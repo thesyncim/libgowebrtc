@@ -18,6 +18,21 @@ type LibPeerPair struct {
 	Sender   *pc.PeerConnection
 	Receiver *pc.PeerConnection
 	t        *testing.T
+
+	// ICE candidates collected during negotiation
+	senderCandidates   []*pc.ICECandidate
+	receiverCandidates []*pc.ICECandidate
+	candidatesMu       sync.Mutex
+
+	// Track reception tracking
+	ReceivedTracks   []*pc.Track
+	receivedTracksMu sync.Mutex
+	trackReceived    chan struct{}
+
+	// Frame counting for received tracks
+	VideoFrameCounter *FrameCounter
+	AudioFrameCounter *FrameCounter
+	frameReceived     chan struct{}
 }
 
 // NewLibPeerPair creates a pair of connected PeerConnections for testing.
@@ -25,6 +40,10 @@ func NewLibPeerPair(t *testing.T) *LibPeerPair {
 	t.Helper()
 
 	cfg := pc.DefaultConfiguration()
+	// Add STUN server for ICE
+	cfg.ICEServers = []pc.ICEServer{
+		{URLs: []string{"stun:stun.l.google.com:19302"}},
+	}
 
 	sender, err := pc.NewPeerConnection(cfg)
 	if err != nil {
@@ -37,11 +56,72 @@ func NewLibPeerPair(t *testing.T) *LibPeerPair {
 		t.Fatalf("Failed to create receiver PeerConnection: %v", err)
 	}
 
-	return &LibPeerPair{
-		Sender:   sender,
-		Receiver: receiver,
-		t:        t,
+	pp := &LibPeerPair{
+		Sender:            sender,
+		Receiver:          receiver,
+		t:                 t,
+		trackReceived:     make(chan struct{}, 10),
+		frameReceived:     make(chan struct{}, 100),
+		VideoFrameCounter: &FrameCounter{},
+		AudioFrameCounter: &FrameCounter{},
 	}
+
+	// Set up ICE candidate handlers
+	sender.OnICECandidate = func(c *pc.ICECandidate) {
+		if c == nil {
+			return
+		}
+		pp.candidatesMu.Lock()
+		pp.senderCandidates = append(pp.senderCandidates, c)
+		pp.candidatesMu.Unlock()
+	}
+
+	receiver.OnICECandidate = func(c *pc.ICECandidate) {
+		if c == nil {
+			return
+		}
+		pp.candidatesMu.Lock()
+		pp.receiverCandidates = append(pp.receiverCandidates, c)
+		pp.candidatesMu.Unlock()
+	}
+
+	// Set up OnTrack handler on receiver
+	receiver.OnTrack = func(track *pc.Track, recv *pc.RTPReceiver, streams []string) {
+		pp.receivedTracksMu.Lock()
+		pp.ReceivedTracks = append(pp.ReceivedTracks, track)
+		pp.receivedTracksMu.Unlock()
+
+		// Set up frame callbacks on the received track
+		if track.Kind() == "video" {
+			if err := track.SetOnVideoFrame(func(f *frame.VideoFrame) {
+				pp.VideoFrameCounter.Inc()
+				select {
+				case pp.frameReceived <- struct{}{}:
+				default:
+				}
+			}); err != nil {
+				t.Logf("SetOnVideoFrame failed: %v", err)
+			}
+		} else if track.Kind() == "audio" {
+			if err := track.SetOnAudioFrame(func(f *frame.AudioFrame) {
+				pp.AudioFrameCounter.Inc()
+				select {
+				case pp.frameReceived <- struct{}{}:
+				default:
+				}
+			}); err != nil {
+				t.Logf("SetOnAudioFrame failed: %v", err)
+			}
+		}
+
+		select {
+		case pp.trackReceived <- struct{}{}:
+		default:
+		}
+		t.Logf("Receiver got track: id=%s kind=%s", track.ID(), track.Kind())
+	}
+
+	return pp
 }
 
 // Close closes both PeerConnections.
@@ -63,12 +143,14 @@ func (pp *LibPeerPair) ExchangeOfferAnswer() error {
 	}
 
 	// Set local description on sender
-	if err := pp.Sender.SetLocalDescription(offer); err != nil {
+	err = pp.Sender.SetLocalDescription(offer)
+	if err != nil {
 		return err
 	}
 
 	// Set remote description on receiver
-	if err := pp.Receiver.SetRemoteDescription(offer); err != nil {
+	err = pp.Receiver.SetRemoteDescription(offer)
+	if err != nil {
 		return err
 	}
 
@@ -79,16 +161,89 @@ func (pp *LibPeerPair) ExchangeOfferAnswer() error {
 	}
 
 	// Set local description on receiver
-	if err := pp.Receiver.SetLocalDescription(answer); err != nil {
+	err = pp.Receiver.SetLocalDescription(answer)
+	if err != nil {
 		return err
 	}
 
 	// Set remote description on sender
-	if err := pp.Sender.SetRemoteDescription(answer); err != nil {
-		return err
+	return pp.Sender.SetRemoteDescription(answer)
+}
+
+// ExchangeICECandidates exchanges collected ICE candidates between peers.
+// Call this after ExchangeOfferAnswer and a brief delay for candidate gathering.
+func (pp *LibPeerPair) ExchangeICECandidates() error {
+	pp.candidatesMu.Lock()
+	senderCandidates := make([]*pc.ICECandidate, len(pp.senderCandidates))
+	copy(senderCandidates, pp.senderCandidates)
+	receiverCandidates := make([]*pc.ICECandidate, len(pp.receiverCandidates))
+	copy(receiverCandidates, pp.receiverCandidates)
+	pp.candidatesMu.Unlock()
+
+	// Add sender's candidates to receiver
+	for _, c := range senderCandidates {
+		if err := pp.Receiver.AddICECandidate(c); err != nil {
+			pp.t.Logf("Failed to add sender candidate to receiver: %v", err)
+		}
+	}
+
+	// Add receiver's candidates to sender
+	for _, c := range receiverCandidates {
+		if err := pp.Sender.AddICECandidate(c); err != nil {
+			pp.t.Logf("Failed to add receiver candidate to sender: %v", err)
+		}
 	}
 
 	return nil
+}
+
+// Connect performs full connection: offer/answer + ICE exchange.
+func (pp *LibPeerPair) Connect() error {
+	if err := pp.ExchangeOfferAnswer(); err != nil {
+		return err
+	}
+
+	// Wait a bit for ICE candidates to be gathered
+	time.Sleep(100 * time.Millisecond)
+
+	return pp.ExchangeICECandidates()
+}
+
+// WaitForTrack waits for at least one track to be received.
+func (pp *LibPeerPair) WaitForTrack(timeout time.Duration) bool {
+	select {
+	case <-pp.trackReceived:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+// WaitForFrame waits for at least one frame to be received.
+func (pp *LibPeerPair) WaitForFrame(timeout time.Duration) bool {
+	select {
+	case <-pp.frameReceived:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+// VideoFrameCount returns the number of video frames received.
+func (pp *LibPeerPair) VideoFrameCount() int {
+	return pp.VideoFrameCounter.Count()
+}
+
+// AudioFrameCount returns the number of audio frames received.
+func (pp *LibPeerPair) AudioFrameCount() int {
+	return pp.AudioFrameCounter.Count()
+}
+
+// ReceivedTrackCount returns the number of tracks received.
+func (pp *LibPeerPair) ReceivedTrackCount() int {
+	pp.receivedTracksMu.Lock()
+	defer pp.receivedTracksMu.Unlock()
+	return len(pp.ReceivedTracks)
 }
 
 // WaitForConnection waits for both peers to reach connected state.

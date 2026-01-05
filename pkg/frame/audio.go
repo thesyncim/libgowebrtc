@@ -137,6 +137,26 @@ func NewAudioFrameS16(sampleRate, channels, numSamples int) *AudioFrame {
 	}
 }
 
+// NewAudioFrameFromS16 creates an audio frame from existing S16 samples.
+// The samples slice is expected to be interleaved (L, R, L, R, ...) for stereo.
+// numSamples should be samples per channel, so total slice length = numSamples * channels.
+func NewAudioFrameFromS16(samples []int16, sampleRate, channels int) *AudioFrame {
+	numSamples := len(samples) / channels
+	f := &AudioFrame{
+		SampleRate: sampleRate,
+		Channels:   channels,
+		Format:     AudioFormatS16,
+		NumSamples: numSamples,
+		Samples:    make([]byte, len(samples)*2),
+	}
+	// Convert int16 to little-endian bytes
+	for i, s := range samples {
+		f.Samples[i*2] = byte(s)
+		f.Samples[i*2+1] = byte(s >> 8)
+	}
+	return f
+}
+
 // NewAudioFrameF32 creates a new audio frame with F32 format.
 func NewAudioFrameF32(sampleRate, channels, numSamples int) *AudioFrame {
 	return &AudioFrame{

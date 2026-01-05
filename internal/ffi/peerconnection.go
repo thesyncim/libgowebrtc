@@ -1,8 +1,149 @@
 package ffi
 
 import (
+	"sync"
 	"unsafe"
+
+	"github.com/ebitengine/purego"
 )
+
+// VideoFrameCallback is called when a video frame is received from a remote track.
+type VideoFrameCallback func(width, height int, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64)
+
+// AudioFrameCallback is called when audio samples are received from a remote track.
+type AudioFrameCallback func(samples []int16, sampleRate, channels int, timestampUs int64)
+
+// Global callback registry for remote track sinks
+var (
+	videoCallbackMu sync.RWMutex
+	videoCallbacks  = make(map[uintptr]VideoFrameCallback)
+
+	audioCallbackMu sync.RWMutex
+	audioCallbacks  = make(map[uintptr]AudioFrameCallback)
+
+	// purego callback function pointers (must be kept alive)
+	videoSinkCallbackPtr uintptr
+	audioSinkCallbackPtr uintptr
+	callbacksInitialized bool
+	callbackInitMu       sync.Mutex
+)
+
+// initCallbacks initializes the purego callbacks for remote track sinks.
+// This must be called before setting any track sinks.
+func initCallbacks() {
+	callbackInitMu.Lock()
+	defer callbackInitMu.Unlock()
+
+	if callbacksInitialized {
+		return
+	}
+
+	// Create the video sink callback
+	// Signature: void(ctx, width, height, y_plane, u_plane, v_plane, y_stride, u_stride, v_stride, timestamp_us)
+	videoSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, width, height int, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int, timestampUs int64) {
+		videoCallbackMu.RLock()
+		cb, ok := videoCallbacks[ctx]
+		videoCallbackMu.RUnlock()
+
+		if !ok || cb == nil {
+			return
+		}
+
+		// Calculate plane sizes
+		ySize := yStride * height
+		uvHeight := (height + 1) / 2
+		uSize := uStride * uvHeight
+		vSize := vStride * uvHeight
+
+		// Copy data from C memory to Go slices (avoid holding pointers across calls)
+		yData := make([]byte, ySize)
+		uData := make([]byte, uSize)
+		vData := make([]byte, vSize)
+
+		if yPlane != 0 {
+			copy(yData, unsafe.Slice((*byte)(unsafe.Pointer(yPlane)), ySize))
+		}
+		if uPlane != 0 {
+			copy(uData, unsafe.Slice((*byte)(unsafe.Pointer(uPlane)), uSize))
+		}
+		if vPlane != 0 {
+			copy(vData, unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize))
+		}
+
+		cb(width, height, yData, uData, vData, yStride, uStride, vStride, timestampUs)
+	})
+
+	// Create the audio sink callback
+	// Signature: void(ctx, samples, num_samples, sample_rate, channels, timestamp_us)
+	audioSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, samples uintptr, numSamples, sampleRate, channels int, timestampUs int64) {
+		audioCallbackMu.RLock()
+		cb, ok := audioCallbacks[ctx]
+		audioCallbackMu.RUnlock()
+
+		if !ok || cb == nil {
+			return
+		}
+
+		// Total samples = numSamples * channels (interleaved)
+		totalSamples := numSamples * channels
+
+		// Copy data from C memory to Go slice
+		samplesData := make([]int16, totalSamples)
+		if samples != 0 {
+			copy(samplesData, unsafe.Slice((*int16)(unsafe.Pointer(samples)), totalSamples))
+		}
+
+		cb(samplesData, sampleRate, channels, timestampUs)
+	})
+
+	callbacksInitialized = true
+}
+
+// RegisterVideoCallback registers a video frame callback for a track.
+// The trackID should be the track handle pointer value.
+func RegisterVideoCallback(trackID uintptr, cb VideoFrameCallback) {
+	initCallbacks()
+
+	videoCallbackMu.Lock()
+	videoCallbacks[trackID] = cb
+	videoCallbackMu.Unlock()
+}
+
+// UnregisterVideoCallback removes a video frame callback for a track.
+func UnregisterVideoCallback(trackID uintptr) {
+	videoCallbackMu.Lock()
+	delete(videoCallbacks, trackID)
+	videoCallbackMu.Unlock()
+}
+
+// RegisterAudioCallback registers an audio frame callback for a track.
+// The trackID should be the track handle pointer value.
+func RegisterAudioCallback(trackID uintptr, cb AudioFrameCallback) {
+	initCallbacks()
+
+	audioCallbackMu.Lock()
+	audioCallbacks[trackID] = cb
+	audioCallbackMu.Unlock()
+}
+
+// UnregisterAudioCallback removes an audio frame callback for a track.
+func UnregisterAudioCallback(trackID uintptr) {
+	audioCallbackMu.Lock()
+	delete(audioCallbacks, trackID)
+	audioCallbackMu.Unlock()
+}
+
+// GetVideoSinkCallbackPtr returns the purego callback pointer for video sinks.
+func GetVideoSinkCallbackPtr() uintptr {
+	initCallbacks()
+	return videoSinkCallbackPtr
+}
+
+// GetAudioSinkCallbackPtr returns the purego callback pointer for audio sinks.
+func GetAudioSinkCallbackPtr() uintptr {
+	initCallbacks()
+	return audioSinkCallbackPtr
+}
 
 // PeerConnection FFI function pointers are defined in lib.go
 
@@ -237,6 +378,15 @@ func RTPSenderDestroy(sender uintptr) {
 	shimRTPSenderDestroy(sender)
 }
 
+// RTPSenderReplaceTrack replaces the track on an RTP sender.
+func RTPSenderReplaceTrack(sender uintptr, track uintptr) error {
+	if !libLoaded || shimRTPSenderReplaceTrack == nil {
+		return ErrLibraryNotLoaded
+	}
+	result := shimRTPSenderReplaceTrack(sender, track)
+	return ShimError(result)
+}
+
 // DataChannelSend sends data on a data channel.
 func DataChannelSend(dc uintptr, data []byte, isBinary bool) error {
 	if !libLoaded || shimDataChannelSend == nil {
@@ -370,4 +520,56 @@ func AudioTrackSourceDestroy(source uintptr) {
 		return
 	}
 	shimAudioTrackSourceDestroy(source)
+}
+
+// TrackSetVideoSink sets a video frame callback on a remote track.
+func TrackSetVideoSink(track uintptr, callback uintptr, ctx uintptr) error {
+	if !libLoaded || shimTrackSetVideoSink == nil {
+		return ErrLibraryNotLoaded
+	}
+	result := shimTrackSetVideoSink(track, callback, ctx)
+	return ShimError(result)
+}
+
+// TrackSetAudioSink sets an audio frame callback on a remote track.
+func TrackSetAudioSink(track uintptr, callback uintptr, ctx uintptr) error {
+	if !libLoaded || shimTrackSetAudioSink == nil {
+		return ErrLibraryNotLoaded
+	}
+	result := shimTrackSetAudioSink(track, callback, ctx)
+	return ShimError(result)
+}
+
+// TrackRemoveVideoSink removes a video sink from a track.
+func TrackRemoveVideoSink(track uintptr) {
+	if !libLoaded || shimTrackRemoveVideoSink == nil {
+		return
+	}
+	shimTrackRemoveVideoSink(track)
+}
+
+// TrackRemoveAudioSink removes an audio sink from a track.
+func TrackRemoveAudioSink(track uintptr) {
+	if !libLoaded || shimTrackRemoveAudioSink == nil {
+		return
+	}
+	shimTrackRemoveAudioSink(track)
+}
+
+// TrackKind returns the track kind ("video" or "audio").
+func TrackKind(track uintptr) string {
+	if !libLoaded || shimTrackKind == nil {
+		return ""
+	}
+	ptr := shimTrackKind(track)
+	return GoString(ptr)
+}
+
+// TrackID returns the track ID.
+func TrackID(track uintptr) string {
+	if !libLoaded || shimTrackID == nil {
+		return ""
+	}
+	ptr := shimTrackID(track)
+	return GoString(ptr)
 }

@@ -148,3 +148,29 @@ func CStringPtr(s string) *byte {
 	b := CString(s)
 	return &b[0]
 }
+
+// GoString converts a C string pointer to a Go string.
+func GoString(ptr uintptr) string {
+	if ptr == 0 {
+		return ""
+	}
+	// Find the null terminator
+	var length int
+	for {
+		b := *(*byte)(unsafe.Pointer(ptr + uintptr(length)))
+		if b == 0 {
+			break
+		}
+		length++
+		// Safety limit
+		if length > 4096 {
+			break
+		}
+	}
+	if length == 0 {
+		return ""
+	}
+	// Create slice header pointing to the data
+	bytes := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), length)
+	return string(bytes)
+}

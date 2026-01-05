@@ -142,6 +142,14 @@ var (
 	shimAudioTrackSourcePushFrame             func(source uintptr, samples uintptr, numSamples int, timestampUs int64) int
 	shimPeerConnectionAddAudioTrackFromSource func(pc, source uintptr, trackID, streamID uintptr) uintptr
 	shimAudioTrackSourceDestroy               func(source uintptr)
+
+	// Remote Track Sink (for receiving frames from remote tracks)
+	shimTrackSetVideoSink    func(track uintptr, callback uintptr, ctx uintptr) int
+	shimTrackSetAudioSink    func(track uintptr, callback uintptr, ctx uintptr) int
+	shimTrackRemoveVideoSink func(track uintptr)
+	shimTrackRemoveAudioSink func(track uintptr)
+	shimTrackKind            func(track uintptr) uintptr
+	shimTrackID              func(track uintptr) uintptr
 )
 
 // LoadLibrary loads the libwebrtc_shim shared library.
@@ -373,6 +381,14 @@ func registerFunctions() error {
 	purego.RegisterLibFunc(&shimAudioTrackSourcePushFrame, libHandle, "shim_audio_track_source_push_frame")
 	purego.RegisterLibFunc(&shimPeerConnectionAddAudioTrackFromSource, libHandle, "shim_peer_connection_add_audio_track_from_source")
 	purego.RegisterLibFunc(&shimAudioTrackSourceDestroy, libHandle, "shim_audio_track_source_destroy")
+
+	// Remote Track Sink
+	purego.RegisterLibFunc(&shimTrackSetVideoSink, libHandle, "shim_track_set_video_sink")
+	purego.RegisterLibFunc(&shimTrackSetAudioSink, libHandle, "shim_track_set_audio_sink")
+	purego.RegisterLibFunc(&shimTrackRemoveVideoSink, libHandle, "shim_track_remove_video_sink")
+	purego.RegisterLibFunc(&shimTrackRemoveAudioSink, libHandle, "shim_track_remove_audio_sink")
+	purego.RegisterLibFunc(&shimTrackKind, libHandle, "shim_track_kind")
+	purego.RegisterLibFunc(&shimTrackID, libHandle, "shim_track_id")
 
 	return err
 }

@@ -243,10 +243,24 @@ func (s *RTPSender) Track() *Track {
 }
 
 // ReplaceTrack replaces the sender's track.
+// Pass nil to remove the track without replacing it.
 func (s *RTPSender) ReplaceTrack(t *Track) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// TODO: Call FFI to replace track
+
+	if s.handle == 0 {
+		return errors.New("sender not initialized")
+	}
+
+	var trackHandle uintptr
+	if t != nil {
+		trackHandle = t.handle
+	}
+
+	if err := ffi.RTPSenderReplaceTrack(s.handle, trackHandle); err != nil {
+		return err
+	}
+
 	s.track = t
 	return nil
 }
@@ -351,6 +365,12 @@ type RTPEncodingParameters struct {
 	ScalabilityMode       string  // SVC mode string (e.g., "L3T3_KEY")
 }
 
+// VideoFrameHandler is called when a video frame is received on a remote track.
+type VideoFrameHandler func(f *frame.VideoFrame)
+
+// AudioFrameHandler is called when an audio frame is received on a remote track.
+type AudioFrameHandler func(f *frame.AudioFrame)
+
 // Track represents a media track (can be local or remote).
 type Track struct {
 	handle  uintptr
@@ -362,12 +382,16 @@ type Track struct {
 	muted   atomic.Bool
 	pc      *PeerConnection
 
-	// Video/audio track source for frame injection
+	// Video/audio track source for frame injection (local tracks)
 	sourceHandle uintptr
 	width        int
 	height       int
 	sampleRate   int
 	channels     int
+
+	// Frame handlers (remote tracks)
+	onVideoFrame VideoFrameHandler
+	onAudioFrame AudioFrameHandler
 
 	// For writing frames
 	mu sync.Mutex
@@ -390,6 +414,86 @@ func (t *Track) SetEnabled(e bool) { t.enabled.Store(e) }
 
 // Muted returns whether the track is muted.
 func (t *Track) Muted() bool { return t.muted.Load() }
+
+// SetOnVideoFrame sets a callback to receive video frames from a remote track.
+// This is the Pion/browser-like interface for reading frames from received tracks.
+func (t *Track) SetOnVideoFrame(handler VideoFrameHandler) error {
+	if t.kind != "video" {
+		return errors.New("not a video track")
+	}
+	if t.handle == 0 {
+		return errors.New("track handle not initialized")
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Remove existing sink if any
+	if t.onVideoFrame != nil {
+		ffi.TrackRemoveVideoSink(t.handle)
+		ffi.UnregisterVideoCallback(t.handle)
+	}
+
+	t.onVideoFrame = handler
+
+	if handler == nil {
+		return nil
+	}
+
+	// Register the callback in the FFI layer
+	ffi.RegisterVideoCallback(t.handle, func(width, height int, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) {
+		// Convert to frame.VideoFrame
+		f := &frame.VideoFrame{
+			Width:  width,
+			Height: height,
+			Format: frame.PixelFormatI420,
+			Data:   [][]byte{yPlane, uPlane, vPlane},
+			Stride: []int{yStride, uStride, vStride},
+			PTS:    uint32(timestampUs / 1000), // Convert to milliseconds
+		}
+		handler(f)
+	})
+
+	// Set the native sink - use track handle as context for callback lookup
+	return ffi.TrackSetVideoSink(t.handle, ffi.GetVideoSinkCallbackPtr(), t.handle)
+}
+
+// SetOnAudioFrame sets a callback to receive audio frames from a remote track.
+// This is the Pion/browser-like interface for reading frames from received tracks.
+func (t *Track) SetOnAudioFrame(handler AudioFrameHandler) error {
+	if t.kind != "audio" {
+		return errors.New("not an audio track")
+	}
+	if t.handle == 0 {
+		return errors.New("track handle not initialized")
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Remove existing sink if any
+	if t.onAudioFrame != nil {
+		ffi.TrackRemoveAudioSink(t.handle)
+		ffi.UnregisterAudioCallback(t.handle)
+	}
+
+	t.onAudioFrame = handler
+
+	if handler == nil {
+		return nil
+	}
+
+	// Register the callback in the FFI layer
+	ffi.RegisterAudioCallback(t.handle, func(samples []int16, sampleRate, channels int, timestampUs int64) {
+		// Convert to frame.AudioFrame
+		f := frame.NewAudioFrameFromS16(samples, sampleRate, channels)
+		f.PTS = uint32(timestampUs / 1000) // Convert to milliseconds
+		handler(f)
+	})
+
+	// Set the native sink - use track handle as context for callback lookup
+	return ffi.TrackSetAudioSink(t.handle, ffi.GetAudioSinkCallbackPtr(), t.handle)
+}
 
 // WriteVideoFrame writes a video frame to the track.
 func (t *Track) WriteVideoFrame(f *frame.VideoFrame) error {

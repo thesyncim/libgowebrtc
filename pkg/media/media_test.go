@@ -136,11 +136,6 @@ func TestConstraints(t *testing.T) {
 	}
 }
 
-func TestMediaStreamTrackInterface(t *testing.T) {
-	// Compile-time interface check
-	var _ MediaStreamTrack = (MediaStreamTrack)(nil)
-}
-
 func TestVideoConstraintsCodecs(t *testing.T) {
 	codecs := []codec.Type{codec.H264, codec.VP8, codec.VP9, codec.AV1}
 

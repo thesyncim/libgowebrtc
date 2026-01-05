@@ -579,6 +579,108 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
 SHIM_EXPORT void shim_audio_track_source_destroy(ShimAudioTrackSource* source);
 
 /* ============================================================================
+ * Remote Track Frame Receiving API (for reading frames from received tracks)
+ * ========================================================================== */
+
+/*
+ * Callback for receiving video frames from a remote track.
+ * Called on the WebRTC worker thread - should return quickly!
+ *
+ * @param ctx User context
+ * @param width Frame width
+ * @param height Frame height
+ * @param y_plane Y plane data
+ * @param u_plane U plane data
+ * @param v_plane V plane data
+ * @param y_stride Y plane stride
+ * @param u_stride U plane stride
+ * @param v_stride V plane stride
+ * @param timestamp_us Timestamp in microseconds
+ */
+typedef void (*ShimOnVideoFrame)(
+    void* ctx,
+    int width,
+    int height,
+    const uint8_t* y_plane,
+    const uint8_t* u_plane,
+    const uint8_t* v_plane,
+    int y_stride,
+    int u_stride,
+    int v_stride,
+    int64_t timestamp_us
+);
+
+/*
+ * Callback for receiving audio frames from a remote track.
+ * Called on the WebRTC worker thread - should return quickly!
+ *
+ * @param ctx User context
+ * @param samples PCM samples (S16LE interleaved)
+ * @param num_samples Number of samples per channel
+ * @param sample_rate Sample rate
+ * @param channels Number of channels
+ * @param timestamp_us Timestamp in microseconds
+ */
+typedef void (*ShimOnAudioFrame)(
+    void* ctx,
+    const int16_t* samples,
+    int num_samples,
+    int sample_rate,
+    int channels,
+    int64_t timestamp_us
+);
+
+/*
+ * Set a video frame callback on a remote video track.
+ * The track pointer comes from the OnTrack callback.
+ *
+ * @param track Track pointer from OnTrack callback
+ * @param callback Frame callback function
+ * @param ctx User context passed to callback
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_track_set_video_sink(
+    void* track,
+    ShimOnVideoFrame callback,
+    void* ctx
+);
+
+/*
+ * Set an audio frame callback on a remote audio track.
+ * The track pointer comes from the OnTrack callback.
+ *
+ * @param track Track pointer from OnTrack callback
+ * @param callback Frame callback function
+ * @param ctx User context passed to callback
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_track_set_audio_sink(
+    void* track,
+    ShimOnAudioFrame callback,
+    void* ctx
+);
+
+/*
+ * Remove video sink from a track.
+ */
+SHIM_EXPORT void shim_track_remove_video_sink(void* track);
+
+/*
+ * Remove audio sink from a track.
+ */
+SHIM_EXPORT void shim_track_remove_audio_sink(void* track);
+
+/*
+ * Get track kind ("audio" or "video").
+ */
+SHIM_EXPORT const char* shim_track_kind(void* track);
+
+/*
+ * Get track ID.
+ */
+SHIM_EXPORT const char* shim_track_id(void* track);
+
+/* ============================================================================
  * DataChannel API
  * ========================================================================== */
 
