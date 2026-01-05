@@ -1,0 +1,243 @@
+# golangci-lint configuration for libgowebrtc
+# Run with: golangci-lint run ./...
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
+
+linters:
+  enable:
+    # Default linters
+    - errcheck       # Check for unchecked errors
+    - gosimple       # Simplify code
+    - govet          # Go vet
+    - ineffassign    # Detect ineffectual assignments
+    - staticcheck    # Static analysis
+    - unused         # Check for unused code
+
+    # Additional recommended linters
+    - bodyclose      # Check HTTP response body is closed
+    - contextcheck   # Check context usage
+    - durationcheck  # Check duration multiplication
+    - errorlint      # Error wrapping best practices
+    - copyloopvar    # Check for loop variable copies (replaces exportloopref)
+    - gofmt          # Check formatting
+    - goimports      # Check imports
+    - gocritic       # Opinionated linter
+    - gosec          # Security checks
+    - misspell       # Spell checker
+    - nilerr         # Check nil error returns
+    - prealloc       # Suggest preallocations
+    - revive         # Fast, configurable linter
+    - unconvert      # Remove unnecessary conversions
+    - unparam        # Check for unused parameters
+    - wastedassign   # Find wasted assignments
+
+  disable:
+    - exhaustive     # Too strict for our use case
+    - exhaustruct    # Too strict, requires all struct fields
+    - wrapcheck      # Too strict about error wrapping
+    - varnamelen     # Variable name length is subjective
+    - nlreturn       # New line before return is style preference
+    - wsl            # Whitespace linter is too opinionated
+    - godox          # We want to keep TODO comments
+    - funlen         # Function length limits are subjective
+    - gocognit       # Cognitive complexity is handled by gocritic
+    - cyclop         # Cyclomatic complexity is handled by gocritic
+    - lll            # Line length limits are subjective
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+
+  govet:
+    enable:
+      - assign
+      - atomic
+      - bools
+      - buildtag
+      - composites
+      - copylocks
+      - defers
+      - directive
+      - errorsas
+      - httpresponse
+      - ifaceassert
+      - loopclosure
+      - lostcancel
+      - nilfunc
+      - printf
+      - shadow
+      - shift
+      - stdmethods
+      - stringintconv
+      - structtag
+      - testinggoroutine
+      - tests
+      - unmarshal
+      - unreachable
+      - unusedresult
+    # Disable fieldalignment - too noisy, optimization not correctness
+    disable:
+      - fieldalignment
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/thesyncim/libgowebrtc
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - hugeParam        # We pass large structs intentionally
+      - rangeValCopy     # Sometimes we want value copies
+      - ifElseChain      # Switch vs if-else is style preference
+
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked (too noisy)
+      - G304  # File inclusion via variable (we need this)
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+        disabled: true  # unparam handles this better
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+  misspell:
+    locale: US
+
+  prealloc:
+    simple: true
+    for-loops: true
+
+issues:
+  exclude-rules:
+    # Test files can have longer functions and more flexibility
+    - path: _test\.go
+      linters:
+        - errcheck    # Tests often ignore errors intentionally
+        - funlen
+        - gocritic
+        - gosec
+        - unparam
+        - prealloc
+        - errorlint   # Tests may check specific error values
+        - govet       # Shadow warnings in tests are often acceptable
+
+    # Test helper files
+    - path: test/interop/helpers\.go
+      linters:
+        - errcheck    # ICE candidate errors don't fail the test
+        - revive      # if-return style is fine in test helpers
+
+    # Type stutter is intentional for Web API compatibility (MediaDeviceKind, etc.)
+    - linters:
+        - revive
+      text: "type name will be used as media.Media"
+
+    # EncoderStats stutter is acceptable for API clarity
+    - linters:
+        - revive
+      text: "type name will be used as encoder.Encoder"
+
+    # SVC mode names use underscores to match industry-standard naming (L1T2_KEY, etc.)
+    - linters:
+        - revive
+      text: "don't use underscores in Go names.*SVC"
+
+    # Unused struct fields are placeholders for FFI integration
+    - path: pkg/pc/peerconnection\.go
+      linters:
+        - unused
+      text: "field .* is unused"
+
+    # Integer overflow warnings in FFI code are intentional (we validate ranges)
+    - linters:
+        - gosec
+      text: "G115: integer overflow conversion"
+
+    # Type assertions on atomic.Value are safe when we control the store
+    - linters:
+        - errcheck
+      text: "Error return value is not checked"
+      path: pkg/media/media\.go
+
+    # SetBitrate/SetFramerate errors are logged internally but don't fail the operation
+    - linters:
+        - errcheck
+      text: "SetBitrate|SetFramerate"
+      path: pkg/media/media\.go
+
+    # Internal FFI layer has special requirements
+    - path: internal/ffi/
+      linters:
+        - unparam      # Function results for FFI stubs may be unused
+        - gocritic     # paramTypeCombine and tooManyResults are fine for FFI
+        - unused       # Placeholder functions for future FFI integration
+
+    # Test helpers
+    - path: test/interop/
+      linters:
+        - govet        # Shadow warnings acceptable in test code
+        - unconvert    # Type conversions may be explicit for clarity
+
+    # Track implementations have FFI integration patterns
+    - path: pkg/track/
+      linters:
+        - unconvert    # Explicit conversions for clarity
+        - unused       # Placeholder fields for future use
+
+    # Example files are more relaxed
+    - path: examples/
+      linters:
+        - errcheck
+        - gosec
+
+    # Generated code (if any)
+    - path: \.pb\.go
+      linters:
+        - all
+
+    # Allow TODO comments everywhere
+    - linters:
+        - godox
+      text: "TODO"
+
+    # Type assertions on atomic.Value are safe when we control the store
+    - linters:
+        - errcheck
+      text: "Error return value is not checked"
+      path: peerconnection\.go
+
+  max-issues-per-linter: 50
+  max-same-issues: 5

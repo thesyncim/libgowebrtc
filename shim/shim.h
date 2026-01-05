@@ -461,6 +461,124 @@ SHIM_EXPORT int shim_rtp_sender_replace_track(ShimRTPSender* sender, void* track
 SHIM_EXPORT void shim_rtp_sender_destroy(ShimRTPSender* sender);
 
 /* ============================================================================
+ * Video Track Source API (for frame injection)
+ * ========================================================================== */
+
+typedef struct ShimVideoTrackSource ShimVideoTrackSource;
+
+/*
+ * Create a video track source that can receive pushed frames.
+ * This source can be added to a PeerConnection to send video.
+ *
+ * @param pc PeerConnection to associate with
+ * @param width Video width
+ * @param height Video height
+ * @return Track source handle, or NULL on failure
+ */
+SHIM_EXPORT ShimVideoTrackSource* shim_video_track_source_create(
+    ShimPeerConnection* pc,
+    int width,
+    int height
+);
+
+/*
+ * Push an I420 video frame to the source.
+ * The frame will be encoded and sent via the PeerConnection.
+ *
+ * @param source Track source handle
+ * @param y_plane Y plane data
+ * @param u_plane U plane data
+ * @param v_plane V plane data
+ * @param y_stride Y plane stride
+ * @param u_stride U plane stride
+ * @param v_stride V plane stride
+ * @param timestamp_us Timestamp in microseconds
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_video_track_source_push_frame(
+    ShimVideoTrackSource* source,
+    const uint8_t* y_plane,
+    const uint8_t* u_plane,
+    const uint8_t* v_plane,
+    int y_stride,
+    int u_stride,
+    int v_stride,
+    int64_t timestamp_us
+);
+
+/*
+ * Add a video track to the PeerConnection using this source.
+ *
+ * @param pc PeerConnection handle
+ * @param source Video track source
+ * @param track_id Track ID
+ * @param stream_id Stream ID
+ * @return RTPSender handle, or NULL on failure
+ */
+SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
+    ShimPeerConnection* pc,
+    ShimVideoTrackSource* source,
+    const char* track_id,
+    const char* stream_id
+);
+
+SHIM_EXPORT void shim_video_track_source_destroy(ShimVideoTrackSource* source);
+
+/* ============================================================================
+ * Audio Track Source API (for frame injection)
+ * ========================================================================== */
+
+typedef struct ShimAudioTrackSource ShimAudioTrackSource;
+
+/*
+ * Create an audio track source that can receive pushed audio frames.
+ *
+ * @param pc PeerConnection to associate with
+ * @param sample_rate Audio sample rate (e.g., 48000)
+ * @param channels Number of channels (1 or 2)
+ * @return Track source handle, or NULL on failure
+ */
+SHIM_EXPORT ShimAudioTrackSource* shim_audio_track_source_create(
+    ShimPeerConnection* pc,
+    int sample_rate,
+    int channels
+);
+
+/*
+ * Push audio samples to the source.
+ *
+ * @param source Track source handle
+ * @param samples PCM samples (S16LE interleaved)
+ * @param num_samples Number of samples per channel
+ * @param timestamp_us Timestamp in microseconds
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_audio_track_source_push_frame(
+    ShimAudioTrackSource* source,
+    const int16_t* samples,
+    int num_samples,
+    int64_t timestamp_us
+);
+
+/*
+ * Add an audio track to the PeerConnection using this source.
+ *
+ * @param pc PeerConnection handle
+ * @param source Audio track source
+ * @param track_id Track ID
+ * @param stream_id Stream ID
+ * @return RTPSender handle, or NULL on failure
+ */
+SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
+    ShimPeerConnection* pc,
+    ShimAudioTrackSource* source,
+    const char* track_id,
+    const char* stream_id
+);
+
+SHIM_EXPORT void shim_audio_track_source_destroy(ShimAudioTrackSource* source);
+
+/* ============================================================================
  * DataChannel API
  * ========================================================================== */
 
@@ -494,6 +612,189 @@ SHIM_EXPORT const char* shim_data_channel_label(ShimDataChannel* dc);
 SHIM_EXPORT int shim_data_channel_ready_state(ShimDataChannel* dc);
 SHIM_EXPORT void shim_data_channel_close(ShimDataChannel* dc);
 SHIM_EXPORT void shim_data_channel_destroy(ShimDataChannel* dc);
+
+/* ============================================================================
+ * Device Enumeration API
+ * ========================================================================== */
+
+typedef struct {
+    char device_id[256];
+    char label[256];
+    int kind;  /* 0=videoinput, 1=audioinput, 2=audiooutput */
+} ShimDeviceInfo;
+
+/*
+ * Enumerate all available media devices.
+ *
+ * @param devices Pre-allocated array of ShimDeviceInfo
+ * @param max_devices Maximum number of devices to return
+ * @param out_count Output: actual number of devices found
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_enumerate_devices(
+    ShimDeviceInfo* devices,
+    int max_devices,
+    int* out_count
+);
+
+/* ============================================================================
+ * Video Capture API
+ * ========================================================================== */
+
+typedef struct ShimVideoCapture ShimVideoCapture;
+
+/*
+ * Callback for video frames captured from camera/screen.
+ * Called from capture thread - must be thread-safe.
+ */
+typedef void (*ShimVideoCaptureCallback)(
+    void* ctx,
+    const uint8_t* y_plane,
+    const uint8_t* u_plane,
+    const uint8_t* v_plane,
+    int width,
+    int height,
+    int y_stride,
+    int u_stride,
+    int v_stride,
+    int64_t timestamp_us
+);
+
+/*
+ * Create a video capture device.
+ *
+ * @param device_id Device ID from enumeration, or NULL for default
+ * @param width Desired capture width
+ * @param height Desired capture height
+ * @param fps Desired framerate
+ * @return Capture handle, or NULL on failure
+ */
+SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
+    const char* device_id,
+    int width,
+    int height,
+    int fps
+);
+
+/*
+ * Start video capture with callback.
+ *
+ * @param cap Capture handle
+ * @param callback Function called for each frame
+ * @param ctx User context passed to callback
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_video_capture_start(
+    ShimVideoCapture* cap,
+    ShimVideoCaptureCallback callback,
+    void* ctx
+);
+
+SHIM_EXPORT void shim_video_capture_stop(ShimVideoCapture* cap);
+SHIM_EXPORT void shim_video_capture_destroy(ShimVideoCapture* cap);
+
+/* ============================================================================
+ * Audio Capture API
+ * ========================================================================== */
+
+typedef struct ShimAudioCapture ShimAudioCapture;
+
+/*
+ * Callback for audio samples captured from microphone.
+ * Called from capture thread - must be thread-safe.
+ */
+typedef void (*ShimAudioCaptureCallback)(
+    void* ctx,
+    const int16_t* samples,
+    int num_samples,
+    int num_channels,
+    int sample_rate,
+    int64_t timestamp_us
+);
+
+/*
+ * Create an audio capture device.
+ *
+ * @param device_id Device ID from enumeration, or NULL for default
+ * @param sample_rate Desired sample rate (e.g., 48000)
+ * @param channels Number of channels (1 or 2)
+ * @return Capture handle, or NULL on failure
+ */
+SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
+    const char* device_id,
+    int sample_rate,
+    int channels
+);
+
+/*
+ * Start audio capture with callback.
+ *
+ * @param cap Capture handle
+ * @param callback Function called for each audio buffer
+ * @param ctx User context passed to callback
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_audio_capture_start(
+    ShimAudioCapture* cap,
+    ShimAudioCaptureCallback callback,
+    void* ctx
+);
+
+SHIM_EXPORT void shim_audio_capture_stop(ShimAudioCapture* cap);
+SHIM_EXPORT void shim_audio_capture_destroy(ShimAudioCapture* cap);
+
+/* ============================================================================
+ * Screen/Window Capture API
+ * ========================================================================== */
+
+typedef struct ShimScreenCapture ShimScreenCapture;
+
+typedef struct {
+    int64_t id;         /* Screen or window ID */
+    char title[256];    /* Window title or screen name */
+    int is_window;      /* 0=screen, 1=window */
+} ShimScreenInfo;
+
+/*
+ * Enumerate available screens and windows for capture.
+ *
+ * @param screens Pre-allocated array of ShimScreenInfo
+ * @param max_screens Maximum number to return
+ * @param out_count Output: actual count found
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_enumerate_screens(
+    ShimScreenInfo* screens,
+    int max_screens,
+    int* out_count
+);
+
+/*
+ * Create a screen or window capture.
+ *
+ * @param screen_or_window_id ID from enumeration
+ * @param is_window 0 for screen capture, 1 for window capture
+ * @param fps Desired capture framerate
+ * @return Capture handle, or NULL on failure
+ */
+SHIM_EXPORT ShimScreenCapture* shim_screen_capture_create(
+    int64_t screen_or_window_id,
+    int is_window,
+    int fps
+);
+
+/*
+ * Start screen capture with callback.
+ * Uses same callback type as video capture (I420 frames).
+ */
+SHIM_EXPORT int shim_screen_capture_start(
+    ShimScreenCapture* cap,
+    ShimVideoCaptureCallback callback,
+    void* ctx
+);
+
+SHIM_EXPORT void shim_screen_capture_stop(ShimScreenCapture* cap);
+SHIM_EXPORT void shim_screen_capture_destroy(ShimScreenCapture* cap);
 
 /* ============================================================================
  * Memory helpers

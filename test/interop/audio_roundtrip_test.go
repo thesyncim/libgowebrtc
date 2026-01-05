@@ -8,6 +8,7 @@ import (
 	"github.com/pion/rtp"
 	pionwebrtc "github.com/pion/webrtc/v4"
 
+	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
@@ -238,7 +239,7 @@ func TestAudioAndVideoTogether(t *testing.T) {
 	defer pp.Close()
 
 	// Create video track on libwebrtc
-	libVideoTrack, err := pp.Lib.CreateVideoTrack("video-combined", 2) // VP8
+	libVideoTrack, err := pp.Lib.CreateVideoTrack("video-combined", codec.VP8, 640, 480)
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
 	}

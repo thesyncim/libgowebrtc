@@ -114,7 +114,7 @@ func TestInt32SlicePtr(t *testing.T) {
 }
 
 func TestIntPtr(t *testing.T) {
-	var val int = 42
+	val := 42
 	ptr := IntPtr(&val)
 	if ptr == 0 {
 		t.Error("IntPtr should return non-zero for valid pointer")

@@ -9,6 +9,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
@@ -17,10 +18,133 @@ import (
 
 // Errors
 var (
-	ErrInvalidConstraints = errors.New("invalid constraints")
-	ErrTrackNotFound      = errors.New("track not found")
-	ErrStreamClosed       = errors.New("stream closed")
+	ErrInvalidConstraints  = errors.New("invalid constraints")
+	ErrTrackNotFound       = errors.New("track not found")
+	ErrStreamClosed        = errors.New("stream closed")
+	ErrDeviceNotFound      = errors.New("device not found")
+	ErrCaptureNotSupported = errors.New("capture not supported without shim library")
 )
+
+// MediaDeviceKind represents the type of media device.
+type MediaDeviceKind string
+
+const (
+	// MediaDeviceKindVideoInput represents a camera.
+	MediaDeviceKindVideoInput MediaDeviceKind = "videoinput"
+	// MediaDeviceKindAudioInput represents a microphone.
+	MediaDeviceKindAudioInput MediaDeviceKind = "audioinput"
+	// MediaDeviceKindAudioOutput represents a speaker.
+	MediaDeviceKindAudioOutput MediaDeviceKind = "audiooutput"
+)
+
+// MediaDeviceInfo mirrors browser's MediaDeviceInfo interface.
+// Returned by EnumerateDevices().
+type MediaDeviceInfo struct {
+	// DeviceID is a unique identifier for the device.
+	DeviceID string
+	// Kind is the type of device (videoinput, audioinput, audiooutput).
+	Kind MediaDeviceKind
+	// Label is a human-readable name for the device.
+	// May be empty if permission not granted.
+	Label string
+	// GroupID identifies devices that belong together (e.g., camera + mic on same device).
+	GroupID string
+}
+
+// EnumerateDevices mirrors browser's navigator.mediaDevices.enumerateDevices().
+// Returns a list of available media input and output devices.
+func EnumerateDevices() ([]MediaDeviceInfo, error) {
+	ffiDevices, err := ffi.EnumerateDevices()
+	if err != nil {
+		// If library not loaded, return empty list (browser-like behavior)
+		if errors.Is(err, ffi.ErrLibraryNotLoaded) {
+			return []MediaDeviceInfo{}, nil
+		}
+		return nil, err
+	}
+
+	devices := make([]MediaDeviceInfo, len(ffiDevices))
+	for i, d := range ffiDevices {
+		var kind MediaDeviceKind
+		switch d.Kind {
+		case ffi.DeviceKindVideoInput:
+			kind = MediaDeviceKindVideoInput
+		case ffi.DeviceKindAudioInput:
+			kind = MediaDeviceKindAudioInput
+		case ffi.DeviceKindAudioOutput:
+			kind = MediaDeviceKindAudioOutput
+		}
+		devices[i] = MediaDeviceInfo{
+			DeviceID: d.DeviceID,
+			Kind:     kind,
+			Label:    d.Label,
+			GroupID:  "", // Not provided by shim yet
+		}
+	}
+
+	return devices, nil
+}
+
+// ScreenInfo represents a screen or window available for capture.
+type ScreenInfo struct {
+	// ID is a unique identifier for the screen/window.
+	ID int64
+	// Title is the window title or screen name.
+	Title string
+	// IsWindow is true for windows, false for screens.
+	IsWindow bool
+}
+
+// EnumerateScreens returns a list of available screens and windows for capture.
+// This is an extension to the browser API (browsers use getDisplayMedia picker).
+func EnumerateScreens() ([]ScreenInfo, error) {
+	ffiScreens, err := ffi.EnumerateScreens()
+	if err != nil {
+		if errors.Is(err, ffi.ErrLibraryNotLoaded) {
+			return []ScreenInfo{}, nil
+		}
+		return nil, err
+	}
+
+	screens := make([]ScreenInfo, len(ffiScreens))
+	for i, s := range ffiScreens {
+		screens[i] = ScreenInfo{
+			ID:       s.ID,
+			Title:    s.Title,
+			IsWindow: s.IsWindow,
+		}
+	}
+
+	return screens, nil
+}
+
+// DisplayConstraints is used with GetDisplayMedia for screen/window capture.
+type DisplayConstraints struct {
+	Video *DisplayVideoConstraints // nil = no video
+	Audio *AudioConstraints        // nil = no audio (usually nil for screen share)
+}
+
+// DisplayVideoConstraints for screen/window capture.
+type DisplayVideoConstraints struct {
+	// ScreenID specifies which screen to capture (from EnumerateScreens).
+	// If 0 and WindowID is 0, captures the primary screen.
+	ScreenID int64
+	// WindowID specifies which window to capture (from EnumerateScreens).
+	// Takes precedence over ScreenID if non-zero.
+	WindowID int64
+	// FrameRate is the desired capture framerate (0 = default).
+	FrameRate float64
+	// Width is the desired width (0 = native resolution).
+	Width int
+	// Height is the desired height (0 = native resolution).
+	Height int
+	// Codec is the preferred video codec.
+	Codec codec.Type
+	// Bitrate is the target bitrate (0 = auto).
+	Bitrate uint32
+	// SVC configuration for screen sharing.
+	SVC *codec.SVCConfig
+}
 
 // VideoConstraints mirrors browser's MediaTrackConstraints for video.
 type VideoConstraints struct {
@@ -52,6 +176,7 @@ type Constraints struct {
 }
 
 // MediaStreamTrack mirrors browser's MediaStreamTrack interface.
+// Use VideoStreamTrack or AudioStreamTrack for type-safe constraint access.
 type MediaStreamTrack interface {
 	// ID returns the track's unique identifier.
 	ID() string
@@ -78,17 +203,45 @@ type MediaStreamTrack interface {
 	// Clone creates a clone of this track.
 	Clone() MediaStreamTrack
 
-	// GetConstraints returns the current constraints.
-	GetConstraints() interface{}
-
-	// ApplyConstraints applies new constraints.
-	ApplyConstraints(constraints interface{}) error
-
-	// GetSettings returns current settings.
-	GetSettings() interface{}
-
 	// Internal: Get the underlying Pion track for addTrack
 	PionTrack() webrtc.TrackLocal
+}
+
+// VideoStreamTrack provides type-safe access to video track constraints and settings.
+type VideoStreamTrack interface {
+	MediaStreamTrack
+
+	// GetConstraints returns the current video constraints.
+	GetConstraints() VideoConstraints
+
+	// ApplyConstraints applies new video constraints.
+	ApplyConstraints(constraints VideoConstraints) error
+
+	// GetSettings returns current video settings.
+	GetSettings() VideoTrackSettings
+
+	// WriteFrame writes a video frame to the track.
+	WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error
+
+	// RequestKeyFrame requests a keyframe from the encoder.
+	RequestKeyFrame()
+}
+
+// AudioStreamTrack provides type-safe access to audio track constraints and settings.
+type AudioStreamTrack interface {
+	MediaStreamTrack
+
+	// GetConstraints returns the current audio constraints.
+	GetConstraints() AudioConstraints
+
+	// ApplyConstraints applies new audio constraints.
+	ApplyConstraints(constraints AudioConstraints) error
+
+	// GetSettings returns current audio settings.
+	GetSettings() AudioTrackSettings
+
+	// WriteFrame writes an audio frame to the track.
+	WriteFrame(f *frame.AudioFrame) error
 }
 
 // MediaStream mirrors browser's MediaStream interface.
@@ -97,7 +250,6 @@ type MediaStream struct {
 	videoTracks []MediaStreamTrack
 	audioTracks []MediaStreamTrack
 	mu          sync.RWMutex
-	closed      atomic.Bool
 }
 
 // NewMediaStream creates a new empty MediaStream.
@@ -380,14 +532,93 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 
 // GetDisplayMedia mirrors browser's navigator.mediaDevices.getDisplayMedia().
 // Returns a MediaStream configured for screen sharing.
-func GetDisplayMedia(constraints Constraints) (*MediaStream, error) {
-	// Default to screen sharing optimized settings
-	if constraints.Video != nil {
-		if constraints.Video.SVC == nil {
-			constraints.Video.SVC = codec.SVCPresetScreenShare()
+// Accepts either Constraints (legacy) or DisplayConstraints.
+func GetDisplayMedia(constraints interface{}) (*MediaStream, error) {
+	switch c := constraints.(type) {
+	case DisplayConstraints:
+		return getDisplayMediaWithDisplayConstraints(c)
+	case Constraints:
+		// Legacy: convert to standard getUserMedia with SVC preset
+		if c.Video != nil {
+			if c.Video.SVC == nil {
+				c.Video.SVC = codec.SVCPresetScreenShare()
+			}
 		}
+		return GetUserMedia(c)
+	default:
+		return nil, ErrInvalidConstraints
 	}
-	return GetUserMedia(constraints)
+}
+
+// getDisplayMediaWithDisplayConstraints handles DisplayConstraints.
+func getDisplayMediaWithDisplayConstraints(c DisplayConstraints) (*MediaStream, error) {
+	stream := NewMediaStream()
+
+	if c.Video != nil {
+		// Apply defaults
+		width := c.Video.Width
+		if width <= 0 {
+			width = 1920 // Default to 1080p for screen share
+		}
+		height := c.Video.Height
+		if height <= 0 {
+			height = 1080
+		}
+		frameRate := c.Video.FrameRate
+		if frameRate <= 0 {
+			frameRate = 30
+		}
+		codecType := c.Video.Codec
+		if codecType == 0 {
+			codecType = codec.VP9 // VP9 is better for screen content
+		}
+		bitrate := c.Video.Bitrate
+		if bitrate == 0 {
+			bitrate = 3_000_000 // 3 Mbps default for screen share
+		}
+		svc := c.Video.SVC
+		if svc == nil {
+			svc = codec.SVCPresetScreenShare()
+		}
+
+		// Create video track with screen share optimizations
+		vt, err := CreateVideoTrack(VideoConstraints{
+			Width:     width,
+			Height:    height,
+			FrameRate: frameRate,
+			Codec:     codecType,
+			Bitrate:   bitrate,
+			SVC:       svc,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Set label to indicate screen capture
+		if vst, ok := vt.(*videoStreamTrack); ok {
+			if c.Video.WindowID != 0 {
+				vst.label = "window-capture"
+			} else {
+				vst.label = "screen-capture"
+			}
+		}
+
+		stream.AddTrack(vt)
+
+		// TODO: When shim is available, start actual screen capture:
+		// screenCap, err := ffi.NewScreenCapture(c.Video.ScreenID, c.Video.WindowID != 0, int(frameRate))
+		// screenCap.Start(func(...) { track.WriteFrame(...) })
+	}
+
+	if c.Audio != nil {
+		at, err := CreateAudioTrack(*c.Audio)
+		if err != nil {
+			return nil, err
+		}
+		stream.AddTrack(at)
+	}
+
+	return stream, nil
 }
 
 // --- videoStreamTrack implementation ---
@@ -410,14 +641,10 @@ func (t *videoStreamTrack) Clone() MediaStreamTrack {
 	return clone
 }
 
-func (t *videoStreamTrack) GetConstraints() interface{} { return t.constraints }
-func (t *videoStreamTrack) GetSettings() interface{}    { return t.settings }
+func (t *videoStreamTrack) GetConstraints() VideoConstraints { return t.constraints }
+func (t *videoStreamTrack) GetSettings() VideoTrackSettings  { return t.settings }
 
-func (t *videoStreamTrack) ApplyConstraints(c interface{}) error {
-	vc, ok := c.(VideoConstraints)
-	if !ok {
-		return ErrInvalidConstraints
-	}
+func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
 	// Apply bitrate change at runtime
 	if vc.Bitrate > 0 && vc.Bitrate != t.constraints.Bitrate {
 		t.track.SetBitrate(vc.Bitrate)
@@ -430,6 +657,9 @@ func (t *videoStreamTrack) ApplyConstraints(c interface{}) error {
 	}
 	return nil
 }
+
+// Compile-time interface check
+var _ VideoStreamTrack = (*videoStreamTrack)(nil)
 
 func (t *videoStreamTrack) PionTrack() webrtc.TrackLocal { return t.track }
 
@@ -466,20 +696,19 @@ func (t *audioStreamTrack) Clone() MediaStreamTrack {
 	return clone
 }
 
-func (t *audioStreamTrack) GetConstraints() interface{} { return t.constraints }
-func (t *audioStreamTrack) GetSettings() interface{}    { return t.settings }
+func (t *audioStreamTrack) GetConstraints() AudioConstraints { return t.constraints }
+func (t *audioStreamTrack) GetSettings() AudioTrackSettings  { return t.settings }
 
-func (t *audioStreamTrack) ApplyConstraints(c interface{}) error {
-	ac, ok := c.(AudioConstraints)
-	if !ok {
-		return ErrInvalidConstraints
-	}
+func (t *audioStreamTrack) ApplyConstraints(ac AudioConstraints) error {
 	if ac.Bitrate > 0 && ac.Bitrate != t.constraints.Bitrate {
 		t.track.SetBitrate(ac.Bitrate)
 		t.constraints.Bitrate = ac.Bitrate
 	}
 	return nil
 }
+
+// Compile-time interface check
+var _ AudioStreamTrack = (*audioStreamTrack)(nil)
 
 func (t *audioStreamTrack) PionTrack() webrtc.TrackLocal { return t.track }
 
@@ -496,9 +725,10 @@ func (t *audioStreamTrack) WriteFrame(f *frame.AudioFrame) error {
 // AddTracksToPC adds all tracks from a MediaStream to a PeerConnection.
 // Mirrors browser's pc.addTrack(track, stream) workflow.
 func AddTracksToPC(pc *webrtc.PeerConnection, stream *MediaStream) ([]*webrtc.RTPSender, error) {
-	var senders []*webrtc.RTPSender
+	tracks := stream.GetTracks()
+	senders := make([]*webrtc.RTPSender, 0, len(tracks))
 
-	for _, t := range stream.GetTracks() {
+	for _, t := range tracks {
 		sender, err := pc.AddTrack(t.PionTrack())
 		if err != nil {
 			return senders, err
@@ -537,7 +767,22 @@ func AsAudioTrack(t MediaStreamTrack) (*track.AudioTrack, bool) {
 
 // AsVideoEncoder returns the underlying encoder if track supports it.
 func AsVideoEncoder(t MediaStreamTrack) (encoder.VideoEncoder, bool) {
-	// The track doesn't expose encoder directly in this design
-	// This would need internal access
+	if vt, ok := t.(*videoStreamTrack); ok && vt.track != nil {
+		enc := vt.track.Encoder()
+		if enc != nil {
+			return enc, true
+		}
+	}
+	return nil, false
+}
+
+// AsAudioEncoder returns the underlying encoder if track supports it.
+func AsAudioEncoder(t MediaStreamTrack) (encoder.AudioEncoder, bool) {
+	if at, ok := t.(*audioStreamTrack); ok && at.track != nil {
+		enc := at.track.Encoder()
+		if enc != nil {
+			return enc, true
+		}
+	}
 	return nil, false
 }

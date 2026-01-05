@@ -7,12 +7,16 @@
 
 #include "shim.h"
 
+#include <algorithm>
 #include <cstring>
+#include <chrono>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
 #include <string>
 #include <atomic>
+#include <thread>
 
 // libwebrtc includes
 #include "api/video_codecs/video_encoder.h"
@@ -1448,15 +1452,442 @@ SHIM_EXPORT void shim_rtp_sender_destroy(ShimRTPSender* sender) {
 }
 
 /* ============================================================================
+ * Video Track Source Implementation (Pushable Frame Source)
+ * ========================================================================== */
+
+// Custom video track source that accepts pushed frames
+class PushableVideoTrackSource : public webrtc::VideoTrackSourceInterface {
+public:
+    PushableVideoTrackSource(int width, int height)
+        : width_(width), height_(height), state_(webrtc::MediaSourceInterface::kLive) {}
+
+    // VideoTrackSourceInterface
+    bool is_screencast() const override { return false; }
+    absl::optional<bool> needs_denoising() const override { return absl::nullopt; }
+
+    // MediaSourceInterface
+    SourceState state() const override { return state_; }
+    bool remote() const override { return false; }
+
+    // NotifierInterface (part of VideoTrackSourceInterface)
+    void RegisterObserver(webrtc::ObserverInterface* observer) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        observers_.push_back(observer);
+    }
+
+    void UnregisterObserver(webrtc::ObserverInterface* observer) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        observers_.erase(
+            std::remove(observers_.begin(), observers_.end(), observer),
+            observers_.end()
+        );
+    }
+
+    // rtc::VideoSourceInterface<VideoFrame>
+    void AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink,
+                         const rtc::VideoSinkWants& wants) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        sinks_.push_back(sink);
+    }
+
+    void RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        sinks_.erase(
+            std::remove(sinks_.begin(), sinks_.end(), sink),
+            sinks_.end()
+        );
+    }
+
+    bool SupportsEncodedOutput() const override { return false; }
+    void GenerateKeyFrame() override {}
+    void AddEncodedSink(rtc::VideoSinkInterface<webrtc::RecordableEncodedFrame>*) override {}
+    void RemoveEncodedSink(rtc::VideoSinkInterface<webrtc::RecordableEncodedFrame>*) override {}
+
+    // Push a frame to all registered sinks
+    void PushFrame(rtc::scoped_refptr<webrtc::I420Buffer> buffer, int64_t timestamp_us) {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        webrtc::VideoFrame frame = webrtc::VideoFrame::Builder()
+            .set_video_frame_buffer(buffer)
+            .set_timestamp_us(timestamp_us)
+            .set_timestamp_rtp(static_cast<uint32_t>(timestamp_us * 90 / 1000))  // Convert to 90kHz
+            .build();
+
+        for (auto* sink : sinks_) {
+            sink->OnFrame(frame);
+        }
+    }
+
+    int width() const { return width_; }
+    int height() const { return height_; }
+
+private:
+    int width_;
+    int height_;
+    SourceState state_;
+    std::mutex mutex_;
+    std::vector<webrtc::ObserverInterface*> observers_;
+    std::vector<rtc::VideoSinkInterface<webrtc::VideoFrame>*> sinks_;
+};
+
+struct ShimVideoTrackSource {
+    rtc::scoped_refptr<PushableVideoTrackSource> source;
+    rtc::scoped_refptr<webrtc::VideoTrackInterface> track;
+    ShimPeerConnection* pc;
+    int width;
+    int height;
+};
+
+SHIM_EXPORT ShimVideoTrackSource* shim_video_track_source_create(
+    ShimPeerConnection* pc,
+    int width,
+    int height
+) {
+    if (!pc || !pc->factory || width <= 0 || height <= 0) {
+        return nullptr;
+    }
+
+    auto shim_source = std::make_unique<ShimVideoTrackSource>();
+    shim_source->source = rtc::make_ref_counted<PushableVideoTrackSource>(width, height);
+    shim_source->pc = pc;
+    shim_source->width = width;
+    shim_source->height = height;
+    shim_source->track = nullptr;  // Created when added to PC
+
+    return shim_source.release();
+}
+
+SHIM_EXPORT int shim_video_track_source_push_frame(
+    ShimVideoTrackSource* source,
+    const uint8_t* y_plane,
+    const uint8_t* u_plane,
+    const uint8_t* v_plane,
+    int y_stride,
+    int u_stride,
+    int v_stride,
+    int64_t timestamp_us
+) {
+    if (!source || !source->source || !y_plane || !u_plane || !v_plane) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    // Create I420 buffer from input planes
+    rtc::scoped_refptr<webrtc::I420Buffer> buffer = webrtc::I420Buffer::Copy(
+        source->width, source->height,
+        y_plane, y_stride,
+        u_plane, u_stride,
+        v_plane, v_stride
+    );
+
+    if (!buffer) {
+        return SHIM_ERROR_OUT_OF_MEMORY;
+    }
+
+    source->source->PushFrame(buffer, timestamp_us);
+    return SHIM_OK;
+}
+
+SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
+    ShimPeerConnection* pc,
+    ShimVideoTrackSource* source,
+    const char* track_id,
+    const char* stream_id
+) {
+    if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
+        return nullptr;
+    }
+
+    // Create video track from source
+    source->track = pc->factory->CreateVideoTrack(
+        track_id,
+        source->source.get()
+    );
+
+    if (!source->track) {
+        return nullptr;
+    }
+
+    // Add track to peer connection
+    std::vector<std::string> stream_ids;
+    if (stream_id) {
+        stream_ids.push_back(stream_id);
+    }
+
+    auto result = pc->peer_connection->AddTrack(source->track, stream_ids);
+    if (!result.ok()) {
+        return nullptr;
+    }
+
+    auto sender = result.value();
+    pc->senders.push_back(sender);
+
+    return reinterpret_cast<ShimRTPSender*>(sender.get());
+}
+
+SHIM_EXPORT void shim_video_track_source_destroy(ShimVideoTrackSource* source) {
+    if (source) {
+        source->track = nullptr;
+        source->source = nullptr;
+        delete source;
+    }
+}
+
+/* ============================================================================
+ * Audio Track Source Implementation (Pushable Frame Source)
+ * ========================================================================== */
+
+// Custom audio track source that accepts pushed audio frames
+class PushableAudioSource : public webrtc::AudioSourceInterface {
+public:
+    PushableAudioSource(int sample_rate, int channels)
+        : sample_rate_(sample_rate), channels_(channels), state_(kLive) {}
+
+    // AudioSourceInterface
+    void SetVolume(double volume) override { volume_ = volume; }
+    void RegisterAudioObserver(webrtc::AudioObserver* observer) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        audio_observers_.push_back(observer);
+    }
+    void UnregisterAudioObserver(webrtc::AudioObserver* observer) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        audio_observers_.erase(
+            std::remove(audio_observers_.begin(), audio_observers_.end(), observer),
+            audio_observers_.end()
+        );
+    }
+    void AddSink(webrtc::AudioTrackSinkInterface* sink) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        sinks_.push_back(sink);
+    }
+    void RemoveSink(webrtc::AudioTrackSinkInterface* sink) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        sinks_.erase(
+            std::remove(sinks_.begin(), sinks_.end(), sink),
+            sinks_.end()
+        );
+    }
+    const cricket::AudioOptions options() const override { return options_; }
+
+    // MediaSourceInterface
+    SourceState state() const override { return state_; }
+    bool remote() const override { return false; }
+
+    // NotifierInterface
+    void RegisterObserver(webrtc::ObserverInterface* observer) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        observers_.push_back(observer);
+    }
+    void UnregisterObserver(webrtc::ObserverInterface* observer) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        observers_.erase(
+            std::remove(observers_.begin(), observers_.end(), observer),
+            observers_.end()
+        );
+    }
+
+    // Push audio data to all registered sinks
+    void PushAudio(const int16_t* samples, int num_samples, int64_t timestamp_us) {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        for (auto* sink : sinks_) {
+            sink->OnData(
+                samples,
+                16,  // bits per sample
+                sample_rate_,
+                channels_,
+                num_samples
+            );
+        }
+    }
+
+    int sample_rate() const { return sample_rate_; }
+    int channels() const { return channels_; }
+
+private:
+    int sample_rate_;
+    int channels_;
+    double volume_ = 1.0;
+    SourceState state_;
+    cricket::AudioOptions options_;
+    std::mutex mutex_;
+    std::vector<webrtc::ObserverInterface*> observers_;
+    std::vector<webrtc::AudioObserver*> audio_observers_;
+    std::vector<webrtc::AudioTrackSinkInterface*> sinks_;
+};
+
+struct ShimAudioTrackSource {
+    rtc::scoped_refptr<PushableAudioSource> source;
+    rtc::scoped_refptr<webrtc::AudioTrackInterface> track;
+    ShimPeerConnection* pc;
+    int sample_rate;
+    int channels;
+};
+
+SHIM_EXPORT ShimAudioTrackSource* shim_audio_track_source_create(
+    ShimPeerConnection* pc,
+    int sample_rate,
+    int channels
+) {
+    if (!pc || !pc->factory || sample_rate <= 0 || channels <= 0 || channels > 2) {
+        return nullptr;
+    }
+
+    auto shim_source = std::make_unique<ShimAudioTrackSource>();
+    shim_source->source = rtc::make_ref_counted<PushableAudioSource>(sample_rate, channels);
+    shim_source->pc = pc;
+    shim_source->sample_rate = sample_rate;
+    shim_source->channels = channels;
+    shim_source->track = nullptr;
+
+    return shim_source.release();
+}
+
+SHIM_EXPORT int shim_audio_track_source_push_frame(
+    ShimAudioTrackSource* source,
+    const int16_t* samples,
+    int num_samples,
+    int64_t timestamp_us
+) {
+    if (!source || !source->source || !samples || num_samples <= 0) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    source->source->PushAudio(samples, num_samples, timestamp_us);
+    return SHIM_OK;
+}
+
+SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
+    ShimPeerConnection* pc,
+    ShimAudioTrackSource* source,
+    const char* track_id,
+    const char* stream_id
+) {
+    if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
+        return nullptr;
+    }
+
+    // Create audio track from source
+    source->track = pc->factory->CreateAudioTrack(
+        track_id,
+        source->source.get()
+    );
+
+    if (!source->track) {
+        return nullptr;
+    }
+
+    // Add track to peer connection
+    std::vector<std::string> stream_ids;
+    if (stream_id) {
+        stream_ids.push_back(stream_id);
+    }
+
+    auto result = pc->peer_connection->AddTrack(source->track, stream_ids);
+    if (!result.ok()) {
+        return nullptr;
+    }
+
+    auto sender = result.value();
+    pc->senders.push_back(sender);
+
+    return reinterpret_cast<ShimRTPSender*>(sender.get());
+}
+
+SHIM_EXPORT void shim_audio_track_source_destroy(ShimAudioTrackSource* source) {
+    if (source) {
+        source->track = nullptr;
+        source->source = nullptr;
+        delete source;
+    }
+}
+
+/* ============================================================================
  * DataChannel Implementation
  * ========================================================================== */
+
+// DataChannel wrapper with observer
+struct ShimDataChannelWrapper {
+    rtc::scoped_refptr<webrtc::DataChannelInterface> channel;
+    ShimOnDataChannelMessage on_message = nullptr;
+    void* on_message_ctx = nullptr;
+    ShimOnDataChannelOpen on_open = nullptr;
+    void* on_open_ctx = nullptr;
+    ShimOnDataChannelClose on_close = nullptr;
+    void* on_close_ctx = nullptr;
+};
+
+class DataChannelObserverImpl : public webrtc::DataChannelObserver {
+public:
+    explicit DataChannelObserverImpl(ShimDataChannelWrapper* wrapper)
+        : wrapper_(wrapper) {}
+
+    void OnStateChange() override {
+        if (!wrapper_) return;
+        auto state = wrapper_->channel->state();
+        if (state == webrtc::DataChannelInterface::kOpen && wrapper_->on_open) {
+            wrapper_->on_open(wrapper_->on_open_ctx);
+        } else if (state == webrtc::DataChannelInterface::kClosed && wrapper_->on_close) {
+            wrapper_->on_close(wrapper_->on_close_ctx);
+        }
+    }
+
+    void OnMessage(const webrtc::DataBuffer& buffer) override {
+        if (wrapper_ && wrapper_->on_message) {
+            wrapper_->on_message(
+                wrapper_->on_message_ctx,
+                buffer.data.data(),
+                static_cast<int>(buffer.data.size()),
+                buffer.binary ? 1 : 0
+            );
+        }
+    }
+
+    void OnBufferedAmountChange(uint64_t sent_data_size) override {}
+
+private:
+    ShimDataChannelWrapper* wrapper_;
+};
+
+// Global registry for data channel wrappers
+namespace {
+    std::mutex g_dc_registry_mutex;
+    std::map<webrtc::DataChannelInterface*, std::unique_ptr<ShimDataChannelWrapper>> g_dc_registry;
+    std::map<ShimDataChannelWrapper*, std::unique_ptr<DataChannelObserverImpl>> g_dc_observers;
+}
+
+static ShimDataChannelWrapper* GetOrCreateWrapper(ShimDataChannel* dc) {
+    if (!dc) return nullptr;
+    auto channel = reinterpret_cast<webrtc::DataChannelInterface*>(dc);
+
+    std::lock_guard<std::mutex> lock(g_dc_registry_mutex);
+    auto it = g_dc_registry.find(channel);
+    if (it != g_dc_registry.end()) {
+        return it->second.get();
+    }
+
+    auto wrapper = std::make_unique<ShimDataChannelWrapper>();
+    wrapper->channel = rtc::scoped_refptr<webrtc::DataChannelInterface>(channel);
+    auto* raw_wrapper = wrapper.get();
+
+    auto observer = std::make_unique<DataChannelObserverImpl>(raw_wrapper);
+    channel->RegisterObserver(observer.get());
+
+    g_dc_observers[raw_wrapper] = std::move(observer);
+    g_dc_registry[channel] = std::move(wrapper);
+
+    return raw_wrapper;
+}
 
 SHIM_EXPORT void shim_data_channel_set_on_message(
     ShimDataChannel* dc,
     ShimOnDataChannelMessage callback,
     void* ctx
 ) {
-    // TODO: Implement DataChannelObserver
+    auto* wrapper = GetOrCreateWrapper(dc);
+    if (wrapper) {
+        wrapper->on_message = callback;
+        wrapper->on_message_ctx = ctx;
+    }
 }
 
 SHIM_EXPORT void shim_data_channel_set_on_open(
@@ -1464,7 +1895,11 @@ SHIM_EXPORT void shim_data_channel_set_on_open(
     ShimOnDataChannelOpen callback,
     void* ctx
 ) {
-    // TODO: Implement DataChannelObserver
+    auto* wrapper = GetOrCreateWrapper(dc);
+    if (wrapper) {
+        wrapper->on_open = callback;
+        wrapper->on_open_ctx = ctx;
+    }
 }
 
 SHIM_EXPORT void shim_data_channel_set_on_close(
@@ -1472,7 +1907,11 @@ SHIM_EXPORT void shim_data_channel_set_on_close(
     ShimOnDataChannelClose callback,
     void* ctx
 ) {
-    // TODO: Implement DataChannelObserver
+    auto* wrapper = GetOrCreateWrapper(dc);
+    if (wrapper) {
+        wrapper->on_close = callback;
+        wrapper->on_close_ctx = ctx;
+    }
 }
 
 SHIM_EXPORT int shim_data_channel_send(
@@ -1512,6 +1951,755 @@ SHIM_EXPORT void shim_data_channel_close(ShimDataChannel* dc) {
 
 SHIM_EXPORT void shim_data_channel_destroy(ShimDataChannel* dc) {
     // DataChannel ref-counted, release will happen automatically
+}
+
+/* ============================================================================
+ * Device Enumeration Implementation
+ * ========================================================================== */
+
+// Device capture headers (conditionally included based on build config)
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+#include "modules/video_capture/video_capture_factory.h"
+#include "modules/audio_device/include/audio_device.h"
+#include "modules/desktop_capture/desktop_capturer.h"
+#include "modules/desktop_capture/desktop_capture_options.h"
+#endif
+
+SHIM_EXPORT int shim_enumerate_devices(
+    ShimDeviceInfo* devices,
+    int max_devices,
+    int* out_count
+) {
+    if (!devices || max_devices <= 0 || !out_count) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    int count = 0;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    // Enumerate video input devices
+    std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> video_info(
+        webrtc::VideoCaptureFactory::CreateDeviceInfo()
+    );
+    if (video_info) {
+        int num_video = video_info->NumberOfDevices();
+        for (int i = 0; i < num_video && count < max_devices; i++) {
+            char device_name[256] = {0};
+            char unique_id[256] = {0};
+            if (video_info->GetDeviceName(i, device_name, sizeof(device_name),
+                                          unique_id, sizeof(unique_id)) == 0) {
+                strncpy(devices[count].device_id, unique_id, 255);
+                devices[count].device_id[255] = '\0';
+                strncpy(devices[count].label, device_name, 255);
+                devices[count].label[255] = '\0';
+                devices[count].kind = 0;  // videoinput
+                count++;
+            }
+        }
+    }
+
+    // Enumerate audio devices using AudioDeviceModule
+    rtc::scoped_refptr<webrtc::AudioDeviceModule> adm =
+        webrtc::AudioDeviceModule::Create(
+            webrtc::AudioDeviceModule::kPlatformDefaultAudio,
+            webrtc::CreateDefaultTaskQueueFactory().get()
+        );
+    if (adm && adm->Init() == 0) {
+        // Audio input devices
+        int16_t num_recording = adm->RecordingDevices();
+        for (int16_t i = 0; i < num_recording && count < max_devices; i++) {
+            char device_name[webrtc::kAdmMaxDeviceNameSize] = {0};
+            char guid[webrtc::kAdmMaxGuidSize] = {0};
+            if (adm->RecordingDeviceName(i, device_name, guid) == 0) {
+                strncpy(devices[count].device_id, guid, 255);
+                devices[count].device_id[255] = '\0';
+                strncpy(devices[count].label, device_name, 255);
+                devices[count].label[255] = '\0';
+                devices[count].kind = 1;  // audioinput
+                count++;
+            }
+        }
+
+        // Audio output devices
+        int16_t num_playout = adm->PlayoutDevices();
+        for (int16_t i = 0; i < num_playout && count < max_devices; i++) {
+            char device_name[webrtc::kAdmMaxDeviceNameSize] = {0};
+            char guid[webrtc::kAdmMaxGuidSize] = {0};
+            if (adm->PlayoutDeviceName(i, device_name, guid) == 0) {
+                strncpy(devices[count].device_id, guid, 255);
+                devices[count].device_id[255] = '\0';
+                strncpy(devices[count].label, device_name, 255);
+                devices[count].label[255] = '\0';
+                devices[count].kind = 2;  // audiooutput
+                count++;
+            }
+        }
+
+        adm->Terminate();
+    }
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    *out_count = count;
+    return SHIM_OK;
+}
+
+/* ============================================================================
+ * Video Capture Implementation
+ * ========================================================================== */
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+// Forward declaration for callback adapter
+class VideoCaptureDataCallback;
+#endif
+
+struct ShimVideoCapture {
+    std::string device_id;
+    int width;
+    int height;
+    int fps;
+    ShimVideoCaptureCallback callback;
+    void* callback_ctx;
+    std::atomic<bool> running{false};
+    std::mutex mutex;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    rtc::scoped_refptr<webrtc::VideoCaptureModule> capture_module;
+    std::unique_ptr<VideoCaptureDataCallback> data_callback;
+#endif
+};
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+class VideoCaptureDataCallback : public rtc::VideoSinkInterface<webrtc::VideoFrame> {
+public:
+    explicit VideoCaptureDataCallback(ShimVideoCapture* cap) : capture_(cap) {}
+
+    void OnFrame(const webrtc::VideoFrame& frame) override {
+        if (!capture_ || !capture_->running || !capture_->callback) return;
+
+        rtc::scoped_refptr<webrtc::I420BufferInterface> buffer =
+            frame.video_frame_buffer()->ToI420();
+
+        capture_->callback(
+            capture_->callback_ctx,
+            buffer->DataY(),
+            buffer->DataU(),
+            buffer->DataV(),
+            buffer->width(),
+            buffer->height(),
+            buffer->StrideY(),
+            buffer->StrideU(),
+            buffer->StrideV(),
+            frame.timestamp_us()
+        );
+    }
+
+private:
+    ShimVideoCapture* capture_;
+};
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
+    const char* device_id,
+    int width,
+    int height,
+    int fps
+) {
+    if (width <= 0 || height <= 0 || fps <= 0) {
+        return nullptr;
+    }
+
+    auto capture = std::make_unique<ShimVideoCapture>();
+    capture->device_id = device_id ? device_id : "";
+    capture->width = width;
+    capture->height = height;
+    capture->fps = fps;
+    capture->callback = nullptr;
+    capture->callback_ctx = nullptr;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    // Get device unique ID if not provided
+    std::string unique_id = capture->device_id;
+    if (unique_id.empty()) {
+        std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
+            webrtc::VideoCaptureFactory::CreateDeviceInfo()
+        );
+        if (info && info->NumberOfDevices() > 0) {
+            char name[256], id[256];
+            info->GetDeviceName(0, name, sizeof(name), id, sizeof(id));
+            unique_id = id;
+        }
+    }
+
+    if (!unique_id.empty()) {
+        capture->capture_module = webrtc::VideoCaptureFactory::Create(unique_id.c_str());
+        if (!capture->capture_module) {
+            return nullptr;
+        }
+    }
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    return capture.release();
+}
+
+SHIM_EXPORT int shim_video_capture_start(
+    ShimVideoCapture* cap,
+    ShimVideoCaptureCallback callback,
+    void* ctx
+) {
+    if (!cap || !callback) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    std::lock_guard<std::mutex> lock(cap->mutex);
+
+    if (cap->running) {
+        return SHIM_ERROR_INIT_FAILED;  // Already running
+    }
+
+    cap->callback = callback;
+    cap->callback_ctx = ctx;
+    cap->running = true;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    if (cap->capture_module) {
+        webrtc::VideoCaptureCapability capability;
+        capability.width = cap->width;
+        capability.height = cap->height;
+        capability.maxFPS = cap->fps;
+        capability.videoType = webrtc::VideoType::kI420;
+
+        cap->data_callback = std::make_unique<VideoCaptureDataCallback>(cap);
+        cap->capture_module->RegisterCaptureDataCallback(cap->data_callback.get());
+
+        if (cap->capture_module->StartCapture(capability) != 0) {
+            cap->running = false;
+            cap->callback = nullptr;
+            cap->callback_ctx = nullptr;
+            return SHIM_ERROR_INIT_FAILED;
+        }
+    }
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    return SHIM_OK;
+}
+
+SHIM_EXPORT void shim_video_capture_stop(ShimVideoCapture* cap) {
+    if (!cap) return;
+
+    std::lock_guard<std::mutex> lock(cap->mutex);
+
+    if (!cap->running) return;
+
+    cap->running = false;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    if (cap->capture_module) {
+        cap->capture_module->StopCapture();
+        cap->capture_module->DeRegisterCaptureDataCallback();
+    }
+    cap->data_callback.reset();
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    cap->callback = nullptr;
+    cap->callback_ctx = nullptr;
+}
+
+SHIM_EXPORT void shim_video_capture_destroy(ShimVideoCapture* cap) {
+    if (!cap) return;
+
+    shim_video_capture_stop(cap);
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    cap->capture_module = nullptr;
+#endif
+
+    delete cap;
+}
+
+/* ============================================================================
+ * Audio Capture Implementation
+ * ========================================================================== */
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+class AudioTransportCallback;
+#endif
+
+struct ShimAudioCapture {
+    std::string device_id;
+    int sample_rate;
+    int channels;
+    ShimAudioCaptureCallback callback;
+    void* callback_ctx;
+    std::atomic<bool> running{false};
+    std::mutex mutex;
+    int device_index;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    rtc::scoped_refptr<webrtc::AudioDeviceModule> adm;
+    std::unique_ptr<AudioTransportCallback> transport;
+#endif
+};
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+class AudioTransportCallback : public webrtc::AudioTransport {
+public:
+    explicit AudioTransportCallback(ShimAudioCapture* cap) : capture_(cap) {}
+
+    int32_t RecordedDataIsAvailable(
+        const void* audioSamples,
+        size_t nSamples,
+        size_t nBytesPerSample,
+        size_t nChannels,
+        uint32_t samplesPerSec,
+        uint32_t totalDelayMS,
+        int32_t clockDrift,
+        uint32_t currentMicLevel,
+        bool keyPressed,
+        uint32_t& newMicLevel
+    ) override {
+        if (!capture_ || !capture_->running || !capture_->callback) {
+            return 0;
+        }
+
+        int64_t timestamp_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+
+        capture_->callback(
+            capture_->callback_ctx,
+            static_cast<const int16_t*>(audioSamples),
+            static_cast<int>(nSamples),
+            static_cast<int>(nChannels),
+            static_cast<int>(samplesPerSec),
+            timestamp_us
+        );
+
+        newMicLevel = currentMicLevel;
+        return 0;
+    }
+
+    int32_t NeedMorePlayData(
+        size_t nSamples,
+        size_t nBytesPerSample,
+        size_t nChannels,
+        uint32_t samplesPerSec,
+        void* audioSamples,
+        size_t& nSamplesOut,
+        int64_t* elapsed_time_ms,
+        int64_t* ntp_time_ms
+    ) override {
+        nSamplesOut = 0;
+        return 0;
+    }
+
+    void PullRenderData(
+        int bits_per_sample,
+        int sample_rate,
+        size_t number_of_channels,
+        size_t number_of_frames,
+        void* audio_data,
+        int64_t* elapsed_time_ms,
+        int64_t* ntp_time_ms
+    ) override {}
+
+private:
+    ShimAudioCapture* capture_;
+};
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
+    const char* device_id,
+    int sample_rate,
+    int channels
+) {
+    if (sample_rate <= 0 || channels <= 0 || channels > 2) {
+        return nullptr;
+    }
+
+    auto capture = std::make_unique<ShimAudioCapture>();
+    capture->device_id = device_id ? device_id : "";
+    capture->sample_rate = sample_rate;
+    capture->channels = channels;
+    capture->callback = nullptr;
+    capture->callback_ctx = nullptr;
+    capture->device_index = 0;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    capture->adm = webrtc::AudioDeviceModule::Create(
+        webrtc::AudioDeviceModule::kPlatformDefaultAudio,
+        webrtc::CreateDefaultTaskQueueFactory().get()
+    );
+
+    if (!capture->adm || capture->adm->Init() != 0) {
+        return nullptr;
+    }
+
+    // Find device by ID if specified
+    if (!capture->device_id.empty()) {
+        int16_t num_devices = capture->adm->RecordingDevices();
+        for (int16_t i = 0; i < num_devices; i++) {
+            char name[webrtc::kAdmMaxDeviceNameSize] = {0};
+            char guid[webrtc::kAdmMaxGuidSize] = {0};
+            if (capture->adm->RecordingDeviceName(i, name, guid) == 0) {
+                if (capture->device_id == guid) {
+                    capture->device_index = i;
+                    break;
+                }
+            }
+        }
+    }
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    return capture.release();
+}
+
+SHIM_EXPORT int shim_audio_capture_start(
+    ShimAudioCapture* cap,
+    ShimAudioCaptureCallback callback,
+    void* ctx
+) {
+    if (!cap || !callback) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    std::lock_guard<std::mutex> lock(cap->mutex);
+
+    if (cap->running) {
+        return SHIM_ERROR_INIT_FAILED;
+    }
+
+    cap->callback = callback;
+    cap->callback_ctx = ctx;
+    cap->running = true;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    if (cap->adm) {
+        cap->transport = std::make_unique<AudioTransportCallback>(cap);
+        cap->adm->RegisterAudioCallback(cap->transport.get());
+
+        if (cap->adm->SetRecordingDevice(cap->device_index) != 0) {
+            cap->running = false;
+            return SHIM_ERROR_INIT_FAILED;
+        }
+
+        if (cap->adm->InitRecording() != 0) {
+            cap->running = false;
+            return SHIM_ERROR_INIT_FAILED;
+        }
+
+        if (cap->adm->StartRecording() != 0) {
+            cap->running = false;
+            return SHIM_ERROR_INIT_FAILED;
+        }
+    }
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    return SHIM_OK;
+}
+
+SHIM_EXPORT void shim_audio_capture_stop(ShimAudioCapture* cap) {
+    if (!cap) return;
+
+    std::lock_guard<std::mutex> lock(cap->mutex);
+
+    if (!cap->running) return;
+
+    cap->running = false;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    if (cap->adm) {
+        cap->adm->StopRecording();
+        cap->adm->RegisterAudioCallback(nullptr);
+    }
+    cap->transport.reset();
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    cap->callback = nullptr;
+    cap->callback_ctx = nullptr;
+}
+
+SHIM_EXPORT void shim_audio_capture_destroy(ShimAudioCapture* cap) {
+    if (!cap) return;
+
+    shim_audio_capture_stop(cap);
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    if (cap->adm) {
+        cap->adm->Terminate();
+        cap->adm = nullptr;
+    }
+#endif
+
+    delete cap;
+}
+
+/* ============================================================================
+ * Screen/Window Capture Implementation
+ * ========================================================================== */
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+class ScreenCaptureCallback;
+#endif
+
+struct ShimScreenCapture {
+    int64_t source_id;
+    bool is_window;
+    int fps;
+    ShimVideoCaptureCallback callback;
+    void* callback_ctx;
+    std::atomic<bool> running{false};
+    std::mutex mutex;
+    std::unique_ptr<std::thread> capture_thread;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    std::unique_ptr<webrtc::DesktopCapturer> capturer;
+    std::unique_ptr<ScreenCaptureCallback> capture_callback;
+#endif
+};
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+class ScreenCaptureCallback : public webrtc::DesktopCapturer::Callback {
+public:
+    explicit ScreenCaptureCallback(ShimScreenCapture* cap) : capture_(cap) {}
+
+    void OnCaptureResult(
+        webrtc::DesktopCapturer::Result result,
+        std::unique_ptr<webrtc::DesktopFrame> frame
+    ) override {
+        if (result != webrtc::DesktopCapturer::Result::SUCCESS ||
+            !frame || !capture_ || !capture_->running || !capture_->callback) {
+            return;
+        }
+
+        // Convert ARGB/BGRA to I420
+        int width = frame->size().width();
+        int height = frame->size().height();
+
+        // Allocate I420 buffer
+        int y_size = width * height;
+        int uv_size = ((width + 1) / 2) * ((height + 1) / 2);
+        std::vector<uint8_t> i420_buffer(y_size + uv_size * 2);
+
+        uint8_t* y_plane = i420_buffer.data();
+        uint8_t* u_plane = y_plane + y_size;
+        uint8_t* v_plane = u_plane + uv_size;
+
+        const uint8_t* argb = frame->data();
+        int argb_stride = frame->stride();
+
+        // Simple ARGB to I420 conversion
+        for (int row = 0; row < height; ++row) {
+            for (int col = 0; col < width; ++col) {
+                int idx = row * argb_stride + col * 4;
+                uint8_t b = argb[idx + 0];
+                uint8_t g = argb[idx + 1];
+                uint8_t r = argb[idx + 2];
+
+                // Y
+                int y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+                y_plane[row * width + col] = static_cast<uint8_t>(std::clamp(y, 0, 255));
+
+                // U/V (subsample 2x2)
+                if ((row % 2 == 0) && (col % 2 == 0)) {
+                    int uv_row = row / 2;
+                    int uv_col = col / 2;
+                    int uv_width = (width + 1) / 2;
+                    int u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+                    int v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+                    u_plane[uv_row * uv_width + uv_col] = static_cast<uint8_t>(std::clamp(u, 0, 255));
+                    v_plane[uv_row * uv_width + uv_col] = static_cast<uint8_t>(std::clamp(v, 0, 255));
+                }
+            }
+        }
+
+        int64_t timestamp_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+
+        capture_->callback(
+            capture_->callback_ctx,
+            y_plane,
+            u_plane,
+            v_plane,
+            width,
+            height,
+            width,              // y_stride
+            (width + 1) / 2,    // u_stride
+            (width + 1) / 2,    // v_stride
+            timestamp_us
+        );
+    }
+
+private:
+    ShimScreenCapture* capture_;
+};
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+SHIM_EXPORT int shim_enumerate_screens(
+    ShimScreenInfo* screens,
+    int max_screens,
+    int* out_count
+) {
+    if (!screens || max_screens <= 0 || !out_count) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    int count = 0;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    webrtc::DesktopCaptureOptions options =
+        webrtc::DesktopCaptureOptions::CreateDefault();
+
+    // Enumerate screens
+    auto screen_capturer = webrtc::DesktopCapturer::CreateScreenCapturer(options);
+    if (screen_capturer) {
+        webrtc::DesktopCapturer::SourceList sources;
+        if (screen_capturer->GetSourceList(&sources)) {
+            for (const auto& source : sources) {
+                if (count >= max_screens) break;
+                screens[count].id = source.id;
+                strncpy(screens[count].title, source.title.c_str(), 255);
+                screens[count].title[255] = '\0';
+                screens[count].is_window = 0;
+                count++;
+            }
+        }
+    }
+
+    // Enumerate windows
+    auto window_capturer = webrtc::DesktopCapturer::CreateWindowCapturer(options);
+    if (window_capturer) {
+        webrtc::DesktopCapturer::SourceList sources;
+        if (window_capturer->GetSourceList(&sources)) {
+            for (const auto& source : sources) {
+                if (count >= max_screens) break;
+                screens[count].id = source.id;
+                strncpy(screens[count].title, source.title.c_str(), 255);
+                screens[count].title[255] = '\0';
+                screens[count].is_window = 1;
+                count++;
+            }
+        }
+    }
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    *out_count = count;
+    return SHIM_OK;
+}
+
+SHIM_EXPORT ShimScreenCapture* shim_screen_capture_create(
+    int64_t screen_or_window_id,
+    int is_window,
+    int fps
+) {
+    if (fps <= 0) {
+        return nullptr;
+    }
+
+    auto capture = std::make_unique<ShimScreenCapture>();
+    capture->source_id = screen_or_window_id;
+    capture->is_window = is_window != 0;
+    capture->fps = fps;
+    capture->callback = nullptr;
+    capture->callback_ctx = nullptr;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    webrtc::DesktopCaptureOptions options =
+        webrtc::DesktopCaptureOptions::CreateDefault();
+
+    if (is_window) {
+        capture->capturer = webrtc::DesktopCapturer::CreateWindowCapturer(options);
+    } else {
+        capture->capturer = webrtc::DesktopCapturer::CreateScreenCapturer(options);
+    }
+
+    if (!capture->capturer) {
+        return nullptr;
+    }
+
+    if (!capture->capturer->SelectSource(screen_or_window_id)) {
+        return nullptr;
+    }
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    return capture.release();
+}
+
+SHIM_EXPORT int shim_screen_capture_start(
+    ShimScreenCapture* cap,
+    ShimVideoCaptureCallback callback,
+    void* ctx
+) {
+    if (!cap || !callback) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    std::lock_guard<std::mutex> lock(cap->mutex);
+
+    if (cap->running) {
+        return SHIM_ERROR_INIT_FAILED;
+    }
+
+    cap->callback = callback;
+    cap->callback_ctx = ctx;
+    cap->running = true;
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    if (cap->capturer) {
+        cap->capture_callback = std::make_unique<ScreenCaptureCallback>(cap);
+        cap->capturer->Start(cap->capture_callback.get());
+
+        // Start capture loop in separate thread
+        cap->capture_thread = std::make_unique<std::thread>([cap]() {
+            auto frame_interval = std::chrono::milliseconds(1000 / cap->fps);
+            while (cap->running) {
+                auto start = std::chrono::steady_clock::now();
+                cap->capturer->CaptureFrame();
+                auto elapsed = std::chrono::steady_clock::now() - start;
+                if (elapsed < frame_interval) {
+                    std::this_thread::sleep_for(frame_interval - elapsed);
+                }
+            }
+        });
+    }
+#endif  // SHIM_ENABLE_DEVICE_CAPTURE
+
+    return SHIM_OK;
+}
+
+SHIM_EXPORT void shim_screen_capture_stop(ShimScreenCapture* cap) {
+    if (!cap) return;
+
+    {
+        std::lock_guard<std::mutex> lock(cap->mutex);
+        if (!cap->running) return;
+        cap->running = false;
+    }
+
+    // Wait for capture thread to finish
+    if (cap->capture_thread && cap->capture_thread->joinable()) {
+        cap->capture_thread->join();
+    }
+    cap->capture_thread.reset();
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    cap->capture_callback.reset();
+#endif
+
+    cap->callback = nullptr;
+    cap->callback_ctx = nullptr;
+}
+
+SHIM_EXPORT void shim_screen_capture_destroy(ShimScreenCapture* cap) {
+    if (!cap) return;
+
+    shim_screen_capture_stop(cap);
+
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+    cap->capturer.reset();
+#endif
+
+    delete cap;
 }
 
 /* ============================================================================

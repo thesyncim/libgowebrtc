@@ -1,19 +1,20 @@
 package media
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
 func TestMediaErrors(t *testing.T) {
-	errors := []error{
+	errs := []error{
 		ErrInvalidConstraints,
 		ErrTrackNotFound,
 		ErrStreamClosed,
 	}
 
-	for _, err := range errors {
+	for _, err := range errs {
 		if err == nil {
 			t.Error("Error should not be nil")
 		}
@@ -251,5 +252,217 @@ func BenchmarkVideoConstraintsWithSVC(b *testing.B) {
 			SVC:       codec.SVCPresetSFU(),
 		}
 		_ = c
+	}
+}
+
+// --- Device Enumeration Tests ---
+
+func TestMediaDeviceKindString(t *testing.T) {
+	tests := []struct {
+		kind MediaDeviceKind
+		want string
+	}{
+		{MediaDeviceKindVideoInput, "videoinput"},
+		{MediaDeviceKindAudioInput, "audioinput"},
+		{MediaDeviceKindAudioOutput, "audiooutput"},
+	}
+
+	for _, tt := range tests {
+		if string(tt.kind) != tt.want {
+			t.Errorf("MediaDeviceKind = %q, want %q", tt.kind, tt.want)
+		}
+	}
+}
+
+func TestMediaDeviceInfo(t *testing.T) {
+	info := MediaDeviceInfo{
+		DeviceID: "device-123",
+		Kind:     MediaDeviceKindVideoInput,
+		Label:    "FaceTime HD Camera",
+		GroupID:  "group-1",
+	}
+
+	if info.DeviceID != "device-123" {
+		t.Errorf("DeviceID = %q, want %q", info.DeviceID, "device-123")
+	}
+	if info.Kind != MediaDeviceKindVideoInput {
+		t.Errorf("Kind = %v, want %v", info.Kind, MediaDeviceKindVideoInput)
+	}
+	if info.Label != "FaceTime HD Camera" {
+		t.Errorf("Label = %q, want %q", info.Label, "FaceTime HD Camera")
+	}
+}
+
+func TestEnumerateDevicesWithoutLibrary(t *testing.T) {
+	// Without the shim library loaded, should return empty list (browser-like behavior)
+	devices, err := EnumerateDevices()
+	if err != nil {
+		t.Errorf("EnumerateDevices() error = %v, want nil", err)
+	}
+	// Empty list is expected when library not loaded
+	if devices == nil {
+		t.Error("EnumerateDevices() should return empty slice, not nil")
+	}
+}
+
+func TestEnumerateScreensWithoutLibrary(t *testing.T) {
+	// Without the shim library loaded, should return empty list
+	screens, err := EnumerateScreens()
+	if err != nil {
+		t.Errorf("EnumerateScreens() error = %v, want nil", err)
+	}
+	if screens == nil {
+		t.Error("EnumerateScreens() should return empty slice, not nil")
+	}
+}
+
+func TestScreenInfo(t *testing.T) {
+	screen := ScreenInfo{
+		ID:       12345,
+		Title:    "Display 1",
+		IsWindow: false,
+	}
+
+	if screen.ID != 12345 {
+		t.Errorf("ID = %d, want 12345", screen.ID)
+	}
+	if screen.Title != "Display 1" {
+		t.Errorf("Title = %q, want %q", screen.Title, "Display 1")
+	}
+	if screen.IsWindow {
+		t.Error("IsWindow should be false for screen")
+	}
+
+	window := ScreenInfo{
+		ID:       67890,
+		Title:    "My App",
+		IsWindow: true,
+	}
+
+	if !window.IsWindow {
+		t.Error("IsWindow should be true for window")
+	}
+}
+
+func TestDisplayConstraints(t *testing.T) {
+	c := DisplayConstraints{
+		Video: &DisplayVideoConstraints{
+			ScreenID:  0,
+			FrameRate: 30,
+			Width:     1920,
+			Height:    1080,
+			Codec:     codec.VP9,
+			Bitrate:   3_000_000,
+			SVC:       codec.SVCPresetScreenShare(),
+		},
+		Audio: nil, // Screen share typically no audio
+	}
+
+	if c.Video == nil {
+		t.Fatal("Video constraints should not be nil")
+	}
+	if c.Video.FrameRate != 30 {
+		t.Errorf("FrameRate = %v, want 30", c.Video.FrameRate)
+	}
+	if c.Video.Codec != codec.VP9 {
+		t.Errorf("Codec = %v, want VP9", c.Video.Codec)
+	}
+	if c.Audio != nil {
+		t.Error("Audio should be nil for screen share")
+	}
+}
+
+func TestDisplayVideoConstraintsWindow(t *testing.T) {
+	c := DisplayVideoConstraints{
+		WindowID:  12345,
+		FrameRate: 60,
+	}
+
+	if c.WindowID != 12345 {
+		t.Errorf("WindowID = %d, want 12345", c.WindowID)
+	}
+	if c.ScreenID != 0 {
+		t.Errorf("ScreenID = %d, want 0", c.ScreenID)
+	}
+	if c.FrameRate != 60 {
+		t.Errorf("FrameRate = %v, want 60", c.FrameRate)
+	}
+}
+
+func TestGetDisplayMediaWithDisplayConstraints(t *testing.T) {
+	stream, err := GetDisplayMedia(DisplayConstraints{
+		Video: &DisplayVideoConstraints{
+			ScreenID:  0,
+			Width:     1920,
+			Height:    1080,
+			FrameRate: 30,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("GetDisplayMedia() error = %v", err)
+	}
+	if stream == nil {
+		t.Fatal("GetDisplayMedia() stream is nil")
+	}
+
+	videoTracks := stream.GetVideoTracks()
+	if len(videoTracks) != 1 {
+		t.Errorf("GetVideoTracks() len = %d, want 1", len(videoTracks))
+	}
+
+	if len(videoTracks) > 0 {
+		track := videoTracks[0]
+		if track.Kind() != "video" {
+			t.Errorf("Kind() = %q, want %q", track.Kind(), "video")
+		}
+		if track.Label() != "screen-capture" {
+			t.Errorf("Label() = %q, want %q", track.Label(), "screen-capture")
+		}
+	}
+}
+
+func TestGetDisplayMediaWithWindowID(t *testing.T) {
+	stream, err := GetDisplayMedia(DisplayConstraints{
+		Video: &DisplayVideoConstraints{
+			WindowID: 12345,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("GetDisplayMedia() error = %v", err)
+	}
+
+	videoTracks := stream.GetVideoTracks()
+	if len(videoTracks) > 0 {
+		track := videoTracks[0]
+		if track.Label() != "window-capture" {
+			t.Errorf("Label() = %q, want %q", track.Label(), "window-capture")
+		}
+	}
+}
+
+func TestGetDisplayMediaLegacyConstraints(t *testing.T) {
+	// Test that legacy Constraints still work
+	stream, err := GetDisplayMedia(Constraints{
+		Video: &VideoConstraints{
+			Width:  1920,
+			Height: 1080,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("GetDisplayMedia() error = %v", err)
+	}
+	if stream == nil {
+		t.Fatal("GetDisplayMedia() stream is nil")
+	}
+}
+
+func TestGetDisplayMediaInvalidConstraints(t *testing.T) {
+	_, err := GetDisplayMedia("invalid")
+
+	if !errors.Is(err, ErrInvalidConstraints) {
+		t.Errorf("GetDisplayMedia() error = %v, want %v", err, ErrInvalidConstraints)
 	}
 }

@@ -362,6 +362,13 @@ type Track struct {
 	muted   atomic.Bool
 	pc      *PeerConnection
 
+	// Video/audio track source for frame injection
+	sourceHandle uintptr
+	width        int
+	height       int
+	sampleRate   int
+	channels     int
+
 	// For writing frames
 	mu sync.Mutex
 }
@@ -392,10 +399,30 @@ func (t *Track) WriteVideoFrame(f *frame.VideoFrame) error {
 	if !t.enabled.Load() {
 		return nil
 	}
+	if t.sourceHandle == 0 {
+		return errors.New("track source not initialized")
+	}
+	if f.Format != frame.PixelFormatI420 {
+		return errors.New("only I420 format supported")
+	}
+	if len(f.Data) < 3 || len(f.Stride) < 3 {
+		return errors.New("invalid I420 frame data")
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	// TODO: Call FFI to write frame to libwebrtc track
-	return nil
+
+	// Push frame to the native track source via FFI
+	return ffi.VideoTrackSourcePushFrame(
+		t.sourceHandle,
+		f.Data[0], // Y plane
+		f.Data[1], // U plane
+		f.Data[2], // V plane
+		f.Stride[0],
+		f.Stride[1],
+		f.Stride[2],
+		int64(f.PTS)*1000, // Convert to microseconds
+	)
 }
 
 // WriteAudioFrame writes an audio frame to the track.
@@ -406,10 +433,25 @@ func (t *Track) WriteAudioFrame(f *frame.AudioFrame) error {
 	if !t.enabled.Load() {
 		return nil
 	}
+	if t.sourceHandle == 0 {
+		return errors.New("track source not initialized")
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	// TODO: Call FFI to write frame to libwebrtc track
-	return nil
+
+	// Convert bytes to int16 samples for FFI
+	samples := f.SamplesS16()
+	if samples == nil {
+		return errors.New("failed to get audio samples")
+	}
+
+	// Push audio samples to the native track source via FFI
+	return ffi.AudioTrackSourcePushFrame(
+		t.sourceHandle,
+		samples,
+		int64(f.PTS)*1000, // Convert to microseconds
+	)
 }
 
 // PeerConnection wraps libwebrtc's native PeerConnection.
@@ -705,9 +747,40 @@ func (pc *PeerConnection) AddTrack(track *Track, streams ...string) (*RTPSender,
 		streamID = streams[0]
 	}
 
-	// Call FFI to add track
-	senderHandle := ffi.PeerConnectionAddTrack(pc.handle, ffi.CodecType(track.codec), track.id, streamID)
+	var senderHandle uintptr
+
+	if track.kind == "video" {
+		// Create video track source for frame injection
+		sourceHandle := ffi.VideoTrackSourceCreate(pc.handle, track.width, track.height)
+		if sourceHandle == 0 {
+			return nil, errors.New("failed to create video track source")
+		}
+		track.sourceHandle = sourceHandle
+
+		// Add video track from source
+		senderHandle = ffi.PeerConnectionAddVideoTrackFromSource(pc.handle, sourceHandle, track.id, streamID)
+	} else if track.kind == "audio" {
+		// Create audio track source for frame injection
+		sourceHandle := ffi.AudioTrackSourceCreate(pc.handle, track.sampleRate, track.channels)
+		if sourceHandle == 0 {
+			return nil, errors.New("failed to create audio track source")
+		}
+		track.sourceHandle = sourceHandle
+
+		// Add audio track from source
+		senderHandle = ffi.PeerConnectionAddAudioTrackFromSource(pc.handle, sourceHandle, track.id, streamID)
+	} else {
+		return nil, errors.New("unknown track kind")
+	}
+
 	if senderHandle == 0 {
+		// Cleanup source on failure
+		if track.kind == "video" {
+			ffi.VideoTrackSourceDestroy(track.sourceHandle)
+		} else {
+			ffi.AudioTrackSourceDestroy(track.sourceHandle)
+		}
+		track.sourceHandle = 0
 		return nil, errors.New("failed to add track")
 	}
 
@@ -888,35 +961,50 @@ func (pc *PeerConnection) Close() error {
 // --- Track creation helpers ---
 
 // CreateVideoTrack creates a video track for this peer connection.
-func (pc *PeerConnection) CreateVideoTrack(id string, codecType codec.Type) (*Track, error) {
+// Width and height specify the video dimensions for the track source.
+func (pc *PeerConnection) CreateVideoTrack(id string, codecType codec.Type, width, height int) (*Track, error) {
+	if width <= 0 || height <= 0 {
+		return nil, errors.New("invalid video dimensions")
+	}
+
 	track := &Track{
-		id:    id,
-		kind:  "video",
-		label: "libwebrtc-video-" + id,
-		codec: codecType,
-		pc:    pc,
+		id:     id,
+		kind:   "video",
+		label:  "libwebrtc-video-" + id,
+		codec:  codecType,
+		pc:     pc,
+		width:  width,
+		height: height,
 	}
 	track.enabled.Store(true)
 	track.muted.Store(false)
-
-	// TODO: Call FFI to create native video track
 
 	return track, nil
 }
 
 // CreateAudioTrack creates an audio track for this peer connection.
+// Uses 48kHz stereo by default (can be overridden with CreateAudioTrackWithOptions).
 func (pc *PeerConnection) CreateAudioTrack(id string) (*Track, error) {
+	return pc.CreateAudioTrackWithOptions(id, 48000, 2)
+}
+
+// CreateAudioTrackWithOptions creates an audio track with specific sample rate and channels.
+func (pc *PeerConnection) CreateAudioTrackWithOptions(id string, sampleRate, channels int) (*Track, error) {
+	if sampleRate <= 0 || channels <= 0 || channels > 2 {
+		return nil, errors.New("invalid audio parameters")
+	}
+
 	track := &Track{
-		id:    id,
-		kind:  "audio",
-		label: "libwebrtc-audio-" + id,
-		codec: codec.Opus,
-		pc:    pc,
+		id:         id,
+		kind:       "audio",
+		label:      "libwebrtc-audio-" + id,
+		codec:      codec.Opus,
+		pc:         pc,
+		sampleRate: sampleRate,
+		channels:   channels,
 	}
 	track.enabled.Store(true)
 	track.muted.Store(false)
-
-	// TODO: Call FFI to create native audio track
 
 	return track, nil
 }

@@ -8,6 +8,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Options
 option(USE_SYSTEM_LIBWEBRTC "Use system-installed libwebrtc" OFF)
 option(BUILD_SHARED_LIBS "Build shared library" ON)
+option(ENABLE_DEVICE_CAPTURE "Enable camera/mic/screen capture support" ON)
 
 # Find libwebrtc
 # Users should set LIBWEBRTC_DIR to point to their libwebrtc build
@@ -94,6 +95,10 @@ target_compile_definitions(webrtc_shim PRIVATE
     WEBRTC_LIBRARY_IMPL
 )
 
+if(ENABLE_DEVICE_CAPTURE)
+    target_compile_definitions(webrtc_shim PRIVATE SHIM_ENABLE_DEVICE_CAPTURE)
+endif()
+
 if(APPLE)
     target_compile_definitions(webrtc_shim PRIVATE WEBRTC_MAC)
 elseif(UNIX)
@@ -136,8 +141,9 @@ install(FILES shim.h DESTINATION include)
 # Print configuration
 message(STATUS "")
 message(STATUS "libwebrtc_shim configuration:")
-message(STATUS "  Version:      ${PROJECT_VERSION}")
-message(STATUS "  Build type:   ${CMAKE_BUILD_TYPE}")
-message(STATUS "  Shared lib:   ${BUILD_SHARED_LIBS}")
-message(STATUS "  libwebrtc:    ${LIBWEBRTC_LIBRARY}")
+message(STATUS "  Version:        ${PROJECT_VERSION}")
+message(STATUS "  Build type:     ${CMAKE_BUILD_TYPE}")
+message(STATUS "  Shared lib:     ${BUILD_SHARED_LIBS}")
+message(STATUS "  Device capture: ${ENABLE_DEVICE_CAPTURE}")
+message(STATUS "  libwebrtc:      ${LIBWEBRTC_LIBRARY}")
 message(STATUS "")

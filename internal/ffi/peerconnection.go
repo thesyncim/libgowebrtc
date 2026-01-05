@@ -275,3 +275,99 @@ func DataChannelDestroy(dc uintptr) {
 	}
 	shimDataChannelDestroy(dc)
 }
+
+// VideoTrackSourceCreate creates a video track source for frame injection.
+func VideoTrackSourceCreate(pc uintptr, width, height int) uintptr {
+	if !libLoaded || shimVideoTrackSourceCreate == nil {
+		return 0
+	}
+	return shimVideoTrackSourceCreate(pc, width, height)
+}
+
+// VideoTrackSourcePushFrame pushes an I420 frame to the video track source.
+func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) error {
+	if !libLoaded || shimVideoTrackSourcePushFrame == nil {
+		return ErrLibraryNotLoaded
+	}
+
+	result := shimVideoTrackSourcePushFrame(
+		source,
+		ByteSlicePtr(yPlane),
+		ByteSlicePtr(uPlane),
+		ByteSlicePtr(vPlane),
+		yStride, uStride, vStride,
+		timestampUs,
+	)
+	return ShimError(result)
+}
+
+// PeerConnectionAddVideoTrackFromSource adds a video track using a source.
+func PeerConnectionAddVideoTrackFromSource(pc, source uintptr, trackID, streamID string) uintptr {
+	if !libLoaded || shimPeerConnectionAddVideoTrackFromSource == nil {
+		return 0
+	}
+
+	trackIDCStr := CString(trackID)
+	streamIDCStr := CString(streamID)
+	return shimPeerConnectionAddVideoTrackFromSource(
+		pc,
+		source,
+		ByteSlicePtr(trackIDCStr),
+		ByteSlicePtr(streamIDCStr),
+	)
+}
+
+// VideoTrackSourceDestroy destroys a video track source.
+func VideoTrackSourceDestroy(source uintptr) {
+	if !libLoaded || shimVideoTrackSourceDestroy == nil {
+		return
+	}
+	shimVideoTrackSourceDestroy(source)
+}
+
+// AudioTrackSourceCreate creates an audio track source for frame injection.
+func AudioTrackSourceCreate(pc uintptr, sampleRate, channels int) uintptr {
+	if !libLoaded || shimAudioTrackSourceCreate == nil {
+		return 0
+	}
+	return shimAudioTrackSourceCreate(pc, sampleRate, channels)
+}
+
+// AudioTrackSourcePushFrame pushes audio samples to the audio track source.
+func AudioTrackSourcePushFrame(source uintptr, samples []int16, timestampUs int64) error {
+	if !libLoaded || shimAudioTrackSourcePushFrame == nil {
+		return ErrLibraryNotLoaded
+	}
+
+	result := shimAudioTrackSourcePushFrame(
+		source,
+		Int16SlicePtr(samples),
+		len(samples),
+		timestampUs,
+	)
+	return ShimError(result)
+}
+
+// PeerConnectionAddAudioTrackFromSource adds an audio track using a source.
+func PeerConnectionAddAudioTrackFromSource(pc, source uintptr, trackID, streamID string) uintptr {
+	if !libLoaded || shimPeerConnectionAddAudioTrackFromSource == nil {
+		return 0
+	}
+
+	trackIDCStr := CString(trackID)
+	streamIDCStr := CString(streamID)
+	return shimPeerConnectionAddAudioTrackFromSource(
+		pc,
+		source,
+		ByteSlicePtr(trackIDCStr),
+		ByteSlicePtr(streamIDCStr),
+	)
+}
+
+// AudioTrackSourceDestroy destroys an audio track source.
+func AudioTrackSourceDestroy(source uintptr) {
+	if !libLoaded || shimAudioTrackSourceDestroy == nil {
+		return
+	}
+	shimAudioTrackSourceDestroy(source)
+}

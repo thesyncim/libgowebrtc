@@ -150,7 +150,7 @@ func TestVideoFramePool(t *testing.T) {
 	// Get again - should get from pool
 	reused := pool.Get()
 	if reused == nil {
-		t.Error("Should get reused frame from pool")
+		t.Fatal("Should get reused frame from pool")
 	}
 
 	// PTS should be reset
@@ -226,7 +226,7 @@ func TestAudioFramePool(t *testing.T) {
 
 	reused := pool.Get()
 	if reused == nil {
-		t.Error("Should get reused frame")
+		t.Fatal("Should get reused frame")
 	}
 	if reused.PTS != 0 {
 		t.Error("PTS should be reset")

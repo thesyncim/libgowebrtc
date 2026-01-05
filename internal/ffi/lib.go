@@ -130,6 +130,18 @@ var (
 	shimDataChannelReadyState   func(dc uintptr) int
 	shimDataChannelClose        func(dc uintptr)
 	shimDataChannelDestroy      func(dc uintptr)
+
+	// Video Track Source (for frame injection)
+	shimVideoTrackSourceCreate                func(pc uintptr, width, height int) uintptr
+	shimVideoTrackSourcePushFrame             func(source uintptr, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int, timestampUs int64) int
+	shimPeerConnectionAddVideoTrackFromSource func(pc, source uintptr, trackID, streamID uintptr) uintptr
+	shimVideoTrackSourceDestroy               func(source uintptr)
+
+	// Audio Track Source (for frame injection)
+	shimAudioTrackSourceCreate                func(pc uintptr, sampleRate, channels int) uintptr
+	shimAudioTrackSourcePushFrame             func(source uintptr, samples uintptr, numSamples int, timestampUs int64) int
+	shimPeerConnectionAddAudioTrackFromSource func(pc, source uintptr, trackID, streamID uintptr) uintptr
+	shimAudioTrackSourceDestroy               func(source uintptr)
 )
 
 // LoadLibrary loads the libwebrtc_shim shared library.
@@ -327,6 +339,40 @@ func registerFunctions() error {
 	purego.RegisterLibFunc(&shimDataChannelReadyState, libHandle, "shim_data_channel_ready_state")
 	purego.RegisterLibFunc(&shimDataChannelClose, libHandle, "shim_data_channel_close")
 	purego.RegisterLibFunc(&shimDataChannelDestroy, libHandle, "shim_data_channel_destroy")
+
+	// Device Enumeration
+	purego.RegisterLibFunc(&shimEnumerateDevices, libHandle, "shim_enumerate_devices")
+
+	// Video Capture
+	purego.RegisterLibFunc(&shimVideoCaptureCreate, libHandle, "shim_video_capture_create")
+	purego.RegisterLibFunc(&shimVideoCaptureStart, libHandle, "shim_video_capture_start")
+	purego.RegisterLibFunc(&shimVideoCaptureStop, libHandle, "shim_video_capture_stop")
+	purego.RegisterLibFunc(&shimVideoCaptureDestroy, libHandle, "shim_video_capture_destroy")
+
+	// Audio Capture
+	purego.RegisterLibFunc(&shimAudioCaptureCreate, libHandle, "shim_audio_capture_create")
+	purego.RegisterLibFunc(&shimAudioCaptureStart, libHandle, "shim_audio_capture_start")
+	purego.RegisterLibFunc(&shimAudioCaptureStop, libHandle, "shim_audio_capture_stop")
+	purego.RegisterLibFunc(&shimAudioCaptureDestroy, libHandle, "shim_audio_capture_destroy")
+
+	// Screen Capture
+	purego.RegisterLibFunc(&shimEnumerateScreens, libHandle, "shim_enumerate_screens")
+	purego.RegisterLibFunc(&shimScreenCaptureCreate, libHandle, "shim_screen_capture_create")
+	purego.RegisterLibFunc(&shimScreenCaptureStart, libHandle, "shim_screen_capture_start")
+	purego.RegisterLibFunc(&shimScreenCaptureStop, libHandle, "shim_screen_capture_stop")
+	purego.RegisterLibFunc(&shimScreenCaptureDestroy, libHandle, "shim_screen_capture_destroy")
+
+	// Video Track Source
+	purego.RegisterLibFunc(&shimVideoTrackSourceCreate, libHandle, "shim_video_track_source_create")
+	purego.RegisterLibFunc(&shimVideoTrackSourcePushFrame, libHandle, "shim_video_track_source_push_frame")
+	purego.RegisterLibFunc(&shimPeerConnectionAddVideoTrackFromSource, libHandle, "shim_peer_connection_add_video_track_from_source")
+	purego.RegisterLibFunc(&shimVideoTrackSourceDestroy, libHandle, "shim_video_track_source_destroy")
+
+	// Audio Track Source
+	purego.RegisterLibFunc(&shimAudioTrackSourceCreate, libHandle, "shim_audio_track_source_create")
+	purego.RegisterLibFunc(&shimAudioTrackSourcePushFrame, libHandle, "shim_audio_track_source_push_frame")
+	purego.RegisterLibFunc(&shimPeerConnectionAddAudioTrackFromSource, libHandle, "shim_peer_connection_add_audio_track_from_source")
+	purego.RegisterLibFunc(&shimAudioTrackSourceDestroy, libHandle, "shim_audio_track_source_destroy")
 
 	return err
 }

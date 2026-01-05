@@ -79,7 +79,7 @@ func TestVideoTrackRoundtrip(t *testing.T) {
 	})
 
 	// Create libwebrtc video track (native)
-	libTrack, err := libPC.CreateVideoTrack("video-interop-test", codec.VP8)
+	libTrack, err := libPC.CreateVideoTrack("video-interop-test", codec.VP8, 640, 480)
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc track: %v", err)
 	}
