@@ -1,0 +1,1118 @@
+# libgowebrtc: Pion-Compatible libwebrtc Wrapper
+
+## Goal
+Create a Go library wrapping libwebrtc for encode/decode/packetize with a **Pion-compatible interface** - no networking, just media processing. Uses **purego** instead of CGO for cleaner builds.
+
+## Design Principles
+
+1. **Allocation-free hot paths** - All encode/decode operations write into caller-provided buffers
+2. **Single way to do things** - No convenience methods, one clear API
+3. **Pion interoperability** - Implements Pion interfaces for seamless integration
+4. **Browser-compatible API** - API should be flexible enough to do everything browser WebRTC can do (offer/answer, ICE, tracks, data channels, transceivers, simulcast, SVC)
+5. **Modular & maintainable** - Code organized into small, focused modules with clear responsibilities. Test helpers abstract common patterns.
+
+## Code Organization Principles
+
+- **Small focused files** - Each file has a single responsibility
+- **Test helpers** - Common test patterns extracted to reusable helpers (see `test/interop/helpers.go`)
+- **Minimal dependencies** - Each package imports only what it needs
+- **Clear interfaces** - Public APIs are well-defined interfaces, implementations are internal
+- **Error handling** - Typed errors with clear messages, no panics in library code
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Go Application                           │
+├─────────────────────────────────────────────────────────────────┤
+│  libgowebrtc (Go)                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ track.Local  │  │ encoder/     │  │ packetizer/          │  │
+│  │ (implements  │  │ decoder      │  │ depacketizer         │  │
+│  │ webrtc.      │  │              │  │                      │  │
+│  │ TrackLocal)  │  └──────────────┘  └──────────────────────┘  │
+│  └──────────────┘                                               │
+│         │                    │                    │             │
+│         └────────────────────┼────────────────────┘             │
+│                              │                                  │
+│                     ┌────────▼────────┐                         │
+│                     │  internal/ffi   │  ← purego bindings      │
+│                     └────────┬────────┘                         │
+└──────────────────────────────┼──────────────────────────────────┘
+                               │ dlopen/dlsym
+                    ┌──────────▼──────────┐
+                    │  libwebrtc_shim.so  │  ← C wrapper (pre-built)
+                    │  (C API over C++)   │
+                    └──────────┬──────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │     libwebrtc       │  ← Google's WebRTC
+                    └─────────────────────┘
+```
+
+## Project Structure
+
+```
+libgowebrtc/
+├── go.mod
+├── PLAN.md
+├── .gitignore
+│
+├── pkg/
+│   ├── codec/                    # Codec types and constants
+│   │   └── codec.go
+│   │
+│   ├── frame/                    # Frame types
+│   │   ├── video.go              # VideoFrame (I420, NV12)
+│   │   └── audio.go              # AudioFrame (PCM)
+│   │
+│   ├── encoder/                  # Encoders (allocation-free)
+│   │   ├── encoder.go            # VideoEncoder, AudioEncoder interfaces
+│   │   ├── h264.go
+│   │   ├── vp8.go
+│   │   ├── vp9.go
+│   │   ├── av1.go
+│   │   └── opus.go
+│   │
+│   ├── decoder/                  # Decoders (allocation-free)
+│   │   ├── decoder.go
+│   │   ├── h264.go
+│   │   ├── vp8.go
+│   │   ├── vp9.go
+│   │   ├── av1.go
+│   │   └── opus.go
+│   │
+│   ├── packetizer/
+│   │   └── packetizer.go
+│   │
+│   ├── depacketizer/
+│   │   └── depacketizer.go
+│   │
+│   └── track/
+│       └── local.go              # Implements webrtc.TrackLocal
+│
+├── internal/
+│   ├── ffi/                      # purego FFI bindings
+│   │   ├── lib.go
+│   │   ├── types.go
+│   │   ├── encoder.go
+│   │   └── decoder.go
+│   │
+│   └── pool/
+│       └── pool.go
+│
+├── shim/
+│   ├── shim.h                    # C API (allocation-free design)
+│   └── ...
+│
+├── lib/                          # Pre-built binaries (gitignored)
+│
+└── examples/
+```
+
+## Core Interfaces (Allocation-Free)
+
+### VideoEncoder
+
+```go
+type VideoEncoder interface {
+    // EncodeInto encodes a video frame into the destination buffer.
+    // Caller must provide buffer of at least MaxEncodedSize() bytes.
+    EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyframe bool) (EncodeResult, error)
+
+    // MaxEncodedSize returns max possible encoded size for configured resolution.
+    MaxEncodedSize() int
+
+    SetBitrate(bps uint32) error
+    SetFramerate(fps float64) error
+    RequestKeyFrame()
+    Codec() codec.Type
+    Close() error
+}
+
+type EncodeResult struct {
+    N          int  // bytes written
+    IsKeyframe bool
+}
+```
+
+### VideoDecoder
+
+```go
+type VideoDecoder interface {
+    // DecodeInto decodes into pre-allocated frame.
+    // dst.Data must have sufficient space (use frame.NewI420Frame).
+    DecodeInto(src []byte, dst *frame.VideoFrame, timestamp uint32, isKeyframe bool) error
+
+    Codec() codec.Type
+    Close() error
+}
+```
+
+### AudioEncoder
+
+```go
+type AudioEncoder interface {
+    // EncodeInto encodes audio samples into the destination buffer.
+    EncodeInto(src *frame.AudioFrame, dst []byte) (n int, err error)
+
+    // MaxEncodedSize returns max possible encoded size for a single frame.
+    MaxEncodedSize() int
+
+    SetBitrate(bps uint32) error
+    Codec() codec.Type
+    Close() error
+}
+```
+
+### AudioDecoder
+
+```go
+type AudioDecoder interface {
+    // DecodeInto decodes into pre-allocated frame.
+    DecodeInto(src []byte, dst *frame.AudioFrame) (numSamples int, err error)
+
+    // MaxSamplesPerFrame returns max samples per channel from one encoded frame.
+    MaxSamplesPerFrame() int
+
+    Codec() codec.Type
+    Close() error
+}
+```
+
+## Codec Configuration Options
+
+### H.264 Config
+```go
+type H264Config struct {
+    Width, Height int              // Resolution
+    Bitrate       uint32           // Target bitrate (0 = auto)
+    MaxBitrate    uint32           // VBR max (0 = 1.5x)
+    RateControl   RateControlMode  // CBR, VBR, CQ
+    FPS           float64          // Framerate (0 = 30)
+    KeyInterval   int              // Keyframe interval
+    Profile       H264Profile      // Baseline, Main, High
+    CRF           int              // CQ quality (0-51)
+    LowDelay      bool             // Low latency mode
+    ZeroLatency   bool             // Ultra low latency
+    PreferHW      bool             // Hardware encoder
+}
+```
+
+### VP8/VP9/AV1 Config
+```go
+// Common options across VP8/VP9/AV1:
+Width, Height   int              // Resolution
+Bitrate         uint32           // Target bitrate
+RateControl     RateControlMode  // CBR, VBR, CQ
+FPS             float64          // Framerate
+KeyInterval     int              // Keyframe interval
+CQ              int              // Quality (0-63)
+Speed           int              // Encode speed (0-10)
+LowDelay        bool             // Low latency
+PreferHW        bool             // Hardware encoder
+
+// VP9/AV1 specific:
+Profile         VP9Profile/AV1Profile
+TileColumns     int              // Parallel tiles
+TileRows        int
+FrameParallel   bool
+SvcEnabled      bool             // Scalable video coding
+SvcNumLayers    int
+```
+
+### Opus Config
+```go
+type OpusConfig struct {
+    SampleRate  int              // 8000-48000
+    Channels    int              // 1 or 2
+    Bitrate     uint32           // 6000-510000 bps
+    VBR         bool             // Variable bitrate
+    Application OpusApplication  // VoIP, Audio, LowDelay
+    Bandwidth   OpusBandwidth    // Narrow to Full
+    Complexity  int              // 0-10
+    FrameSize   float64          // 2.5-60ms
+    FEC         bool             // Forward error correction
+    DTX         bool             // Silence suppression
+    InBandFEC   bool             // Packet loss recovery
+    PacketLoss  int              // Expected loss %
+}
+```
+
+### Default Configurations
+```go
+// Sensible defaults with auto bitrate estimation:
+codec.DefaultH264Config(1280, 720)  // H.264 720p
+codec.DefaultVP8Config(1920, 1080)  // VP8 1080p
+codec.DefaultVP9Config(1280, 720)   // VP9 720p
+codec.DefaultAV1Config(1920, 1080)  // AV1 1080p
+codec.DefaultOpusConfig()            // Opus 48kHz stereo
+```
+
+## Runtime Controls
+
+Encoders support runtime adjustments without recreation. Use type assertion for advanced controls.
+
+### Video Encoder Runtime API
+```go
+// Core runtime controls (all video encoders)
+enc.SetBitrate(2_000_000)     // Change bitrate
+enc.SetFramerate(60)           // Change framerate
+enc.RequestKeyFrame()          // Force next frame to be keyframe
+
+// Advanced controls (use type assertion)
+if adv, ok := enc.(encoder.VideoEncoderAdvanced); ok {
+    adv.SetQuality(23)                       // CQ mode quality
+    adv.SetKeyInterval(120)                  // Keyframe every 4s at 30fps
+    adv.SetRateControl(codec.RateControlVBR) // Switch rate control
+    stats := adv.Stats()                     // Get encoder statistics
+}
+```
+
+### Audio Encoder Runtime API
+```go
+// Core runtime controls (all audio encoders)
+enc.SetBitrate(128_000)  // Change bitrate
+
+// Advanced Opus controls (use type assertion)
+if adv, ok := enc.(encoder.AudioEncoderAdvanced); ok {
+    adv.SetComplexity(10)          // Max quality
+    adv.SetFEC(true)               // Enable forward error correction
+    adv.SetDTX(true)               // Enable discontinuous transmission
+    adv.SetPacketLossPercentage(5) // Tune FEC for 5% packet loss
+    adv.SetBandwidth(codec.OpusBandwidthFull)
+}
+```
+
+### Encoder Statistics
+```go
+type EncoderStats struct {
+    FramesEncoded   uint64  // Total frames encoded
+    BytesEncoded    uint64  // Total bytes produced
+    KeyframesForced uint32  // Keyframes from RequestKeyFrame
+    AvgBitrate      uint32  // Average bitrate in bps
+    AvgFrameSize    uint32  // Average encoded frame size
+    AvgEncodeTimeUs uint32  // Average encode time in microseconds
+}
+```
+
+## SVC & Simulcast
+
+Scalable Video Coding allows a single encoder to produce multiple quality layers, enabling SFUs to forward appropriate layers without transcoding.
+
+### SVC Modes
+```go
+// Standard SVC (inter-layer prediction)
+SVCModeL1T1  // No SVC (baseline)
+SVCModeL1T2  // 1 spatial, 2 temporal layers
+SVCModeL1T3  // 1 spatial, 3 temporal layers
+SVCModeL2T3  // 2 spatial, 3 temporal layers
+SVCModeL3T3  // 3 spatial, 3 temporal layers (full SVC)
+
+// K-SVC (Key-frame dependent - best for SFU)
+SVCModeL2T3_KEY  // 2 spatial, 3 temporal (K-SVC)
+SVCModeL3T3_KEY  // 3 spatial, 3 temporal (K-SVC, Chrome default)
+
+// Simulcast (separate independent encoders)
+SVCModeS2T1  // 2 simulcast streams
+SVCModeS3T3  // 3 simulcast streams with temporal layers
+```
+
+### Browser-Like Presets
+```go
+// Use presets that match browser behavior:
+codec.SVCPresetNone()        // No SVC
+codec.SVCPresetScreenShare() // L1T3 - temporal only for screen sharing
+codec.SVCPresetLowLatency()  // L1T2 - minimal overhead
+codec.SVCPresetSFU()         // L3T3_KEY - best for SFU forwarding
+codec.SVCPresetSFULite()     // L2T3_KEY - lighter alternative
+codec.SVCPresetSimulcast()   // S3T3 - classic 3-stream simulcast
+codec.SVCPresetChrome()      // L3T3_KEY - matches Chrome defaults
+codec.SVCPresetFirefox()     // L2T3 - matches Firefox defaults
+```
+
+### SVC Configuration Example
+```go
+// VP9 with Chrome-like SVC for SFU usage
+enc, _ := encoder.NewVP9Encoder(codec.VP9Config{
+    Width:   1280,
+    Height:  720,
+    Bitrate: 2_000_000,
+    FPS:     30,
+    SVC:     codec.SVCPresetSFU(), // L3T3_KEY
+})
+
+// AV1 with custom SVC layers
+enc, _ := encoder.NewAV1Encoder(codec.AV1Config{
+    Width:   1920,
+    Height:  1080,
+    Bitrate: 4_000_000,
+    SVC: &codec.SVCConfig{
+        Mode: codec.SVCModeL3T3_KEY,
+        Layers: []codec.SVCLayerConfig{
+            {Width: 480, Height: 270, Bitrate: 300_000, Active: true},
+            {Width: 960, Height: 540, Bitrate: 1_000_000, Active: true},
+            {Width: 1920, Height: 1080, Bitrate: 2_700_000, Active: true},
+        },
+    },
+})
+```
+
+### Runtime SVC Control
+```go
+// Check if encoder supports SVC controls
+if svc, ok := enc.(encoder.VideoEncoderSVC); ok {
+    // Change SVC mode at runtime
+    svc.SetSVCMode(codec.SVCModeL2T3_KEY)
+
+    // Adjust individual layer bitrates (bandwidth adaptation)
+    svc.SetLayerBitrate(0, 200_000)  // Low quality layer
+    svc.SetLayerBitrate(1, 800_000)  // Medium quality
+    svc.SetLayerBitrate(2, 2_000_000) // High quality
+
+    // Disable/enable layers dynamically
+    svc.SetLayerActive(2, false) // Disable highest layer
+
+    // Request keyframe for specific layer
+    svc.RequestLayerKeyFrame(0)
+
+    // Get current layer status
+    spatial, temporal := svc.GetActiveLayerCount()
+}
+```
+
+## Unified Codec Creation
+
+```go
+// Type-safe per-codec constructors (recommended)
+enc, _ := encoder.NewH264Encoder(codec.H264Config{...})
+enc, _ := encoder.NewVP9Encoder(codec.VP9Config{...})
+
+// Or generic factory with interface{}
+enc, _ := encoder.NewVideoEncoder(codec.H264, codec.H264Config{...})
+enc, _ := encoder.NewVideoEncoder(codec.VP9, codec.VP9Config{...})
+
+// Decoders (codec-only, no config needed)
+dec, _ := decoder.NewVideoDecoder(codec.H264)
+dec, _ := decoder.NewAudioDecoder(codec.Opus)
+```
+
+## Browser-Like API
+
+The library provides a browser-like API that mirrors the Web APIs, making it easy for developers familiar with WebRTC in browsers.
+
+### pkg/media - MediaStream & Tracks (like getUserMedia)
+```go
+import "github.com/thesyncim/libgowebrtc/pkg/media"
+
+// Just like navigator.mediaDevices.getUserMedia()
+stream, _ := media.GetUserMedia(media.Constraints{
+    Video: &media.VideoConstraints{
+        Width:     1280,
+        Height:    720,
+        FrameRate: 30,
+        Codec:     codec.VP9,
+        SVC:       codec.SVCPresetSFU(), // L3T3_KEY for SFU
+    },
+    Audio: &media.AudioConstraints{
+        SampleRate:       48000,
+        ChannelCount:     2,
+        EchoCancellation: true,
+        NoiseSuppression: true,
+    },
+})
+
+// Screen sharing (like getDisplayMedia)
+screenStream, _ := media.GetDisplayMedia(media.Constraints{
+    Video: &media.VideoConstraints{
+        Width:  1920,
+        Height: 1080,
+        Codec:  codec.AV1,
+        SVC:    codec.SVCPresetScreenShare(),
+    },
+})
+
+// Access tracks like in browser
+videoTracks := stream.GetVideoTracks()
+audioTracks := stream.GetAudioTracks()
+
+// Control tracks
+videoTracks[0].SetEnabled(false) // Disable video
+audioTracks[0].Stop()            // Stop audio track
+```
+
+### pkg/pc - Native libwebrtc PeerConnection
+```go
+import "github.com/thesyncim/libgowebrtc/pkg/pc"
+
+// Create PeerConnection (backed by libwebrtc, not Pion!)
+peerConnection, _ := pc.NewPeerConnection(pc.Configuration{
+    ICEServers: []pc.ICEServer{
+        {URLs: []string{"stun:stun.l.google.com:19302"}},
+        {URLs: []string{"turn:turn.example.com:3478"},
+         Username: "user", Credential: "pass"},
+    },
+    SDPSemantics: "unified-plan",
+})
+
+// Event handlers - exactly like browser JavaScript
+peerConnection.OnICECandidate = func(candidate *pc.ICECandidate) {
+    // Send candidate to remote peer via signaling
+    signalingChannel.Send(candidate)
+}
+
+peerConnection.OnTrack = func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
+    // Handle incoming track
+    if track.Kind() == "video" {
+        // Decode and display video
+    }
+}
+
+peerConnection.OnConnectionStateChange = func(state pc.PeerConnectionState) {
+    fmt.Printf("Connection state: %s\n", state)
+}
+
+// Add tracks (like browser's addTrack)
+videoTrack, _ := peerConnection.CreateVideoTrack("video-0", codec.VP9)
+audioTrack, _ := peerConnection.CreateAudioTrack("audio-0")
+
+sender, _ := peerConnection.AddTrack(videoTrack, "stream-0")
+peerConnection.AddTrack(audioTrack, "stream-0")
+
+// Configure SVC/simulcast per-sender
+sender.SetParameters(pc.RTPSendParameters{
+    Encodings: []pc.RTPEncodingParameters{
+        {RID: "low", MaxBitrate: 300_000, ScaleResolutionDownBy: 4},
+        {RID: "mid", MaxBitrate: 1_000_000, ScaleResolutionDownBy: 2},
+        {RID: "high", MaxBitrate: 2_500_000, ScalabilityMode: "L3T3_KEY"},
+    },
+})
+
+// Create offer/answer - standard WebRTC flow
+offer, _ := peerConnection.CreateOffer(nil)
+peerConnection.SetLocalDescription(offer)
+// ... send offer via signaling, receive answer ...
+peerConnection.SetRemoteDescription(answer)
+
+// Feed raw frames to tracks
+for frame := range videoSource {
+    videoTrack.WriteVideoFrame(frame)
+}
+```
+
+### Comparison: Browser JS vs libgowebrtc Go
+
+| Browser JavaScript | libgowebrtc Go |
+|-------------------|----------------|
+| `navigator.mediaDevices.getUserMedia(constraints)` | `media.GetUserMedia(constraints)` |
+| `new RTCPeerConnection(config)` | `pc.NewPeerConnection(config)` |
+| `pc.addTrack(track, stream)` | `pc.AddTrack(track, "stream")` |
+| `pc.createOffer()` | `pc.CreateOffer(nil)` |
+| `pc.setLocalDescription(offer)` | `pc.SetLocalDescription(offer)` |
+| `pc.ontrack = (e) => {}` | `pc.OnTrack = func(track, receiver, streams) {}` |
+| `pc.onicecandidate = (e) => {}` | `pc.OnICECandidate = func(candidate) {}` |
+| `sender.setParameters(params)` | `sender.SetParameters(params)` |
+| `track.enabled = false` | `track.SetEnabled(false)` |
+
+## State-of-the-Art Examples
+
+### Example 1: SFU-Ready Video Conference with K-SVC
+```go
+// Production-ready video conferencing with SFU-optimized encoding
+package main
+
+import (
+    "github.com/thesyncim/libgowebrtc/pkg/codec"
+    "github.com/thesyncim/libgowebrtc/pkg/media"
+    "github.com/thesyncim/libgowebrtc/pkg/pc"
+)
+
+func main() {
+    // Create peer connection with TURN fallback
+    peerConnection, _ := pc.NewPeerConnection(pc.Configuration{
+        ICEServers: []pc.ICEServer{
+            {URLs: []string{"stun:stun.l.google.com:19302"}},
+            {URLs: []string{"turns:turn.example.com:443?transport=tcp"},
+             Username: "user", Credential: "pass"},
+        },
+    })
+
+    // Get camera+mic with SFU-optimized SVC (Chrome-like)
+    stream, _ := media.GetUserMedia(media.Constraints{
+        Video: &media.VideoConstraints{
+            Width:     1280,
+            Height:    720,
+            FrameRate: 30,
+            Codec:     codec.VP9,              // Best SVC support
+            SVC:       codec.SVCPresetChrome(), // L3T3_KEY for SFU
+        },
+        Audio: &media.AudioConstraints{
+            SampleRate:       48000,
+            EchoCancellation: true,
+            NoiseSuppression: true,
+        },
+    })
+
+    // Add all tracks to peer connection
+    for _, track := range stream.GetTracks() {
+        sender, _ := peerConnection.AddTrack(track.PionTrack(), stream.ID())
+
+        // Configure simulcast layers for SFU
+        if track.Kind() == "video" {
+            sender.SetParameters(pc.RTPSendParameters{
+                Encodings: []pc.RTPEncodingParameters{
+                    {Active: true, MaxBitrate: 150_000, ScaleResolutionDownBy: 4},  // 320x180
+                    {Active: true, MaxBitrate: 500_000, ScaleResolutionDownBy: 2},  // 640x360
+                    {Active: true, MaxBitrate: 2_500_000, ScalabilityMode: "L3T3_KEY"}, // 1280x720
+                },
+            })
+        }
+    }
+
+    // Handle incoming tracks (from SFU)
+    peerConnection.OnTrack = func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
+        go handleRemoteTrack(track)
+    }
+
+    // Signaling...
+    offer, _ := peerConnection.CreateOffer(nil)
+    peerConnection.SetLocalDescription(offer)
+}
+```
+
+### Example 2: Screen Share with High-Quality AV1
+```go
+// 4K Screen sharing with AV1 for maximum quality
+stream, _ := media.GetDisplayMedia(media.Constraints{
+    Video: &media.VideoConstraints{
+        Width:     3840,
+        Height:    2160,
+        FrameRate: 60,
+        Codec:     codec.AV1,
+        Bitrate:   8_000_000,
+        SVC:       codec.SVCPresetScreenShare(), // L1T3 temporal only
+    },
+})
+
+// Access video track for advanced control
+videoTrack := stream.GetVideoTracks()[0]
+
+// Dynamic quality adjustment based on network
+go func() {
+    for {
+        stats := getNetworkStats()
+        if stats.PacketLoss > 5 {
+            // Reduce quality under packet loss
+            videoTrack.ApplyConstraints(media.VideoConstraints{
+                Bitrate: 4_000_000,
+            })
+        }
+    }
+}()
+```
+
+### Example 3: Low-Latency Game Streaming
+```go
+// Ultra low-latency game streaming pipeline
+enc, _ := encoder.NewH264Encoder(codec.H264Config{
+    Width:       1920,
+    Height:      1080,
+    Bitrate:     15_000_000,
+    FPS:         120,
+    Profile:     codec.H264ProfileHigh,
+    RateControl: codec.RateControlCBR,  // Constant bitrate for predictable latency
+    LowDelay:    true,
+    ZeroLatency: true,  // No B-frames, no lookahead
+    PreferHW:    true,  // Use GPU encoder
+})
+
+// Pre-allocate buffers for zero-allocation encoding
+encBuf := make([]byte, enc.MaxEncodedSize())
+framePool := frame.NewVideoFramePool(1920, 1080, frame.FormatI420, 4)
+
+// Game capture loop - 8.3ms per frame at 120fps
+for {
+    f := framePool.Get()
+    captureGameFrame(f)
+
+    result, _ := enc.EncodeInto(f, encBuf, false)
+    sendToNetwork(encBuf[:result.N])
+
+    f.Release()
+}
+```
+
+### Example 4: Media Server / SFU Integration
+```go
+// Production SFU that leverages libwebrtc for encode/decode
+type SFURoom struct {
+    participants map[string]*Participant
+    // Use libwebrtc decoders for server-side processing
+    decoders     map[string]decoder.VideoDecoder
+}
+
+func (r *SFURoom) ProcessIncomingTrack(participantID string, track *pc.Track) {
+    // Selective forwarding - no decode needed for most cases
+    // But decode when we need to:
+
+    if needsRecording || needsTranscoding {
+        dec, _ := decoder.NewVideoDecoder(codec.VP9)
+        dstFrame := frame.NewI420Frame(1920, 1080)
+
+        for packet := range track.Packets() {
+            // Depacketize RTP
+            depacketizer.Push(packet)
+            if frame, ok := depacketizer.Pop(); ok {
+                // Decode for server-side processing
+                dec.DecodeInto(frame, dstFrame, timestamp, isKeyframe)
+
+                // Record, transcode, or analyze
+                recorder.Write(dstFrame)
+            }
+        }
+    }
+}
+
+// Bandwidth estimation and layer selection
+func (r *SFURoom) SelectLayerForSubscriber(sub *Subscriber, pub *Publisher) {
+    bw := sub.EstimatedBandwidth()
+
+    // Select appropriate SVC layer based on bandwidth
+    switch {
+    case bw > 2_000_000:
+        sub.ForwardLayer(pub, 2, 2) // Spatial 2, Temporal 2 (highest)
+    case bw > 500_000:
+        sub.ForwardLayer(pub, 1, 2) // Medium resolution, full framerate
+    default:
+        sub.ForwardLayer(pub, 0, 1) // Lowest resolution, reduced framerate
+    }
+}
+```
+
+### Example 5: AI Video Processing Pipeline
+```go
+// Real-time AI processing with libwebrtc decode → process → encode
+func AIVideoProcessor(input *pc.Track, output *pc.Track) {
+    dec, _ := decoder.NewVideoDecoder(codec.VP9)
+    enc, _ := encoder.NewVP9Encoder(codec.VP9Config{
+        Width:   1280,
+        Height:  720,
+        Bitrate: 2_000_000,
+        SVC:     codec.SVCPresetLowLatency(),
+    })
+
+    srcFrame := frame.NewI420Frame(1280, 720)
+    dstFrame := frame.NewI420Frame(1280, 720)
+    encBuf := make([]byte, enc.MaxEncodedSize())
+
+    for packet := range input.Packets() {
+        // Decode
+        dec.DecodeInto(packet.Data, srcFrame, packet.Timestamp, packet.IsKeyframe)
+
+        // AI Processing (blur background, add effects, etc.)
+        aiModel.Process(srcFrame, dstFrame)
+
+        // Re-encode and send
+        result, _ := enc.EncodeInto(dstFrame, encBuf, false)
+        output.WriteEncodedData(encBuf[:result.N], packet.Timestamp, result.IsKeyframe)
+    }
+}
+```
+
+## Usage Examples
+
+### Low-Level Encoding (Allocation-Free)
+```go
+// Create encoder with defaults
+enc, _ := encoder.NewH264Encoder(codec.DefaultH264Config(1280, 720))
+defer enc.Close()
+
+// Pre-allocate buffers once
+encBuf := make([]byte, enc.MaxEncodedSize())
+srcFrame := frame.NewI420Frame(1280, 720)
+
+// Encode loop - zero allocations
+for {
+    // Fill srcFrame.Data with raw pixels...
+    srcFrame.PTS = timestamp
+
+    result, err := enc.EncodeInto(srcFrame, encBuf, false)
+    if err != nil {
+        // handle error
+    }
+
+    // Use encBuf[:result.N] - the encoded data
+    // result.IsKeyframe tells if it's a keyframe
+}
+```
+
+### Pion Integration (High-Level)
+```go
+import (
+    "github.com/pion/webrtc/v4"
+    "github.com/thesyncim/libgowebrtc/pkg/track"
+    "github.com/thesyncim/libgowebrtc/pkg/codec"
+    "github.com/thesyncim/libgowebrtc/pkg/frame"
+)
+
+// Create Pion PeerConnection
+pc, _ := webrtc.NewPeerConnection(webrtc.Configuration{})
+
+// Create libwebrtc-backed video track (implements webrtc.TrackLocal)
+videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
+    ID:      "video",
+    Codec:   codec.H264,
+    Width:   1280,
+    Height:  720,
+    Bitrate: 2_000_000,
+})
+defer videoTrack.Close()
+
+// Add to Pion - seamless interop!
+pc.AddTrack(videoTrack)
+
+// Create audio track
+audioTrack, _ := track.NewAudioTrack(track.AudioTrackConfig{
+    ID:         "audio",
+    SampleRate: 48000,
+    Channels:   2,
+    Bitrate:    64000,
+})
+defer audioTrack.Close()
+
+pc.AddTrack(audioTrack)
+
+// Feed raw frames - encoding + packetization handled internally
+videoFrame := frame.NewI420Frame(1280, 720)
+audioFrame := frame.NewS16Frame(48000, 2, 960) // 20ms at 48kHz
+
+for {
+    // Fill frames with raw data...
+    videoTrack.WriteFrame(videoFrame, false)
+    audioTrack.WriteFrame(audioFrame)
+}
+```
+
+### Pre-Encoded Data
+```go
+// If you already have encoded H.264/VP8/etc data:
+videoTrack.WriteEncodedData(h264NALUs, rtpTimestamp, isKeyframe)
+
+// Or pre-encoded Opus:
+audioTrack.WriteEncodedData(opusPacket, rtpTimestamp)
+```
+
+## Implementation Progress
+
+### Phase 1: Foundation ✅
+- [x] Set up go.mod with purego dependency
+- [x] Create shim/shim.h C API definition (allocation-free)
+- [x] Create internal/ffi/lib.go library loading
+- [x] Create internal/ffi/types.go FFI type mappings
+- [x] Create internal/ffi/encoder.go FFI encoder bindings
+- [x] Create internal/ffi/decoder.go FFI decoder bindings
+- [x] Create pkg/frame types (VideoFrame, AudioFrame)
+- [x] Create pkg/codec constants
+
+### Phase 2: Allocation-Free Encoders/Decoders ✅
+- [x] pkg/encoder/encoder.go - allocation-free VideoEncoder interface
+- [x] pkg/encoder/h264.go - H.264 encoder (FFI integrated)
+- [x] pkg/encoder/vp8.go - VP8 encoder (FFI integrated)
+- [x] pkg/encoder/vp9.go - VP9 encoder (FFI integrated)
+- [x] pkg/encoder/av1.go - AV1 encoder (FFI integrated)
+- [x] pkg/encoder/opus.go - Opus encoder (FFI integrated)
+- [x] pkg/decoder/decoder.go - allocation-free VideoDecoder interface
+- [x] pkg/decoder/h264.go - H.264 decoder (FFI integrated)
+- [x] pkg/decoder/vp8.go - VP8 decoder (FFI integrated)
+- [x] pkg/decoder/vp9.go - VP9 decoder (FFI integrated)
+- [x] pkg/decoder/av1.go - AV1 decoder (FFI integrated)
+- [x] pkg/decoder/opus.go - Opus decoder (FFI integrated)
+
+### Phase 3: Packetization ✅
+- [x] Implement pkg/packetizer (Pion-compatible, FFI integrated)
+- [x] Implement pkg/depacketizer (FFI integrated)
+
+### Phase 4: Pion TrackLocal ✅
+- [x] Implement pkg/track/local.go (webrtc.TrackLocal)
+- [x] VideoTrack with WriteFrame, WriteEncodedData, WriteRTP
+- [x] AudioTrack with WriteFrame, WriteEncodedData
+- [ ] Integration test with Pion PeerConnection
+
+### Phase 5: SVC & Simulcast ✅
+- [x] SVC mode definitions (L1T1 through L3T3, K-SVC variants)
+- [x] Browser-like presets (SVCPresetChrome, SVCPresetFirefox, etc.)
+- [x] SVCConfig with per-layer configuration
+- [x] VideoEncoderSVC interface for runtime layer control
+- [x] VP9/AV1 SVC config integration
+
+### Phase 6: Runtime Controls ✅
+- [x] VideoEncoderAdvanced interface (SetQuality, SetKeyInterval, SetRateControl)
+- [x] AudioEncoderAdvanced interface (SetComplexity, SetFEC, SetDTX)
+- [x] EncoderStats for monitoring
+- [x] VideoEncoderSVC for layer control
+
+### Phase 7: Browser-Like API ✅
+- [x] pkg/media - API defined (getUserMedia pattern)
+- [x] pkg/pc - API defined (PeerConnection, event handlers)
+- [x] Browser-like event handlers (OnTrack, OnICECandidate, etc.)
+- [x] RTPSender/RTPReceiver/RTPTransceiver API
+- [x] DataChannel API
+- [x] **pkg/pc FFI integration** (CreateOffer, CreateAnswer, SetLocalDescription, AddICECandidate, AddTrack, RemoveTrack, CreateDataChannel, Close)
+- [x] internal/ffi/peerconnection.go - FFI bindings for PeerConnection
+- [x] **pkg/media FFI integration** - Complete via track/encoder layer (library uses raw frame input, not device capture)
+
+### Phase 8: Testing ✅
+
+**Testing Principle:** Every feature must be tested. Test the high-level public API, not just FFI plumbing. Use idiomatic Go test patterns (table-driven tests, subtests, got/want assertions).
+
+**High-Level Tests (test the real thing):**
+- [x] pkg/encoder/e2e_test.go - H264, VP8, VP9, Opus encoding with real API
+- [x] pkg/decoder/e2e_test.go - Full encode/decode roundtrip tests
+- [x] pkg/track/e2e_test.go - VideoTrack, AudioTrack pipeline tests
+- [x] pkg/pc/e2e_test.go - PeerConnection, CreateOffer, AddTrack, DataChannel
+
+**Unit Tests (types, configs, enums):**
+- [x] pkg/codec - Codec types, SVC modes, configs
+- [x] pkg/frame - VideoFrame, AudioFrame types
+- [x] pkg/encoder - Interface validation, error handling
+- [x] pkg/decoder - Interface validation, error handling
+- [x] pkg/packetizer - Packetizer interface tests
+- [x] pkg/depacketizer - Depacketizer interface tests
+- [x] pkg/media - MediaStream, Constraints
+- [x] pkg/pc - Enums, states, type tests
+
+**FFI Tests (internal layer):**
+- [x] internal/ffi/ffi_test.go - FFI type mappings, helpers
+- [x] internal/ffi/integration_test.go - Library loading
+- [x] internal/ffi/e2e_test.go - Encode/decode pipeline via FFI
+- [x] internal/ffi/peerconnection_test.go - PeerConnection FFI bindings
+
+**Note:** Tests require the shim library to be available.
+
+### Phase 9: Pion Interop Testing ✅
+
+**Principle:** Everything must be tested against Pion to ensure real-world interoperability.
+
+**Interop Tests (test against real Pion WebRTC):**
+- [x] `test/interop/helpers.go` - Reusable test helpers (PeerPair, DataChannelPair, ICE exchange)
+- [x] `test/interop/offer_answer_test.go` - Offer/answer exchange between libwebrtc and Pion
+- [x] `test/interop/video_roundtrip_test.go` - Send video from libwebrtc → Pion and Pion → libwebrtc
+- [x] `test/interop/audio_roundtrip_test.go` - Send audio from libwebrtc → Pion and Pion → libwebrtc
+- [x] `test/interop/datachannel_test.go` - DataChannel message exchange (lib→pion, pion→lib, bidirectional)
+- [x] ICE candidate exchange integrated into helpers (STUNPeerPairConfig)
+
+**Test Setup (using helpers):**
+```go
+// Simple offer/answer test
+func TestOfferAnswerExchange(t *testing.T) {
+    pp, err := NewPeerPair(t, DefaultPeerPairConfig())
+    if err != nil {
+        t.Fatalf("Failed to create peer pair: %v", err)
+    }
+    defer pp.Close()
+
+    // Perform offer/answer exchange with libwebrtc as offerer
+    if err := pp.ExchangeOfferAnswer(); err != nil {
+        t.Fatalf("Offer/answer exchange failed: %v", err)
+    }
+    t.Log("Success")
+}
+
+// With ICE connectivity
+func TestWithICE(t *testing.T) {
+    pp, err := NewPeerPair(t, STUNPeerPairConfig())
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer pp.Close()
+
+    pp.ExchangeOfferAnswer()
+
+    // ICE exchange happens automatically via helpers
+    if pp.WaitForConnection(10 * time.Second) {
+        t.Log("Both peers connected")
+    }
+}
+
+// Data channel test
+func TestDataChannel(t *testing.T) {
+    pp, _ := NewPeerPair(t, DefaultPeerPairConfig())
+    defer pp.Close()
+
+    dcp, _ := pp.CreateDataChannelPair("test-channel", true)
+    pp.ExchangeOfferAnswer()
+
+    if dcp.WaitForReceived(5 * time.Second) {
+        t.Log("Data channel received by Pion")
+    }
+}
+```
+
+### Phase 10: Shim Build & Distribution
+- [x] shim/CMakeLists.txt - CMake build configuration
+- [x] shim/shim.cc - Full implementation (encode/decode/packetizer/PeerConnection)
+- [ ] Build shim with actual libwebrtc for darwin-arm64
+- [ ] Build shim with actual libwebrtc for darwin-amd64
+- [ ] Build shim with actual libwebrtc for linux-amd64
+- [ ] Build shim with actual libwebrtc for linux-arm64
+- [ ] CI/CD for automated shim builds
+- [ ] GitHub releases with pre-built binaries
+
+### Phase 11: Device Capture (via libwebrtc)
+
+**Goal:** Wrap libwebrtc's native device capture APIs so `pkg/media.GetUserMedia()` actually captures from camera/mic.
+
+**libwebrtc APIs to wrap:**
+- `webrtc::VideoCaptureModule` - Camera enumeration and capture
+- `webrtc::AudioDeviceModule` - Microphone/speaker enumeration and capture
+- `webrtc::DesktopCapturer` - Screen/window capture for `GetDisplayMedia()`
+
+**Shim additions (shim/shim.h):**
+```c
+// Device enumeration
+int device_enumerate_video(char** names, char** ids, int max_devices);
+int device_enumerate_audio_input(char** names, char** ids, int max_devices);
+int device_enumerate_audio_output(char** names, char** ids, int max_devices);
+
+// Video capture
+VideoCapture* video_capture_create(const char* device_id, int width, int height, int fps);
+int video_capture_start(VideoCapture* cap, FrameCallback callback, void* ctx);
+void video_capture_stop(VideoCapture* cap);
+void video_capture_destroy(VideoCapture* cap);
+
+// Audio capture
+AudioCapture* audio_capture_create(const char* device_id, int sample_rate, int channels);
+int audio_capture_start(AudioCapture* cap, AudioCallback callback, void* ctx);
+void audio_capture_stop(AudioCapture* cap);
+void audio_capture_destroy(AudioCapture* cap);
+
+// Screen capture
+ScreenCapture* screen_capture_create(int screen_id);
+ScreenCapture* window_capture_create(int window_id);
+int screen_capture_start(ScreenCapture* cap, FrameCallback callback, void* ctx);
+void screen_capture_stop(ScreenCapture* cap);
+void screen_capture_destroy(ScreenCapture* cap);
+```
+
+**Go API (pkg/media):**
+```go
+// Enumerate available devices
+devices, _ := media.EnumerateDevices()
+for _, d := range devices {
+    fmt.Printf("%s: %s (%s)\n", d.Kind, d.Label, d.DeviceID)
+}
+
+// Capture from camera (like browser getUserMedia)
+stream, _ := media.GetUserMedia(media.Constraints{
+    Video: &media.VideoConstraints{
+        DeviceID: "device-id",  // or omit for default
+        Width:    1280,
+        Height:   720,
+        FPS:      30,
+    },
+    Audio: &media.AudioConstraints{
+        DeviceID:   "mic-id",
+        SampleRate: 48000,
+    },
+})
+
+// Capture screen (like browser getDisplayMedia)
+screenStream, _ := media.GetDisplayMedia(media.DisplayConstraints{
+    Video: &media.ScreenConstraints{
+        ScreenID: 0,  // or WindowID for window capture
+    },
+})
+```
+
+**Implementation steps:**
+- [ ] Add device enumeration to shim (VideoCaptureModule::DeviceInfo)
+- [ ] Add video capture start/stop to shim
+- [ ] Add audio capture to shim (AudioDeviceModule)
+- [ ] Add screen capture to shim (DesktopCapturer)
+- [ ] Add FFI bindings for device APIs (internal/ffi/device.go)
+- [ ] Implement pkg/media.EnumerateDevices()
+- [ ] Implement pkg/media.GetUserMedia() with real capture
+- [ ] Implement pkg/media.GetDisplayMedia() for screen share
+- [ ] Test on macOS (AVFoundation backend)
+- [ ] Test on Linux (V4L2/PulseAudio backend)
+
+### Phase 12: Browser Example
+
+**Goal:** Minimal example: Go server captures camera via libwebrtc, streams to browser.
+
+**Components:**
+- [ ] `examples/camera_to_browser/main.go` - Go server with:
+  - HTTP server for signaling (WebSocket)
+  - Camera capture via `media.GetUserMedia()`
+  - libwebrtc PeerConnection to stream to browser
+- [ ] `examples/camera_to_browser/index.html` - Browser client:
+  - WebSocket signaling
+  - RTCPeerConnection to receive video
+  - `<video>` element to display
+
+**Architecture:**
+```
+┌─────────────────┐         WebSocket          ┌─────────────────┐
+│   Go Server     │◄─────────────────────────► │    Browser      │
+│                 │       (signaling)          │                 │
+│  Camera ──►     │                            │     ◄── video   │
+│  libwebrtc      │◄═══════════════════════════│   WebRTC        │
+│  encoder        │        WebRTC/SRTP         │   decoder       │
+└─────────────────┘         (media)            └─────────────────┘
+```
+
+**Example code sketch:**
+```go
+// examples/camera_to_browser/main.go
+func main() {
+    // Capture camera
+    stream, _ := media.GetUserMedia(media.Constraints{
+        Video: &media.VideoConstraints{Width: 1280, Height: 720},
+    })
+
+    // Create PeerConnection
+    pc, _ := pc.NewPeerConnection(pc.DefaultConfiguration())
+
+    // Add video track
+    for _, track := range stream.GetVideoTracks() {
+        pc.AddTrack(track)
+    }
+
+    // Signaling server
+    http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+        // WebSocket signaling: exchange offer/answer/ICE
+    })
+
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        http.ServeFile(w, r, "index.html")
+    })
+
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+### Phase 13: Polish
+- [x] State-of-the-art examples in PLAN.md
+- [x] examples/encode_decode/main.go - Basic encode/decode example
+- [x] examples/pion_interop/main.go - Pion PeerConnection integration example
+- [x] Makefile with dependency management
+- [ ] examples/camera_to_browser/ - Camera streaming to browser
+
+## Dependencies
+
+**Go:**
+- `github.com/ebitengine/purego` - FFI without CGO
+- `github.com/pion/webrtc/v4` - Pion WebRTC (for interface compatibility)
+- `github.com/pion/rtp` - RTP types
+
+**Build (for shim):**
+- CMake
+- libwebrtc source or pre-built binaries
+- C++17 compiler
+
+## Notes
+
+- purego requires shared libraries (.so/.dylib/.dll), not static
+- Memory management: Go allocates buffers, passes to C, C writes into them
+- No allocations in hot paths - caller provides all buffers
+- Pre-build shim for all platforms, distribute via GitHub releases

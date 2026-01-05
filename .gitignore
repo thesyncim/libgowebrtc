@@ -1,0 +1,53 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+
+# Build artifacts
+/bin/
+/dist/
+/build/
+
+# Pre-built libraries (downloaded, not committed)
+/lib/
+/third_party/
+
+# Test coverage
+coverage.txt
+coverage.html
+*.coverprofile
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Shim build artifacts (C++ build)
+shim/*.o
+shim/*.a
+shim/build/
+shim/CMakeFiles/
+shim/CMakeCache.txt
+shim/cmake_install.cmake
+shim/Makefile
+shim/*.so
+shim/*.dylib
+shim/*.dll
+.goland-state.json

@@ -1,0 +1,356 @@
+// Package ffi provides purego-based FFI bindings to the libwebrtc shim library.
+package ffi
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sync"
+
+	"github.com/ebitengine/purego"
+)
+
+var (
+	// ErrLibraryNotLoaded is returned when the shim library hasn't been loaded.
+	ErrLibraryNotLoaded = errors.New("libwebrtc_shim library not loaded")
+
+	// ErrLibraryNotFound is returned when the shim library cannot be found.
+	ErrLibraryNotFound = errors.New("libwebrtc_shim library not found")
+)
+
+// Error codes from shim
+const (
+	ShimOK              = 0
+	ShimErrInvalidParam = -1
+	ShimErrInitFailed   = -2
+	ShimErrEncodeFailed = -3
+	ShimErrDecodeFailed = -4
+	ShimErrOutOfMemory  = -5
+	ShimErrNotSupported = -6
+	ShimErrNeedMoreData = -7
+)
+
+// CodecType matches ShimCodecType in shim.h
+type CodecType int
+
+const (
+	CodecH264 CodecType = 0
+	CodecVP8  CodecType = 1
+	CodecVP9  CodecType = 2
+	CodecAV1  CodecType = 3
+	CodecOpus CodecType = 10
+)
+
+var (
+	libHandle uintptr
+	libLoaded bool
+	libMu     sync.Mutex
+)
+
+// Function pointers - populated by LoadLibrary
+var (
+	// Video Encoder
+	shimVideoEncoderCreate          func(codec int, configPtr uintptr) uintptr
+	shimVideoEncoderEncode          func(encoder uintptr, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int, timestamp uint32, forceKeyframe int, outData, outSize, outIsKeyframe uintptr) int
+	shimVideoEncoderSetBitrate      func(encoder uintptr, bitrate uint32) int
+	shimVideoEncoderSetFramerate    func(encoder uintptr, framerate float32) int
+	shimVideoEncoderRequestKeyframe func(encoder uintptr) int
+	shimVideoEncoderDestroy         func(encoder uintptr)
+
+	// Video Decoder
+	shimVideoDecoderCreate  func(codec int) uintptr
+	shimVideoDecoderDecode  func(decoder uintptr, data uintptr, size int, timestamp uint32, isKeyframe int, outY, outU, outV, outW, outH, outYStride, outUStride, outVStride uintptr) int
+	shimVideoDecoderDestroy func(decoder uintptr)
+
+	// Audio Encoder
+	shimAudioEncoderCreate     func(configPtr uintptr) uintptr
+	shimAudioEncoderEncode     func(encoder uintptr, samples uintptr, numSamples int, outData, outSize uintptr) int
+	shimAudioEncoderSetBitrate func(encoder uintptr, bitrate uint32) int
+	shimAudioEncoderDestroy    func(encoder uintptr)
+
+	// Audio Decoder
+	shimAudioDecoderCreate  func(sampleRate, channels int) uintptr
+	shimAudioDecoderDecode  func(decoder uintptr, data uintptr, size int, outSamples, outNumSamples uintptr) int
+	shimAudioDecoderDestroy func(decoder uintptr)
+
+	// Packetizer
+	shimPacketizerCreate    func(configPtr uintptr) uintptr
+	shimPacketizerPacketize func(packetizer uintptr, data uintptr, size int, timestamp uint32, isKeyframe int, dst uintptr, offsets uintptr, sizes uintptr, maxPackets int, outCount uintptr) int
+	shimPacketizerSeqNum    func(packetizer uintptr) uint16
+	shimPacketizerDestroy   func(packetizer uintptr)
+
+	// Depacketizer
+	shimDepacketizerCreate  func(codec int) uintptr
+	shimDepacketizerPush    func(depacketizer uintptr, data uintptr, size int) int
+	shimDepacketizerPop     func(depacketizer uintptr, outData, outSize, outTimestamp, outIsKeyframe uintptr) int
+	shimDepacketizerDestroy func(depacketizer uintptr)
+
+	// Memory
+	shimFreeBuffer  func(buffer uintptr)
+	shimFreePackets func(packets, sizes uintptr, count int)
+
+	// Version
+	shimLibwebrtcVersion func() uintptr
+	shimVersion          func() uintptr
+)
+
+// PeerConnection FFI function pointers - populated by registerFunctions
+var (
+	shimPeerConnectionCreate                     func(configPtr uintptr) uintptr
+	shimPeerConnectionDestroy                    func(pc uintptr)
+	shimPeerConnectionSetOnICECandidate          func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionSetOnConnectionStateChange func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionSetOnTrack                 func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionSetOnDataChannel           func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionCreateOffer                func(pc uintptr, sdpOut uintptr, sdpOutSize int, outSdpLen uintptr) int
+	shimPeerConnectionCreateAnswer               func(pc uintptr, sdpOut uintptr, sdpOutSize int, outSdpLen uintptr) int
+	shimPeerConnectionSetLocalDescription        func(pc uintptr, sdpType int, sdp uintptr) int
+	shimPeerConnectionSetRemoteDescription       func(pc uintptr, sdpType int, sdp uintptr) int
+	shimPeerConnectionAddICECandidate            func(pc uintptr, candidate, sdpMid uintptr, sdpMLineIndex int) int
+	shimPeerConnectionSignalingState             func(pc uintptr) int
+	shimPeerConnectionICEConnectionState         func(pc uintptr) int
+	shimPeerConnectionICEGatheringState          func(pc uintptr) int
+	shimPeerConnectionConnectionState            func(pc uintptr) int
+	shimPeerConnectionAddTrack                   func(pc uintptr, codec int, trackID, streamID uintptr) uintptr
+	shimPeerConnectionRemoveTrack                func(pc uintptr, sender uintptr) int
+	shimPeerConnectionCreateDataChannel          func(pc uintptr, label uintptr, ordered, maxRetransmits int, protocol uintptr) uintptr
+	shimPeerConnectionClose                      func(pc uintptr)
+
+	shimRTPSenderSetBitrate   func(sender uintptr, bitrate uint32) int
+	shimRTPSenderReplaceTrack func(sender uintptr, track uintptr) int
+	shimRTPSenderDestroy      func(sender uintptr)
+
+	shimDataChannelSetOnMessage func(dc uintptr, callback uintptr, ctx uintptr)
+	shimDataChannelSetOnOpen    func(dc uintptr, callback uintptr, ctx uintptr)
+	shimDataChannelSetOnClose   func(dc uintptr, callback uintptr, ctx uintptr)
+	shimDataChannelSend         func(dc uintptr, data uintptr, size int, isBinary int) int
+	shimDataChannelLabel        func(dc uintptr) uintptr
+	shimDataChannelReadyState   func(dc uintptr) int
+	shimDataChannelClose        func(dc uintptr)
+	shimDataChannelDestroy      func(dc uintptr)
+)
+
+// LoadLibrary loads the libwebrtc_shim shared library.
+// It searches in the following locations:
+// 1. Path specified by LIBWEBRTC_SHIM_PATH environment variable
+// 2. ./lib/{os}_{arch}/
+// 3. System library paths
+func LoadLibrary() error {
+	libMu.Lock()
+	defer libMu.Unlock()
+
+	if libLoaded {
+		return nil
+	}
+
+	libPath, err := findLibrary()
+	if err != nil {
+		return err
+	}
+
+	handle, err := purego.Dlopen(libPath, purego.RTLD_NOW|purego.RTLD_GLOBAL)
+	if err != nil {
+		return fmt.Errorf("failed to load %s: %w", libPath, err)
+	}
+
+	libHandle = handle
+	if err := registerFunctions(); err != nil {
+		purego.Dlclose(handle)
+		return err
+	}
+
+	libLoaded = true
+	return nil
+}
+
+// MustLoadLibrary loads the library and panics on failure.
+func MustLoadLibrary() {
+	if err := LoadLibrary(); err != nil {
+		panic(fmt.Sprintf("libgowebrtc: %v", err))
+	}
+}
+
+// IsLoaded returns true if the shim library is loaded.
+func IsLoaded() bool {
+	libMu.Lock()
+	defer libMu.Unlock()
+	return libLoaded
+}
+
+// Close unloads the shim library.
+func Close() error {
+	libMu.Lock()
+	defer libMu.Unlock()
+
+	if !libLoaded {
+		return nil
+	}
+
+	if err := purego.Dlclose(libHandle); err != nil {
+		return err
+	}
+
+	libLoaded = false
+	libHandle = 0
+	return nil
+}
+
+func findLibrary() (string, error) {
+	// Check environment variable first
+	if path := os.Getenv("LIBWEBRTC_SHIM_PATH"); path != "" {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	libName := getLibraryName()
+
+	// Check ./lib/{os}_{arch}/
+	execPath, _ := os.Executable()
+	execDir := filepath.Dir(execPath)
+	platformDir := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
+
+	searchPaths := []string{
+		filepath.Join(execDir, "lib", platformDir, libName),
+		filepath.Join(".", "lib", platformDir, libName),
+		filepath.Join("..", "lib", platformDir, libName),
+	}
+
+	// Also check working directory
+	if wd, err := os.Getwd(); err == nil {
+		searchPaths = append(searchPaths, filepath.Join(wd, "lib", platformDir, libName))
+	}
+
+	for _, path := range searchPaths {
+		if _, err := os.Stat(path); err == nil {
+			absPath, _ := filepath.Abs(path)
+			return absPath, nil
+		}
+	}
+
+	// Try system library paths (let dlopen find it)
+	return libName, nil
+}
+
+func getLibraryName() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "libwebrtc_shim.dylib"
+	case "windows":
+		return "webrtc_shim.dll"
+	default:
+		return "libwebrtc_shim.so"
+	}
+}
+
+func registerFunctions() error {
+	var err error
+
+	// Video Encoder
+	purego.RegisterLibFunc(&shimVideoEncoderCreate, libHandle, "shim_video_encoder_create")
+	purego.RegisterLibFunc(&shimVideoEncoderEncode, libHandle, "shim_video_encoder_encode")
+	purego.RegisterLibFunc(&shimVideoEncoderSetBitrate, libHandle, "shim_video_encoder_set_bitrate")
+	purego.RegisterLibFunc(&shimVideoEncoderSetFramerate, libHandle, "shim_video_encoder_set_framerate")
+	purego.RegisterLibFunc(&shimVideoEncoderRequestKeyframe, libHandle, "shim_video_encoder_request_keyframe")
+	purego.RegisterLibFunc(&shimVideoEncoderDestroy, libHandle, "shim_video_encoder_destroy")
+
+	// Video Decoder
+	purego.RegisterLibFunc(&shimVideoDecoderCreate, libHandle, "shim_video_decoder_create")
+	purego.RegisterLibFunc(&shimVideoDecoderDecode, libHandle, "shim_video_decoder_decode")
+	purego.RegisterLibFunc(&shimVideoDecoderDestroy, libHandle, "shim_video_decoder_destroy")
+
+	// Audio Encoder
+	purego.RegisterLibFunc(&shimAudioEncoderCreate, libHandle, "shim_audio_encoder_create")
+	purego.RegisterLibFunc(&shimAudioEncoderEncode, libHandle, "shim_audio_encoder_encode")
+	purego.RegisterLibFunc(&shimAudioEncoderSetBitrate, libHandle, "shim_audio_encoder_set_bitrate")
+	purego.RegisterLibFunc(&shimAudioEncoderDestroy, libHandle, "shim_audio_encoder_destroy")
+
+	// Audio Decoder
+	purego.RegisterLibFunc(&shimAudioDecoderCreate, libHandle, "shim_audio_decoder_create")
+	purego.RegisterLibFunc(&shimAudioDecoderDecode, libHandle, "shim_audio_decoder_decode")
+	purego.RegisterLibFunc(&shimAudioDecoderDestroy, libHandle, "shim_audio_decoder_destroy")
+
+	// Packetizer
+	purego.RegisterLibFunc(&shimPacketizerCreate, libHandle, "shim_packetizer_create")
+	purego.RegisterLibFunc(&shimPacketizerPacketize, libHandle, "shim_packetizer_packetize")
+	purego.RegisterLibFunc(&shimPacketizerSeqNum, libHandle, "shim_packetizer_sequence_number")
+	purego.RegisterLibFunc(&shimPacketizerDestroy, libHandle, "shim_packetizer_destroy")
+
+	// Depacketizer
+	purego.RegisterLibFunc(&shimDepacketizerCreate, libHandle, "shim_depacketizer_create")
+	purego.RegisterLibFunc(&shimDepacketizerPush, libHandle, "shim_depacketizer_push")
+	purego.RegisterLibFunc(&shimDepacketizerPop, libHandle, "shim_depacketizer_pop")
+	purego.RegisterLibFunc(&shimDepacketizerDestroy, libHandle, "shim_depacketizer_destroy")
+
+	// Memory
+	purego.RegisterLibFunc(&shimFreeBuffer, libHandle, "shim_free_buffer")
+	purego.RegisterLibFunc(&shimFreePackets, libHandle, "shim_free_packets")
+
+	// Version
+	purego.RegisterLibFunc(&shimLibwebrtcVersion, libHandle, "shim_libwebrtc_version")
+	purego.RegisterLibFunc(&shimVersion, libHandle, "shim_version")
+
+	// PeerConnection
+	purego.RegisterLibFunc(&shimPeerConnectionCreate, libHandle, "shim_peer_connection_create")
+	purego.RegisterLibFunc(&shimPeerConnectionDestroy, libHandle, "shim_peer_connection_destroy")
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnICECandidate, libHandle, "shim_peer_connection_set_on_ice_candidate")
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnConnectionStateChange, libHandle, "shim_peer_connection_set_on_connection_state_change")
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnTrack, libHandle, "shim_peer_connection_set_on_track")
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnDataChannel, libHandle, "shim_peer_connection_set_on_data_channel")
+	purego.RegisterLibFunc(&shimPeerConnectionCreateOffer, libHandle, "shim_peer_connection_create_offer")
+	purego.RegisterLibFunc(&shimPeerConnectionCreateAnswer, libHandle, "shim_peer_connection_create_answer")
+	purego.RegisterLibFunc(&shimPeerConnectionSetLocalDescription, libHandle, "shim_peer_connection_set_local_description")
+	purego.RegisterLibFunc(&shimPeerConnectionSetRemoteDescription, libHandle, "shim_peer_connection_set_remote_description")
+	purego.RegisterLibFunc(&shimPeerConnectionAddICECandidate, libHandle, "shim_peer_connection_add_ice_candidate")
+	purego.RegisterLibFunc(&shimPeerConnectionSignalingState, libHandle, "shim_peer_connection_signaling_state")
+	purego.RegisterLibFunc(&shimPeerConnectionICEConnectionState, libHandle, "shim_peer_connection_ice_connection_state")
+	purego.RegisterLibFunc(&shimPeerConnectionICEGatheringState, libHandle, "shim_peer_connection_ice_gathering_state")
+	purego.RegisterLibFunc(&shimPeerConnectionConnectionState, libHandle, "shim_peer_connection_connection_state")
+	purego.RegisterLibFunc(&shimPeerConnectionAddTrack, libHandle, "shim_peer_connection_add_track")
+	purego.RegisterLibFunc(&shimPeerConnectionRemoveTrack, libHandle, "shim_peer_connection_remove_track")
+	purego.RegisterLibFunc(&shimPeerConnectionCreateDataChannel, libHandle, "shim_peer_connection_create_data_channel")
+	purego.RegisterLibFunc(&shimPeerConnectionClose, libHandle, "shim_peer_connection_close")
+
+	// RTPSender
+	purego.RegisterLibFunc(&shimRTPSenderSetBitrate, libHandle, "shim_rtp_sender_set_bitrate")
+	purego.RegisterLibFunc(&shimRTPSenderReplaceTrack, libHandle, "shim_rtp_sender_replace_track")
+	purego.RegisterLibFunc(&shimRTPSenderDestroy, libHandle, "shim_rtp_sender_destroy")
+
+	// DataChannel
+	purego.RegisterLibFunc(&shimDataChannelSetOnMessage, libHandle, "shim_data_channel_set_on_message")
+	purego.RegisterLibFunc(&shimDataChannelSetOnOpen, libHandle, "shim_data_channel_set_on_open")
+	purego.RegisterLibFunc(&shimDataChannelSetOnClose, libHandle, "shim_data_channel_set_on_close")
+	purego.RegisterLibFunc(&shimDataChannelSend, libHandle, "shim_data_channel_send")
+	purego.RegisterLibFunc(&shimDataChannelLabel, libHandle, "shim_data_channel_label")
+	purego.RegisterLibFunc(&shimDataChannelReadyState, libHandle, "shim_data_channel_ready_state")
+	purego.RegisterLibFunc(&shimDataChannelClose, libHandle, "shim_data_channel_close")
+	purego.RegisterLibFunc(&shimDataChannelDestroy, libHandle, "shim_data_channel_destroy")
+
+	return err
+}
+
+// ShimError converts a shim error code to a Go error.
+func ShimError(code int) error {
+	switch code {
+	case ShimOK:
+		return nil
+	case ShimErrInvalidParam:
+		return errors.New("invalid parameter")
+	case ShimErrInitFailed:
+		return errors.New("initialization failed")
+	case ShimErrEncodeFailed:
+		return errors.New("encode failed")
+	case ShimErrDecodeFailed:
+		return errors.New("decode failed")
+	case ShimErrOutOfMemory:
+		return errors.New("out of memory")
+	case ShimErrNotSupported:
+		return errors.New("not supported")
+	case ShimErrNeedMoreData:
+		return errors.New("need more data")
+	default:
+		return fmt.Errorf("unknown error: %d", code)
+	}
+}
