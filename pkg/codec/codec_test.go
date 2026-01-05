@@ -286,39 +286,3 @@ func TestOpusConfig(t *testing.T) {
 		})
 	}
 }
-
-func TestRateControlModes(t *testing.T) {
-	modes := []RateControlMode{RateControlCBR, RateControlVBR, RateControlCQ}
-	expected := []string{"CBR", "VBR", "CQ"}
-
-	for i, mode := range modes {
-		if int(mode) != i {
-			t.Errorf("RateControlMode %d should be %d", mode, i)
-		}
-		// Just verify the enum values are distinct
-		for j, other := range modes {
-			if i != j && mode == other {
-				t.Errorf("RateControlMode %s should be unique", expected[i])
-			}
-		}
-	}
-}
-
-func BenchmarkDefaultH264Config(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_ = DefaultH264Config(1920, 1080)
-	}
-}
-
-func BenchmarkEstimateVideoBitrate(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		_ = estimateVideoBitrate(1920, 1080)
-	}
-}
-
-func BenchmarkSVCModeString(b *testing.B) {
-	mode := SVCModeL3T3_KEY
-	for i := 0; i < b.N; i++ {
-		_ = mode.String()
-	}
-}

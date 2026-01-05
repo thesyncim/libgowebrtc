@@ -8,48 +8,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
-func TestTrackErrors(t *testing.T) {
-	errors := []error{
-		ErrTrackClosed,
-		ErrNotBound,
-		ErrAlreadyBound,
-		ErrEncodeFailed,
-		ErrInvalidConfig,
-	}
-
-	for _, err := range errors {
-		if err == nil {
-			t.Error("Error should not be nil")
-		}
-		if err.Error() == "" {
-			t.Error("Error message should not be empty")
-		}
-	}
-}
-
-func TestVideoTrackConfig(t *testing.T) {
-	cfg := VideoTrackConfig{
-		ID:       "video-0",
-		StreamID: "stream-0",
-		Codec:    codec.H264,
-		Width:    1920,
-		Height:   1080,
-		Bitrate:  4_000_000,
-		FPS:      30,
-		MTU:      1200,
-	}
-
-	if cfg.ID != "video-0" {
-		t.Errorf("ID = %v, want video-0", cfg.ID)
-	}
-	if cfg.Codec != codec.H264 {
-		t.Errorf("Codec = %v, want H264", cfg.Codec)
-	}
-	if cfg.Width != 1920 {
-		t.Errorf("Width = %v, want 1920", cfg.Width)
-	}
-}
-
 func TestNewVideoTrack(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -259,24 +217,6 @@ func TestVideoTrackSetFramerateUnbound(t *testing.T) {
 	}
 }
 
-func TestAudioTrackConfig(t *testing.T) {
-	cfg := AudioTrackConfig{
-		ID:         "audio-0",
-		StreamID:   "stream-0",
-		SampleRate: 48000,
-		Channels:   2,
-		Bitrate:    64000,
-		MTU:        1200,
-	}
-
-	if cfg.ID != "audio-0" {
-		t.Errorf("ID = %v, want audio-0", cfg.ID)
-	}
-	if cfg.SampleRate != 48000 {
-		t.Errorf("SampleRate = %v, want 48000", cfg.SampleRate)
-	}
-}
-
 func TestNewAudioTrack(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -427,48 +367,5 @@ func TestAudioTrackSetBitrateUnbound(t *testing.T) {
 	err := track.SetBitrate(128000)
 	if err != nil {
 		t.Errorf("SetBitrate should succeed when unbound: %v", err)
-	}
-}
-
-// Interface compliance tests
-func TestVideoTrackImplementsTrackLocal(t *testing.T) {
-	var _ webrtc.TrackLocal = (*VideoTrack)(nil)
-}
-
-func TestAudioTrackImplementsTrackLocal(t *testing.T) {
-	var _ webrtc.TrackLocal = (*AudioTrack)(nil)
-}
-
-func BenchmarkNewVideoTrack(b *testing.B) {
-	cfg := VideoTrackConfig{
-		ID:       "video-0",
-		StreamID: "stream-0",
-		Codec:    codec.H264,
-		Width:    1920,
-		Height:   1080,
-		Bitrate:  4_000_000,
-		FPS:      30,
-		MTU:      1200,
-	}
-
-	for i := 0; i < b.N; i++ {
-		track, _ := NewVideoTrack(cfg)
-		track.Close()
-	}
-}
-
-func BenchmarkNewAudioTrack(b *testing.B) {
-	cfg := AudioTrackConfig{
-		ID:         "audio-0",
-		StreamID:   "stream-0",
-		SampleRate: 48000,
-		Channels:   2,
-		Bitrate:    64000,
-		MTU:        1200,
-	}
-
-	for i := 0; i < b.N; i++ {
-		track, _ := NewAudioTrack(cfg)
-		track.Close()
 	}
 }

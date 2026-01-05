@@ -403,6 +403,11 @@ type videoStreamTrack struct {
 	muted       atomic.Bool
 	readyState  atomic.Value // "live" or "ended"
 	label       string
+
+	// Device capture (optional - started when DeviceID is specified)
+	videoCapture  *ffi.VideoCapture
+	screenCapture *ffi.ScreenCapture
+	mu            sync.Mutex
 }
 
 // audioStreamTrack wraps AudioTrack as MediaStreamTrack.
@@ -414,6 +419,10 @@ type audioStreamTrack struct {
 	muted       atomic.Bool
 	readyState  atomic.Value
 	label       string
+
+	// Device capture (optional - started when DeviceID is specified)
+	audioCapture *ffi.AudioCapture
+	mu           sync.Mutex
 }
 
 // CreateVideoTrack creates a video track from constraints (like getUserMedia for video).
@@ -461,6 +470,12 @@ func CreateVideoTrack(constraints VideoConstraints) (MediaStreamTrack, error) {
 	t.muted.Store(false)
 	t.readyState.Store("live")
 
+	// Start device capture if DeviceID is specified and shim is loaded
+	// Ignore error - capture may fail but track can still be used for manual frame input
+	if constraints.DeviceID != "" && ffi.IsLoaded() {
+		_ = t.startVideoCapture()
+	}
+
 	return t, nil
 }
 
@@ -502,6 +517,12 @@ func CreateAudioTrack(constraints AudioConstraints) (MediaStreamTrack, error) {
 	t.enabled.Store(true)
 	t.muted.Store(false)
 	t.readyState.Store("live")
+
+	// Start device capture if DeviceID is specified and shim is loaded
+	// Ignore error - capture may fail but track can still be used for manual frame input
+	if constraints.DeviceID != "" && ffi.IsLoaded() {
+		_ = t.startAudioCapture()
+	}
 
 	return t, nil
 }
@@ -601,13 +622,20 @@ func getDisplayMediaWithDisplayConstraints(c DisplayConstraints) (*MediaStream, 
 			} else {
 				vst.label = "screen-capture"
 			}
+
+			// Start screen capture if shim is loaded
+			if ffi.IsLoaded() {
+				isWindow := c.Video.WindowID != 0
+				screenID := c.Video.ScreenID
+				if isWindow {
+					screenID = c.Video.WindowID
+				}
+				// Ignore error - capture may fail but track can still be used for manual frame input
+				_ = vst.startScreenCapture(screenID, isWindow)
+			}
 		}
 
 		stream.AddTrack(vt)
-
-		// TODO: When shim is available, start actual screen capture:
-		// screenCap, err := ffi.NewScreenCapture(c.Video.ScreenID, c.Video.WindowID != 0, int(frameRate))
-		// screenCap.Start(func(...) { track.WriteFrame(...) })
 	}
 
 	if c.Audio != nil {
@@ -633,7 +661,106 @@ func (t *videoStreamTrack) ReadyState() string { return t.readyState.Load().(str
 
 func (t *videoStreamTrack) Stop() {
 	t.readyState.Store("ended")
+
+	// Stop any active capture
+	t.mu.Lock()
+	if t.videoCapture != nil {
+		t.videoCapture.Close()
+		t.videoCapture = nil
+	}
+	if t.screenCapture != nil {
+		t.screenCapture.Close()
+		t.screenCapture = nil
+	}
+	t.mu.Unlock()
+
 	t.track.Close()
+}
+
+// startVideoCapture starts capturing from the device specified in constraints.
+func (t *videoStreamTrack) startVideoCapture() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.videoCapture != nil {
+		return nil // Already capturing
+	}
+
+	capture, err := ffi.NewVideoCapture(
+		t.constraints.DeviceID,
+		t.constraints.Width,
+		t.constraints.Height,
+		int(t.constraints.FrameRate),
+	)
+	if err != nil {
+		return err
+	}
+
+	// Start capture with callback that writes to track
+	err = capture.Start(func(captured *ffi.CapturedVideoFrame) {
+		if !t.enabled.Load() || t.muted.Load() {
+			return // Track disabled or muted, skip frame
+		}
+
+		// Convert ffi.CapturedVideoFrame to frame.VideoFrame
+		videoFrame := &frame.VideoFrame{
+			Width:  captured.Width,
+			Height: captured.Height,
+			Format: frame.PixelFormatI420,
+			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
+			Stride: []int{captured.YStride, captured.UStride, captured.VStride},
+		}
+
+		// Write to track - ignore ErrNotBound (track not yet added to PeerConnection)
+		_ = t.track.WriteFrame(videoFrame, false)
+	})
+
+	if err != nil {
+		capture.Close()
+		return err
+	}
+
+	t.videoCapture = capture
+	return nil
+}
+
+// startScreenCapture starts screen capture.
+func (t *videoStreamTrack) startScreenCapture(screenID int64, isWindow bool) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.screenCapture != nil {
+		return nil // Already capturing
+	}
+
+	capture, err := ffi.NewScreenCapture(screenID, isWindow, int(t.constraints.FrameRate))
+	if err != nil {
+		return err
+	}
+
+	err = capture.Start(func(captured *ffi.CapturedVideoFrame) {
+		if !t.enabled.Load() || t.muted.Load() {
+			return
+		}
+
+		videoFrame := &frame.VideoFrame{
+			Width:  captured.Width,
+			Height: captured.Height,
+			Format: frame.PixelFormatI420,
+			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
+			Stride: []int{captured.YStride, captured.UStride, captured.VStride},
+		}
+
+		_ = t.track.WriteFrame(videoFrame, false)
+	})
+
+	if err != nil {
+		capture.Close()
+		return err
+	}
+
+	t.screenCapture = capture
+	return nil
 }
 
 func (t *videoStreamTrack) Clone() MediaStreamTrack {
@@ -688,7 +815,60 @@ func (t *audioStreamTrack) ReadyState() string { return t.readyState.Load().(str
 
 func (t *audioStreamTrack) Stop() {
 	t.readyState.Store("ended")
+
+	// Stop any active capture
+	t.mu.Lock()
+	if t.audioCapture != nil {
+		t.audioCapture.Close()
+		t.audioCapture = nil
+	}
+	t.mu.Unlock()
+
 	t.track.Close()
+}
+
+// startAudioCapture starts capturing from the audio device specified in constraints.
+func (t *audioStreamTrack) startAudioCapture() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.audioCapture != nil {
+		return nil // Already capturing
+	}
+
+	capture, err := ffi.NewAudioCapture(
+		t.constraints.DeviceID,
+		t.constraints.SampleRate,
+		t.constraints.ChannelCount,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Start capture with callback that writes to track
+	err = capture.Start(func(captured *ffi.CapturedAudioFrame) {
+		if !t.enabled.Load() || t.muted.Load() {
+			return // Track disabled or muted, skip frame
+		}
+
+		// Convert ffi.CapturedAudioFrame to frame.AudioFrame
+		audioFrame := frame.NewAudioFrameFromS16(
+			captured.Samples,
+			captured.SampleRate,
+			captured.NumChannels,
+		)
+
+		// Write to track - ignore ErrNotBound (track not yet added to PeerConnection)
+		_ = t.track.WriteFrame(audioFrame)
+	})
+
+	if err != nil {
+		capture.Close()
+		return err
+	}
+
+	t.audioCapture = capture
+	return nil
 }
 
 func (t *audioStreamTrack) Clone() MediaStreamTrack {

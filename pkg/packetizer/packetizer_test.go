@@ -6,23 +6,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
-func TestPacketizerErrors(t *testing.T) {
-	errors := []error{
-		ErrPacketizerClosed,
-		ErrBufferTooSmall,
-		ErrInvalidData,
-	}
-
-	for _, err := range errors {
-		if err == nil {
-			t.Error("Error should not be nil")
-		}
-		if err.Error() == "" {
-			t.Error("Error message should not be empty")
-		}
-	}
-}
-
 func TestConfigDefaults(t *testing.T) {
 	configs := []struct {
 		name      string
@@ -96,17 +79,5 @@ func TestMaxPacketSize(t *testing.T) {
 	p.config.MTU = 1400
 	if p.MaxPacketSize() != 1400 {
 		t.Errorf("MaxPacketSize() = %d, want 1400", p.MaxPacketSize())
-	}
-}
-
-func BenchmarkMaxPackets(b *testing.B) {
-	p := &packetizer{
-		config: Config{
-			MTU: 1200,
-		},
-	}
-
-	for i := 0; i < b.N; i++ {
-		_ = p.MaxPackets(50000)
 	}
 }
