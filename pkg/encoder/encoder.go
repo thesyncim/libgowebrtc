@@ -165,48 +165,11 @@ type AudioEncoderAdvanced interface {
 	SetBandwidth(bw codec.OpusBandwidth) error
 }
 
-// NewVideoEncoder creates a video encoder for the specified codec.
-func NewVideoEncoder(codecType codec.Type, config interface{}) (VideoEncoder, error) {
-	switch codecType {
-	case codec.H264:
-		cfg, ok := config.(codec.H264Config)
-		if !ok {
-			return nil, ErrInvalidConfig
-		}
-		return NewH264Encoder(cfg)
-	case codec.VP8:
-		cfg, ok := config.(codec.VP8Config)
-		if !ok {
-			return nil, ErrInvalidConfig
-		}
-		return NewVP8Encoder(cfg)
-	case codec.VP9:
-		cfg, ok := config.(codec.VP9Config)
-		if !ok {
-			return nil, ErrInvalidConfig
-		}
-		return NewVP9Encoder(cfg)
-	case codec.AV1:
-		cfg, ok := config.(codec.AV1Config)
-		if !ok {
-			return nil, ErrInvalidConfig
-		}
-		return NewAV1Encoder(cfg)
-	default:
-		return nil, ErrUnsupportedCodec
-	}
-}
-
-// NewAudioEncoder creates an audio encoder for the specified codec.
-func NewAudioEncoder(codecType codec.Type, config interface{}) (AudioEncoder, error) {
-	switch codecType {
-	case codec.Opus:
-		cfg, ok := config.(codec.OpusConfig)
-		if !ok {
-			return nil, ErrInvalidConfig
-		}
-		return NewOpusEncoder(cfg)
-	default:
-		return nil, ErrUnsupportedCodec
-	}
-}
+// Video encoder constructors - use these directly:
+//   - NewH264Encoder(codec.H264Config)
+//   - NewVP8Encoder(codec.VP8Config)
+//   - NewVP9Encoder(codec.VP9Config)
+//   - NewAV1Encoder(codec.AV1Config)
+//
+// Audio encoder constructors:
+//   - NewOpusEncoder(codec.OpusConfig)

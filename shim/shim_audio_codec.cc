@@ -35,7 +35,7 @@ SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
     }
 
     webrtc::AudioEncoderOpusConfig opus_config;
-    opus_config.frame_size_ms = 10;  // 10ms for immediate output per Encode call
+    opus_config.frame_size_ms = 20;  // 20ms matches browser WebRTC default
     opus_config.sample_rate_hz = config->sample_rate;
     opus_config.num_channels = config->channels;
     opus_config.bitrate_bps = config->bitrate_bps > 0 ? config->bitrate_bps : 64000;
@@ -58,7 +58,7 @@ SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
     shim_encoder->encoder = std::move(encoder);
     shim_encoder->sample_rate = config->sample_rate;
     shim_encoder->channels = config->channels;
-    shim_encoder->frame_size = (config->sample_rate * 10) / 1000;  // 10ms
+    shim_encoder->frame_size = (config->sample_rate * 20) / 1000;  // 20ms
 
     return shim_encoder.release();
 }
@@ -80,23 +80,33 @@ SHIM_EXPORT int shim_audio_encoder_encode(
     const int16_t* pcm = reinterpret_cast<const int16_t*>(samples);
     int samples_per_channel = num_samples;
 
-    // Create encoded buffer
-    webrtc::Buffer encoded_buffer;
+    // WebRTC AudioEncoder::Encode() requires exactly 10ms chunks (SampleRateHz / 100)
+    // We split larger frames (e.g., 20ms) into 10ms chunks for browser-like behavior
+    const int chunk_size = encoder->sample_rate / 100;  // 10ms = 480 samples at 48kHz
 
-    webrtc::AudioEncoder::EncodedInfo info = encoder->encoder->Encode(
-        0,  // timestamp
-        webrtc::ArrayView<const int16_t>(pcm, samples_per_channel * encoder->channels),
-        &encoded_buffer
-    );
+    int total_encoded = 0;
+    int remaining = samples_per_channel;
+    const int16_t* current_pcm = pcm;
 
-    if (encoded_buffer.empty()) {
-        *out_size = 0;
-        return SHIM_OK;
+    while (remaining >= chunk_size) {
+        webrtc::Buffer encoded_buffer;
+
+        webrtc::AudioEncoder::EncodedInfo info = encoder->encoder->Encode(
+            0,  // timestamp
+            webrtc::ArrayView<const int16_t>(current_pcm, chunk_size * encoder->channels),
+            &encoded_buffer
+        );
+
+        if (!encoded_buffer.empty()) {
+            memcpy(dst_buffer + total_encoded, encoded_buffer.data(), encoded_buffer.size());
+            total_encoded += static_cast<int>(encoded_buffer.size());
+        }
+
+        current_pcm += chunk_size * encoder->channels;
+        remaining -= chunk_size;
     }
 
-    memcpy(dst_buffer, encoded_buffer.data(), encoded_buffer.size());
-    *out_size = static_cast<int>(encoded_buffer.size());
-
+    *out_size = total_encoded;
     return SHIM_OK;
 }
 

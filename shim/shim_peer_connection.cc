@@ -47,7 +47,10 @@ public:
 
     void OnDataChannel(webrtc::scoped_refptr<webrtc::DataChannelInterface> channel) override {
         if (pc_->on_data_channel) {
-            pc_->on_data_channel(pc_->on_data_channel_ctx, channel.release());
+            // Store in PC's data_channels vector to maintain proper reference count
+            pc_->data_channels.push_back(channel);
+            // Pass raw pointer (PC owns the reference)
+            pc_->on_data_channel(pc_->on_data_channel_ctx, channel.get());
         }
     }
 
@@ -652,7 +655,13 @@ SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(
         return nullptr;
     }
 
-    return reinterpret_cast<ShimDataChannel*>(result.value().release());
+    // Store in PC's data_channels vector to maintain proper reference count
+    // (prevents leak from release() without proper cleanup)
+    auto channel = result.MoveValue();
+    pc->data_channels.push_back(channel);
+
+    // Return raw pointer (PC owns the reference)
+    return reinterpret_cast<ShimDataChannel*>(channel.get());
 }
 
 SHIM_EXPORT void shim_peer_connection_close(ShimPeerConnection* pc) {

@@ -27,8 +27,8 @@ func TestNewPeerConnection(t *testing.T) {
 	}
 	defer pc.Close()
 
-	if pc.handle == 0 {
-		t.Error("PeerConnection handle should not be 0")
+	if !pc.IsValid() {
+		t.Error("PeerConnection should have a valid handle")
 	}
 
 	// Check initial states
@@ -459,5 +459,66 @@ func BenchmarkCreateOffer(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = pc.CreateOffer(nil)
+	}
+}
+
+func TestGetSupportedVideoCodecs(t *testing.T) {
+	codecs, err := GetSupportedVideoCodecs()
+	if err != nil {
+		t.Fatalf("GetSupportedVideoCodecs failed: %v", err)
+	}
+
+	if len(codecs) == 0 {
+		t.Fatal("Expected at least one video codec")
+	}
+
+	// Should include VP8 or H264
+	foundKnown := false
+	for _, c := range codecs {
+		t.Logf("Video codec: %s (clock=%d, pt=%d)", c.MimeType, c.ClockRate, c.PayloadType)
+		if c.MimeType == "video/VP8" || c.MimeType == "video/H264" || c.MimeType == "video/VP9" {
+			foundKnown = true
+		}
+	}
+	if !foundKnown {
+		t.Error("Expected to find VP8, H264, or VP9 codec")
+	}
+}
+
+func TestGetSupportedAudioCodecs(t *testing.T) {
+	codecs, err := GetSupportedAudioCodecs()
+	if err != nil {
+		t.Fatalf("GetSupportedAudioCodecs failed: %v", err)
+	}
+
+	if len(codecs) == 0 {
+		t.Fatal("Expected at least one audio codec")
+	}
+
+	// Should include Opus
+	foundOpus := false
+	for _, c := range codecs {
+		t.Logf("Audio codec: %s (clock=%d, ch=%d, pt=%d)", c.MimeType, c.ClockRate, c.Channels, c.PayloadType)
+		if c.MimeType == "audio/opus" {
+			foundOpus = true
+		}
+	}
+	if !foundOpus {
+		t.Error("Expected to find Opus codec")
+	}
+}
+
+func TestIsCodecSupported(t *testing.T) {
+	// VP8 and Opus should be supported
+	if !IsCodecSupported("video/VP8") {
+		t.Error("VP8 should be supported")
+	}
+	if !IsCodecSupported("audio/opus") {
+		t.Error("Opus should be supported")
+	}
+
+	// Unknown codec should not be supported
+	if IsCodecSupported("video/unknown-codec") {
+		t.Error("Unknown codec should not be supported")
 	}
 }

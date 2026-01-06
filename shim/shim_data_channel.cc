@@ -17,7 +17,9 @@
  * ========================================================================== */
 
 struct ShimDataChannelWrapper {
-    webrtc::scoped_refptr<webrtc::DataChannelInterface> channel;
+    // Raw pointer - PC owns the reference via its data_channels vector
+    // We don't create a scoped_refptr here to avoid double ref count
+    webrtc::DataChannelInterface* channel = nullptr;
     ShimOnDataChannelMessage on_message = nullptr;
     void* on_message_ctx = nullptr;
     ShimOnDataChannelOpen on_open = nullptr;
@@ -80,7 +82,9 @@ static ShimDataChannelWrapper* GetOrCreateWrapper(ShimDataChannel* dc) {
     }
 
     auto wrapper = std::make_unique<ShimDataChannelWrapper>();
-    wrapper->channel = webrtc::scoped_refptr<webrtc::DataChannelInterface>(channel);
+    // Store raw pointer - PC owns the scoped_refptr in its data_channels vector
+    // We don't create another scoped_refptr here to avoid incrementing ref count
+    wrapper->channel = channel;
     auto* raw_wrapper = wrapper.get();
 
     auto observer = std::make_unique<DataChannelObserverImpl>(raw_wrapper);

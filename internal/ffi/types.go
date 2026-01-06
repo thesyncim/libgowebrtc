@@ -109,7 +109,9 @@ func UintptrSlicePtr(s []uintptr) uintptr {
 
 // GoBytes copies C memory to a Go byte slice and frees the C memory.
 func GoBytes(ptr uintptr, size int) []byte {
-	if ptr == 0 || size <= 0 {
+	// Bounds validation
+	const maxSize = 256 * 1024 * 1024 // 256MB max
+	if ptr == 0 || size <= 0 || size > maxSize {
 		return nil
 	}
 
@@ -126,7 +128,9 @@ func GoBytes(ptr uintptr, size int) []byte {
 
 // GoInt16Slice copies C int16 array to a Go slice and frees the C memory.
 func GoInt16Slice(ptr uintptr, numSamples int) []int16 {
-	if ptr == 0 || numSamples <= 0 {
+	// Bounds validation
+	const maxSamples = 48000 * 8 * 10 // 10 seconds of 8-channel 48kHz audio
+	if ptr == 0 || numSamples <= 0 || numSamples > maxSamples {
 		return nil
 	}
 
@@ -149,12 +153,6 @@ func CString(s string) []byte {
 	copy(b, s)
 	b[len(s)] = 0
 	return b
-}
-
-// CStringPtr returns a pointer to a null-terminated C string.
-func CStringPtr(s string) *byte {
-	b := CString(s)
-	return &b[0]
 }
 
 // GoString converts a C string pointer to a Go string.

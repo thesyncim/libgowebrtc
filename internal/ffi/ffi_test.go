@@ -20,7 +20,7 @@ func TestShimErrorCodes(t *testing.T) {
 		{ShimErrOutOfMemory, true, "out of memory"},
 		{ShimErrNotSupported, true, "not supported"},
 		{ShimErrNeedMoreData, true, "need more data"},
-		{-999, true, "unknown error: -999"},
+		{-999, true, "unknown shim error: -999"},
 	}
 
 	for _, tt := range tests {
@@ -173,14 +173,6 @@ func TestCString(t *testing.T) {
 		if cstr[i] != s[i] {
 			t.Errorf("CString[%d] = %d, want %d", i, cstr[i], s[i])
 		}
-	}
-}
-
-func TestCStringPtr(t *testing.T) {
-	s := "test"
-	ptr := CStringPtr(s)
-	if ptr == nil {
-		t.Error("CStringPtr should return non-nil")
 	}
 }
 

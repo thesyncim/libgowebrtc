@@ -26,8 +26,12 @@
  * Video Encoder Implementation
  * ========================================================================== */
 
+// Forward declaration for callback
+class EncoderCallback;
+
 struct ShimVideoEncoder {
     std::unique_ptr<webrtc::VideoEncoder> encoder;
+    std::unique_ptr<EncoderCallback> callback;  // Owns the callback
     webrtc::VideoCodec codec_settings;
     ShimCodecType codec_type;
     std::mutex encode_mutex;       // Protects encode calls
@@ -128,13 +132,14 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
         1000  // max_payload_size
     );
 
-    auto callback = std::make_unique<EncoderCallback>(shim_encoder.get());
+    shim_encoder->callback = std::make_unique<EncoderCallback>(shim_encoder.get());
 
     if (shim_encoder->encoder->InitEncode(&settings, encoder_settings) != WEBRTC_VIDEO_CODEC_OK) {
         return nullptr;
     }
 
-    shim_encoder->encoder->RegisterEncodeCompleteCallback(callback.release());
+    // Register callback (encoder doesn't own it, we do)
+    shim_encoder->encoder->RegisterEncodeCompleteCallback(shim_encoder->callback.get());
 
     // Set initial rates - required for VP8 and other encoders before they produce output
     webrtc::VideoBitrateAllocation allocation;
@@ -295,8 +300,10 @@ SHIM_EXPORT int shim_video_encoder_request_keyframe(ShimVideoEncoder* encoder) {
 
 SHIM_EXPORT void shim_video_encoder_destroy(ShimVideoEncoder* encoder) {
     if (encoder) {
+        // Unregister callback before releasing encoder to prevent use-after-free
+        encoder->encoder->RegisterEncodeCompleteCallback(nullptr);
         encoder->encoder->Release();
-        delete encoder;
+        delete encoder;  // This also destroys the callback
     }
 }
 
@@ -304,8 +311,12 @@ SHIM_EXPORT void shim_video_encoder_destroy(ShimVideoEncoder* encoder) {
  * Video Decoder Implementation
  * ========================================================================== */
 
+// Forward declaration for callback
+class DecoderCallback;
+
 struct ShimVideoDecoder {
     std::unique_ptr<webrtc::VideoDecoder> decoder;
+    std::unique_ptr<DecoderCallback> callback;  // Owns the callback
     ShimCodecType codec_type;
     std::mutex decode_mutex;   // Protects decode calls
     std::mutex output_mutex;   // Protects output access (separate to avoid deadlock)
@@ -354,13 +365,14 @@ SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(ShimCodecType codec) {
     settings.set_number_of_cores(1);
     settings.set_max_render_resolution({1920, 1080});
 
-    auto callback = std::make_unique<DecoderCallback>(shim_decoder.get());
+    shim_decoder->callback = std::make_unique<DecoderCallback>(shim_decoder.get());
 
     if (!shim_decoder->decoder->Configure(settings)) {
         return nullptr;
     }
 
-    shim_decoder->decoder->RegisterDecodeCompleteCallback(callback.release());
+    // Register callback (decoder doesn't own it, we do)
+    shim_decoder->decoder->RegisterDecodeCompleteCallback(shim_decoder->callback.get());
 
     return shim_decoder.release();
 }
@@ -461,8 +473,10 @@ SHIM_EXPORT int shim_video_decoder_decode(
 
 SHIM_EXPORT void shim_video_decoder_destroy(ShimVideoDecoder* decoder) {
     if (decoder) {
+        // Unregister callback before releasing decoder to prevent use-after-free
+        decoder->decoder->RegisterDecodeCompleteCallback(nullptr);
         decoder->decoder->Release();
-        delete decoder;
+        delete decoder;  // This also destroys the callback
     }
 }
 

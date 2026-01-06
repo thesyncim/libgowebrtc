@@ -102,7 +102,7 @@ func main() {
 	// Demonstrate writing frames
 	fmt.Println("\n6. Writing test frames...")
 	videoFrame := frame.NewI420Frame(1280, 720)
-	audioFrame := frame.NewAudioFrameS16(48000, 2, 960) // 20ms
+	audioFrame := frame.NewAudioFrameS16(48000, 2, 960) // 20ms frames (browser WebRTC)
 
 	// Fill video frame with test pattern
 	yPlane := videoFrame.Data[0]

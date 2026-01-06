@@ -172,7 +172,8 @@ func TestOpusEncodeDecode(t *testing.T) {
 	}
 	defer dec.Close()
 
-	// Create 20ms audio frame
+	// Create 20ms audio frame (960 samples per channel at 48kHz)
+	// Browser WebRTC uses 20ms Opus frames; shim handles chunking internally
 	src := frame.NewAudioFrameS16(48000, 2, 960)
 
 	encodedBuf := make([]byte, enc.MaxEncodedSize())
@@ -183,7 +184,8 @@ func TestOpusEncodeDecode(t *testing.T) {
 	encoded := encodedBuf[:n]
 	t.Logf("Opus encoded: %d bytes", n)
 
-	dst := frame.NewAudioFrameS16(48000, 2, 960)
+	// Decoder requires buffer for MaxSamplesPerFrame (5760 samples per channel)
+	dst := frame.NewAudioFrameS16(48000, 2, 5760)
 	numSamples, err := dec.DecodeInto(encoded, dst)
 	if err != nil {
 		t.Fatalf("DecodeInto: %v", err)

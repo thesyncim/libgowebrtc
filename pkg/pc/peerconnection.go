@@ -226,6 +226,52 @@ type AnswerOptions struct {
 	VoiceActivityDetection bool
 }
 
+// CodecCapability represents a supported codec.
+type CodecCapability struct {
+	MimeType    string
+	ClockRate   int
+	Channels    int
+	SDPFmtpLine string
+	PayloadType int
+}
+
+// GetSupportedVideoCodecs returns a list of supported video codecs.
+func GetSupportedVideoCodecs() ([]CodecCapability, error) {
+	ffiCodecs, err := ffi.GetSupportedVideoCodecs()
+	if err != nil {
+		return nil, err
+	}
+	return convertCodecCapabilities(ffiCodecs), nil
+}
+
+// GetSupportedAudioCodecs returns a list of supported audio codecs.
+func GetSupportedAudioCodecs() ([]CodecCapability, error) {
+	ffiCodecs, err := ffi.GetSupportedAudioCodecs()
+	if err != nil {
+		return nil, err
+	}
+	return convertCodecCapabilities(ffiCodecs), nil
+}
+
+// IsCodecSupported checks if a specific codec is supported.
+func IsCodecSupported(mimeType string) bool {
+	return ffi.IsCodecSupported(mimeType)
+}
+
+func convertCodecCapabilities(ffiCodecs []ffi.CodecCapability) []CodecCapability {
+	codecs := make([]CodecCapability, len(ffiCodecs))
+	for i, c := range ffiCodecs {
+		codecs[i] = CodecCapability{
+			MimeType:    ffi.CStringToGo(c.MimeType[:]),
+			ClockRate:   int(c.ClockRate),
+			Channels:    int(c.Channels),
+			SDPFmtpLine: ffi.CStringToGo(c.SDPFmtpLine[:]),
+			PayloadType: int(c.PayloadType),
+		}
+	}
+	return codecs
+}
+
 // RTPSender represents an RTP sender.
 type RTPSender struct {
 	handle uintptr
@@ -233,6 +279,13 @@ type RTPSender struct {
 	pc     *PeerConnection
 	id     string
 	mu     sync.RWMutex
+}
+
+// IsValid returns true if the sender has a valid native handle.
+func (s *RTPSender) IsValid() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.handle != 0
 }
 
 // Track returns the sender's track.
@@ -568,6 +621,11 @@ type RTPReceiver struct {
 	id     string
 }
 
+// IsValid returns true if the receiver has a valid native handle.
+func (r *RTPReceiver) IsValid() bool {
+	return r.handle != 0
+}
+
 // Track returns the receiver's track.
 func (r *RTPReceiver) Track() *Track {
 	return r.track
@@ -604,6 +662,11 @@ type RTPTransceiver struct {
 	direction TransceiverDirection
 	mid       string
 	pc        *PeerConnection
+}
+
+// IsValid returns true if the transceiver has a valid native handle.
+func (t *RTPTransceiver) IsValid() bool {
+	return t.handle != 0
 }
 
 // TransceiverDirection represents the transceiver direction.
@@ -727,6 +790,12 @@ type Track struct {
 
 	// For writing frames
 	mu sync.Mutex
+}
+
+// IsValid returns true if the track has a valid native handle.
+// For local tracks, checks sourceHandle; for remote tracks, checks handle.
+func (t *Track) IsValid() bool {
+	return t.handle != 0 || t.sourceHandle != 0
 }
 
 // ID returns the track ID.
@@ -927,6 +996,36 @@ type PeerConnection struct {
 	closed atomic.Bool
 }
 
+// IsValid returns true if the PeerConnection has a valid native handle.
+func (pc *PeerConnection) IsValid() bool {
+	return pc.handle != 0
+}
+
+// DataChannelState represents the state of a data channel.
+type DataChannelState int
+
+const (
+	DataChannelStateConnecting DataChannelState = iota
+	DataChannelStateOpen
+	DataChannelStateClosing
+	DataChannelStateClosed
+)
+
+func (s DataChannelState) String() string {
+	switch s {
+	case DataChannelStateConnecting:
+		return "connecting"
+	case DataChannelStateOpen:
+		return "open"
+	case DataChannelStateClosing:
+		return "closing"
+	case DataChannelStateClosed:
+		return "closed"
+	default:
+		return "unknown"
+	}
+}
+
 // DataChannel represents a data channel.
 type DataChannel struct {
 	handle uintptr
@@ -934,10 +1033,15 @@ type DataChannel struct {
 	id     uint16
 	pc     *PeerConnection
 
-	OnOpen    func()
-	OnClose   func()
-	OnMessage func(data []byte)
-	OnError   func(err error)
+	onOpen    func()
+	onClose   func()
+	onMessage func(data []byte)
+	onError   func(err error)
+}
+
+// IsValid returns true if the DataChannel has a valid native handle.
+func (dc *DataChannel) IsValid() bool {
+	return dc.handle != 0
 }
 
 // Label returns the data channel label.
@@ -945,6 +1049,55 @@ func (dc *DataChannel) Label() string { return dc.label }
 
 // ID returns the data channel ID.
 func (dc *DataChannel) ID() uint16 { return dc.id }
+
+// ReadyState returns the current state of the data channel.
+func (dc *DataChannel) ReadyState() DataChannelState {
+	if dc.handle == 0 {
+		return DataChannelStateClosed
+	}
+	return DataChannelState(ffi.DataChannelReadyState(dc.handle))
+}
+
+// SetOnOpen sets the callback for when the data channel opens.
+func (dc *DataChannel) SetOnOpen(cb func()) {
+	dc.onOpen = cb
+	if dc.handle != 0 {
+		ffi.DataChannelSetOnOpen(dc.handle, func() {
+			if dc.onOpen != nil {
+				dc.onOpen()
+			}
+		})
+	}
+}
+
+// SetOnClose sets the callback for when the data channel closes.
+func (dc *DataChannel) SetOnClose(cb func()) {
+	dc.onClose = cb
+	if dc.handle != 0 {
+		ffi.DataChannelSetOnClose(dc.handle, func() {
+			if dc.onClose != nil {
+				dc.onClose()
+			}
+		})
+	}
+}
+
+// SetOnMessage sets the callback for when a message is received.
+func (dc *DataChannel) SetOnMessage(cb func(data []byte)) {
+	dc.onMessage = cb
+	if dc.handle != 0 {
+		ffi.DataChannelSetOnMessage(dc.handle, func(data []byte, isBinary bool) {
+			if dc.onMessage != nil {
+				dc.onMessage(data)
+			}
+		})
+	}
+}
+
+// SetOnError sets the callback for errors.
+func (dc *DataChannel) SetOnError(cb func(err error)) {
+	dc.onError = cb
+}
 
 // Send sends data on the channel.
 func (dc *DataChannel) Send(data []byte) error {
@@ -967,6 +1120,7 @@ func (dc *DataChannel) Close() error {
 	if dc.handle == 0 {
 		return nil
 	}
+	ffi.UnregisterDataChannelCallbacks(dc.handle)
 	ffi.DataChannelClose(dc.handle)
 	return nil
 }
@@ -1073,6 +1227,9 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Set up connection state change callback
 	ffi.PeerConnectionSetOnConnectionStateChange(handle, func(state int) {
+		if pc.closed.Load() {
+			return // Ignore if closed
+		}
 		newState := PeerConnectionState(state)
 		pc.connectionState.Store(newState)
 		if pc.OnConnectionStateChange != nil {
@@ -1082,6 +1239,9 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Set up ICE candidate callback
 	ffi.PeerConnectionSetOnICECandidate(handle, func(candidate, sdpMid string, sdpMLineIndex int) {
+		if pc.closed.Load() {
+			return // Ignore if closed
+		}
 		if pc.OnICECandidate != nil {
 			pc.OnICECandidate(&ICECandidate{
 				Candidate:     candidate,
@@ -1093,6 +1253,9 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Set up track callback
 	ffi.PeerConnectionSetOnTrack(handle, func(trackHandle, receiverHandle uintptr, streams string) {
+		if pc.closed.Load() {
+			return // Ignore if closed
+		}
 		if pc.OnTrack != nil {
 			// Create track wrapper
 			kind := ffi.TrackKind(trackHandle)
@@ -1128,6 +1291,9 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Set up data channel callback
 	ffi.PeerConnectionSetOnDataChannel(handle, func(dcHandle uintptr) {
+		if pc.closed.Load() {
+			return // Ignore if closed
+		}
 		if pc.OnDataChannel != nil {
 			label := ffi.DataChannelLabel(dcHandle)
 			dc := &DataChannel{
@@ -1141,6 +1307,9 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Set up signaling state change callback
 	ffi.PeerConnectionSetOnSignalingStateChange(handle, func(state int) {
+		if pc.closed.Load() {
+			return // Ignore if closed
+		}
 		newState := SignalingState(state)
 		pc.signalingState.Store(newState)
 		if pc.OnSignalingStateChange != nil {
@@ -1150,6 +1319,9 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Set up ICE connection state change callback
 	ffi.PeerConnectionSetOnICEConnectionStateChange(handle, func(state int) {
+		if pc.closed.Load() {
+			return // Ignore if closed
+		}
 		newState := ICEConnectionState(state)
 		pc.iceConnectionState.Store(newState)
 		if pc.OnICEConnectionStateChange != nil {
@@ -1159,6 +1331,9 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Set up ICE gathering state change callback
 	ffi.PeerConnectionSetOnICEGatheringStateChange(handle, func(state int) {
+		if pc.closed.Load() {
+			return // Ignore if closed
+		}
 		newState := ICEGatheringState(state)
 		pc.iceGatheringState.Store(newState)
 		if pc.OnICEGatheringStateChange != nil {
@@ -1168,6 +1343,9 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Set up negotiation needed callback
 	ffi.PeerConnectionSetOnNegotiationNeeded(handle, func() {
+		if pc.closed.Load() {
+			return // Ignore if closed
+		}
 		if pc.OnNegotiationNeeded != nil {
 			pc.OnNegotiationNeeded()
 		}
@@ -1546,6 +1724,18 @@ func (pc *PeerConnection) Close() error {
 	defer pc.mu.Unlock()
 
 	if pc.handle != 0 {
+		// Unregister all callbacks BEFORE destroying the handle to prevent
+		// callbacks firing on destroyed state (use-after-free prevention)
+		ffi.UnregisterConnectionStateCallback(pc.handle)
+		ffi.UnregisterOnTrackCallback(pc.handle)
+		ffi.UnregisterOnICECandidateCallback(pc.handle)
+		ffi.UnregisterOnDataChannelCallback(pc.handle)
+		ffi.UnregisterSignalingStateCallback(pc.handle)
+		ffi.UnregisterICEConnectionStateCallback(pc.handle)
+		ffi.UnregisterICEGatheringStateCallback(pc.handle)
+		ffi.UnregisterNegotiationNeededCallback(pc.handle)
+		ffi.UnregisterBandwidthEstimateCallback(pc.handle)
+
 		ffi.PeerConnectionClose(pc.handle)
 		ffi.PeerConnectionDestroy(pc.handle)
 		pc.handle = 0

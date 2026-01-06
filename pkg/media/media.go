@@ -11,7 +11,6 @@ import (
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
-	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
@@ -202,9 +201,6 @@ type MediaStreamTrack interface {
 
 	// Clone creates a clone of this track.
 	Clone() MediaStreamTrack
-
-	// Internal: Get the underlying Pion track for addTrack
-	PionTrack() webrtc.TrackLocal
 }
 
 // VideoStreamTrack provides type-safe access to video track constraints and settings.
@@ -553,26 +549,7 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 
 // GetDisplayMedia mirrors browser's navigator.mediaDevices.getDisplayMedia().
 // Returns a MediaStream configured for screen sharing.
-// Accepts either Constraints (legacy) or DisplayConstraints.
-func GetDisplayMedia(constraints interface{}) (*MediaStream, error) {
-	switch c := constraints.(type) {
-	case DisplayConstraints:
-		return getDisplayMediaWithDisplayConstraints(c)
-	case Constraints:
-		// Legacy: convert to standard getUserMedia with SVC preset
-		if c.Video != nil {
-			if c.Video.SVC == nil {
-				c.Video.SVC = codec.SVCPresetScreenShare()
-			}
-		}
-		return GetUserMedia(c)
-	default:
-		return nil, ErrInvalidConstraints
-	}
-}
-
-// getDisplayMediaWithDisplayConstraints handles DisplayConstraints.
-func getDisplayMediaWithDisplayConstraints(c DisplayConstraints) (*MediaStream, error) {
+func GetDisplayMedia(c DisplayConstraints) (*MediaStream, error) {
 	stream := NewMediaStream()
 
 	if c.Video != nil {
@@ -788,7 +765,7 @@ func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
 // Compile-time interface check
 var _ VideoStreamTrack = (*videoStreamTrack)(nil)
 
-func (t *videoStreamTrack) PionTrack() webrtc.TrackLocal { return t.track }
+func (t *videoStreamTrack) pionTrack() webrtc.TrackLocal { return t.track }
 
 // WriteFrame writes a video frame (for feeding raw video data).
 func (t *videoStreamTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
@@ -890,7 +867,7 @@ func (t *audioStreamTrack) ApplyConstraints(ac AudioConstraints) error {
 // Compile-time interface check
 var _ AudioStreamTrack = (*audioStreamTrack)(nil)
 
-func (t *audioStreamTrack) PionTrack() webrtc.TrackLocal { return t.track }
+func (t *audioStreamTrack) pionTrack() webrtc.TrackLocal { return t.track }
 
 // WriteFrame writes an audio frame.
 func (t *audioStreamTrack) WriteFrame(f *frame.AudioFrame) error {
@@ -898,25 +875,6 @@ func (t *audioStreamTrack) WriteFrame(f *frame.AudioFrame) error {
 		return nil
 	}
 	return t.track.WriteFrame(f)
-}
-
-// --- Helper to add tracks to PeerConnection ---
-
-// AddTracksToPC adds all tracks from a MediaStream to a PeerConnection.
-// Mirrors browser's pc.addTrack(track, stream) workflow.
-func AddTracksToPC(pc *webrtc.PeerConnection, stream *MediaStream) ([]*webrtc.RTPSender, error) {
-	tracks := stream.GetTracks()
-	senders := make([]*webrtc.RTPSender, 0, len(tracks))
-
-	for _, t := range tracks {
-		sender, err := pc.AddTrack(t.PionTrack())
-		if err != nil {
-			return senders, err
-		}
-		senders = append(senders, sender)
-	}
-
-	return senders, nil
 }
 
 // --- Utilities ---
@@ -941,28 +899,6 @@ func AsVideoTrack(t MediaStreamTrack) (*track.VideoTrack, bool) {
 func AsAudioTrack(t MediaStreamTrack) (*track.AudioTrack, bool) {
 	if at, ok := t.(*audioStreamTrack); ok {
 		return at.track, true
-	}
-	return nil, false
-}
-
-// AsVideoEncoder returns the underlying encoder if track supports it.
-func AsVideoEncoder(t MediaStreamTrack) (encoder.VideoEncoder, bool) {
-	if vt, ok := t.(*videoStreamTrack); ok && vt.track != nil {
-		enc := vt.track.Encoder()
-		if enc != nil {
-			return enc, true
-		}
-	}
-	return nil, false
-}
-
-// AsAudioEncoder returns the underlying encoder if track supports it.
-func AsAudioEncoder(t MediaStreamTrack) (encoder.AudioEncoder, bool) {
-	if at, ok := t.(*audioStreamTrack); ok && at.track != nil {
-		enc := at.track.Encoder()
-		if enc != nil {
-			return enc, true
-		}
 	}
 	return nil, false
 }

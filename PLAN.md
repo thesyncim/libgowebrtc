@@ -384,13 +384,9 @@ if svc, ok := enc.(encoder.VideoEncoderSVC); ok {
 ## Unified Codec Creation
 
 ```go
-// Type-safe per-codec constructors (recommended)
+// Type-safe per-codec constructors
 enc, _ := encoder.NewH264Encoder(codec.H264Config{...})
 enc, _ := encoder.NewVP9Encoder(codec.VP9Config{...})
-
-// Or generic factory with interface{}
-enc, _ := encoder.NewVideoEncoder(codec.H264, codec.H264Config{...})
-enc, _ := encoder.NewVideoEncoder(codec.VP9, codec.VP9Config{...})
 
 // Decoders (codec-only, no config needed)
 dec, _ := decoder.NewVideoDecoder(codec.H264)
@@ -423,8 +419,8 @@ stream, _ := media.GetUserMedia(media.Constraints{
 })
 
 // Screen sharing (like getDisplayMedia)
-screenStream, _ := media.GetDisplayMedia(media.Constraints{
-    Video: &media.VideoConstraints{
+screenStream, _ := media.GetDisplayMedia(media.DisplayConstraints{
+    Video: &media.DisplayVideoConstraints{
         Width:  1920,
         Height: 1080,
         Codec:  codec.AV1,
@@ -554,16 +550,16 @@ func main() {
     })
 
     // Add all tracks to peer connection
-    for _, track := range stream.GetTracks() {
-        sender, _ := peerConnection.AddTrack(track.PionTrack(), stream.ID())
+    senders, _ := media.AddTracksToPC(peerConnection, stream)
 
-        // Configure simulcast layers for SFU
-        if track.Kind() == "video" {
-            sender.SetParameters(pc.RTPSendParameters{
-                Encodings: []pc.RTPEncodingParameters{
-                    {Active: true, MaxBitrate: 150_000, ScaleResolutionDownBy: 4},  // 320x180
-                    {Active: true, MaxBitrate: 500_000, ScaleResolutionDownBy: 2},  // 640x360
-                    {Active: true, MaxBitrate: 2_500_000, ScalabilityMode: "L3T3_KEY"}, // 1280x720
+    // Configure simulcast layers for SFU on video senders
+    for _, sender := range senders {
+        if sender.Track().Kind() == webrtc.RTPCodecTypeVideo {
+            sender.SetParameters(webrtc.RTPSendParameters{
+                Encodings: []webrtc.RTPEncodingParameters{
+                    {RID: "q", MaxBitrate: 150_000, ScaleResolutionDownBy: 4},  // 320x180
+                    {RID: "h", MaxBitrate: 500_000, ScaleResolutionDownBy: 2},  // 640x360
+                    {RID: "f", MaxBitrate: 2_500_000},                          // 1280x720
                 },
             })
         }
@@ -583,8 +579,8 @@ func main() {
 ### Example 2: Screen Share with High-Quality AV1
 ```go
 // 4K Screen sharing with AV1 for maximum quality
-stream, _ := media.GetDisplayMedia(media.Constraints{
-    Video: &media.VideoConstraints{
+stream, _ := media.GetDisplayMedia(media.DisplayConstraints{
+    Video: &media.DisplayVideoConstraints{
         Width:     3840,
         Height:    2160,
         FrameRate: 60,
@@ -1494,4 +1490,122 @@ LIBWEBRTC_SHIM_PATH=$PWD/lib/darwin_arm64/libwebrtc_shim.dylib go test ./test/e2
 ### Buffer Safety
 - Encoder functions accept `dst_buffer_size` parameter for overflow protection
 - Returns `SHIM_ERROR_BUFFER_TOO_SMALL` if encoded frame exceeds buffer
+
+---
+
+## Security Audit - Memory Safety Fixes (January 2025)
+
+### Summary
+Comprehensive audit revealed 29 issues: **8 CRITICAL**, **11 HIGH**, **10 MEDIUM**
+
+### Critical Issues (Status: In Progress)
+
+| # | Issue | File | Status |
+|---|-------|------|--------|
+| 1 | Encoder/Decoder callback memory leak | shim_video_codec.cc:137,363 | ✅ Fixed |
+| 2 | DataChannel reference count leak | shim_peer_connection.cc:50 | ✅ Fixed |
+| 3 | CStringPtr use-after-free | internal/ffi/types.go:154 | ✅ Fixed |
+| 4 | Callbacks not unregistered on Close | pkg/pc/peerconnection.go:1540 | ⏳ |
+| 5 | Missing Unregister*Callback functions | internal/ffi/peerconnection.go | ⏳ |
+| 6 | Close() race with running callbacks | pkg/pc/peerconnection.go:1540 | ⏳ |
+| 7 | Panic in callbacks unwinding through C | internal/ffi/peerconnection.go | ⏳ |
+| 8 | Device capture zero-copy to C memory | internal/ffi/device.go:239 | ⏳ |
+
+### High Severity Issues (Status: Pending)
+
+| # | Issue | File | Status |
+|---|-------|------|--------|
+| 1 | SetLocalDescription potential UAF | shim_peer_connection.cc:469 | ⏳ |
+| 2 | GetOrCreateWrapper dangling pointer | shim_data_channel.cc:83 | ⏳ |
+| 3 | Screen capture race condition | shim_capture.cc:716 | ⏳ |
+| 4 | PushFrame thread safety | shim_track_source.cc:95 | ⏳ |
+| 5 | Dangling sender pointer | shim_peer_connection.cc:608 | ⏳ |
+| 6 | Missing KeepAlive for CString | internal/ffi/peerconnection.go:267+ | ⏳ |
+| 7 | Missing bounds validation | internal/ffi/device.go:233 | ⏳ |
+| 8 | Slices passed to C unpinned | pkg/pc/peerconnection.go:855 | ⏳ |
+| 9 | RTPSender RTCP callback leak | pkg/pc/peerconnection.go:388 | ⏳ |
+| 10 | Unclear handle ownership | Multiple | ⏳ |
+| 11 | Data race on callbackInitMu | internal/ffi/peerconnection.go:27 | ⏳ |
+
+### Medium Severity Issues (Status: Pending)
+
+| # | Issue | File |
+|---|-------|------|
+| 1 | Missing encoder null check | shim_video_codec.cc:176 |
+| 2 | Encoder output race condition | shim_video_codec.cc:220 |
+| 3 | AudioDeviceModule cleanup leak | shim_capture.cc:316 |
+| 4 | Thread-local buffer lifetime | shim_data_channel.cc:156 |
+| 5 | DataChannel reference leak | shim_peer_connection.cc:655 |
+| 6 | Integer overflow in size calc | internal/ffi/peerconnection.go:65 |
+| 7 | BandwidthEstimate pointer lifetime | internal/ffi/peerconnection.go:1590 |
+| 8 | Device registry race | internal/ffi/device.go:255 |
+| 9 | Stale transceiver handles | pkg/pc/peerconnection.go:1444 |
+| 10 | DataChannel callbacks not wired | pkg/pc/peerconnection.go:930 |
+
+### Implementation Phases
+
+**Phase 1: Critical Memory Safety**
+- [x] Fix CStringPtr use-after-free (types.go - removed unsafe CStringPtr function)
+- [x] Add callback ownership to encoder/decoder (shim_video_codec.cc - store callback in struct, unregister before destroy)
+- [x] Fix DataChannel reference counting (shim_peer_connection.cc - store in PC's data_channels vector, use .get() not .release(); shim_data_channel.cc - wrapper uses raw pointer to avoid double ref count)
+
+**Phase 2: Callback Lifecycle**
+- [ ] Add Unregister*Callback functions
+- [ ] Add callback cleanup in Close()
+- [ ] Add closed check in callbacks
+- [ ] Add panic recovery
+
+**Phase 3: Memory Pinning**
+- [ ] Add runtime.KeepAlive() for CString
+- [ ] Copy device capture data
+- [ ] Add bounds validation
+
+**Phase 4: Thread Safety**
+- [ ] Fix callback init mutex
+- [ ] Add screen capture synchronization
+- [ ] Document thread requirements
+
+**Phase 5: Documentation & Cleanup**
+- [ ] Document handle ownership
+- [ ] Wire DataChannel callbacks
+- [ ] Add null/overflow checks
+
+---
+
+## API Surface Cleanup (January 2025)
+
+Cleaned up public API to hide C implementation details and provide more browser/Pion-like patterns.
+
+### Breaking Changes
+
+| Change | Migration |
+|--------|-----------|
+| Removed `PionTrack()` from MediaStreamTrack interface | Use `media.PionTrackLocal(track)` helper |
+| Removed `NewVideoEncoder(codec, interface{})` | Use type-safe constructors: `NewH264Encoder()`, `NewVP9Encoder()`, etc. |
+| Removed `NewAudioEncoder(codec, interface{})` | Use `NewOpusEncoder()` directly |
+| Removed `VideoTrack.Encoder()` | Use track methods: `SetBitrate()`, `SetFramerate()`, `RequestKeyFrame()` |
+| Removed `AudioTrack.Encoder()` | Use track methods: `SetBitrate()` |
+| Changed `GetDisplayMedia(interface{})` | Use `GetDisplayMedia(DisplayConstraints)` directly |
+
+### New APIs
+
+| API | Description |
+|-----|-------------|
+| `PeerConnection.IsValid()` | Check if handle is valid (replaces direct `handle != 0` checks) |
+| `Track.IsValid()` | Validation helper for Track |
+| `RTPSender.IsValid()` | Validation helper for RTPSender |
+| `RTPReceiver.IsValid()` | Validation helper for RTPReceiver |
+| `RTPTransceiver.IsValid()` | Validation helper for RTPTransceiver |
+| `DataChannel.IsValid()` | Validation helper for DataChannel |
+| `media.PionTrackLocal()` | Extract Pion TrackLocal from MediaStreamTrack |
+| `media.AddTracksToPC()` | Add all tracks from MediaStream to Pion PeerConnection |
+| `media.IntConstraint` | Browser-like exact/ideal/min/max constraint for integers |
+| `media.FloatConstraint` | Browser-like exact/ideal/min/max constraint for floats |
+| `media.FacingMode` | Camera facing mode enum (`user`, `environment`) |
+| `media.DisplaySurface` | Screen capture surface enum (`monitor`, `window`) |
+| `media.OverconstrainedError` | Error type for constraint validation failures |
+
+### Deferred Changes
+
+- **VideoConstraints migration**: Converting existing `int`/`float64` fields to `IntConstraint`/`FloatConstraint` is deferred due to invasive changes required across the codebase
 

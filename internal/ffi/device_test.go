@@ -41,9 +41,9 @@ func TestCStringToGo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := cStringToGo(tt.input)
+			got := CStringToGo(tt.input)
 			if got != tt.want {
-				t.Errorf("cStringToGo(%v) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("CStringToGo(%v) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -246,7 +246,7 @@ func BenchmarkCStringToGo(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = cStringToGo(input[:])
+		_ = CStringToGo(input[:])
 	}
 }
 

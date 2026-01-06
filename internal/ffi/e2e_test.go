@@ -126,6 +126,7 @@ func TestAudioEncoderDecoderPipeline(t *testing.T) {
 	defer AudioDecoderDestroy(decoder)
 
 	// Create test audio (20ms at 48kHz stereo = 960 samples * 2 channels * 2 bytes)
+	// Browser WebRTC uses 20ms Opus frames; shim handles chunking internally
 	numSamples := 960
 	samples := make([]byte, numSamples*2*2) // 16-bit stereo
 

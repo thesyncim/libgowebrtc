@@ -14,6 +14,7 @@
 
 #include "api/peer_connection_interface.h"
 #include "api/rtp_sender_interface.h"
+#include "api/data_channel_interface.h"
 #include "api/scoped_refptr.h"
 
 /* ============================================================================
@@ -45,6 +46,9 @@ struct ShimPeerConnection {
 
     // Track senders
     std::vector<webrtc::scoped_refptr<webrtc::RtpSenderInterface>> senders;
+
+    // Data channels (owned references to prevent leaks)
+    std::vector<webrtc::scoped_refptr<webrtc::DataChannelInterface>> data_channels;
 };
 
 // Alias for internal struct reference

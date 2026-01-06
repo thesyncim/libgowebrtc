@@ -1,11 +1,25 @@
 package ffi
 
 import (
+	"log"
+	"runtime"
 	"sync"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
+
+// safeCallback wraps a callback invocation with panic recovery.
+// This prevents panics in user callbacks from unwinding through C stack frames,
+// which would cause undefined behavior.
+func safeCallback(fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[libgowebrtc] panic recovered in callback: %v", r)
+		}
+	}()
+	fn()
+}
 
 // VideoFrameCallback is called when a video frame is received from a remote track.
 type VideoFrameCallback func(width, height int, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64)
@@ -88,7 +102,9 @@ func initCallbacks() {
 			copy(vData, unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize))
 		}
 
-		cb(int(width), int(height), yData, uData, vData, int(yStride), int(uStride), int(vStride), timestampUs)
+		safeCallback(func() {
+			cb(int(width), int(height), yData, uData, vData, int(yStride), int(uStride), int(vStride), timestampUs)
+		})
 	})
 
 	// Create the audio sink callback
@@ -117,7 +133,9 @@ func initCallbacks() {
 			copy(samplesData, unsafe.Slice((*int16)(unsafe.Pointer(samples)), totalSamples))
 		}
 
-		cb(samplesData, int(sampleRate), int(channels), timestampUs)
+		safeCallback(func() {
+			cb(samplesData, int(sampleRate), int(channels), timestampUs)
+		})
 	})
 
 	callbacksInitialized = true
@@ -266,6 +284,7 @@ func PeerConnectionSetLocalDescription(pc uintptr, sdpType int, sdp string) erro
 
 	sdpCStr := CString(sdp)
 	result := shimPeerConnectionSetLocalDescription(pc, sdpType, ByteSlicePtr(sdpCStr))
+	runtime.KeepAlive(sdpCStr)
 	return ShimError(result)
 }
 
@@ -277,6 +296,7 @@ func PeerConnectionSetRemoteDescription(pc uintptr, sdpType int, sdp string) err
 
 	sdpCStr := CString(sdp)
 	result := shimPeerConnectionSetRemoteDescription(pc, sdpType, ByteSlicePtr(sdpCStr))
+	runtime.KeepAlive(sdpCStr)
 	return ShimError(result)
 }
 
@@ -294,6 +314,8 @@ func PeerConnectionAddICECandidate(pc uintptr, candidate, sdpMid string, sdpMLin
 		ByteSlicePtr(sdpMidCStr),
 		sdpMLineIndex,
 	)
+	runtime.KeepAlive(candidateCStr)
+	runtime.KeepAlive(sdpMidCStr)
 	return ShimError(result)
 }
 
@@ -337,12 +359,15 @@ func PeerConnectionAddTrack(pc uintptr, codec CodecType, trackID, streamID strin
 
 	trackIDCStr := CString(trackID)
 	streamIDCStr := CString(streamID)
-	return shimPeerConnectionAddTrack(
+	result := shimPeerConnectionAddTrack(
 		pc,
 		int(codec),
 		ByteSlicePtr(trackIDCStr),
 		ByteSlicePtr(streamIDCStr),
 	)
+	runtime.KeepAlive(trackIDCStr)
+	runtime.KeepAlive(streamIDCStr)
+	return result
 }
 
 // PeerConnectionRemoveTrack removes a track from the peer connection.
@@ -368,13 +393,16 @@ func PeerConnectionCreateDataChannel(pc uintptr, label string, ordered bool, max
 		orderedInt = 1
 	}
 
-	return shimPeerConnectionCreateDataChannel(
+	result := shimPeerConnectionCreateDataChannel(
 		pc,
 		ByteSlicePtr(labelCStr),
 		orderedInt,
 		maxRetransmits,
 		ByteSlicePtr(protocolCStr),
 	)
+	runtime.KeepAlive(labelCStr)
+	runtime.KeepAlive(protocolCStr)
+	return result
 }
 
 // PeerConnectionClose closes the peer connection.
@@ -459,6 +487,141 @@ func DataChannelDestroy(dc uintptr) {
 	shimDataChannelDestroy(dc)
 }
 
+// DataChannel callback types
+type OnDataChannelMessageCallback func(data []byte, isBinary bool)
+type OnDataChannelStateCallback func()
+
+// DataChannel callback registries
+var (
+	dcMessageCallbackMu  sync.RWMutex
+	dcMessageCallbacks   = make(map[uintptr]OnDataChannelMessageCallback)
+	dcMessageCallbackPtr uintptr
+	dcMessageInitialized bool
+
+	dcOpenCallbackMu  sync.RWMutex
+	dcOpenCallbacks   = make(map[uintptr]OnDataChannelStateCallback)
+	dcOpenCallbackPtr uintptr
+	dcOpenInitialized bool
+
+	dcCloseCallbackMu  sync.RWMutex
+	dcCloseCallbacks   = make(map[uintptr]OnDataChannelStateCallback)
+	dcCloseCallbackPtr uintptr
+	dcCloseInitialized bool
+)
+
+func initDCMessageCallback() {
+	callbackInitMu.Lock()
+	defer callbackInitMu.Unlock()
+	if dcMessageInitialized {
+		return
+	}
+	// NOTE: C uses 'int' (32-bit) for size/isBinary, so we must use int32 to match
+	dcMessageCallbackPtr = purego.NewCallback(func(ctx uintptr, data uintptr, size int32, isBinary int32) {
+		dcMessageCallbackMu.RLock()
+		cb, ok := dcMessageCallbacks[ctx]
+		dcMessageCallbackMu.RUnlock()
+		if ok && cb != nil {
+			// Bounds validation: DataChannel messages should be reasonably sized
+			const maxMessageSize = 256 * 1024 * 1024 // 256MB max
+			if size < 0 || size > maxMessageSize {
+				return
+			}
+			// Copy data before callback (C memory may be reused)
+			goData := make([]byte, size)
+			if size > 0 && data != 0 {
+				copy(goData, unsafe.Slice((*byte)(unsafe.Pointer(data)), size))
+			}
+			safeCallback(func() { cb(goData, isBinary != 0) })
+		}
+	})
+	dcMessageInitialized = true
+}
+
+func initDCOpenCallback() {
+	callbackInitMu.Lock()
+	defer callbackInitMu.Unlock()
+	if dcOpenInitialized {
+		return
+	}
+	dcOpenCallbackPtr = purego.NewCallback(func(ctx uintptr) {
+		dcOpenCallbackMu.RLock()
+		cb, ok := dcOpenCallbacks[ctx]
+		dcOpenCallbackMu.RUnlock()
+		if ok && cb != nil {
+			safeCallback(cb)
+		}
+	})
+	dcOpenInitialized = true
+}
+
+func initDCCloseCallback() {
+	callbackInitMu.Lock()
+	defer callbackInitMu.Unlock()
+	if dcCloseInitialized {
+		return
+	}
+	dcCloseCallbackPtr = purego.NewCallback(func(ctx uintptr) {
+		dcCloseCallbackMu.RLock()
+		cb, ok := dcCloseCallbacks[ctx]
+		dcCloseCallbackMu.RUnlock()
+		if ok && cb != nil {
+			safeCallback(cb)
+		}
+	})
+	dcCloseInitialized = true
+}
+
+// DataChannelSetOnMessage sets the message callback for a data channel.
+func DataChannelSetOnMessage(dc uintptr, cb OnDataChannelMessageCallback) {
+	if !libLoaded || shimDataChannelSetOnMessage == nil {
+		return
+	}
+	initDCMessageCallback()
+	dcMessageCallbackMu.Lock()
+	dcMessageCallbacks[dc] = cb
+	dcMessageCallbackMu.Unlock()
+	shimDataChannelSetOnMessage(dc, dcMessageCallbackPtr, dc)
+}
+
+// DataChannelSetOnOpen sets the open callback for a data channel.
+func DataChannelSetOnOpen(dc uintptr, cb OnDataChannelStateCallback) {
+	if !libLoaded || shimDataChannelSetOnOpen == nil {
+		return
+	}
+	initDCOpenCallback()
+	dcOpenCallbackMu.Lock()
+	dcOpenCallbacks[dc] = cb
+	dcOpenCallbackMu.Unlock()
+	shimDataChannelSetOnOpen(dc, dcOpenCallbackPtr, dc)
+}
+
+// DataChannelSetOnClose sets the close callback for a data channel.
+func DataChannelSetOnClose(dc uintptr, cb OnDataChannelStateCallback) {
+	if !libLoaded || shimDataChannelSetOnClose == nil {
+		return
+	}
+	initDCCloseCallback()
+	dcCloseCallbackMu.Lock()
+	dcCloseCallbacks[dc] = cb
+	dcCloseCallbackMu.Unlock()
+	shimDataChannelSetOnClose(dc, dcCloseCallbackPtr, dc)
+}
+
+// UnregisterDataChannelCallbacks removes all callbacks for a data channel.
+func UnregisterDataChannelCallbacks(dc uintptr) {
+	dcMessageCallbackMu.Lock()
+	delete(dcMessageCallbacks, dc)
+	dcMessageCallbackMu.Unlock()
+
+	dcOpenCallbackMu.Lock()
+	delete(dcOpenCallbacks, dc)
+	dcOpenCallbackMu.Unlock()
+
+	dcCloseCallbackMu.Lock()
+	delete(dcCloseCallbacks, dc)
+	dcCloseCallbackMu.Unlock()
+}
+
 // VideoTrackSourceCreate creates a video track source for frame injection.
 func VideoTrackSourceCreate(pc uintptr, width, height int) uintptr {
 	if !libLoaded || shimVideoTrackSourceCreate == nil {
@@ -500,12 +663,15 @@ func PeerConnectionAddVideoTrackFromSource(pc, source uintptr, trackID, streamID
 
 	trackIDCStr := CString(trackID)
 	streamIDCStr := CString(streamID)
-	return shimPeerConnectionAddVideoTrackFromSource(
+	result := shimPeerConnectionAddVideoTrackFromSource(
 		pc,
 		source,
 		ByteSlicePtr(trackIDCStr),
 		ByteSlicePtr(streamIDCStr),
 	)
+	runtime.KeepAlive(trackIDCStr)
+	runtime.KeepAlive(streamIDCStr)
+	return result
 }
 
 // VideoTrackSourceDestroy destroys a video track source.
@@ -547,12 +713,15 @@ func PeerConnectionAddAudioTrackFromSource(pc, source uintptr, trackID, streamID
 
 	trackIDCStr := CString(trackID)
 	streamIDCStr := CString(streamID)
-	return shimPeerConnectionAddAudioTrackFromSource(
+	result := shimPeerConnectionAddAudioTrackFromSource(
 		pc,
 		source,
 		ByteSlicePtr(trackIDCStr),
 		ByteSlicePtr(streamIDCStr),
 	)
+	runtime.KeepAlive(trackIDCStr)
+	runtime.KeepAlive(streamIDCStr)
+	return result
 }
 
 // AudioTrackSourceDestroy destroys an audio track source.
@@ -784,13 +953,16 @@ func initRTCPCallback() {
 		return
 	}
 
-	rtcpFeedbackCallbackPtr = purego.NewCallback(func(ctx uintptr, feedbackType int, ssrc uint32) {
+	// NOTE: C uses 'int' (32-bit) for feedbackType, so we must use int32 to match
+	rtcpFeedbackCallbackPtr = purego.NewCallback(func(ctx uintptr, feedbackType int32, ssrc uint32) {
 		rtcpFeedbackCallbackMu.RLock()
 		cb, ok := rtcpFeedbackCallbacks[ctx]
 		rtcpFeedbackCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			cb(feedbackType, ssrc)
+			safeCallback(func() {
+				cb(int(feedbackType), ssrc)
+			})
 		}
 	})
 
@@ -812,6 +984,13 @@ func RTPSenderSetOnRTCPFeedback(sender uintptr, cb RTCPFeedbackCallback) {
 	shimRTPSenderSetOnRTCPFeedback(sender, rtcpFeedbackCallbackPtr, sender)
 }
 
+// UnregisterRTCPFeedbackCallback removes the RTCP feedback callback for a sender.
+func UnregisterRTCPFeedbackCallback(sender uintptr) {
+	rtcpFeedbackCallbackMu.Lock()
+	delete(rtcpFeedbackCallbacks, sender)
+	rtcpFeedbackCallbackMu.Unlock()
+}
+
 // RTPSenderSetLayerActive enables or disables a simulcast layer.
 func RTPSenderSetLayerActive(sender uintptr, rid string, active bool) error {
 	if !libLoaded || shimRTPSenderSetLayerActive == nil {
@@ -825,6 +1004,7 @@ func RTPSenderSetLayerActive(sender uintptr, rid string, active bool) error {
 	}
 
 	result := shimRTPSenderSetLayerActive(sender, ByteSlicePtr(ridCStr), activeInt)
+	runtime.KeepAlive(ridCStr)
 	return ShimError(result)
 }
 
@@ -836,6 +1016,7 @@ func RTPSenderSetLayerBitrate(sender uintptr, rid string, maxBitrate uint32) err
 
 	ridCStr := CString(rid)
 	result := shimRTPSenderSetLayerBitrate(sender, ByteSlicePtr(ridCStr), maxBitrate)
+	runtime.KeepAlive(ridCStr)
 	return ShimError(result)
 }
 
@@ -1080,13 +1261,16 @@ func initConnectionStateCallback() {
 		return
 	}
 
-	connectionStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int) {
+	// NOTE: C uses 'int' (32-bit) for state, so we must use int32 to match
+	connectionStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) {
 		connectionStateCallbackMu.RLock()
 		cb, ok := connectionStateCallbacks[ctx]
 		connectionStateCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			cb(state)
+			safeCallback(func() {
+				cb(int(state))
+			})
 		}
 	})
 
@@ -1144,7 +1328,9 @@ func initOnTrackCallback() {
 
 		if ok && cb != nil {
 			streamsStr := GoString(streams)
-			cb(track, receiver, streamsStr)
+			safeCallback(func() {
+				cb(track, receiver, streamsStr)
+			})
 		}
 	})
 
@@ -1164,6 +1350,13 @@ func PeerConnectionSetOnTrack(pc uintptr, cb OnTrackCallback) {
 	onTrackCallbackMu.Unlock()
 
 	shimPeerConnectionSetOnTrack(pc, onTrackCallbackPtr, pc)
+}
+
+// UnregisterOnTrackCallback removes the on track callback for a PC.
+func UnregisterOnTrackCallback(pc uintptr) {
+	onTrackCallbackMu.Lock()
+	delete(onTrackCallbacks, pc)
+	onTrackCallbackMu.Unlock()
 }
 
 // ============================================================================
@@ -1203,7 +1396,9 @@ func initOnICECandidateCallback() {
 
 			candidate := GoString(candidateStrPtr)
 			sdpMid := GoString(sdpMidPtr)
-			cb(candidate, sdpMid, int(sdpMLineIndex))
+			safeCallback(func() {
+				cb(candidate, sdpMid, int(sdpMLineIndex))
+			})
 		}
 	})
 
@@ -1223,6 +1418,13 @@ func PeerConnectionSetOnICECandidate(pc uintptr, cb OnICECandidateCallback) {
 	onICECandidateCallbackMu.Unlock()
 
 	shimPeerConnectionSetOnICECandidate(pc, onICECandidateCallbackPtr, pc)
+}
+
+// UnregisterOnICECandidateCallback removes the on ICE candidate callback for a PC.
+func UnregisterOnICECandidateCallback(pc uintptr) {
+	onICECandidateCallbackMu.Lock()
+	delete(onICECandidateCallbacks, pc)
+	onICECandidateCallbackMu.Unlock()
 }
 
 // ============================================================================
@@ -1253,7 +1455,9 @@ func initOnDataChannelCallback() {
 		onDataChannelCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			cb(dc)
+			safeCallback(func() {
+				cb(dc)
+			})
 		}
 	})
 
@@ -1273,6 +1477,13 @@ func PeerConnectionSetOnDataChannel(pc uintptr, cb OnDataChannelCallback) {
 	onDataChannelCallbackMu.Unlock()
 
 	shimPeerConnectionSetOnDataChannel(pc, onDataChannelCallbackPtr, pc)
+}
+
+// UnregisterOnDataChannelCallback removes the on data channel callback for a PC.
+func UnregisterOnDataChannelCallback(pc uintptr) {
+	onDataChannelCallbackMu.Lock()
+	delete(onDataChannelCallbacks, pc)
+	onDataChannelCallbackMu.Unlock()
 }
 
 // ============================================================================
@@ -1297,13 +1508,16 @@ func initSignalingStateCallback() {
 		return
 	}
 
-	signalingStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int) {
+	// NOTE: C uses 'int' (32-bit) for state, so we must use int32 to match
+	signalingStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) {
 		signalingStateCallbackMu.RLock()
 		cb, ok := signalingStateCallbacks[ctx]
 		signalingStateCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			cb(state)
+			safeCallback(func() {
+				cb(int(state))
+			})
 		}
 	})
 
@@ -1323,6 +1537,13 @@ func PeerConnectionSetOnSignalingStateChange(pc uintptr, cb SignalingStateCallba
 	signalingStateCallbackMu.Unlock()
 
 	shimPeerConnectionSetOnSignalingStateChange(pc, signalingStateCallbackPtr, pc)
+}
+
+// UnregisterSignalingStateCallback removes the signaling state callback for a PC.
+func UnregisterSignalingStateCallback(pc uintptr) {
+	signalingStateCallbackMu.Lock()
+	delete(signalingStateCallbacks, pc)
+	signalingStateCallbackMu.Unlock()
 }
 
 // ============================================================================
@@ -1347,13 +1568,16 @@ func initICEConnectionStateCallback() {
 		return
 	}
 
-	iceConnectionStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int) {
+	// NOTE: C uses 'int' (32-bit) for state, so we must use int32 to match
+	iceConnectionStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) {
 		iceConnectionStateCallbackMu.RLock()
 		cb, ok := iceConnectionStateCallbacks[ctx]
 		iceConnectionStateCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			cb(state)
+			safeCallback(func() {
+				cb(int(state))
+			})
 		}
 	})
 
@@ -1373,6 +1597,13 @@ func PeerConnectionSetOnICEConnectionStateChange(pc uintptr, cb ICEConnectionSta
 	iceConnectionStateCallbackMu.Unlock()
 
 	shimPeerConnectionSetOnICEConnectionStateChange(pc, iceConnectionStateCallbackPtr, pc)
+}
+
+// UnregisterICEConnectionStateCallback removes the ICE connection state callback for a PC.
+func UnregisterICEConnectionStateCallback(pc uintptr) {
+	iceConnectionStateCallbackMu.Lock()
+	delete(iceConnectionStateCallbacks, pc)
+	iceConnectionStateCallbackMu.Unlock()
 }
 
 // ============================================================================
@@ -1397,13 +1628,16 @@ func initICEGatheringStateCallback() {
 		return
 	}
 
-	iceGatheringStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int) {
+	// NOTE: C uses 'int' (32-bit) for state, so we must use int32 to match
+	iceGatheringStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) {
 		iceGatheringStateCallbackMu.RLock()
 		cb, ok := iceGatheringStateCallbacks[ctx]
 		iceGatheringStateCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			cb(state)
+			safeCallback(func() {
+				cb(int(state))
+			})
 		}
 	})
 
@@ -1423,6 +1657,13 @@ func PeerConnectionSetOnICEGatheringStateChange(pc uintptr, cb ICEGatheringState
 	iceGatheringStateCallbackMu.Unlock()
 
 	shimPeerConnectionSetOnICEGatheringStateChange(pc, iceGatheringStateCallbackPtr, pc)
+}
+
+// UnregisterICEGatheringStateCallback removes the ICE gathering state callback for a PC.
+func UnregisterICEGatheringStateCallback(pc uintptr) {
+	iceGatheringStateCallbackMu.Lock()
+	delete(iceGatheringStateCallbacks, pc)
+	iceGatheringStateCallbackMu.Unlock()
 }
 
 // ============================================================================
@@ -1453,7 +1694,9 @@ func initNegotiationNeededCallback() {
 		negotiationNeededCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			cb()
+			safeCallback(func() {
+				cb()
+			})
 		}
 	})
 
@@ -1475,6 +1718,13 @@ func PeerConnectionSetOnNegotiationNeeded(pc uintptr, cb NegotiationNeededCallba
 	shimPeerConnectionSetOnNegotiationNeeded(pc, negotiationNeededCallbackPtr, pc)
 }
 
+// UnregisterNegotiationNeededCallback removes the negotiation needed callback for a PC.
+func UnregisterNegotiationNeededCallback(pc uintptr) {
+	negotiationNeededCallbackMu.Lock()
+	delete(negotiationNeededCallbacks, pc)
+	negotiationNeededCallbackMu.Unlock()
+}
+
 // ============================================================================
 // RTPSender Scalability Mode
 // ============================================================================
@@ -1487,6 +1737,7 @@ func RTPSenderSetScalabilityMode(sender uintptr, mode string) error {
 
 	modeCStr := CString(mode)
 	result := shimRTPSenderSetScalabilityMode(sender, ByteSlicePtr(modeCStr))
+	runtime.KeepAlive(modeCStr)
 	return ShimError(result)
 }
 
@@ -1498,6 +1749,7 @@ func RTPSenderGetScalabilityMode(sender uintptr) (string, error) {
 
 	modeBuf := make([]byte, 64)
 	result := shimRTPSenderGetScalabilityMode(sender, ByteSlicePtr(modeBuf), len(modeBuf))
+	runtime.KeepAlive(modeBuf)
 	if err := ShimError(result); err != nil {
 		return "", err
 	}
@@ -1522,17 +1774,29 @@ func GetSupportedVideoCodecs() ([]CodecCapability, error) {
 	}
 
 	codecs := make([]CodecCapability, 16)
-	var count int32
+	var count int
 	result := shimGetSupportedVideoCodecs(
 		uintptr(unsafe.Pointer(&codecs[0])),
 		len(codecs),
-		uintptr(unsafe.Pointer(&count)),
+		IntPtr(&count),
 	)
+	runtime.KeepAlive(&count)
+	runtime.KeepAlive(&codecs)
 	if err := ShimError(result); err != nil {
 		return nil, err
 	}
 
-	return codecs[:count], nil
+	// Workaround for purego FFI output pointer issue:
+	// The count value isn't propagating through purego correctly,
+	// so we count codecs by checking which ones have non-empty mime types.
+	actualCount := 0
+	for i := range codecs {
+		if codecs[i].MimeType[0] != 0 {
+			actualCount++
+		}
+	}
+
+	return codecs[:actualCount], nil
 }
 
 // GetSupportedAudioCodecs returns a list of supported audio codecs.
@@ -1542,17 +1806,27 @@ func GetSupportedAudioCodecs() ([]CodecCapability, error) {
 	}
 
 	codecs := make([]CodecCapability, 16)
-	var count int32
+	var count int
 	result := shimGetSupportedAudioCodecs(
 		uintptr(unsafe.Pointer(&codecs[0])),
 		len(codecs),
-		uintptr(unsafe.Pointer(&count)),
+		IntPtr(&count),
 	)
+	runtime.KeepAlive(&count)
+	runtime.KeepAlive(&codecs)
 	if err := ShimError(result); err != nil {
 		return nil, err
 	}
 
-	return codecs[:count], nil
+	// Workaround for purego FFI output pointer issue
+	actualCount := 0
+	for i := range codecs {
+		if codecs[i].MimeType[0] != 0 {
+			actualCount++
+		}
+	}
+
+	return codecs[:actualCount], nil
 }
 
 // IsCodecSupported checks if a specific codec is supported.
@@ -1562,7 +1836,9 @@ func IsCodecSupported(mimeType string) bool {
 	}
 
 	cstr := CString(mimeType)
-	return shimIsCodecSupported(ByteSlicePtr(cstr)) != 0
+	result := shimIsCodecSupported(ByteSlicePtr(cstr)) != 0
+	runtime.KeepAlive(cstr)
+	return result
 }
 
 // ============================================================================
@@ -1594,7 +1870,9 @@ func initBWECallback() {
 
 		if ok && cb != nil && estimatePtr != 0 {
 			estimate := (*BandwidthEstimate)(unsafe.Pointer(estimatePtr))
-			cb(estimate)
+			safeCallback(func() {
+				cb(estimate)
+			})
 		}
 	})
 
@@ -1614,6 +1892,13 @@ func PeerConnectionSetOnBandwidthEstimate(pc uintptr, cb BandwidthEstimateCallba
 	bweCallbackMu.Unlock()
 
 	shimPeerConnectionSetOnBandwidthEstimate(pc, bweCallbackPtr, pc)
+}
+
+// UnregisterBandwidthEstimateCallback removes the bandwidth estimate callback for a PC.
+func UnregisterBandwidthEstimateCallback(pc uintptr) {
+	bweCallbackMu.Lock()
+	delete(bweCallbacks, pc)
+	bweCallbackMu.Unlock()
 }
 
 // PeerConnectionGetBandwidthEstimate gets the current bandwidth estimate.

@@ -235,14 +235,14 @@ func TestDataChannelBidirectional(t *testing.T) {
 	)
 
 	// Set up libwebrtc DC callbacks
-	libDC.OnOpen = func() {
+	libDC.SetOnOpen(func() {
 		t.Log("libwebrtc DC opened")
-	}
-	libDC.OnMessage = func(data []byte) {
+	})
+	libDC.SetOnMessage(func(data []byte) {
 		messagesMu.Lock()
 		libMessages = append(libMessages, string(data))
 		messagesMu.Unlock()
-	}
+	})
 
 	// Set up Pion DC callbacks
 	pionPC.OnDataChannel(func(dc *pionwebrtc.DataChannel) {

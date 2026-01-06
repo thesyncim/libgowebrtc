@@ -342,15 +342,15 @@ func (s *Session) setupCallbacks() {
 }
 
 func (s *Session) setupDataChannel(dc *pc.DataChannel) {
-	dc.OnOpen = func() {
+	dc.SetOnOpen(func() {
 		log.Printf("DataChannel opened")
 		dc.Send([]byte(fmt.Sprintf("Transcoding: %s -> %s @ %dx%d",
 			*srcCodec, *dstCodec, *width, *height)))
-	}
+	})
 
-	dc.OnMessage = func(msg []byte) {
+	dc.SetOnMessage(func(msg []byte) {
 		log.Printf("DataChannel message: %s", string(msg))
-	}
+	})
 }
 
 func (s *Session) handleSignaling(ctx context.Context) error {

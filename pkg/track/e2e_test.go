@@ -43,17 +43,18 @@ func TestVideoTrackFullPipeline(t *testing.T) {
 		f.Data[2][i] = 128
 	}
 
-	// Write multiple frames
+	// Write multiple frames - expect ErrNotBound when track is not added to PeerConnection
 	for i := 0; i < 10; i++ {
 		f.PTS = uint32(i * 33) // 30fps
 		forceKeyframe := i == 0
 
-		if err := vt.WriteFrame(f, forceKeyframe); err != nil {
-			t.Logf("Frame %d: WriteFrame returned: %v (may be expected without Pion binding)", i, err)
+		err := vt.WriteFrame(f, forceKeyframe)
+		if err != nil && err != ErrNotBound {
+			t.Fatalf("Frame %d: unexpected error: %v", i, err)
 		}
 	}
 
-	t.Log("Video track pipeline test passed")
+	t.Log("Video track pipeline test passed (not bound to PeerConnection)")
 }
 
 func TestAudioTrackFullPipeline(t *testing.T) {
@@ -69,20 +70,22 @@ func TestAudioTrackFullPipeline(t *testing.T) {
 	defer at.Close()
 
 	// Create test audio frame (20ms at 48kHz stereo)
+	// Browser WebRTC uses 20ms Opus frames; shim handles chunking internally
 	f := frame.NewAudioFrameS16(48000, 2, 960)
 
 	// Fill with silence (already zeroed)
 
-	// Write multiple frames
+	// Write multiple frames - expect ErrNotBound when track is not added to PeerConnection
 	for i := 0; i < 10; i++ {
 		f.PTS = uint32(i * 20) // 20ms per frame
 
-		if err := at.WriteFrame(f); err != nil {
-			t.Logf("Frame %d: WriteFrame returned: %v (may be expected without Pion binding)", i, err)
+		err := at.WriteFrame(f)
+		if err != nil && err != ErrNotBound {
+			t.Fatalf("Frame %d: unexpected error: %v", i, err)
 		}
 	}
 
-	t.Log("Audio track pipeline test passed")
+	t.Log("Audio track pipeline test passed (not bound to PeerConnection)")
 }
 
 func TestVideoTrackBitrateChange(t *testing.T) {
@@ -145,11 +148,12 @@ func TestVideoTrackKeyframeRequest(t *testing.T) {
 		f.Data[2][i] = 128
 	}
 
-	if err := vt.WriteFrame(f, false); err != nil {
-		t.Logf("WriteFrame returned: %v (may be expected without Pion binding)", err)
+	err = vt.WriteFrame(f, false)
+	if err != nil && err != ErrNotBound {
+		t.Fatalf("WriteFrame unexpected error: %v", err)
 	}
 
-	t.Log("Keyframe request test passed")
+	t.Log("Keyframe request test passed (not bound to PeerConnection)")
 }
 
 func TestMultipleCodecs(t *testing.T) {
@@ -186,11 +190,12 @@ func TestMultipleCodecs(t *testing.T) {
 				f.Data[2][i] = 128
 			}
 
-			if err := vt.WriteFrame(f, true); err != nil {
-				t.Logf("%s WriteFrame returned: %v", tc.name, err)
+			err = vt.WriteFrame(f, true)
+			if err != nil && err != ErrNotBound {
+				t.Fatalf("%s WriteFrame unexpected error: %v", tc.name, err)
 			}
 
-			t.Logf("%s track test passed", tc.name)
+			// Success - track created and encoder works
 		})
 	}
 }

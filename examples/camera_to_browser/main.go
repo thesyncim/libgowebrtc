@@ -200,21 +200,21 @@ func (s *Session) setupCallbacks() {
 }
 
 func (s *Session) setupDataChannel(dc *pc.DataChannel) {
-	dc.OnOpen = func() {
+	dc.SetOnOpen(func() {
 		log.Printf("DataChannel opened: %s", dc.Label())
 		dc.Send([]byte("Welcome to libgowebrtc!"))
-	}
+	})
 
-	dc.OnMessage = func(data []byte) {
+	dc.SetOnMessage(func(data []byte) {
 		log.Printf("DataChannel message: %s", string(data))
 		// Echo back with timestamp
 		response := fmt.Sprintf("[%s] Echo: %s", time.Now().Format("15:04:05"), string(data))
 		dc.Send([]byte(response))
-	}
+	})
 
-	dc.OnClose = func() {
+	dc.SetOnClose(func() {
 		log.Printf("DataChannel closed")
-	}
+	})
 }
 
 func (s *Session) handleMessage(msg SignalingMessage) error {

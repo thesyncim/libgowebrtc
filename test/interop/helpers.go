@@ -316,11 +316,11 @@ func (pp *PeerPair) CreateDataChannelPair(label string, ordered bool) (*DataChan
 	dcp.Lib = libDC
 
 	// Set up libDC message handler
-	libDC.OnMessage = func(data []byte) {
+	libDC.SetOnMessage(func(data []byte) {
 		dcp.messagesMu.Lock()
 		dcp.libMessages = append(dcp.libMessages, data)
 		dcp.messagesMu.Unlock()
-	}
+	})
 
 	// Set up Pion to receive DC
 	pp.Pion.OnDataChannel(func(dc *pionwebrtc.DataChannel) {

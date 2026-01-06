@@ -54,10 +54,8 @@ peerConnection, _ := pc.NewPeerConnection(pc.Configuration{
     },
 })
 
-// Add tracks
-for _, track := range stream.GetVideoTracks() {
-    peerConnection.AddTrack(track.PionTrack(), stream.ID())
-}
+// Add tracks using helper
+senders, _ := media.AddTracksToPC(peerConnection, stream)
 
 // Create offer
 offer, _ := peerConnection.CreateOffer(nil)

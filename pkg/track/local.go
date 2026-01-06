@@ -101,11 +101,6 @@ func (t *VideoTrack) StreamID() string {
 	return t.streamID
 }
 
-// Encoder returns the underlying video encoder (nil if not yet bound/created).
-func (t *VideoTrack) Encoder() encoder.VideoEncoder {
-	return t.enc
-}
-
 // Kind returns webrtc.RTPCodecTypeVideo.
 func (t *VideoTrack) Kind() webrtc.RTPCodecType {
 	return webrtc.RTPCodecTypeVideo
@@ -490,11 +485,6 @@ func (t *AudioTrack) RID() string {
 // StreamID returns the stream ID.
 func (t *AudioTrack) StreamID() string {
 	return t.streamID
-}
-
-// Encoder returns the underlying audio encoder (nil if not yet bound/created).
-func (t *AudioTrack) Encoder() encoder.AudioEncoder {
-	return t.enc
 }
 
 // Kind returns webrtc.RTPCodecTypeAudio.

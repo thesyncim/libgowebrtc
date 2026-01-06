@@ -1,7 +1,6 @@
 package media
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
@@ -80,31 +79,6 @@ func TestGetDisplayMediaWithWindowID(t *testing.T) {
 		if track.Label() != "window-capture" {
 			t.Errorf("Label() = %q, want %q", track.Label(), "window-capture")
 		}
-	}
-}
-
-func TestGetDisplayMediaLegacyConstraints(t *testing.T) {
-	// Test that legacy Constraints still work
-	stream, err := GetDisplayMedia(Constraints{
-		Video: &VideoConstraints{
-			Width:  1920,
-			Height: 1080,
-		},
-	})
-
-	if err != nil {
-		t.Fatalf("GetDisplayMedia() error = %v", err)
-	}
-	if stream == nil {
-		t.Fatal("GetDisplayMedia() stream is nil")
-	}
-}
-
-func TestGetDisplayMediaInvalidConstraints(t *testing.T) {
-	_, err := GetDisplayMedia("invalid")
-
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Errorf("GetDisplayMedia() error = %v, want %v", err, ErrInvalidConstraints)
 	}
 }
 

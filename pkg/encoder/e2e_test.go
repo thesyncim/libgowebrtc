@@ -250,7 +250,8 @@ func TestOpusEncoderEncode(t *testing.T) {
 	}
 	defer enc.Close()
 
-	// Create 20ms of silence (960 samples at 48kHz)
+	// Create 20ms of audio (960 samples per channel at 48kHz)
+	// Browser WebRTC uses 20ms Opus frames; shim handles chunking internally
 	src := frame.NewAudioFrameS16(48000, 2, 960)
 
 	dst := make([]byte, enc.MaxEncodedSize())

@@ -116,7 +116,7 @@ func TestOpusRoundtrip(t *testing.T) {
 
 	sampleRate := 48000
 	channels := 2
-	frameDuration := 10 // ms - WebRTC expects 10ms frames per Encode call
+	frameDuration := 20 // ms - Opus uses 20ms frames (shim processes as 2x 10ms chunks)
 	samplesPerFrame := sampleRate * frameDuration / 1000
 
 	// Create encoder
@@ -425,13 +425,13 @@ func BenchmarkOpusEncode(b *testing.B) {
 	}
 	defer enc.Close()
 
-	srcFrame := frame.NewAudioFrameS16(48000, 2, 960) // 20ms
+	srcFrame := frame.NewAudioFrameS16(48000, 2, 960) // 20ms frames (browser WebRTC)
 	fillAudioTestPattern(srcFrame)
 	encBuf := make([]byte, enc.MaxEncodedSize())
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		srcFrame.PTS = uint32(i * 960)
+		srcFrame.PTS = uint32(i * 960) // 20ms frames
 		enc.EncodeInto(srcFrame, encBuf)
 	}
 }

@@ -217,7 +217,8 @@ func TestWriteAudioFrameToTrack(t *testing.T) {
 	}
 	defer audioTrack.Close()
 
-	// Create a test audio frame (20ms at 48kHz stereo = 960 samples)
+	// Create a test audio frame (20ms at 48kHz stereo = 960 samples per channel)
+	// Browser WebRTC uses 20ms Opus frames; shim handles chunking internally
 	testFrame := frame.NewAudioFrameS16(48000, 2, 960)
 	testFrame.PTS = 0
 

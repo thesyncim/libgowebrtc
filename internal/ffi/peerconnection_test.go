@@ -2,6 +2,7 @@ package ffi
 
 import (
 	"testing"
+	"unsafe"
 )
 
 // Integration tests for PeerConnection FFI bindings.
@@ -326,5 +327,46 @@ func BenchmarkFFICreateOffer(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = PeerConnectionCreateOffer(handle, sdpBuf)
+	}
+}
+
+func TestGetSupportedVideoCodecsFFI(t *testing.T) {
+	t.Logf("CodecCapability struct size: %d", unsafe.Sizeof(CodecCapability{}))
+
+	codecs, err := GetSupportedVideoCodecs()
+	if err != nil {
+		t.Fatalf("GetSupportedVideoCodecs failed: %v", err)
+	}
+
+	t.Logf("Got %d video codecs", len(codecs))
+	for i, c := range codecs {
+		t.Logf("  [%d] mime=%s clock=%d pt=%d", i,
+			CStringToGo(c.MimeType[:]),
+			c.ClockRate,
+			c.PayloadType)
+	}
+
+	if len(codecs) == 0 {
+		t.Error("Expected at least one video codec")
+	}
+}
+
+func TestGetSupportedAudioCodecsFFI(t *testing.T) {
+	codecs, err := GetSupportedAudioCodecs()
+	if err != nil {
+		t.Fatalf("GetSupportedAudioCodecs failed: %v", err)
+	}
+
+	t.Logf("Got %d audio codecs", len(codecs))
+	for i, c := range codecs {
+		t.Logf("  [%d] mime=%s clock=%d ch=%d pt=%d", i,
+			CStringToGo(c.MimeType[:]),
+			c.ClockRate,
+			c.Channels,
+			c.PayloadType)
+	}
+
+	if len(codecs) == 0 {
+		t.Error("Expected at least one audio codec")
 	}
 }

@@ -180,8 +180,8 @@ func EnumerateDevices() ([]DeviceInfo, error) {
 	out := make([]DeviceInfo, count)
 	for i := int32(0); i < count; i++ {
 		out[i] = DeviceInfo{
-			DeviceID: cStringToGo(devices[i].deviceID[:]),
-			Label:    cStringToGo(devices[i].label[:]),
+			DeviceID: CStringToGo(devices[i].deviceID[:]),
+			Label:    CStringToGo(devices[i].label[:]),
 			Kind:     DeviceKind(devices[i].kind),
 		}
 	}
@@ -230,17 +230,45 @@ func videoCaptureCallbackBridge(
 		return
 	}
 
+	// Bounds validation to prevent integer overflow and invalid memory access
+	if width <= 0 || height <= 0 || width > 16384 || height > 16384 {
+		return
+	}
+	if yStride <= 0 || uStride <= 0 || vStride <= 0 {
+		return
+	}
+	if yStride > 16384 || uStride > 16384 || vStride > 16384 {
+		return
+	}
+	if yPlane == 0 || uPlane == 0 || vPlane == 0 {
+		return
+	}
+
 	// Calculate plane sizes
 	ySize := yStride * height
 	uvHeight := (height + 1) / 2
 	uSize := uStride * uvHeight
 	vSize := vStride * uvHeight
 
-	// Create slices from pointers (zero-copy view into C memory)
+	// Additional sanity check for total size
+	const maxFrameSize = 64 * 1024 * 1024 // 64MB max
+	if ySize > maxFrameSize || uSize > maxFrameSize || vSize > maxFrameSize {
+		return
+	}
+
+	// Copy data from C memory to Go-managed memory for safety.
+	// This ensures the callback can safely store/use the data after returning.
+	yData := make([]byte, ySize)
+	uData := make([]byte, uSize)
+	vData := make([]byte, vSize)
+	copy(yData, unsafe.Slice((*byte)(unsafe.Pointer(yPlane)), ySize))
+	copy(uData, unsafe.Slice((*byte)(unsafe.Pointer(uPlane)), uSize))
+	copy(vData, unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize))
+
 	frame := &CapturedVideoFrame{
-		YPlane:      unsafe.Slice((*byte)(unsafe.Pointer(yPlane)), ySize),
-		UPlane:      unsafe.Slice((*byte)(unsafe.Pointer(uPlane)), uSize),
-		VPlane:      unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize),
+		YPlane:      yData,
+		UPlane:      uData,
+		VPlane:      vData,
 		Width:       width,
 		Height:      height,
 		YStride:     yStride,
@@ -249,7 +277,9 @@ func videoCaptureCallbackBridge(
 		TimestampUs: timestampUs,
 	}
 
-	capture.callback(frame)
+	safeCallback(func() {
+		capture.callback(frame)
+	})
 }
 
 // Start begins video capture with the given callback.
@@ -371,15 +401,30 @@ func audioCaptureCallbackBridge(
 		return
 	}
 
-	// Create slice from pointer (zero-copy view into C memory)
+	// Bounds validation to prevent integer overflow and invalid memory access
+	if numSamples <= 0 || numSamples > 48000 || numChannels <= 0 || numChannels > 8 {
+		return
+	}
+	if samples == 0 {
+		return
+	}
+
+	// Copy data from C memory to Go-managed memory for safety.
+	// This ensures the callback can safely store/use the data after returning.
+	sampleCount := numSamples * numChannels
+	samplesData := make([]int16, sampleCount)
+	copy(samplesData, unsafe.Slice((*int16)(unsafe.Pointer(samples)), sampleCount))
+
 	frame := &CapturedAudioFrame{
-		Samples:     unsafe.Slice((*int16)(unsafe.Pointer(samples)), numSamples*numChannels),
+		Samples:     samplesData,
 		NumChannels: numChannels,
 		SampleRate:  sampleRate,
 		TimestampUs: timestampUs,
 	}
 
-	capture.callback(frame)
+	safeCallback(func() {
+		capture.callback(frame)
+	})
 }
 
 // Start begins audio capture with the given callback.
@@ -483,7 +528,7 @@ func EnumerateScreens() ([]ScreenInfo, error) {
 	for i := int32(0); i < count; i++ {
 		out[i] = ScreenInfo{
 			ID:       screens[i].id,
-			Title:    cStringToGo(screens[i].title[:]),
+			Title:    CStringToGo(screens[i].title[:]),
 			IsWindow: screens[i].isWindow != 0,
 		}
 	}
@@ -527,17 +572,45 @@ func screenCaptureCallbackBridge(
 		return
 	}
 
+	// Bounds validation to prevent integer overflow and invalid memory access
+	if width <= 0 || height <= 0 || width > 16384 || height > 16384 {
+		return
+	}
+	if yStride <= 0 || uStride <= 0 || vStride <= 0 {
+		return
+	}
+	if yStride > 16384 || uStride > 16384 || vStride > 16384 {
+		return
+	}
+	if yPlane == 0 || uPlane == 0 || vPlane == 0 {
+		return
+	}
+
 	// Calculate plane sizes
 	ySize := yStride * height
 	uvHeight := (height + 1) / 2
 	uSize := uStride * uvHeight
 	vSize := vStride * uvHeight
 
-	// Create slices from pointers (zero-copy view into C memory)
+	// Additional sanity check for total size
+	const maxFrameSize = 64 * 1024 * 1024 // 64MB max
+	if ySize > maxFrameSize || uSize > maxFrameSize || vSize > maxFrameSize {
+		return
+	}
+
+	// Copy data from C memory to Go-managed memory for safety.
+	// This ensures the callback can safely store/use the data after returning.
+	yData := make([]byte, ySize)
+	uData := make([]byte, uSize)
+	vData := make([]byte, vSize)
+	copy(yData, unsafe.Slice((*byte)(unsafe.Pointer(yPlane)), ySize))
+	copy(uData, unsafe.Slice((*byte)(unsafe.Pointer(uPlane)), uSize))
+	copy(vData, unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize))
+
 	frame := &CapturedVideoFrame{
-		YPlane:      unsafe.Slice((*byte)(unsafe.Pointer(yPlane)), ySize),
-		UPlane:      unsafe.Slice((*byte)(unsafe.Pointer(uPlane)), uSize),
-		VPlane:      unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize),
+		YPlane:      yData,
+		UPlane:      uData,
+		VPlane:      vData,
 		Width:       width,
 		Height:      height,
 		YStride:     yStride,
@@ -546,7 +619,9 @@ func screenCaptureCallbackBridge(
 		TimestampUs: timestampUs,
 	}
 
-	capture.callback(frame)
+	safeCallback(func() {
+		capture.callback(frame)
+	})
 }
 
 // Start begins screen capture with the given callback.
@@ -626,8 +701,8 @@ func (c *ScreenCapture) IsRunning() bool {
 	return c.running
 }
 
-// cStringToGo converts a null-terminated C string to a Go string.
-func cStringToGo(b []byte) string {
+// CStringToGo converts a null-terminated C string to a Go string.
+func CStringToGo(b []byte) string {
 	for i, c := range b {
 		if c == 0 {
 			return string(b[:i])
