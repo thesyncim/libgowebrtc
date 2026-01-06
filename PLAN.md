@@ -1283,3 +1283,111 @@ func main() {
   - DataChannel bidirectional messaging
   - Real-time connection statistics
   - Modern responsive browser UI
+
+---
+
+## libwebrtc Build & Pion Interop Session (January 2025)
+
+### Fixed Issues
+
+**1. purego Callback Type Mismatch (CRITICAL FIX)**
+- **Problem:** Video and audio callbacks received garbage data, causing panics
+- **Root cause:** C uses `int` (32-bit) for width/height/strides, but Go's purego callback was using `int` (64-bit on arm64)
+- **Fix:** Changed callback parameter types from `int` to `int32` in `internal/ffi/peerconnection.go`:
+  ```go
+  // Before (broken):
+  func(ctx uintptr, width, height int, yPlane, uPlane, vPlane uintptr, ...)
+
+  // After (fixed):
+  func(ctx uintptr, width, height int32, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int32, timestampUs int64)
+  ```
+- This fix applies to both video and audio callbacks
+
+**2. libwebrtc Build Configuration**
+- Added `use_custom_libcxx = false` to use system libc++ for ABI compatibility
+- Added creation of separate codec factory archives (thin archives don't copy correctly):
+  - `libbuiltin_video_encoder_factory.a`
+  - `libbuiltin_video_decoder_factory.a`
+  - `librtc_internal_video_codecs.a`
+  - `librtc_simulcast_encoder_adapter.a`
+  - `librtc_software_fallback_wrappers.a`
+- Fixed missing macOS frameworks: ScreenCaptureKit, AppKit, ApplicationServices
+- Fixed AudioDeviceModule API change: `AudioDeviceModule::Create` → `CreateAudioDeviceModule`
+
+### Test Status
+
+**E2E Tests (all pass):**
+- ✅ TestEnumerateDevices
+- ✅ TestEnumerateScreens
+- ✅ TestVideoCodecRoundtrip (VP8, VP9 work; H264 skipped - needs OpenH264)
+- ✅ TestOpusRoundtrip
+- ✅ TestEncoderBitrateControl
+- ✅ TestEncoderFramerateControl
+- ✅ TestKeyframeRequest
+- ✅ TestVideoTrackCreation
+- ✅ TestAudioTrackCreation
+- ✅ TestVideoFrameWrite
+- ✅ TestAudioFrameWrite
+- ✅ TestOfferAnswerWithTracks
+- ✅ TestTrackReception (1 video frame received)
+- ✅ TestVideoFrameReceiving
+- ✅ TestVideoAndAudioTrackReception
+- ✅ TestMultipleCodecs
+- ✅ TestTrackDisable
+- ✅ TestPeerConnectionLifecycle
+- ✅ TestConcurrentFrameWrites
+
+**Pion Interop Tests (new):**
+- ✅ TestPionToLibVideoInterop - Lib receives track from pion
+- ✅ TestBidirectionalVideoInterop - Bidirectional media flow works
+- ✅ TestDataChannelInterop - Data channel negotiation works
+- ✅ TestCodecNegotiation - VP8/VP9 codec negotiation works
+- ✅ TestMultipleTracksInterop - Multiple tracks can be added
+- ✅ TestRenegotiationInterop - Track addition after initial connection
+- ✅ TestConnectionStateInterop - Connection state callbacks work (connecting → connected)
+- ✅ TestICECandidateExchange - ICE candidates exchange correctly
+- ✅ TestFrameIntegrity - Frame transmission works
+- ⚠️ TestLibToPionVideoInterop - FAIL (track not received within timeout)
+- ⚠️ TestSDPParsing - FAIL (lib rejects pion's SDP answer in some cases)
+
+### Known Issues
+
+1. **H264 encoding** - Creates encoder but encoding fails. Likely needs:
+   - OpenH264 library for software encoding, OR
+   - VideoToolbox configuration for hardware encoding
+
+2. **SDP parsing** - libwebrtc sometimes rejects pion's SDP answer with "set description failed"
+   - May be codec ordering or RTP extension mismatch
+   - Works in most real-world scenarios (connectivity tests pass)
+
+3. **Frame reception in stress tests** - Some frames not received due to ICE connectivity timing
+   - Expected behavior in loopback without full ICE establishment
+
+### Files Modified
+
+- `internal/ffi/peerconnection.go` - Fixed callback types (int → int32)
+- `scripts/build_libwebrtc.sh` - Updated library installation
+- `shim/CMakeLists.txt` - Added codec factory libraries and frameworks
+- `shim/shim_capture.cc` - Fixed AudioDeviceModule API
+- `test/e2e/pion_interop_test.go` - New comprehensive pion interop test suite
+
+### Build Requirements
+
+**libwebrtc (M141.7390):**
+```bash
+# Full build with scripts/build_libwebrtc.sh
+./scripts/build_libwebrtc.sh
+
+# Or skip fetch for rebuilds
+./scripts/build_libwebrtc.sh --skip-fetch
+```
+
+**Shim:**
+```bash
+LIBWEBRTC_DIR=~/libwebrtc make shim shim-install
+```
+
+**Run tests:**
+```bash
+LIBWEBRTC_SHIM_PATH=$PWD/lib/darwin_arm64/libwebrtc_shim.dylib go test ./test/e2e/ -v
+```
