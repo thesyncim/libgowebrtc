@@ -1347,8 +1347,8 @@ func main() {
 - ✅ TestConnectionStateInterop - Connection state callbacks work (connecting → connected)
 - ✅ TestICECandidateExchange - ICE candidates exchange correctly
 - ✅ TestFrameIntegrity - Frame transmission works
-- ⚠️ TestLibToPionVideoInterop - FAIL (track not received within timeout)
-- ⚠️ TestSDPParsing - FAIL (lib rejects pion's SDP answer in some cases)
+- ✅ TestLibToPionVideoInterop - Lib sends video to pion (fixed: proper ICE gathering)
+- ✅ TestSDPParsing - Bidirectional SDP parsing (fixed: set local desc before remote)
 
 ### Known Issues
 
@@ -1356,11 +1356,7 @@ func main() {
    - OpenH264 library for software encoding, OR
    - VideoToolbox configuration for hardware encoding
 
-2. **SDP parsing** - libwebrtc sometimes rejects pion's SDP answer with "set description failed"
-   - May be codec ordering or RTP extension mismatch
-   - Works in most real-world scenarios (connectivity tests pass)
-
-3. **Frame reception in stress tests** - Some frames not received due to ICE connectivity timing
+2. **Frame reception in stress tests** - Some frames not received due to ICE connectivity timing
    - Expected behavior in loopback without full ICE establishment
 
 ### Files Modified
