@@ -212,11 +212,17 @@ is_debug = false
 is_component_build = false
 rtc_include_tests = false
 
-# Enable H264 support
+# Enable H264 support (VideoToolbox on macOS, OpenH264 on other platforms)
 rtc_use_h264 = true
+
+# Enable AV1 support via libaom
+rtc_include_dav1d_in_internal_decoder_factory = true
 
 # Required for Go CGO bindings
 use_rtti = true
+
+# Use system libc++ for compatibility with shim build
+use_custom_libcxx = false
 
 # Avoid build failures on warnings
 treat_warnings_as_errors = false
@@ -258,7 +264,9 @@ build_libwebrtc() {
 
     cd "$BUILD_DIR/src"
 
-    # Build the main library and required targets
+    # Build the main library and all required codec targets
+    # Note: Building :webrtc should include all codec factories, but we explicitly
+    # list them to ensure they're included in the final library.
     ninja -C out/Release -j"$JOBS" \
         :webrtc \
         api/video_codecs:builtin_video_decoder_factory \
@@ -282,9 +290,41 @@ install_libwebrtc() {
 
     mkdir -p "$INSTALL_DIR"/{include,lib,Frameworks}
 
-    # Copy library
+    # Copy main library
     log_info "Copying library..."
     cp "$BUILD_DIR/src/out/Release/obj/libwebrtc.a" "$INSTALL_DIR/lib/"
+
+    # Create proper archives from additional codec factory object files
+    log_info "Creating codec factory libraries..."
+    cd "$BUILD_DIR/src/out/Release/obj"
+
+    if [ -d "api/video_codecs/builtin_video_encoder_factory" ]; then
+        ar -rcs "$INSTALL_DIR/lib/libbuiltin_video_encoder_factory.a" \
+            api/video_codecs/builtin_video_encoder_factory/*.o
+    fi
+
+    if [ -d "api/video_codecs/builtin_video_decoder_factory" ]; then
+        ar -rcs "$INSTALL_DIR/lib/libbuiltin_video_decoder_factory.a" \
+            api/video_codecs/builtin_video_decoder_factory/*.o
+    fi
+
+    # Create internal video codecs library (contains InternalEncoderFactory, etc.)
+    if [ -d "media/rtc_internal_video_codecs" ]; then
+        ar -rcs "$INSTALL_DIR/lib/librtc_internal_video_codecs.a" \
+            media/rtc_internal_video_codecs/*.o
+    fi
+
+    # Create simulcast encoder adapter library
+    if [ -d "media/rtc_simulcast_encoder_adapter" ]; then
+        ar -rcs "$INSTALL_DIR/lib/librtc_simulcast_encoder_adapter.a" \
+            media/rtc_simulcast_encoder_adapter/*.o
+    fi
+
+    # Create software fallback wrappers library
+    if [ -d "api/video_codecs/rtc_software_fallback_wrappers" ]; then
+        ar -rcs "$INSTALL_DIR/lib/librtc_software_fallback_wrappers.a" \
+            api/video_codecs/rtc_software_fallback_wrappers/*.o
+    fi
 
     # Copy headers
     log_info "Copying headers..."

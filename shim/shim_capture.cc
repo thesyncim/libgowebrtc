@@ -20,6 +20,7 @@
 #if defined(SHIM_ENABLE_DEVICE_CAPTURE)
 #include "modules/video_capture/video_capture_factory.h"
 #include "modules/audio_device/include/audio_device.h"
+#include "api/audio/create_audio_device_module.h"
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "modules/desktop_capture/desktop_capture_options.h"
 #include "api/task_queue/default_task_queue_factory.h"
@@ -313,9 +314,9 @@ SHIM_EXPORT int shim_enumerate_devices(
 
     // Enumerate audio devices using AudioDeviceModule
     webrtc::scoped_refptr<webrtc::AudioDeviceModule> adm =
-        webrtc::AudioDeviceModule::Create(
-            webrtc::AudioDeviceModule::kPlatformDefaultAudio,
-            webrtc::CreateDefaultTaskQueueFactory().get()
+        webrtc::CreateAudioDeviceModule(
+            shim::GetEnvironment(),
+            webrtc::AudioDeviceModule::kPlatformDefaultAudio
         );
     if (adm && adm->Init() == 0) {
         // Audio input devices
@@ -491,9 +492,9 @@ SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
     capture->device_index = 0;
 
 #if defined(SHIM_ENABLE_DEVICE_CAPTURE)
-    capture->adm = webrtc::AudioDeviceModule::Create(
-        webrtc::AudioDeviceModule::kPlatformDefaultAudio,
-        webrtc::CreateDefaultTaskQueueFactory().get()
+    capture->adm = webrtc::CreateAudioDeviceModule(
+        shim::GetEnvironment(),
+        webrtc::AudioDeviceModule::kPlatformDefaultAudio
     );
 
     if (!capture->adm || capture->adm->Init() != 0) {

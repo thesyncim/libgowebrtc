@@ -1,6 +1,6 @@
 module github.com/thesyncim/libgowebrtc
 
-go 1.22
+go 1.25
 
 require (
 	github.com/ebitengine/purego v0.9.1

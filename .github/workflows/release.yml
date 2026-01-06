@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  build-shim:
+    name: Build Shim (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-arm64
+            runner: macos-14
+            target_os: mac
+            target_cpu: arm64
+            shim_name: libwebrtc_shim.dylib
+            archive_name: libwebrtc_shim-darwin-arm64
+          - os: macos-x64
+            runner: macos-13
+            target_os: mac
+            target_cpu: x64
+            shim_name: libwebrtc_shim.dylib
+            archive_name: libwebrtc_shim-darwin-amd64
+          - os: linux-x64
+            runner: ubuntu-22.04
+            target_os: linux
+            target_cpu: x64
+            shim_name: libwebrtc_shim.so
+            archive_name: libwebrtc_shim-linux-amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download libwebrtc (macOS arm64)
+        if: matrix.os == 'macos-arm64'
+        run: |
+          mkdir -p ~/libwebrtc
+          curl -L -o ~/libwebrtc.tar.gz \
+            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-mac-arm64.tar.gz"
+          tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+
+      - name: Download libwebrtc (macOS x64)
+        if: matrix.os == 'macos-x64'
+        run: |
+          mkdir -p ~/libwebrtc
+          curl -L -o ~/libwebrtc.tar.gz \
+            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-mac-x64.tar.gz"
+          tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+
+      - name: Download libwebrtc (Linux)
+        if: matrix.os == 'linux-x64'
+        run: |
+          mkdir -p ~/libwebrtc
+          curl -L -o ~/libwebrtc.tar.gz \
+            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-linux-x64.tar.gz"
+          tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+
+      - name: Build shim
+        run: |
+          mkdir -p shim/build
+          cd shim/build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLIBWEBRTC_DIR=$HOME/libwebrtc \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build . --config Release -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+
+      - name: Package shim
+        run: |
+          mkdir -p dist
+          cp shim/build/${{ matrix.shim_name }} dist/
+          cp shim/shim.h dist/
+          cd dist
+          tar -czvf ${{ matrix.archive_name }}.tar.gz *
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive_name }}
+          path: dist/${{ matrix.archive_name }}.tar.gz
+
+  release:
+    name: Create Release
+    needs: build-shim
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Get tag
+        id: tag
+        run: |
+          if [ "${{ github.event.inputs.tag }}" != "" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Release ${{ steps.tag.outputs.tag }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/**/*.tar.gz
+          body: |
+            ## libgowebrtc ${{ steps.tag.outputs.tag }}
+
+            ### Pre-built shim libraries
+
+            Download the appropriate shim library for your platform:
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon) | `libwebrtc_shim-darwin-arm64.tar.gz` |
+            | macOS (Intel) | `libwebrtc_shim-darwin-amd64.tar.gz` |
+            | Linux (x64) | `libwebrtc_shim-linux-amd64.tar.gz` |
+
+            ### Installation
+
+            1. Download and extract the archive for your platform
+            2. Set `LIBWEBRTC_SHIM_PATH` to point to the extracted library
+            3. Import and use libgowebrtc in your Go code
+
+            ```bash
+            export LIBWEBRTC_SHIM_PATH=/path/to/libwebrtc_shim.dylib  # or .so on Linux
+            ```
+
+            ### Building from source
+
+            See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for build instructions.

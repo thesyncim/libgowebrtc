@@ -75,12 +75,17 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
         return nullptr;
     }
 
-    // Use InternalEncoderFactory - same as libwebrtc uses internally
-    // This provides access to all codecs: VP8, VP9, H264 (OpenH264), AV1 (libaom)
-    webrtc::InternalEncoderFactory factory;
+    // Use CreateBuiltinVideoEncoderFactory for full codec support including:
+    // - VP8, VP9 (libvpx)
+    // - H264 (VideoToolbox on macOS, OpenH264 on other platforms)
+    // - AV1 (libaom, if enabled)
+    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    if (!factory) {
+        return nullptr;
+    }
 
     auto format = shim::CreateSdpVideoFormat(codec, config->h264_profile);
-    auto encoder = factory.Create(shim::GetEnvironment(), format);
+    auto encoder = factory->Create(shim::GetEnvironment(), format);
     if (!encoder) {
         return nullptr;
     }
@@ -317,11 +322,11 @@ private:
 };
 
 SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(ShimCodecType codec) {
-    // Use InternalDecoderFactory - same as libwebrtc uses internally
-    webrtc::InternalDecoderFactory factory;
+    // Use CreateBuiltinVideoDecoderFactory for full codec support including H264/VideoToolbox
+    auto factory = webrtc::CreateBuiltinVideoDecoderFactory();
 
     auto format = shim::CreateSdpVideoFormat(codec, nullptr);
-    auto decoder = factory.Create(shim::GetEnvironment(), format);
+    auto decoder = factory->Create(shim::GetEnvironment(), format);
     if (!decoder) {
         return nullptr;
     }
@@ -461,9 +466,13 @@ SHIM_EXPORT int shim_get_supported_video_codecs(
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    // Use InternalEncoderFactory - same as libwebrtc uses internally
-    webrtc::InternalEncoderFactory factory;
-    auto formats = factory.GetSupportedFormats();
+    // Use CreateBuiltinVideoEncoderFactory for full codec support
+    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    if (!factory) {
+        *out_count = 0;
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    auto formats = factory->GetSupportedFormats();
     int count = 0;
     int payload_type = 96;
 
@@ -504,9 +513,9 @@ SHIM_EXPORT int shim_is_codec_supported(const char* mime_type) {
         }
     }
 
-    // Check video codecs against InternalEncoderFactory
-    webrtc::InternalEncoderFactory factory;
-    auto formats = factory.GetSupportedFormats();
+    // Check video codecs against builtin factory
+    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    auto formats = factory->GetSupportedFormats();
     for (const auto& format : formats) {
         std::string mime = "video/" + format.name;
         if (strcasecmp(mime_type, mime.c_str()) == 0) {

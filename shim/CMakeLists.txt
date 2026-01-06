@@ -35,6 +35,12 @@ set(LIBWEBRTC_INCLUDE_DIRS
 # libwebrtc library
 if(APPLE)
     set(LIBWEBRTC_LIBRARY ${LIBWEBRTC_DIR}/lib/libwebrtc.a)
+    # Additional codec factory libraries (separate from libwebrtc.a)
+    set(LIBWEBRTC_BUILTIN_ENCODER ${LIBWEBRTC_DIR}/lib/libbuiltin_video_encoder_factory.a)
+    set(LIBWEBRTC_BUILTIN_DECODER ${LIBWEBRTC_DIR}/lib/libbuiltin_video_decoder_factory.a)
+    set(LIBWEBRTC_INTERNAL_CODECS ${LIBWEBRTC_DIR}/lib/librtc_internal_video_codecs.a)
+    set(LIBWEBRTC_SIMULCAST_ADAPTER ${LIBWEBRTC_DIR}/lib/librtc_simulcast_encoder_adapter.a)
+    set(LIBWEBRTC_FALLBACK_WRAPPERS ${LIBWEBRTC_DIR}/lib/librtc_software_fallback_wrappers.a)
     set(PLATFORM_LIBS
         "-framework Foundation"
         "-framework AVFoundation"
@@ -47,6 +53,9 @@ if(APPLE)
         "-framework CoreGraphics"
         "-framework IOSurface"
         "-framework Metal"
+        "-framework AppKit"
+        "-framework ScreenCaptureKit"
+        "-framework ApplicationServices"
     )
 elseif(UNIX)
     set(LIBWEBRTC_LIBRARY ${LIBWEBRTC_DIR}/lib/libwebrtc.a)
@@ -121,11 +130,33 @@ elseif(WIN32)
 endif()
 
 # Link libraries
-target_link_libraries(webrtc_shim
-    PRIVATE
-        ${LIBWEBRTC_LIBRARY}
-        ${PLATFORM_LIBS}
-)
+# Order matters: specific libraries first, then libwebrtc.a, then frameworks
+if(APPLE AND EXISTS ${LIBWEBRTC_BUILTIN_ENCODER} AND EXISTS ${LIBWEBRTC_BUILTIN_DECODER})
+    set(ADDITIONAL_LIBS "")
+    if(EXISTS ${LIBWEBRTC_INTERNAL_CODECS})
+        list(APPEND ADDITIONAL_LIBS ${LIBWEBRTC_INTERNAL_CODECS})
+    endif()
+    if(EXISTS ${LIBWEBRTC_SIMULCAST_ADAPTER})
+        list(APPEND ADDITIONAL_LIBS ${LIBWEBRTC_SIMULCAST_ADAPTER})
+    endif()
+    if(EXISTS ${LIBWEBRTC_FALLBACK_WRAPPERS})
+        list(APPEND ADDITIONAL_LIBS ${LIBWEBRTC_FALLBACK_WRAPPERS})
+    endif()
+    target_link_libraries(webrtc_shim
+        PRIVATE
+            ${LIBWEBRTC_BUILTIN_ENCODER}
+            ${LIBWEBRTC_BUILTIN_DECODER}
+            ${ADDITIONAL_LIBS}
+            ${LIBWEBRTC_LIBRARY}
+            ${PLATFORM_LIBS}
+    )
+else()
+    target_link_libraries(webrtc_shim
+        PRIVATE
+            ${LIBWEBRTC_LIBRARY}
+            ${PLATFORM_LIBS}
+    )
+endif()
 
 # Set output name
 set_target_properties(webrtc_shim PROPERTIES

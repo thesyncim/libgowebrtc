@@ -275,22 +275,40 @@ func findLibrary() (string, error) {
 	}
 
 	libName := getLibraryName()
-
-	// Check ./lib/{os}_{arch}/
-	execPath, _ := os.Executable()
-	execDir := filepath.Dir(execPath)
 	platformDir := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
 
-	searchPaths := []string{
-		filepath.Join(execDir, "lib", platformDir, libName),
-		filepath.Join(".", "lib", platformDir, libName),
-		filepath.Join("..", "lib", platformDir, libName),
+	// Build search paths
+	var searchPaths []string
+
+	// Check relative to executable
+	if execPath, err := os.Executable(); err == nil {
+		execDir := filepath.Dir(execPath)
+		searchPaths = append(searchPaths, filepath.Join(execDir, "lib", platformDir, libName))
 	}
 
-	// Also check working directory
+	// Check working directory
 	if wd, err := os.Getwd(); err == nil {
-		searchPaths = append(searchPaths, filepath.Join(wd, "lib", platformDir, libName))
+		searchPaths = append(searchPaths,
+			filepath.Join(wd, "lib", platformDir, libName),
+			filepath.Join(wd, "..", "lib", platformDir, libName),
+			filepath.Join(wd, "..", "..", "lib", platformDir, libName),
+		)
 	}
+
+	// Check relative to this source file (for development/testing)
+	// This finds lib/ relative to the Go module root
+	_, thisFile, _, ok := runtime.Caller(0)
+	if ok {
+		// thisFile is .../internal/ffi/lib.go, go up to module root
+		moduleRoot := filepath.Dir(filepath.Dir(filepath.Dir(thisFile)))
+		searchPaths = append(searchPaths, filepath.Join(moduleRoot, "lib", platformDir, libName))
+	}
+
+	// Standard paths
+	searchPaths = append(searchPaths,
+		filepath.Join(".", "lib", platformDir, libName),
+		filepath.Join("..", "lib", platformDir, libName),
+	)
 
 	for _, path := range searchPaths {
 		if _, err := os.Stat(path); err == nil {

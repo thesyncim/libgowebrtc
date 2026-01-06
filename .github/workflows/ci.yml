@@ -1,0 +1,327 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild_libwebrtc:
+        description: 'Force rebuild libwebrtc from source'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  GO_VERSION: '1.25'
+  WEBRTC_BRANCH: 'branch-heads/7390'  # M141
+
+jobs:
+  # Quick tests that don't need the shim (pure Go)
+  lint-and-unit:
+    name: Lint & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: "latest"
+          install-go: false
+
+      - name: Run unit tests (no shim required)
+        run: go test -v -race ./pkg/frame/... ./pkg/codec/...
+
+  # Build and test with shim on each platform
+  build-and-test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos
+            runner: macos-14  # Apple Silicon
+            target_os: mac
+            target_cpu: arm64
+            shim_ext: dylib
+            lib_dir: darwin_arm64
+          - os: macos-x64
+            runner: macos-13  # Intel
+            target_os: mac
+            target_cpu: x64
+            shim_ext: dylib
+            lib_dir: darwin_amd64
+          - os: linux
+            runner: ubuntu-22.04
+            target_os: linux
+            target_cpu: x64
+            shim_ext: so
+            lib_dir: linux_amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      # Cache pre-built libwebrtc
+      - name: Cache libwebrtc
+        id: cache-libwebrtc
+        uses: actions/cache@v4
+        with:
+          path: ~/libwebrtc
+          key: libwebrtc-${{ matrix.os }}-${{ env.WEBRTC_BRANCH }}-v2
+
+      # Download pre-built libwebrtc if not cached
+      - name: Download pre-built libwebrtc (macOS arm64)
+        if: steps.cache-libwebrtc.outputs.cache-hit != 'true' && matrix.os == 'macos'
+        run: |
+          mkdir -p ~/libwebrtc
+          # Try to download from releases, fall back to building
+          curl -L -o ~/libwebrtc.tar.gz \
+            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-mac-arm64.tar.gz" \
+            || echo "Pre-built not available"
+          if [ -f ~/libwebrtc.tar.gz ]; then
+            tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+          fi
+
+      - name: Download pre-built libwebrtc (macOS x64)
+        if: steps.cache-libwebrtc.outputs.cache-hit != 'true' && matrix.os == 'macos-x64'
+        run: |
+          mkdir -p ~/libwebrtc
+          curl -L -o ~/libwebrtc.tar.gz \
+            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-mac-x64.tar.gz" \
+            || echo "Pre-built not available"
+          if [ -f ~/libwebrtc.tar.gz ]; then
+            tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+          fi
+
+      - name: Download pre-built libwebrtc (Linux)
+        if: steps.cache-libwebrtc.outputs.cache-hit != 'true' && matrix.os == 'linux'
+        run: |
+          mkdir -p ~/libwebrtc
+          curl -L -o ~/libwebrtc.tar.gz \
+            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-linux-x64.tar.gz" \
+            || echo "Pre-built not available"
+          if [ -f ~/libwebrtc.tar.gz ]; then
+            tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+          fi
+
+      # Check if we have libwebrtc
+      - name: Verify libwebrtc
+        id: verify-libwebrtc
+        run: |
+          if [ -f ~/libwebrtc/lib/libwebrtc.a ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "libwebrtc found at ~/libwebrtc"
+            ls -la ~/libwebrtc/lib/
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "libwebrtc not found, will skip shim build"
+          fi
+
+      # Build shim if libwebrtc is available
+      - name: Configure shim build
+        if: steps.verify-libwebrtc.outputs.found == 'true'
+        run: |
+          mkdir -p shim/build
+          cd shim/build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLIBWEBRTC_DIR=$HOME/libwebrtc \
+            -DBUILD_SHARED_LIBS=ON
+
+      - name: Build shim
+        if: steps.verify-libwebrtc.outputs.found == 'true'
+        run: |
+          cd shim/build
+          cmake --build . --config Release -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+
+      - name: Install shim
+        if: steps.verify-libwebrtc.outputs.found == 'true'
+        run: |
+          mkdir -p lib/${{ matrix.lib_dir }}
+          cp shim/build/libwebrtc_shim.${{ matrix.shim_ext }} lib/${{ matrix.lib_dir }}/
+
+      # Run tests
+      - name: Run Go tests (without shim)
+        run: go test -v ./pkg/...
+
+      - name: Run integration tests (with shim)
+        if: steps.verify-libwebrtc.outputs.found == 'true'
+        run: |
+          # Library finder auto-discovers lib/{os}_{arch}/ relative to source
+          ls -la lib/${{ matrix.lib_dir }}/
+          go test -v ./internal/ffi/... -count=1
+
+      - name: Run e2e tests (with shim)
+        if: steps.verify-libwebrtc.outputs.found == 'true'
+        run: |
+          # Run subset of e2e tests that don't require hardware
+          # Library is auto-discovered from lib/{os}_{arch}/
+          go test -v ./test/e2e/... \
+            -run "TestVideoCodec|TestOpus|TestEncoder|TestKeyframe|TestVideoTrack|TestAudioTrack|TestVideoFrameWrite|TestAudioFrameWrite|TestOfferAnswer" \
+            -count=1 -timeout=120s
+
+      # Upload artifacts
+      - name: Upload shim library
+        if: steps.verify-libwebrtc.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwebrtc_shim-${{ matrix.lib_dir }}
+          path: lib/${{ matrix.lib_dir }}/libwebrtc_shim.${{ matrix.shim_ext }}
+
+  # Build libwebrtc from source (manual trigger only)
+  build-libwebrtc:
+    name: Build libwebrtc (${{ matrix.os }})
+    if: github.event.inputs.rebuild_libwebrtc == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos
+            runner: macos-14
+            target_os: mac
+            target_cpu: arm64
+          - os: linux
+            runner: ubuntu-22.04
+            target_os: linux
+            target_cpu: x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            python3 \
+            pkg-config \
+            libglib2.0-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxdamage-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxrandr-dev \
+            libxtst-dev
+
+      - name: Cache depot_tools
+        uses: actions/cache@v4
+        with:
+          path: ~/depot_tools
+          key: depot_tools-${{ matrix.os }}-v1
+
+      - name: Setup depot_tools
+        run: |
+          if [ ! -d ~/depot_tools ]; then
+            git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ~/depot_tools
+          fi
+          echo "$HOME/depot_tools" >> $GITHUB_PATH
+
+      - name: Fetch WebRTC source
+        run: |
+          mkdir -p ~/webrtc_build
+          cd ~/webrtc_build
+          cat > .gclient << EOF
+          solutions = [
+            {
+              "name": "src",
+              "url": "https://webrtc.googlesource.com/src.git@${{ env.WEBRTC_BRANCH }}",
+              "deps_file": "DEPS",
+              "managed": False,
+            },
+          ]
+          target_os = ["${{ matrix.target_os }}"]
+          EOF
+          gclient sync --nohooks --no-history
+
+      - name: Run hooks
+        run: |
+          cd ~/webrtc_build/src
+          gclient runhooks
+
+      - name: Generate build files
+        run: |
+          cd ~/webrtc_build/src
+          mkdir -p out/Release
+          cat > out/Release/args.gn << EOF
+          is_debug = false
+          is_component_build = false
+          rtc_include_tests = false
+          rtc_use_h264 = true
+          rtc_include_dav1d_in_internal_decoder_factory = true
+          use_rtti = true
+          treat_warnings_as_errors = false
+          target_cpu = "${{ matrix.target_cpu }}"
+          EOF
+
+          if [ "${{ matrix.target_os }}" = "mac" ]; then
+            cat >> out/Release/args.gn << EOF
+          target_os = "mac"
+          mac_deployment_target = "11.0"
+          EOF
+          else
+            cat >> out/Release/args.gn << EOF
+          target_os = "linux"
+          is_clang = true
+          use_sysroot = false
+          EOF
+          fi
+
+          gn gen out/Release
+
+      - name: Build libwebrtc
+        run: |
+          cd ~/webrtc_build/src
+          ninja -C out/Release -j$(nproc 2>/dev/null || sysctl -n hw.ncpu) \
+            :webrtc \
+            api/video_codecs:builtin_video_decoder_factory \
+            api/video_codecs:builtin_video_encoder_factory
+
+      - name: Package libwebrtc
+        run: |
+          mkdir -p ~/libwebrtc/{include,lib}
+          cp ~/webrtc_build/src/out/Release/obj/libwebrtc.a ~/libwebrtc/lib/
+
+          # Copy headers
+          cd ~/webrtc_build/src
+          for dir in api call common_video media modules p2p pc rtc_base system_wrappers; do
+            rsync -av --include='*.h' --include='*/' --exclude='*' \
+              "$dir/" ~/libwebrtc/include/"$dir"/ 2>/dev/null || true
+          done
+
+          # Copy third_party headers
+          mkdir -p ~/libwebrtc/include/third_party/abseil-cpp
+          rsync -av --include='*.h' --include='*.inc' --include='*/' --exclude='*' \
+            third_party/abseil-cpp/absl/ ~/libwebrtc/include/third_party/abseil-cpp/absl/ 2>/dev/null || true
+
+          # Create tarball
+          cd ~
+          tar -czvf libwebrtc-${{ matrix.target_os }}-${{ matrix.target_cpu }}.tar.gz libwebrtc
+
+      - name: Upload libwebrtc artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwebrtc-${{ matrix.target_os }}-${{ matrix.target_cpu }}
+          path: ~/libwebrtc-${{ matrix.target_os }}-${{ matrix.target_cpu }}.tar.gz

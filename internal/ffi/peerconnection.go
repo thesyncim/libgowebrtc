@@ -40,7 +40,8 @@ func initCallbacks() {
 
 	// Create the video sink callback
 	// Signature: void(ctx, width, height, y_plane, u_plane, v_plane, y_stride, u_stride, v_stride, timestamp_us)
-	videoSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, width, height int, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int, timestampUs int64) {
+	// NOTE: C uses 'int' (32-bit) for width/height/strides, so we must use int32 to match
+	videoSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, width, height int32, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int32, timestampUs int64) {
 		videoCallbackMu.RLock()
 		cb, ok := videoCallbacks[ctx]
 		videoCallbackMu.RUnlock()
@@ -49,11 +50,28 @@ func initCallbacks() {
 			return
 		}
 
+		// Validate dimensions to prevent panic from invalid data
+		if width <= 0 || height <= 0 || width > 8192 || height > 8192 {
+			return
+		}
+		if yStride <= 0 || uStride <= 0 || vStride <= 0 {
+			return
+		}
+		if yStride > 16384 || uStride > 16384 || vStride > 16384 {
+			return
+		}
+
 		// Calculate plane sizes
-		ySize := yStride * height
-		uvHeight := (height + 1) / 2
-		uSize := uStride * uvHeight
-		vSize := vStride * uvHeight
+		ySize := int(yStride) * int(height)
+		uvHeight := (int(height) + 1) / 2
+		uSize := int(uStride) * uvHeight
+		vSize := int(vStride) * uvHeight
+
+		// Additional sanity check for total size
+		const maxFrameSize = 64 * 1024 * 1024 // 64MB max
+		if ySize > maxFrameSize || uSize > maxFrameSize || vSize > maxFrameSize {
+			return
+		}
 
 		// Copy data from C memory to Go slices (avoid holding pointers across calls)
 		yData := make([]byte, ySize)
@@ -70,12 +88,13 @@ func initCallbacks() {
 			copy(vData, unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize))
 		}
 
-		cb(width, height, yData, uData, vData, yStride, uStride, vStride, timestampUs)
+		cb(int(width), int(height), yData, uData, vData, int(yStride), int(uStride), int(vStride), timestampUs)
 	})
 
 	// Create the audio sink callback
 	// Signature: void(ctx, samples, num_samples, sample_rate, channels, timestamp_us)
-	audioSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, samples uintptr, numSamples, sampleRate, channels int, timestampUs int64) {
+	// NOTE: C uses 'int' (32-bit) for numSamples/sampleRate/channels, so we must use int32 to match
+	audioSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, samples uintptr, numSamples, sampleRate, channels int32, timestampUs int64) {
 		audioCallbackMu.RLock()
 		cb, ok := audioCallbacks[ctx]
 		audioCallbackMu.RUnlock()
@@ -84,8 +103,13 @@ func initCallbacks() {
 			return
 		}
 
+		// Validate parameters
+		if numSamples <= 0 || numSamples > 48000 || channels <= 0 || channels > 8 {
+			return
+		}
+
 		// Total samples = numSamples * channels (interleaved)
-		totalSamples := numSamples * channels
+		totalSamples := int(numSamples) * int(channels)
 
 		// Copy data from C memory to Go slice
 		samplesData := make([]int16, totalSamples)
@@ -93,7 +117,7 @@ func initCallbacks() {
 			copy(samplesData, unsafe.Slice((*int16)(unsafe.Pointer(samples)), totalSamples))
 		}
 
-		cb(samplesData, sampleRate, channels, timestampUs)
+		cb(samplesData, int(sampleRate), int(channels), timestampUs)
 	})
 
 	callbacksInitialized = true
