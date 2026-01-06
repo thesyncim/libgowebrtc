@@ -90,6 +90,11 @@ std::string CodecTypeToString(ShimCodecType codec) {
 }
 
 webrtc::SdpVideoFormat CreateSdpVideoFormat(ShimCodecType codec, const char* h264_profile) {
+    if (codec == SHIM_CODEC_AV1) {
+        // Use the standard AV1 Profile 0 format (8/10-bit 4:2:0)
+        return webrtc::SdpVideoFormat::AV1Profile0();
+    }
+
     webrtc::SdpVideoFormat format(CodecTypeToString(codec));
 
     if (codec == SHIM_CODEC_H264) {

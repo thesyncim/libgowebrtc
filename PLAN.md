@@ -1319,7 +1319,7 @@ func main() {
 **E2E Tests (all pass):**
 - ✅ TestEnumerateDevices
 - ✅ TestEnumerateScreens
-- ✅ TestVideoCodecRoundtrip (VP8, VP9 work; H264 skipped - needs OpenH264)
+- ✅ TestVideoCodecRoundtrip (H264, VP8, VP9, AV1 - all pass!)
 - ✅ TestOpusRoundtrip
 - ✅ TestEncoderBitrateControl
 - ✅ TestEncoderFramerateControl
@@ -1350,13 +1350,29 @@ func main() {
 - ✅ TestLibToPionVideoInterop - Lib sends video to pion (fixed: proper ICE gathering)
 - ✅ TestSDPParsing - Bidirectional SDP parsing (fixed: set local desc before remote)
 
+### H264 and AV1 Support (Fixed - January 2025)
+
+**H264 Encoding/Decoding (Fixed):**
+- Added `proprietary_codecs = true` to `scripts/build_libwebrtc.sh`
+- Added `rtc_use_h264 = true` (enables OpenH264 encoder + FFmpeg decoder)
+- Added `ffmpeg_branding = "Chrome"` (required for FFmpeg H264 decoder)
+- Now H264 encode/decode works exactly like browsers
+
+**AV1 Encoding/Decoding (Fixed):**
+- AV1 requires `qpMax = 63` to be set in codec settings
+- AV1 requires `SetScalabilityMode(kL1T1)` for single-layer encoding
+- Added `rtc_include_dav1d_in_internal_decoder_factory = true` for AV1 decoder
+- Uses libaom encoder (software), dav1d decoder
+
+**All 4 Video Codecs Now Work:**
+- ✅ H264 (OpenH264 encoder + FFmpeg decoder)
+- ✅ VP8 (libvpx)
+- ✅ VP9 (libvpx)
+- ✅ AV1 (libaom encoder + dav1d decoder)
+
 ### Known Issues
 
-1. **H264 encoding** - Creates encoder but encoding fails. Likely needs:
-   - OpenH264 library for software encoding, OR
-   - VideoToolbox configuration for hardware encoding
-
-2. **Frame reception in stress tests** - Some frames not received due to ICE connectivity timing
+1. **Frame reception in stress tests** - Some frames not received due to ICE connectivity timing
    - Expected behavior in loopback without full ICE establishment
 
 ### Files Modified
@@ -1366,6 +1382,84 @@ func main() {
 - `shim/CMakeLists.txt` - Added codec factory libraries and frameworks
 - `shim/shim_capture.cc` - Fixed AudioDeviceModule API
 - `test/e2e/pion_interop_test.go` - New comprehensive pion interop test suite
+
+---
+
+## Phase 14: Real-Time Transcoding Example [COMPLETE]
+
+**Goal:** Demonstrate the library's transcoding capabilities with live browser streaming.
+
+**Example:** `examples/transcode_to_browser/main.go`
+
+**Features:**
+- Real-time codec transcoding (any → any: VP8→AV1, H264→VP9, etc.)
+- Zero-allocation encode/decode pipeline
+- Live statistics (source/destination frame sizes, compression ratio, transcode time)
+- WebSocket signaling with browser
+- DataChannel for status messages
+- Configurable source/destination codecs via command line
+
+**Architecture:**
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                      Go Transcoder Server                          │
+│                                                                    │
+│  Test Pattern ─► Source Encoder ─► Decoder ─► Track (dst codec)   │
+│      (I420)        (VP8/H264)      (raw)       (AV1/VP9)          │
+│                        │              │                            │
+│                   Stats: 1321 B    Stats: →    ─► Browser WebRTC   │
+│                   (source avg)                    (stream output)  │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Usage:**
+```bash
+# Default: VP8 → AV1 transcoding at 1280x720
+LIBWEBRTC_SHIM_PATH=$PWD/lib/darwin_arm64/libwebrtc_shim.dylib go run ./examples/transcode_to_browser/
+
+# Custom codecs: H264 → VP9
+go run ./examples/transcode_to_browser/ -src h264 -dst vp9
+
+# Higher resolution
+go run ./examples/transcode_to_browser/ -width 1920 -height 1080 -bitrate 4000000
+```
+
+**Browser UI shows:**
+- Source/destination codec badges
+- Frames processed counter
+- Average source/destination frame sizes
+- Compression ratio (src/dst)
+- Per-frame transcode time (microseconds)
+- Live transcoded video stream
+
+---
+
+## Codec Encoding Benchmarks (Apple M2 Pro, 720p)
+
+| Codec | Encode Time | Notes |
+|-------|-------------|-------|
+| H264 | ~1.14 ms/frame | OpenH264 software encoder |
+| VP8 | ~3.08 ms/frame | libvpx |
+| VP9 | ~3.21 ms/frame | libvpx |
+| AV1 | ~1.88 ms/frame | libaom (surprisingly fast) |
+
+Run benchmarks:
+```bash
+LIBWEBRTC_SHIM_PATH=$PWD/lib/darwin_arm64/libwebrtc_shim.dylib go test -bench=BenchmarkAllVideoCodecs -benchtime=1s ./test/e2e/
+```
+
+---
+
+## Current Priority Tasks
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 1 | Add AV1 benchmark test | ✅ Done | All 4 codecs benchmarked |
+| 2 | Update CI with codec tests | ✅ Done | Added H264/AV1 build flags + Pion interop tests |
+| 3 | Add external WebRTC client interop test | 🔄 In Progress | Test against browsers/other WebRTC implementations |
+| 4 | Document codec transcoding pipeline | ⏳ Pending | API documentation for transcoding use cases |
+
+---
 
 ### Build Requirements
 

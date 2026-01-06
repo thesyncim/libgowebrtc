@@ -172,9 +172,10 @@ jobs:
         run: |
           # Run subset of e2e tests that don't require hardware
           # Library is auto-discovered from lib/{os}_{arch}/
+          # Includes: codec roundtrip (H264/VP8/VP9/AV1), Pion interop, track tests
           go test -v ./test/e2e/... \
-            -run "TestVideoCodec|TestOpus|TestEncoder|TestKeyframe|TestVideoTrack|TestAudioTrack|TestVideoFrameWrite|TestAudioFrameWrite|TestOfferAnswer" \
-            -count=1 -timeout=120s
+            -run "TestVideoCodec|TestOpus|TestEncoder|TestKeyframe|TestVideoTrack|TestAudioTrack|TestVideoFrameWrite|TestAudioFrameWrite|TestOfferAnswer|TestLibToPion|TestPionToLib|TestDataChannel|TestCodecNegotiation" \
+            -count=1 -timeout=180s
 
       # Upload artifacts
       - name: Upload shim library
@@ -269,10 +270,18 @@ jobs:
           is_debug = false
           is_component_build = false
           rtc_include_tests = false
+
+          # H264 support (OpenH264 encoder + FFmpeg decoder)
+          proprietary_codecs = true
           rtc_use_h264 = true
+          ffmpeg_branding = "Chrome"
+
+          # AV1 support (libaom encoder + dav1d decoder)
           rtc_include_dav1d_in_internal_decoder_factory = true
+
           use_rtti = true
           treat_warnings_as_errors = false
+          use_custom_libcxx = false
           target_cpu = "${{ matrix.target_cpu }}"
           EOF
 

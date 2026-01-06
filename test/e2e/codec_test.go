@@ -30,6 +30,9 @@ func TestVideoCodecRoundtrip(t *testing.T) {
 		{"VP9", codec.VP9, func(w, h int) interface{} {
 			return codec.VP9Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30}
 		}},
+		{"AV1", codec.AV1, func(w, h int) interface{} {
+			return codec.AV1Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30}
+		}},
 	}
 
 	width, height := 320, 240
@@ -47,6 +50,8 @@ func TestVideoCodecRoundtrip(t *testing.T) {
 				enc, err = encoder.NewVP8Encoder(tc.config(width, height).(codec.VP8Config))
 			case codec.VP9:
 				enc, err = encoder.NewVP9Encoder(tc.config(width, height).(codec.VP9Config))
+			case codec.AV1:
+				enc, err = encoder.NewAV1Encoder(tc.config(width, height).(codec.AV1Config))
 			}
 
 			if err != nil {
@@ -348,17 +353,76 @@ func BenchmarkVP8Encode(b *testing.B) {
 	}
 }
 
+// BenchmarkVP9Encode benchmarks VP9 encoding performance.
+func BenchmarkVP9Encode(b *testing.B) {
+	if !ffi.IsLoaded() {
+		b.Skip("shim library not available")
+	}
+
+	enc, err := encoder.NewVP9Encoder(codec.VP9Config{
+		Width:   1280,
+		Height:  720,
+		Bitrate: 2_000_000,
+		FPS:     30,
+	})
+	if err != nil {
+		b.Fatalf("Failed to create VP9 encoder: %v", err)
+	}
+	defer enc.Close()
+
+	srcFrame := frame.NewI420Frame(1280, 720)
+	fillTestPattern(srcFrame)
+	encBuf := make([]byte, enc.MaxEncodedSize())
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		srcFrame.PTS = uint32(i * 3000)
+		enc.EncodeInto(srcFrame, encBuf, i == 0)
+	}
+}
+
+// BenchmarkAV1Encode benchmarks AV1 encoding performance.
+func BenchmarkAV1Encode(b *testing.B) {
+	if !ffi.IsLoaded() {
+		b.Skip("shim library not available")
+	}
+
+	enc, err := encoder.NewAV1Encoder(codec.AV1Config{
+		Width:   1280,
+		Height:  720,
+		Bitrate: 2_000_000,
+		FPS:     30,
+	})
+	if err != nil {
+		b.Fatalf("Failed to create AV1 encoder: %v", err)
+	}
+	defer enc.Close()
+
+	srcFrame := frame.NewI420Frame(1280, 720)
+	fillTestPattern(srcFrame)
+	encBuf := make([]byte, enc.MaxEncodedSize())
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		srcFrame.PTS = uint32(i * 3000)
+		enc.EncodeInto(srcFrame, encBuf, i == 0)
+	}
+}
+
 // BenchmarkOpusEncode benchmarks Opus encoding performance.
 func BenchmarkOpusEncode(b *testing.B) {
 	if !ffi.IsLoaded() {
 		b.Skip("shim library not available")
 	}
 
-	enc, _ := encoder.NewOpusEncoder(codec.OpusConfig{
+	enc, err := encoder.NewOpusEncoder(codec.OpusConfig{
 		SampleRate: 48000,
 		Channels:   2,
 		Bitrate:    64000,
 	})
+	if err != nil {
+		b.Fatalf("Failed to create Opus encoder: %v", err)
+	}
 	defer enc.Close()
 
 	srcFrame := frame.NewAudioFrameS16(48000, 2, 960) // 20ms
@@ -369,5 +433,59 @@ func BenchmarkOpusEncode(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		srcFrame.PTS = uint32(i * 960)
 		enc.EncodeInto(srcFrame, encBuf)
+	}
+}
+
+// BenchmarkAllVideoCodecs runs a comparative benchmark of all video codecs.
+func BenchmarkAllVideoCodecs(b *testing.B) {
+	if !ffi.IsLoaded() {
+		b.Skip("shim library not available")
+	}
+
+	codecs := []struct {
+		name   string
+		newEnc func() (encoder.VideoEncoder, error)
+	}{
+		{"H264", func() (encoder.VideoEncoder, error) {
+			return encoder.NewH264Encoder(codec.H264Config{
+				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
+			})
+		}},
+		{"VP8", func() (encoder.VideoEncoder, error) {
+			return encoder.NewVP8Encoder(codec.VP8Config{
+				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
+			})
+		}},
+		{"VP9", func() (encoder.VideoEncoder, error) {
+			return encoder.NewVP9Encoder(codec.VP9Config{
+				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
+			})
+		}},
+		{"AV1", func() (encoder.VideoEncoder, error) {
+			return encoder.NewAV1Encoder(codec.AV1Config{
+				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
+			})
+		}},
+	}
+
+	srcFrame := frame.NewI420Frame(1280, 720)
+	fillTestPattern(srcFrame)
+
+	for _, tc := range codecs {
+		b.Run(tc.name, func(b *testing.B) {
+			enc, err := tc.newEnc()
+			if err != nil {
+				b.Skipf("Encoder not available: %v", err)
+			}
+			defer enc.Close()
+
+			encBuf := make([]byte, enc.MaxEncodedSize())
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				srcFrame.PTS = uint32(i * 3000)
+				enc.EncodeInto(srcFrame, encBuf, i == 0)
+			}
+		})
 	}
 }

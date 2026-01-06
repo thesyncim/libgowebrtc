@@ -13,6 +13,7 @@
 
 #include "api/video_codecs/builtin_video_encoder_factory.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
+#include "api/video_codecs/scalability_mode.h"
 #include "api/video/i420_buffer.h"
 #include "api/video/video_frame.h"
 #include "api/video/encoded_image.h"
@@ -113,6 +114,11 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
     } else if (codec == SHIM_CODEC_VP9) {
         settings.VP9()->numberOfTemporalLayers = 1;
         settings.VP9()->numberOfSpatialLayers = 1;
+    } else if (codec == SHIM_CODEC_AV1) {
+        settings.AV1()->automatic_resize_on = false;
+        // AV1 requires scalability mode and qpMax to be set
+        settings.SetScalabilityMode(webrtc::ScalabilityMode::kL1T1);
+        settings.qpMax = 63;
     }
 
     // Initialize encoder

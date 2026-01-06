@@ -212,8 +212,12 @@ is_debug = false
 is_component_build = false
 rtc_include_tests = false
 
-# Enable H264 support (VideoToolbox on macOS, OpenH264 on other platforms)
+# Enable H264 support (OpenH264 encoder + FFmpeg decoder)
+# NOTE: proprietary_codecs and ffmpeg_branding MUST be set for full H264 support
+# See: https://webrtchacks.com/what-i-learned-about-h-264-for-webrtc-video-tim-panton/
+proprietary_codecs = true
 rtc_use_h264 = true
+ffmpeg_branding = "Chrome"  # Required for FFmpeg H264 decoder
 
 # Enable AV1 support via libaom
 rtc_include_dav1d_in_internal_decoder_factory = true
