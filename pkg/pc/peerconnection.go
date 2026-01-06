@@ -966,48 +966,75 @@ func (dc *DataChannel) Close() error {
 	return nil
 }
 
+// ffiConfigData holds FFI config and keeps allocations alive
+type ffiConfigData struct {
+	config     *ffi.PeerConnectionConfig
+	iceServers []ffi.ICEServerConfig
+	urlArrays  [][]uintptr
+	urlStrings [][]byte
+	strings    [][]byte
+}
+
 // buildFFIConfig converts a Configuration to FFI-compatible format.
-// Note: This allocates memory that must be kept alive during the FFI call.
-func buildFFIConfig(config *Configuration) *ffi.PeerConnectionConfig {
-	ffiConfig := &ffi.PeerConnectionConfig{
-		ICECandidatePoolSize: int32(config.ICECandidatePoolSize),
+// Returns config data that must be kept alive during the FFI call.
+func buildFFIConfig(config *Configuration) *ffiConfigData {
+	data := &ffiConfigData{
+		config: &ffi.PeerConnectionConfig{
+			ICECandidatePoolSize: int32(config.ICECandidatePoolSize),
+		},
 	}
 
 	// Convert ICE servers
 	if len(config.ICEServers) > 0 {
-		iceServers := make([]ffi.ICEServerConfig, len(config.ICEServers))
+		data.iceServers = make([]ffi.ICEServerConfig, len(config.ICEServers))
+		data.urlArrays = make([][]uintptr, len(config.ICEServers))
+		data.urlStrings = make([][]byte, 0)
+
 		for i, server := range config.ICEServers {
 			if len(server.URLs) > 0 {
 				urlPtrs := make([]uintptr, len(server.URLs))
 				for j, url := range server.URLs {
-					urlPtrs[j] = ffi.ByteSlicePtr(ffi.CString(url))
+					urlStr := ffi.CString(url)
+					data.urlStrings = append(data.urlStrings, urlStr)
+					urlPtrs[j] = ffi.ByteSlicePtr(urlStr)
 				}
-				iceServers[i].URLs = ffi.ByteSlicePtr((*[8]byte)(nil)[:]) // Will be set properly
-				iceServers[i].URLCount = int32(len(server.URLs))
+				data.urlArrays[i] = urlPtrs
+				data.iceServers[i].URLs = ffi.UintptrSlicePtr(urlPtrs)
+				data.iceServers[i].URLCount = int32(len(server.URLs))
 			}
 			if server.Username != "" {
-				iceServers[i].Username = ffi.CStringPtr(server.Username)
+				usernameStr := ffi.CString(server.Username)
+				data.strings = append(data.strings, usernameStr)
+				data.iceServers[i].Username = &usernameStr[0]
 			}
 			if server.Credential != "" {
-				iceServers[i].Credential = ffi.CStringPtr(server.Credential)
+				credStr := ffi.CString(server.Credential)
+				data.strings = append(data.strings, credStr)
+				data.iceServers[i].Credential = &credStr[0]
 			}
 		}
-		ffiConfig.ICEServers = iceServers[0].Ptr()
-		ffiConfig.ICEServerCount = int32(len(iceServers))
+		data.config.ICEServers = data.iceServers[0].Ptr()
+		data.config.ICEServerCount = int32(len(data.iceServers))
 	}
 
 	// Set policies
 	if config.BundlePolicy != "" {
-		ffiConfig.BundlePolicy = ffi.CStringPtr(config.BundlePolicy)
+		bundleStr := ffi.CString(config.BundlePolicy)
+		data.strings = append(data.strings, bundleStr)
+		data.config.BundlePolicy = &bundleStr[0]
 	}
 	if config.RTCPMuxPolicy != "" {
-		ffiConfig.RTCPMuxPolicy = ffi.CStringPtr(config.RTCPMuxPolicy)
+		rtcpStr := ffi.CString(config.RTCPMuxPolicy)
+		data.strings = append(data.strings, rtcpStr)
+		data.config.RTCPMuxPolicy = &rtcpStr[0]
 	}
 	if config.SDPSemantics != "" {
-		ffiConfig.SDPSemantics = ffi.CStringPtr(config.SDPSemantics)
+		sdpStr := ffi.CString(config.SDPSemantics)
+		data.strings = append(data.strings, sdpStr)
+		data.config.SDPSemantics = &sdpStr[0]
 	}
 
-	return ffiConfig
+	return data
 }
 
 // NewPeerConnection creates a new libwebrtc-backed PeerConnection.
@@ -1029,9 +1056,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 	pc.iceGatheringState.Store(ICEGatheringStateNew)
 	pc.connectionState.Store(PeerConnectionStateNew)
 
-	// Build FFI config
-	ffiConfig := buildFFIConfig(&config)
-	handle := ffi.CreatePeerConnection(ffiConfig)
+	// Build FFI config - keep data alive during FFI call
+	configData := buildFFIConfig(&config)
+	handle := ffi.CreatePeerConnection(configData.config)
+	// Ensure configData is kept alive until after FFI call completes
+	_ = configData
 	if handle == 0 {
 		return nil, errors.New("failed to create peer connection")
 	}
@@ -1192,14 +1221,14 @@ func (pc *PeerConnection) SetLocalDescription(desc *SessionDescription) error {
 		return ErrPeerConnectionClosed
 	}
 
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
+	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock
 	if err := ffi.PeerConnectionSetLocalDescription(pc.handle, int(desc.Type), desc.SDP); err != nil {
 		return ErrSetDescriptionFailed
 	}
 
+	pc.mu.Lock()
 	pc.localDescription = desc
+	pc.mu.Unlock()
 	return nil
 }
 
@@ -1209,14 +1238,14 @@ func (pc *PeerConnection) SetRemoteDescription(desc *SessionDescription) error {
 		return ErrPeerConnectionClosed
 	}
 
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
+	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock
 	if err := ffi.PeerConnectionSetRemoteDescription(pc.handle, int(desc.Type), desc.SDP); err != nil {
 		return ErrSetDescriptionFailed
 	}
 
+	pc.mu.Lock()
 	pc.remoteDescription = desc
+	pc.mu.Unlock()
 	return nil
 }
 

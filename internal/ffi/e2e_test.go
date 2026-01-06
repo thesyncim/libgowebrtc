@@ -7,28 +7,26 @@ import (
 // End-to-end tests that verify the full encode/decode pipeline.
 
 func TestVideoEncoderDecoderPipeline(t *testing.T) {
-	// Create encoder
-	profile := CString("42e014") // Constrained Baseline
+	// Use VP8 since it's always available (H264 requires OpenH264)
 	encCfg := &VideoEncoderConfig{
 		Width:            320,
 		Height:           240,
 		BitrateBps:       500_000,
 		Framerate:        30.0,
 		KeyframeInterval: 30,
-		H264Profile:      &profile[0],
 		PreferHW:         0,
 	}
 
-	encoder := CreateVideoEncoder(CodecH264, encCfg)
+	encoder := CreateVideoEncoder(CodecVP8, encCfg)
 	if encoder == 0 {
-		t.Fatal("Failed to create H264 encoder")
+		t.Fatal("Failed to create VP8 encoder")
 	}
 	defer VideoEncoderDestroy(encoder)
 
 	// Create decoder
-	decoder := CreateVideoDecoder(CodecH264)
+	decoder := CreateVideoDecoder(CodecVP8)
 	if decoder == 0 {
-		t.Fatal("Failed to create H264 decoder")
+		t.Fatal("Failed to create VP8 decoder")
 	}
 	defer VideoDecoderDestroy(decoder)
 
@@ -355,23 +353,22 @@ func TestEncoderBitrateChange(t *testing.T) {
 }
 
 func BenchmarkFullEncodeDecode(b *testing.B) {
-	profile := CString("42e014")
+	// Use VP8 since it's always available
 	encCfg := &VideoEncoderConfig{
-		Width:       640,
-		Height:      480,
-		BitrateBps:  2_000_000,
-		Framerate:   30.0,
-		H264Profile: &profile[0],
-		PreferHW:    0,
+		Width:      640,
+		Height:     480,
+		BitrateBps: 2_000_000,
+		Framerate:  30.0,
+		PreferHW:   0,
 	}
 
-	encoder := CreateVideoEncoder(CodecH264, encCfg)
+	encoder := CreateVideoEncoder(CodecVP8, encCfg)
 	if encoder == 0 {
 		b.Fatal("Failed to create encoder")
 	}
 	defer VideoEncoderDestroy(encoder)
 
-	decoder := CreateVideoDecoder(CodecH264)
+	decoder := CreateVideoDecoder(CodecVP8)
 	if decoder == 0 {
 		b.Fatal("Failed to create decoder")
 	}

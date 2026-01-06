@@ -26,10 +26,11 @@ struct ShimVideoEncoder {
     std::unique_ptr<webrtc::VideoEncoder> encoder;
     webrtc::VideoCodec codec_settings;
     ShimCodecType codec_type;
-    std::mutex mutex;
+    std::mutex encode_mutex;       // Protects encode calls
+    std::mutex output_mutex;       // Protects output data
     std::atomic<bool> force_keyframe{false};
 
-    // Encoded frame callback storage
+    // Encoded frame callback storage (protected by output_mutex)
     std::vector<uint8_t> encoded_data;
     bool is_keyframe = false;
     bool has_output = false;
@@ -44,7 +45,7 @@ public:
         const webrtc::EncodedImage& encoded_image,
         const webrtc::CodecSpecificInfo* codec_specific_info) override {
 
-        std::lock_guard<std::mutex> lock(encoder_->mutex);
+        std::lock_guard<std::mutex> lock(encoder_->output_mutex);
 
         encoder_->encoded_data.assign(
             encoded_image.data(),
@@ -123,6 +124,15 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
 
     shim_encoder->encoder->RegisterEncodeCompleteCallback(callback.release());
 
+    // Set initial rates - required for VP8 and other encoders before they produce output
+    webrtc::VideoBitrateAllocation allocation;
+    allocation.SetBitrate(0, 0, config->bitrate_bps);
+
+    shim_encoder->encoder->SetRates(webrtc::VideoEncoder::RateControlParameters(
+        allocation,
+        static_cast<double>(config->framerate)
+    ));
+
     return shim_encoder.release();
 }
 
@@ -144,7 +154,8 @@ SHIM_EXPORT int shim_video_encoder_encode(
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    std::lock_guard<std::mutex> lock(encoder->mutex);
+    // Use encode_mutex to serialize encode calls (but not output access)
+    std::lock_guard<std::mutex> encode_lock(encoder->encode_mutex);
 
     int width = encoder->codec_settings.width;
     int height = encoder->codec_settings.height;
@@ -177,15 +188,21 @@ SHIM_EXPORT int shim_video_encoder_encode(
         frame_types.push_back(webrtc::VideoFrameType::kVideoFrameDelta);
     }
 
-    // Reset output state
-    encoder->has_output = false;
-    encoder->encoded_data.clear();
+    // Reset output state (need output_mutex for this)
+    {
+        std::lock_guard<std::mutex> output_lock(encoder->output_mutex);
+        encoder->has_output = false;
+        encoder->encoded_data.clear();
+    }
 
-    // Encode
+    // Encode - callback will be called synchronously and will acquire output_mutex
     int result = encoder->encoder->Encode(frame, &frame_types);
     if (result != WEBRTC_VIDEO_CODEC_OK) {
         return SHIM_ERROR_ENCODE_FAILED;
     }
+
+    // Read output (need output_mutex)
+    std::lock_guard<std::mutex> output_lock(encoder->output_mutex);
 
     // Wait for callback (synchronous in most implementations)
     if (!encoder->has_output) {
@@ -213,7 +230,7 @@ SHIM_EXPORT int shim_video_encoder_set_bitrate(
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    std::lock_guard<std::mutex> lock(encoder->mutex);
+    std::lock_guard<std::mutex> lock(encoder->encode_mutex);
 
     webrtc::VideoBitrateAllocation allocation;
     allocation.SetBitrate(0, 0, bitrate_bps);
@@ -234,7 +251,7 @@ SHIM_EXPORT int shim_video_encoder_set_framerate(
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    std::lock_guard<std::mutex> lock(encoder->mutex);
+    std::lock_guard<std::mutex> lock(encoder->encode_mutex);
 
     encoder->codec_settings.maxFramerate = static_cast<uint32_t>(framerate);
 
@@ -420,6 +437,81 @@ SHIM_EXPORT void shim_video_decoder_destroy(ShimVideoDecoder* decoder) {
         decoder->decoder->Release();
         delete decoder;
     }
+}
+
+/* ============================================================================
+ * Codec Capability API
+ * ========================================================================== */
+
+SHIM_EXPORT int shim_get_supported_video_codecs(
+    ShimCodecCapability* codecs,
+    int max_codecs,
+    int* out_count
+) {
+    if (!codecs || !out_count || max_codecs <= 0) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    // Query the actual factory for supported formats
+    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    if (!factory) {
+        *out_count = 0;
+        return SHIM_OK;
+    }
+
+    auto formats = factory->GetSupportedFormats();
+    int count = 0;
+    int payload_type = 96;
+
+    for (const auto& format : formats) {
+        if (count >= max_codecs) break;
+
+        std::string mime = "video/" + format.name;
+        strncpy(codecs[count].mime_type, mime.c_str(), sizeof(codecs[count].mime_type) - 1);
+        codecs[count].mime_type[sizeof(codecs[count].mime_type) - 1] = '\0';
+        codecs[count].clock_rate = 90000;
+        codecs[count].channels = 0;
+
+        // Build fmtp line from parameters
+        std::string fmtp;
+        for (const auto& param : format.parameters) {
+            if (!fmtp.empty()) fmtp += ";";
+            fmtp += param.first + "=" + param.second;
+        }
+        strncpy(codecs[count].sdp_fmtp_line, fmtp.c_str(), sizeof(codecs[count].sdp_fmtp_line) - 1);
+        codecs[count].sdp_fmtp_line[sizeof(codecs[count].sdp_fmtp_line) - 1] = '\0';
+
+        codecs[count].payload_type = payload_type++;
+        count++;
+    }
+
+    *out_count = count;
+    return SHIM_OK;
+}
+
+SHIM_EXPORT int shim_is_codec_supported(const char* mime_type) {
+    if (!mime_type) return 0;
+
+    // Audio codecs are always supported
+    const char* audio_codecs[] = {"audio/opus", "audio/PCMU", "audio/PCMA"};
+    for (size_t i = 0; i < sizeof(audio_codecs) / sizeof(audio_codecs[0]); i++) {
+        if (strcasecmp(mime_type, audio_codecs[i]) == 0) {
+            return 1;
+        }
+    }
+
+    // Check video codecs against the actual factory
+    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    if (!factory) return 0;
+
+    auto formats = factory->GetSupportedFormats();
+    for (const auto& format : formats) {
+        std::string mime = "video/" + format.name;
+        if (strcasecmp(mime_type, mime.c_str()) == 0) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 }  // extern "C"

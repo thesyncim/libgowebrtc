@@ -5,6 +5,7 @@
  */
 
 #include "shim_common.h"
+#include "shim_internal.h"
 
 #include <algorithm>
 #include <cstring>
@@ -17,6 +18,7 @@
 #include "api/media_stream_interface.h"
 #include "api/video/recordable_encoded_frame.h"
 #include "api/peer_connection_interface.h"
+#include "api/rtp_sender_interface.h"
 
 /* ============================================================================
  * Pushable Video Track Source Implementation
@@ -31,6 +33,14 @@ public:
     // VideoTrackSourceInterface
     bool is_screencast() const override { return false; }
     std::optional<bool> needs_denoising() const override { return std::nullopt; }
+
+    // Returns stats about the video source
+    bool GetStats(Stats* stats) override {
+        if (!stats) return false;
+        stats->input_width = width_;
+        stats->input_height = height_;
+        return true;
+    }
 
     // MediaSourceInterface
     SourceState state() const override { return state_; }
@@ -100,7 +110,7 @@ private:
 struct ShimVideoTrackSource {
     webrtc::scoped_refptr<PushableVideoTrackSource> source;
     webrtc::scoped_refptr<webrtc::VideoTrackInterface> track;
-    webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> factory;
+    webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> factory;  // Keep reference to factory for track creation
     int width;
     int height;
 };
@@ -190,7 +200,7 @@ private:
 struct ShimAudioTrackSource {
     webrtc::scoped_refptr<PushableAudioSource> source;
     webrtc::scoped_refptr<webrtc::AudioTrackInterface> track;
-    webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> factory;
+    webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> factory;  // Keep reference to factory for track creation
     int sample_rate;
     int channels;
 };
@@ -210,14 +220,9 @@ SHIM_EXPORT ShimVideoTrackSource* shim_video_track_source_create(
         return nullptr;
     }
 
-    // Get factory from peer connection (cast to internal struct)
-    auto* pc_internal = reinterpret_cast<struct ShimPeerConnectionInternal*>(pc);
-    if (!pc_internal) {
-        return nullptr;
-    }
-
     auto shim_source = std::make_unique<ShimVideoTrackSource>();
     shim_source->source = webrtc::make_ref_counted<PushableVideoTrackSource>(width, height);
+    shim_source->factory = pc->factory;  // Keep reference to factory
     shim_source->width = width;
     shim_source->height = height;
     shim_source->track = nullptr;  // Created when added to PC
@@ -274,6 +279,7 @@ SHIM_EXPORT ShimAudioTrackSource* shim_audio_track_source_create(
 
     auto shim_source = std::make_unique<ShimAudioTrackSource>();
     shim_source->source = webrtc::make_ref_counted<PushableAudioSource>(sample_rate, channels);
+    shim_source->factory = pc->factory;  // Keep reference to factory
     shim_source->sample_rate = sample_rate;
     shim_source->channels = channels;
     shim_source->track = nullptr;
@@ -301,6 +307,80 @@ SHIM_EXPORT void shim_audio_track_source_destroy(ShimAudioTrackSource* source) {
         source->source = nullptr;
         delete source;
     }
+}
+
+SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
+    ShimPeerConnection* pc,
+    ShimVideoTrackSource* source,
+    const char* track_id,
+    const char* stream_id
+) {
+    if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
+        return nullptr;
+    }
+
+    // Create video track from source (source first, then label)
+    source->track = pc->factory->CreateVideoTrack(
+        source->source,
+        track_id
+    );
+
+    if (!source->track) {
+        return nullptr;
+    }
+
+    // Add track to peer connection
+    std::vector<std::string> stream_ids;
+    if (stream_id) {
+        stream_ids.push_back(stream_id);
+    }
+
+    auto result = pc->peer_connection->AddTrack(source->track, stream_ids);
+    if (!result.ok()) {
+        return nullptr;
+    }
+
+    auto sender = result.value();
+    pc->senders.push_back(sender);
+
+    return reinterpret_cast<ShimRTPSender*>(sender.get());
+}
+
+SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
+    ShimPeerConnection* pc,
+    ShimAudioTrackSource* source,
+    const char* track_id,
+    const char* stream_id
+) {
+    if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
+        return nullptr;
+    }
+
+    // Create audio track from source
+    source->track = pc->factory->CreateAudioTrack(
+        track_id,
+        source->source.get()
+    );
+
+    if (!source->track) {
+        return nullptr;
+    }
+
+    // Add track to peer connection
+    std::vector<std::string> stream_ids;
+    if (stream_id) {
+        stream_ids.push_back(stream_id);
+    }
+
+    auto result = pc->peer_connection->AddTrack(source->track, stream_ids);
+    if (!result.ok()) {
+        return nullptr;
+    }
+
+    auto sender = result.value();
+    pc->senders.push_back(sender);
+
+    return reinterpret_cast<ShimRTPSender*>(sender.get());
 }
 
 }  // extern "C"

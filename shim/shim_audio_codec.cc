@@ -197,4 +197,44 @@ SHIM_EXPORT void shim_audio_decoder_destroy(ShimAudioDecoder* decoder) {
     delete decoder;
 }
 
+/* ============================================================================
+ * Codec Capability API
+ * ========================================================================== */
+
+SHIM_EXPORT int shim_get_supported_audio_codecs(
+    ShimCodecCapability* codecs,
+    int max_codecs,
+    int* out_count
+) {
+    if (!codecs || !out_count || max_codecs <= 0) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    // List of supported audio codecs
+    const struct {
+        const char* mime_type;
+        int clock_rate;
+        int channels;
+        int payload_type;
+    } audio_codecs[] = {
+        {"audio/opus", 48000, 2, 111},
+        {"audio/PCMU", 8000, 1, 0},
+        {"audio/PCMA", 8000, 1, 8},
+    };
+
+    int count = 0;
+    for (size_t i = 0; i < sizeof(audio_codecs) / sizeof(audio_codecs[0]) && count < max_codecs; i++) {
+        strncpy(codecs[count].mime_type, audio_codecs[i].mime_type, sizeof(codecs[count].mime_type) - 1);
+        codecs[count].mime_type[sizeof(codecs[count].mime_type) - 1] = '\0';
+        codecs[count].clock_rate = audio_codecs[i].clock_rate;
+        codecs[count].channels = audio_codecs[i].channels;
+        codecs[count].sdp_fmtp_line[0] = '\0';
+        codecs[count].payload_type = audio_codecs[i].payload_type;
+        count++;
+    }
+
+    *out_count = count;
+    return SHIM_OK;
+}
+
 }  // extern "C"

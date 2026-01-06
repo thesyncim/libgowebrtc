@@ -99,6 +99,14 @@ func BoolPtr(p *int32) uintptr {
 	return uintptr(unsafe.Pointer(p))
 }
 
+// UintptrSlicePtr returns a uintptr to the first element of a uintptr slice.
+func UintptrSlicePtr(s []uintptr) uintptr {
+	if len(s) == 0 {
+		return 0
+	}
+	return uintptr(unsafe.Pointer(&s[0]))
+}
+
 // GoBytes copies C memory to a Go byte slice and frees the C memory.
 func GoBytes(ptr uintptr, size int) []byte {
 	if ptr == 0 || size <= 0 {

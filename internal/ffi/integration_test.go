@@ -27,6 +27,34 @@ func TestLoadLibrary(t *testing.T) {
 	}
 }
 
+func TestListSupportedCodecs(t *testing.T) {
+	codecs, err := GetSupportedVideoCodecs()
+	if err != nil {
+		t.Fatalf("GetSupportedVideoCodecs failed: %v", err)
+	}
+
+	t.Logf("Supported video codecs from factory (%d):", len(codecs))
+	for _, c := range codecs {
+		mimeType := ByteArrayToString(c.MimeType[:])
+		fmtpLine := ByteArrayToString(c.SDPFmtpLine[:])
+		t.Logf("  %s (PT=%d): %s", mimeType, c.PayloadType, fmtpLine)
+	}
+
+	// Check if H264 is available
+	h264Available := false
+	for _, c := range codecs {
+		mimeType := ByteArrayToString(c.MimeType[:])
+		if mimeType == "video/H264" {
+			h264Available = true
+			break
+		}
+	}
+	if !h264Available {
+		t.Log("WARNING: H264 is not available in this libwebrtc build")
+		t.Log("H264 requires either OpenH264 library or VideoToolbox (macOS)")
+	}
+}
+
 func TestCreateVideoEncoderH264(t *testing.T) {
 	profile := CString("42e014") // Constrained Baseline
 	cfg := &VideoEncoderConfig{

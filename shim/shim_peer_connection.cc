@@ -26,40 +26,10 @@
 #include "api/rtp_receiver_interface.h"
 #include "api/rtp_transceiver_interface.h"
 #include "media/base/media_channel.h"
+#include "rtc_base/time_utils.h"
 
-/* ============================================================================
- * PeerConnection Internal Structure
- * ========================================================================== */
-
-struct ShimPeerConnection {
-    webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> factory;
-    webrtc::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection;
-    std::mutex mutex;
-
-    // Callbacks
-    ShimOnICECandidate on_ice_candidate = nullptr;
-    void* on_ice_candidate_ctx = nullptr;
-    ShimOnConnectionStateChange on_connection_state_change = nullptr;
-    void* on_connection_state_change_ctx = nullptr;
-    ShimOnTrack on_track = nullptr;
-    void* on_track_ctx = nullptr;
-    ShimOnDataChannel on_data_channel = nullptr;
-    void* on_data_channel_ctx = nullptr;
-    ShimOnSignalingStateChange on_signaling_state_change = nullptr;
-    void* on_signaling_state_change_ctx = nullptr;
-    ShimOnICEConnectionStateChange on_ice_connection_state_change = nullptr;
-    void* on_ice_connection_state_change_ctx = nullptr;
-    ShimOnICEGatheringStateChange on_ice_gathering_state_change = nullptr;
-    void* on_ice_gathering_state_change_ctx = nullptr;
-    ShimOnNegotiationNeeded on_negotiation_needed = nullptr;
-    void* on_negotiation_needed_ctx = nullptr;
-
-    // Track senders
-    std::vector<webrtc::scoped_refptr<webrtc::RtpSenderInterface>> senders;
-};
-
-// Alias for internal struct reference
-typedef ShimPeerConnection ShimPeerConnectionInternal;
+// Include internal structure definition
+#include "shim_internal.h"
 
 /* ============================================================================
  * PeerConnection Observer
@@ -759,6 +729,43 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCSt
     if (!pc || !pc->peer_connection || !out_stats) return SHIM_ERROR_INVALID_PARAM;
     memset(out_stats, 0, sizeof(ShimRTCStats));
     // TODO: Implement proper stats collection via GetStats() callback
+    return SHIM_OK;
+}
+
+/* ============================================================================
+ * Bandwidth Estimation API
+ * ========================================================================== */
+
+SHIM_EXPORT void shim_peer_connection_set_on_bandwidth_estimate(
+    ShimPeerConnection* pc,
+    ShimOnBandwidthEstimate callback,
+    void* ctx
+) {
+    if (!pc) return;
+    // TODO: Wire up BWE callback from libwebrtc's BitrateController
+    // This requires implementing a NetworkControllerObserver
+}
+
+SHIM_EXPORT int shim_peer_connection_get_bandwidth_estimate(
+    ShimPeerConnection* pc,
+    ShimBandwidthEstimate* out_estimate
+) {
+    if (!pc || !out_estimate) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    memset(out_estimate, 0, sizeof(ShimBandwidthEstimate));
+    out_estimate->timestamp_us = webrtc::TimeMicros();
+
+    // TODO: Get actual BWE from libwebrtc's transport controller
+    // For now, return placeholder values
+    out_estimate->target_bitrate_bps = 0;
+    out_estimate->available_send_bps = 0;
+    out_estimate->available_recv_bps = 0;
+    out_estimate->pacing_rate_bps = 0;
+    out_estimate->congestion_window = 0;
+    out_estimate->loss_rate = 0.0;
+
     return SHIM_OK;
 }
 

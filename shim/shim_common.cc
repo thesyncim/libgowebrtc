@@ -92,8 +92,15 @@ std::string CodecTypeToString(ShimCodecType codec) {
 webrtc::SdpVideoFormat CreateSdpVideoFormat(ShimCodecType codec, const char* h264_profile) {
     webrtc::SdpVideoFormat format(CodecTypeToString(codec));
 
-    if (codec == SHIM_CODEC_H264 && h264_profile) {
-        format.parameters["profile-level-id"] = h264_profile;
+    if (codec == SHIM_CODEC_H264) {
+        // H264 requires profile-level-id and packetization-mode
+        if (h264_profile) {
+            format.parameters["profile-level-id"] = h264_profile;
+        } else {
+            // Default to Constrained Baseline Level 3.1
+            format.parameters["profile-level-id"] = "42e01f";
+        }
+        format.parameters["packetization-mode"] = "1";
     }
 
     return format;
