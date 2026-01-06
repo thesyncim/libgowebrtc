@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -64,7 +65,7 @@ func (d *vp8Decoder) DecodeInto(src []byte, dst *frame.VideoFrame, timestamp uin
 		dst.Data[0], dst.Data[1], dst.Data[2],
 	)
 	if err != nil {
-		if err.Error() == "need more data" {
+		if errors.Is(err, ffi.ErrNeedMoreData) {
 			return ErrNeedMoreData
 		}
 		return err

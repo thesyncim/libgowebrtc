@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "api/audio_options.h"
+#include "rtc_base/time_utils.h"
 #include "api/video/i420_buffer.h"
 #include "api/video/video_frame.h"
 #include "api/media_stream_interface.h"
@@ -64,7 +65,17 @@ public:
     void AddOrUpdateSink(webrtc::VideoSinkInterface<webrtc::VideoFrame>* sink,
                          const webrtc::VideoSinkWants& wants) override {
         std::lock_guard<std::mutex> lock(mutex_);
-        sinks_.push_back(sink);
+        // Check if sink already exists (avoid duplicates)
+        auto it = std::find(sinks_.begin(), sinks_.end(), sink);
+        if (it == sinks_.end()) {
+            sinks_.push_back(sink);
+            fprintf(stderr, "SHIM DEBUG: AddOrUpdateSink NEW sink=%p, total sinks=%zu\n",
+                    (void*)sink, sinks_.size());
+        } else {
+            fprintf(stderr, "SHIM DEBUG: AddOrUpdateSink UPDATE sink=%p (already registered)\n",
+                    (void*)sink);
+        }
+        fflush(stderr);
     }
 
     void RemoveSink(webrtc::VideoSinkInterface<webrtc::VideoFrame>* sink) override {
@@ -81,14 +92,37 @@ public:
     void RemoveEncodedSink(webrtc::VideoSinkInterface<webrtc::RecordableEncodedFrame>*) override {}
 
     // Push a frame to all registered sinks
-    void PushFrame(webrtc::scoped_refptr<webrtc::I420Buffer> buffer, int64_t timestamp_us) {
+    void PushFrame(webrtc::scoped_refptr<webrtc::I420Buffer> buffer, int64_t timestamp_us, uint32_t rtp_timestamp) {
         std::lock_guard<std::mutex> lock(mutex_);
+
+        // Use real wall-clock time for timestamp_us - this is what WebRTC expects
+        // The passed-in timestamp_us is used to derive RTP timestamp if not explicitly provided
+        int64_t capture_time_us = webrtc::TimeMicros();
+
+        // DEBUG: Log sink count periodically
+        static int frame_count = 0;
+        frame_count++;
+        if (frame_count % 100 == 0) {
+            fprintf(stderr, "SHIM DEBUG: PushFrame frame=%d sinks=%zu capture_us=%lld rtp_ts=%u\n",
+                    frame_count, sinks_.size(), (long long)capture_time_us, rtp_timestamp);
+            fflush(stderr);
+        }
 
         webrtc::VideoFrame frame = webrtc::VideoFrame::Builder()
             .set_video_frame_buffer(buffer)
-            .set_timestamp_us(timestamp_us)
-            .set_timestamp_rtp(static_cast<uint32_t>(timestamp_us * 90 / 1000))  // Convert to 90kHz
+            .set_timestamp_us(capture_time_us)
+            .set_timestamp_rtp(rtp_timestamp)
+            .set_rotation(webrtc::kVideoRotation_0)
             .build();
+
+        // DEBUG: Log frame delivery to sinks
+        static int deliver_count = 0;
+        deliver_count++;
+        if (deliver_count % 100 == 0) {
+            fprintf(stderr, "SHIM DEBUG: Delivering frame %d to %zu sinks, size=%dx%d rtp=%u\n",
+                    deliver_count, sinks_.size(), buffer->width(), buffer->height(), rtp_timestamp);
+            fflush(stderr);
+        }
 
         for (auto* sink : sinks_) {
             sink->OnFrame(frame);
@@ -256,7 +290,12 @@ SHIM_EXPORT int shim_video_track_source_push_frame(
         return SHIM_ERROR_OUT_OF_MEMORY;
     }
 
-    source->source->PushFrame(buffer, timestamp_us);
+    // Convert timestamp_us back to RTP timestamp (90kHz)
+    // The Go side passes timestamp_us as PTS * 1000000 / 90000
+    // So RTP = timestamp_us * 90000 / 1000000 = timestamp_us * 9 / 100
+    uint32_t rtp_timestamp = static_cast<uint32_t>(timestamp_us * 9 / 100);
+
+    source->source->PushFrame(buffer, timestamp_us, rtp_timestamp);
     return SHIM_OK;
 }
 
@@ -315,7 +354,12 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
     const char* track_id,
     const char* stream_id
 ) {
+    fprintf(stderr, "SHIM DEBUG: add_video_track_from_source called, track_id=%s\n", track_id ? track_id : "NULL");
+    fflush(stderr);
+
     if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
+        fprintf(stderr, "SHIM DEBUG: add_video_track_from_source - invalid params\n");
+        fflush(stderr);
         return nullptr;
     }
 
@@ -326,8 +370,19 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
     );
 
     if (!source->track) {
+        fprintf(stderr, "SHIM DEBUG: CreateVideoTrack failed!\n");
+        fflush(stderr);
         return nullptr;
     }
+
+    fprintf(stderr, "SHIM DEBUG: VideoTrack created successfully, enabled=%d, state=%d\n",
+            source->track->enabled(), static_cast<int>(source->track->state()));
+    fflush(stderr);
+
+    // Ensure track is enabled
+    source->track->set_enabled(true);
+    fprintf(stderr, "SHIM DEBUG: Track enabled set to true\n");
+    fflush(stderr);
 
     // Add track to peer connection
     std::vector<std::string> stream_ids;
@@ -337,8 +392,13 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
 
     auto result = pc->peer_connection->AddTrack(source->track, stream_ids);
     if (!result.ok()) {
+        fprintf(stderr, "SHIM DEBUG: AddTrack failed: %s\n", result.error().message());
+        fflush(stderr);
         return nullptr;
     }
+
+    fprintf(stderr, "SHIM DEBUG: Track added to PeerConnection successfully\n");
+    fflush(stderr);
 
     auto sender = result.value();
     pc->senders.push_back(sender);

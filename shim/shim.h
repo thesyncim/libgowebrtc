@@ -103,9 +103,10 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
  * @param timestamp RTP timestamp (90kHz clock)
  * @param force_keyframe Force this frame to be a keyframe
  * @param dst_buffer Pre-allocated output buffer (caller provides)
+ * @param dst_buffer_size Size of dst_buffer in bytes
  * @param out_size Output: number of bytes written to dst_buffer
  * @param out_is_keyframe Output: true if encoded frame is a keyframe
- * @return SHIM_OK on success, error code otherwise
+ * @return SHIM_OK on success, SHIM_ERROR_BUFFER_TOO_SMALL if buffer insufficient
  */
 SHIM_EXPORT int shim_video_encoder_encode(
     ShimVideoEncoder* encoder,
@@ -118,6 +119,7 @@ SHIM_EXPORT int shim_video_encoder_encode(
     uint32_t timestamp,
     int force_keyframe,
     uint8_t* dst_buffer,        /* Caller-provided output buffer */
+    int dst_buffer_size,        /* Size of dst_buffer */
     int* out_size,
     int* out_is_keyframe
 );

@@ -118,6 +118,17 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
 
     auto pc = std::make_unique<ShimPeerConnection>();
 
+    // Create encoder/decoder factories
+    auto video_encoder_factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    auto video_decoder_factory = webrtc::CreateBuiltinVideoDecoderFactory();
+
+    // DEBUG: Log supported encoder formats
+    fprintf(stderr, "SHIM DEBUG: Supported video encoder formats:\n");
+    for (const auto& format : video_encoder_factory->GetSupportedFormats()) {
+        fprintf(stderr, "  - %s\n", format.ToString().c_str());
+    }
+    fflush(stderr);
+
     // Create PeerConnectionFactory
     pc->factory = webrtc::CreatePeerConnectionFactory(
         shim::GetNetworkThread(),
@@ -126,15 +137,20 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
         nullptr,  // default_adm
         webrtc::CreateBuiltinAudioEncoderFactory(),
         webrtc::CreateBuiltinAudioDecoderFactory(),
-        webrtc::CreateBuiltinVideoEncoderFactory(),
-        webrtc::CreateBuiltinVideoDecoderFactory(),
+        std::move(video_encoder_factory),
+        std::move(video_decoder_factory),
         nullptr,  // audio_mixer
         nullptr   // audio_processing
     );
 
     if (!pc->factory) {
+        fprintf(stderr, "SHIM DEBUG: PeerConnectionFactory creation FAILED!\n");
+        fflush(stderr);
         return nullptr;
     }
+
+    fprintf(stderr, "SHIM DEBUG: PeerConnectionFactory created successfully\n");
+    fflush(stderr);
 
     // Configure ICE servers
     webrtc::PeerConnectionInterface::RTCConfiguration rtc_config;

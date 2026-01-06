@@ -35,7 +35,7 @@ func VideoEncoderEncodeInto(
 		forceKF = 1
 	}
 
-	// Pass dst buffer pointer - shim writes directly into it
+	// Pass dst buffer pointer and size - shim writes directly into it
 	result := shimVideoEncoderEncode(
 		encoder,
 		ByteSlicePtr(yPlane),
@@ -45,6 +45,7 @@ func VideoEncoderEncodeInto(
 		timestamp,
 		forceKF,
 		ByteSlicePtr(dst), // dst buffer for shim to write into
+		len(dst),          // buffer size for overflow protection
 		IntPtr(&outSize),
 		BoolPtr(&outIsKeyframe),
 	)

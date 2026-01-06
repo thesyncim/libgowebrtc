@@ -1481,3 +1481,122 @@ LIBWEBRTC_DIR=~/libwebrtc make shim shim-install
 ```bash
 LIBWEBRTC_SHIM_PATH=$PWD/lib/darwin_arm64/libwebrtc_shim.dylib go test ./test/e2e/ -v
 ```
+
+---
+
+## Error Handling & Bug Fixes Session (January 2025)
+
+### Critical Bug Fix: Video Timestamp Conversion
+
+**Problem:** Browser showed black video even though frames were being pushed successfully.
+
+**Root Cause:** Incorrect timestamp conversion in `WriteVideoFrame()`:
+```go
+// Before (WRONG): Treated PTS as milliseconds, multiplied by 1000
+int64(f.PTS)*1000
+
+// PTS is actually in 90kHz RTP clock units!
+// For frame 100 at 30fps: PTS = 297000 (90kHz units)
+// Old code: 297000 * 1000 = 297,000,000 µs = 297 seconds (WRONG!)
+```
+
+**Fix:** Proper conversion from 90kHz to microseconds:
+```go
+// After (CORRECT): Convert 90kHz → microseconds
+// microseconds = pts_90khz * 1_000_000 / 90_000
+timestampUs := int64(f.PTS) * 1000000 / 90000
+```
+
+**Files:** `pkg/pc/peerconnection.go:854` (video), `pkg/pc/peerconnection.go:890` (audio)
+
+### Error Handling Improvements
+
+**1. Sentinel Errors for `errors.Is()` Support**
+- Added FFI error sentinels to `internal/ffi/lib.go`:
+  - `ErrInvalidParam`, `ErrInitFailed`, `ErrEncodeFailed`, `ErrDecodeFailed`
+  - `ErrOutOfMemory`, `ErrNotSupported`, `ErrNeedMoreData`, `ErrBufferTooSmall`
+- Updated `ShimError()` to return sentinels instead of `errors.New()`
+- Now callers can use `errors.Is(err, ffi.ErrNeedMoreData)` properly
+
+**2. Fixed String-Based Error Matching**
+- Replaced fragile string matching in all decoder files:
+```go
+// Before (BAD)
+if err.Error() == "need more data" { ... }
+
+// After (GOOD)
+if errors.Is(err, ffi.ErrNeedMoreData) { ... }
+```
+- Files: `pkg/decoder/h264.go`, `vp8.go`, `vp9.go`, `av1.go`
+
+**3. Fixed Dangling Pointer Risk**
+- Added `runtime.KeepAlive()` to prevent GC of deviceID bytes during FFI calls
+- Files: `internal/ffi/device.go` (NewVideoCapture, NewAudioCapture)
+```go
+ptr := shimVideoCaptureCreate(deviceIDPtr, ...)
+runtime.KeepAlive(deviceIDBytes)  // Ensures bytes aren't GC'd during call
+```
+
+**4. Removed Stub Files**
+- Deleted `shim/shim_stub.cc` and `shim/CMakeLists_stub.txt`
+- Stub was only for development/testing without libwebrtc, no longer needed
+
+**5. Buffer Overflow Protection (Implemented - needs shim rebuild)**
+- Added `dst_buffer_size` parameter to `shim_video_encoder_encode()` in `shim/shim.h`
+- Added validation in `shim/shim_video_codec.cc`:
+  - Returns `SHIM_ERROR_INVALID_PARAM` if `dst_buffer_size <= 0`
+  - Returns `SHIM_ERROR_BUFFER_TOO_SMALL` if encoded frame exceeds buffer
+- Updated Go FFI function pointer in `internal/ffi/lib.go`
+- Updated `internal/ffi/encoder.go` to pass `len(dst)` as buffer size
+- **Status:** Code complete, requires shim rebuild:
+  ```bash
+  LIBWEBRTC_DIR=~/libwebrtc make shim shim-install
+  ```
+
+### Critical Bug Fix: Video Track Source Timestamp (January 2025)
+
+**Problem:** Browser received 0 packets despite frames being delivered to the encoder sink. Connection showed "connected" but no video was being transmitted.
+
+**Root Cause:** The `PushableVideoTrackSource` was using the Go-provided timestamp (converted from RTP) as `timestamp_us`, but **WebRTC's internal encoder expects `timestamp_us` to be actual wall-clock capture time**, not a derived value. The encoder uses this timestamp for:
+- Frame pacing and rate control
+- Determining when to drop frames
+- Synchronization with audio
+
+**Symptoms:**
+- Debug logs showed: "PushFrame frame=100 sinks=1 ts=3300000"
+- Frames were being delivered to encoder sink (AddOrUpdateSink worked)
+- Browser showed "Packets Recv: 0" despite ICE connection succeeding
+- SDP negotiation was correct (VP8 sendonly/recvonly)
+
+**Fix in `shim/shim_track_source.cc`:**
+```cpp
+void PushFrame(..., int64_t timestamp_us, uint32_t rtp_timestamp) {
+    // Use REAL wall-clock time for timestamp_us - this is what WebRTC expects
+    int64_t capture_time_us = webrtc::TimeMicros();
+
+    webrtc::VideoFrame frame = webrtc::VideoFrame::Builder()
+        .set_video_frame_buffer(buffer)
+        .set_timestamp_us(capture_time_us)  // Wall-clock time (critical!)
+        .set_timestamp_rtp(rtp_timestamp)    // RTP timestamp from Go
+        .set_rotation(webrtc::kVideoRotation_0)
+        .build();
+
+    for (auto* sink : sinks_) {
+        sink->OnFrame(frame);
+    }
+}
+```
+
+**Key insight:** WebRTC has TWO timestamps:
+1. `timestamp_us` - Capture time in wall-clock microseconds (used for encoder rate control)
+2. `timestamp_rtp` - RTP timestamp in 90kHz units (used for RTP packet headers)
+
+Both must be set correctly. The Go side provides the RTP timestamp via `f.PTS`, and the C++ shim uses `webrtc::TimeMicros()` for the capture time.
+
+**Files modified:**
+- `shim/shim_track_source.cc` - Use `webrtc::TimeMicros()` for capture timestamp
+- Added `#include "rtc_base/time_utils.h"` for `TimeMicros()`
+
+**Also added:**
+- Explicit `source->track->set_enabled(true)` after track creation
+- Browser-side stats collection via `RTCPeerConnection.getStats()` for accurate packet counts

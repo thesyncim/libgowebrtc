@@ -233,6 +233,9 @@ func (s *Session) handleMessage(msg SignalingMessage) error {
 }
 
 func (s *Session) handleOffer(sdp string) error {
+	// DEBUG: Log browser offer (first 500 chars)
+	log.Printf("DEBUG: Browser offer (first 500 chars):\n%s...", sdp[:min(500, len(sdp))])
+
 	if err := s.peerConn.SetRemoteDescription(&pc.SessionDescription{
 		Type: pc.SDPTypeOffer,
 		SDP:  sdp,
@@ -244,6 +247,9 @@ func (s *Session) handleOffer(sdp string) error {
 	if err != nil {
 		return fmt.Errorf("create answer: %w", err)
 	}
+
+	// DEBUG: Log our answer
+	log.Printf("DEBUG: Our answer SDP:\n%s", answer.SDP)
 
 	if err := s.peerConn.SetLocalDescription(answer); err != nil {
 		return fmt.Errorf("set local description: %w", err)
@@ -276,6 +282,9 @@ func (s *Session) createAndSendOffer() error {
 		return fmt.Errorf("create offer: %w", err)
 	}
 
+	// DEBUG: Print SDP to see codec negotiation
+	log.Printf("DEBUG: Offer SDP:\n%s", offer.SDP)
+
 	if err := s.peerConn.SetLocalDescription(offer); err != nil {
 		return fmt.Errorf("set local description: %w", err)
 	}
@@ -300,7 +309,15 @@ func (s *Session) generateFrames(ctx context.Context) {
 		case <-ticker.C:
 			// Generate gradient test pattern with moving bar
 			generateTestPattern(videoFrame, frameCount)
+
+			// Set timestamp in 90kHz clock (standard for video RTP)
+			videoFrame.PTS = uint32(frameCount * (90000 / *fps))
 			frameCount++
+
+			// DEBUG: Log frame write status periodically
+			if frameCount%100 == 0 {
+				log.Printf("DEBUG: Writing frame %d, PTS=%d", frameCount, videoFrame.PTS)
+			}
 
 			if err := s.videoTrack.WriteVideoFrame(videoFrame); err != nil {
 				// Only log if not a "not initialized" error (expected before connection)
@@ -803,6 +820,7 @@ const indexHTML = `<!DOCTYPE html>
                 this.ws.onopen = () => {
                     this.log('WebSocket connected');
                     this.setupPeerConnection();
+                    this.startStatsCollection();
                 };
 
                 this.ws.onmessage = (event) => {
@@ -940,11 +958,58 @@ const indexHTML = `<!DOCTYPE html>
         }
 
         updateStats(stats) {
-            if (!stats) return;
-            this.elements.statPackets.textContent = stats.PacketsReceived || 0;
-            this.elements.statBytes.textContent = Math.round((stats.BytesReceived || 0) / 1024) + ' KB';
-            this.elements.statRtt.textContent = (stats.RoundTripTimeMs || 0).toFixed(1) + ' ms';
-            this.elements.statLoss.textContent = stats.PacketsLost || 0;
+            // Ignore server stats, use browser-side stats instead
+        }
+
+        // Collect stats from browser's RTCPeerConnection
+        async collectBrowserStats() {
+            if (!this.pc) return;
+            try {
+                const stats = await this.pc.getStats();
+                let packetsReceived = 0;
+                let bytesReceived = 0;
+                let packetsLost = 0;
+                let roundTripTime = 0;
+                let framesReceived = 0;
+                let framesDecoded = 0;
+
+                stats.forEach(report => {
+                    if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                        packetsReceived = report.packetsReceived || 0;
+                        bytesReceived = report.bytesReceived || 0;
+                        packetsLost = report.packetsLost || 0;
+                        framesReceived = report.framesReceived || 0;
+                        framesDecoded = report.framesDecoded || 0;
+                    }
+                    if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                        roundTripTime = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
+                    }
+                });
+
+                this.elements.statPackets.textContent = packetsReceived;
+                this.elements.statBytes.textContent = Math.round(bytesReceived / 1024) + ' KB';
+                this.elements.statRtt.textContent = roundTripTime.toFixed(1) + ' ms';
+                this.elements.statLoss.textContent = packetsLost;
+
+                // Log detailed stats periodically
+                if (packetsReceived > 0 || this.lastLoggedPackets !== packetsReceived) {
+                    this.log('Stats: pkts=' + packetsReceived + ' frames=' + framesReceived + ' decoded=' + framesDecoded);
+                    this.lastLoggedPackets = packetsReceived;
+                }
+            } catch (e) {
+                // Ignore stats errors
+            }
+        }
+
+        startStatsCollection() {
+            this.statsInterval = setInterval(() => this.collectBrowserStats(), 1000);
+        }
+
+        stopStatsCollection() {
+            if (this.statsInterval) {
+                clearInterval(this.statsInterval);
+                this.statsInterval = null;
+            }
         }
 
         addChatMessage(message) {
@@ -965,6 +1030,7 @@ const indexHTML = `<!DOCTYPE html>
         }
 
         disconnect() {
+            this.stopStatsCollection();
             if (this.dataChannel) {
                 this.dataChannel.close();
                 this.dataChannel = null;

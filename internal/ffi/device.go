@@ -4,6 +4,7 @@ package ffi
 
 import (
 	"errors"
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -196,12 +197,16 @@ func NewVideoCapture(deviceID string, width, height, fps int) (*VideoCapture, er
 	}
 
 	var deviceIDPtr uintptr
+	var deviceIDBytes []byte
 	if deviceID != "" {
-		deviceIDBytes := append([]byte(deviceID), 0)
+		deviceIDBytes = append([]byte(deviceID), 0)
 		deviceIDPtr = uintptr(unsafe.Pointer(&deviceIDBytes[0]))
 	}
 
 	ptr := shimVideoCaptureCreate(deviceIDPtr, width, height, fps)
+	// Keep deviceIDBytes alive until after the FFI call completes
+	runtime.KeepAlive(deviceIDBytes)
+
 	if ptr == 0 {
 		return nil, errors.New("failed to create video capture")
 	}
@@ -332,12 +337,16 @@ func NewAudioCapture(deviceID string, sampleRate, channels int) (*AudioCapture, 
 	}
 
 	var deviceIDPtr uintptr
+	var deviceIDBytes []byte
 	if deviceID != "" {
-		deviceIDBytes := append([]byte(deviceID), 0)
+		deviceIDBytes = append([]byte(deviceID), 0)
 		deviceIDPtr = uintptr(unsafe.Pointer(&deviceIDBytes[0]))
 	}
 
 	ptr := shimAudioCaptureCreate(deviceIDPtr, sampleRate, channels)
+	// Keep deviceIDBytes alive until after the FFI call completes
+	runtime.KeepAlive(deviceIDBytes)
+
 	if ptr == 0 {
 		return nil, errors.New("failed to create audio capture")
 	}

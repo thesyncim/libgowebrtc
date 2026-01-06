@@ -18,18 +18,29 @@ var (
 
 	// ErrLibraryNotFound is returned when the shim library cannot be found.
 	ErrLibraryNotFound = errors.New("libwebrtc_shim library not found")
+
+	// FFI error sentinels - these match shim error codes and support errors.Is().
+	ErrInvalidParam   = errors.New("invalid parameter")
+	ErrInitFailed     = errors.New("initialization failed")
+	ErrEncodeFailed   = errors.New("encode failed")
+	ErrDecodeFailed   = errors.New("decode failed")
+	ErrOutOfMemory    = errors.New("out of memory")
+	ErrNotSupported   = errors.New("not supported")
+	ErrNeedMoreData   = errors.New("need more data")
+	ErrBufferTooSmall = errors.New("buffer too small")
 )
 
 // Error codes from shim
 const (
-	ShimOK              = 0
-	ShimErrInvalidParam = -1
-	ShimErrInitFailed   = -2
-	ShimErrEncodeFailed = -3
-	ShimErrDecodeFailed = -4
-	ShimErrOutOfMemory  = -5
-	ShimErrNotSupported = -6
-	ShimErrNeedMoreData = -7
+	ShimOK                = 0
+	ShimErrInvalidParam   = -1
+	ShimErrInitFailed     = -2
+	ShimErrEncodeFailed   = -3
+	ShimErrDecodeFailed   = -4
+	ShimErrOutOfMemory    = -5
+	ShimErrNotSupported   = -6
+	ShimErrNeedMoreData   = -7
+	ShimErrBufferTooSmall = -8
 )
 
 // CodecType matches ShimCodecType in shim.h
@@ -53,7 +64,7 @@ var (
 var (
 	// Video Encoder
 	shimVideoEncoderCreate          func(codec int, configPtr uintptr) uintptr
-	shimVideoEncoderEncode          func(encoder uintptr, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int, timestamp uint32, forceKeyframe int, outData, outSize, outIsKeyframe uintptr) int
+	shimVideoEncoderEncode          func(encoder uintptr, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int, timestamp uint32, forceKeyframe int, outData uintptr, dstBufferSize int, outSize, outIsKeyframe uintptr) int
 	shimVideoEncoderSetBitrate      func(encoder uintptr, bitrate uint32) int
 	shimVideoEncoderSetFramerate    func(encoder uintptr, framerate float32) int
 	shimVideoEncoderRequestKeyframe func(encoder uintptr) int
@@ -510,25 +521,28 @@ func registerFunctions() error {
 }
 
 // ShimError converts a shim error code to a Go error.
+// Returns sentinel errors that support errors.Is() comparisons.
 func ShimError(code int) error {
 	switch code {
 	case ShimOK:
 		return nil
 	case ShimErrInvalidParam:
-		return errors.New("invalid parameter")
+		return ErrInvalidParam
 	case ShimErrInitFailed:
-		return errors.New("initialization failed")
+		return ErrInitFailed
 	case ShimErrEncodeFailed:
-		return errors.New("encode failed")
+		return ErrEncodeFailed
 	case ShimErrDecodeFailed:
-		return errors.New("decode failed")
+		return ErrDecodeFailed
 	case ShimErrOutOfMemory:
-		return errors.New("out of memory")
+		return ErrOutOfMemory
 	case ShimErrNotSupported:
-		return errors.New("not supported")
+		return ErrNotSupported
 	case ShimErrNeedMoreData:
-		return errors.New("need more data")
+		return ErrNeedMoreData
+	case ShimErrBufferTooSmall:
+		return ErrBufferTooSmall
 	default:
-		return fmt.Errorf("unknown error: %d", code)
+		return fmt.Errorf("unknown shim error: %d", code)
 	}
 }

@@ -473,6 +473,12 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 		return ErrLibraryNotLoaded
 	}
 
+	// DEBUG: Log every 100th call
+	static_counter++
+	if static_counter%100 == 0 {
+		println("DEBUG FFI: VideoTrackSourcePushFrame source=", source, "yLen=", len(yPlane), "ts=", timestampUs)
+	}
+
 	result := shimVideoTrackSourcePushFrame(
 		source,
 		ByteSlicePtr(yPlane),
@@ -483,6 +489,8 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 	)
 	return ShimError(result)
 }
+
+var static_counter int
 
 // PeerConnectionAddVideoTrackFromSource adds a video track using a source.
 func PeerConnectionAddVideoTrackFromSource(pc, source uintptr, trackID, streamID string) uintptr {

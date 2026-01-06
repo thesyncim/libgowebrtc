@@ -159,10 +159,14 @@ SHIM_EXPORT int shim_video_encoder_encode(
     uint32_t timestamp,
     int force_keyframe,
     uint8_t* dst_buffer,
+    int dst_buffer_size,
     int* out_size,
     int* out_is_keyframe
 ) {
     if (!encoder || !y_plane || !u_plane || !v_plane || !dst_buffer || !out_size) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    if (dst_buffer_size <= 0) {
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -224,6 +228,9 @@ SHIM_EXPORT int shim_video_encoder_encode(
 
     // Copy encoded data to output buffer
     size_t encoded_size = encoder->encoded_data.size();
+    if (static_cast<int>(encoded_size) > dst_buffer_size) {
+        return SHIM_ERROR_BUFFER_TOO_SMALL;
+    }
     memcpy(dst_buffer, encoder->encoded_data.data(), encoded_size);
     *out_size = static_cast<int>(encoded_size);
 

@@ -849,6 +849,9 @@ func (t *Track) WriteVideoFrame(f *frame.VideoFrame) error {
 	defer t.mu.Unlock()
 
 	// Push frame to the native track source via FFI
+	// PTS is in 90kHz RTP clock units, convert to microseconds for libwebrtc
+	// microseconds = pts_90khz * 1_000_000 / 90_000
+	timestampUs := int64(f.PTS) * 1000000 / 90000
 	return ffi.VideoTrackSourcePushFrame(
 		t.sourceHandle,
 		f.Data[0], // Y plane
@@ -857,7 +860,7 @@ func (t *Track) WriteVideoFrame(f *frame.VideoFrame) error {
 		f.Stride[0],
 		f.Stride[1],
 		f.Stride[2],
-		int64(f.PTS)*1000, // Convert to microseconds
+		timestampUs,
 	)
 }
 
@@ -883,10 +886,12 @@ func (t *Track) WriteAudioFrame(f *frame.AudioFrame) error {
 	}
 
 	// Push audio samples to the native track source via FFI
+	// PTS is in 90kHz RTP clock units, convert to microseconds for libwebrtc
+	timestampUs := int64(f.PTS) * 1000000 / 90000
 	return ffi.AudioTrackSourcePushFrame(
 		t.sourceHandle,
 		samples,
-		int64(f.PTS)*1000, // Convert to microseconds
+		timestampUs,
 	)
 }
 

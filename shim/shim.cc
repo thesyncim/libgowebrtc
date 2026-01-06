@@ -1927,6 +1927,8 @@ public:
     void AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink,
                          const rtc::VideoSinkWants& wants) override {
         std::lock_guard<std::mutex> lock(mutex_);
+        fprintf(stderr, "DEBUG: AddOrUpdateSink called, sink=%p, total sinks=%zu\n",
+                (void*)sink, sinks_.size() + 1);
         sinks_.push_back(sink);
     }
 
@@ -1946,6 +1948,14 @@ public:
     // Push a frame to all registered sinks
     void PushFrame(webrtc::scoped_refptr<webrtc::I420Buffer> buffer, int64_t timestamp_us) {
         std::lock_guard<std::mutex> lock(mutex_);
+
+        // DEBUG: Log sink count periodically
+        static int frame_count = 0;
+        frame_count++;
+        if (frame_count % 100 == 0) {
+            fprintf(stderr, "DEBUG: PushFrame frame=%d sinks=%zu timestamp=%lld\n",
+                    frame_count, sinks_.size(), (long long)timestamp_us);
+        }
 
         webrtc::VideoFrame frame = webrtc::VideoFrame::Builder()
             .set_video_frame_buffer(buffer)
@@ -2007,7 +2017,18 @@ SHIM_EXPORT int shim_video_track_source_push_frame(
     int v_stride,
     int64_t timestamp_us
 ) {
+    // DEBUG: Log at function entry
+    static int call_count = 0;
+    call_count++;
+    if (call_count % 100 == 0) {
+        fprintf(stderr, "SHIM DEBUG: push_frame called count=%d source=%p ts=%lld\n",
+                call_count, (void*)source, (long long)timestamp_us);
+        fflush(stderr);
+    }
+
     if (!source || !source->source || !y_plane || !u_plane || !v_plane) {
+        fprintf(stderr, "SHIM DEBUG: push_frame invalid params!\n");
+        fflush(stderr);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
