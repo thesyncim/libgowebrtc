@@ -247,6 +247,11 @@ example-encode:
 example-pion:
 	$(GO) run ./examples/pion_interop/main.go
 
+example-browser:
+	@echo "==> Starting browser example..."
+	@echo "==> Open http://localhost:8080 in your browser"
+	$(GO) run ./examples/camera_to_browser/main.go
+
 #-----------------------------------------------------------------------------
 # CI/CD targets
 #-----------------------------------------------------------------------------

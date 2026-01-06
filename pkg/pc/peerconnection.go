@@ -267,14 +267,297 @@ func (s *RTPSender) ReplaceTrack(t *Track) error {
 
 // SetParameters sets encoding parameters.
 func (s *RTPSender) SetParameters(params RTPSendParameters) error {
-	// TODO: Call FFI
-	return nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.handle == 0 {
+		return errors.New("sender not initialized")
+	}
+
+	// Convert to FFI format
+	ffiEncodings := make([]ffi.RTPEncodingParameters, len(params.Encodings))
+	for i, enc := range params.Encodings {
+		copy(ffiEncodings[i].RID[:], enc.RID)
+		ffiEncodings[i].MaxBitrateBps = enc.MaxBitrate
+		ffiEncodings[i].MaxFramerate = enc.MaxFramerate
+		ffiEncodings[i].ScaleResolutionDownBy = enc.ScaleResolutionDownBy
+		if enc.Active {
+			ffiEncodings[i].Active = 1
+		}
+		copy(ffiEncodings[i].ScalabilityMode[:], enc.ScalabilityMode)
+	}
+
+	ffiParams := &ffi.RTPSendParameters{
+		EncodingCount: int32(len(ffiEncodings)),
+	}
+	if len(ffiEncodings) > 0 {
+		ffiParams.Encodings = ffi.UintptrFromSlice(ffiEncodings)
+	}
+
+	return ffi.RTPSenderSetParameters(s.handle, ffiParams)
 }
 
 // GetParameters gets current parameters.
 func (s *RTPSender) GetParameters() RTPSendParameters {
-	// TODO: Call FFI
-	return RTPSendParameters{}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == 0 {
+		return RTPSendParameters{}
+	}
+
+	const maxEncodings = 8
+	ffiEncodings := make([]ffi.RTPEncodingParameters, maxEncodings)
+	ffiParams, count, err := ffi.RTPSenderGetParameters(s.handle, ffiEncodings)
+	if err != nil || ffiParams == nil {
+		return RTPSendParameters{}
+	}
+
+	params := RTPSendParameters{
+		Encodings: make([]RTPEncodingParameters, count),
+	}
+
+	for i := 0; i < count; i++ {
+		params.Encodings[i] = RTPEncodingParameters{
+			RID:                   ffi.ByteArrayToString(ffiEncodings[i].RID[:]),
+			Active:                ffiEncodings[i].Active != 0,
+			MaxBitrate:            ffiEncodings[i].MaxBitrateBps,
+			MaxFramerate:          ffiEncodings[i].MaxFramerate,
+			ScaleResolutionDownBy: ffiEncodings[i].ScaleResolutionDownBy,
+			ScalabilityMode:       ffi.ByteArrayToString(ffiEncodings[i].ScalabilityMode[:]),
+		}
+	}
+
+	return params
+}
+
+// GetStats gets statistics for this sender.
+func (s *RTPSender) GetStats() (*RTCStats, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == 0 {
+		return nil, errors.New("sender not initialized")
+	}
+
+	ffiStats, err := ffi.RTPSenderGetStats(s.handle)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertFFIStats(ffiStats), nil
+}
+
+// SetLayerActive enables or disables a simulcast layer.
+func (s *RTPSender) SetLayerActive(rid string, active bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.handle == 0 {
+		return errors.New("sender not initialized")
+	}
+
+	return ffi.RTPSenderSetLayerActive(s.handle, rid, active)
+}
+
+// SetLayerBitrate sets the maximum bitrate for a layer.
+func (s *RTPSender) SetLayerBitrate(rid string, maxBitrate uint32) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.handle == 0 {
+		return errors.New("sender not initialized")
+	}
+
+	return ffi.RTPSenderSetLayerBitrate(s.handle, rid, maxBitrate)
+}
+
+// GetActiveLayers gets the number of active layers.
+func (s *RTPSender) GetActiveLayers() (spatial, temporal int, err error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == 0 {
+		return 0, 0, errors.New("sender not initialized")
+	}
+
+	return ffi.RTPSenderGetActiveLayers(s.handle)
+}
+
+// SetOnRTCPFeedback sets a callback for RTCP feedback events.
+func (s *RTPSender) SetOnRTCPFeedback(cb func(feedbackType RTCPFeedbackType, ssrc uint32)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.handle == 0 {
+		return
+	}
+
+	ffi.RTPSenderSetOnRTCPFeedback(s.handle, func(feedbackType int, ssrc uint32) {
+		cb(RTCPFeedbackType(feedbackType), ssrc)
+	})
+}
+
+// SetScalabilityMode sets the SVC scalability mode (e.g., "L3T3_KEY", "L1T2").
+// This allows runtime configuration of spatial/temporal layers.
+func (s *RTPSender) SetScalabilityMode(mode string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.handle == 0 {
+		return errors.New("sender not initialized")
+	}
+
+	return ffi.RTPSenderSetScalabilityMode(s.handle, mode)
+}
+
+// GetScalabilityMode gets the current SVC scalability mode.
+func (s *RTPSender) GetScalabilityMode() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == 0 {
+		return "", errors.New("sender not initialized")
+	}
+
+	return ffi.RTPSenderGetScalabilityMode(s.handle)
+}
+
+// RTCPFeedbackType represents the type of RTCP feedback.
+type RTCPFeedbackType int
+
+const (
+	RTCPFeedbackTypePLI  RTCPFeedbackType = 0
+	RTCPFeedbackTypeFIR  RTCPFeedbackType = 1
+	RTCPFeedbackTypeNACK RTCPFeedbackType = 2
+)
+
+func (t RTCPFeedbackType) String() string {
+	switch t {
+	case RTCPFeedbackTypePLI:
+		return "PLI"
+	case RTCPFeedbackTypeFIR:
+		return "FIR"
+	case RTCPFeedbackTypeNACK:
+		return "NACK"
+	default:
+		return "unknown"
+	}
+}
+
+// RTCStats represents connection statistics.
+type RTCStats struct {
+	TimestampUs              int64
+	BytesSent                int64
+	BytesReceived            int64
+	PacketsSent              int64
+	PacketsReceived          int64
+	PacketsLost              int64
+	RoundTripTimeMs          float64
+	JitterMs                 float64
+	AvailableOutgoingBitrate float64
+	AvailableIncomingBitrate float64
+	CurrentRTTMs             int64
+	TotalRTTMs               int64
+	ResponsesReceived        int64
+	FramesEncoded            int
+	FramesDecoded            int
+	FramesDropped            int
+	KeyFramesEncoded         int
+	KeyFramesDecoded         int
+	NACKCount                int
+	PLICount                 int
+	FIRCount                 int
+	QPSum                    int
+	AudioLevel               float64
+	TotalAudioEnergy         float64
+	ConcealmentEvents        int
+
+	// SCTP/DataChannel stats
+	DataChannelsOpened       int64
+	DataChannelsClosed       int64
+	MessagesSent             int64
+	MessagesReceived         int64
+	BytesSentDataChannel     int64
+	BytesReceivedDataChannel int64
+
+	// Quality limitation
+	QualityLimitationReason     QualityLimitationReason
+	QualityLimitationDurationMs int
+
+	// Remote inbound/outbound RTP stats
+	RemotePacketsLost     int64
+	RemoteJitterMs        float64
+	RemoteRoundTripTimeMs float64
+}
+
+// QualityLimitationReason indicates why quality is limited.
+type QualityLimitationReason int
+
+const (
+	QualityLimitationNone      QualityLimitationReason = 0
+	QualityLimitationCPU       QualityLimitationReason = 1
+	QualityLimitationBandwidth QualityLimitationReason = 2
+	QualityLimitationOther     QualityLimitationReason = 3
+)
+
+func (r QualityLimitationReason) String() string {
+	switch r {
+	case QualityLimitationNone:
+		return "none"
+	case QualityLimitationCPU:
+		return "cpu"
+	case QualityLimitationBandwidth:
+		return "bandwidth"
+	case QualityLimitationOther:
+		return "other"
+	default:
+		return "unknown"
+	}
+}
+
+func convertFFIStats(s *ffi.RTCStats) *RTCStats {
+	if s == nil {
+		return nil
+	}
+	return &RTCStats{
+		TimestampUs:                 s.TimestampUs,
+		BytesSent:                   s.BytesSent,
+		BytesReceived:               s.BytesReceived,
+		PacketsSent:                 s.PacketsSent,
+		PacketsReceived:             s.PacketsReceived,
+		PacketsLost:                 s.PacketsLost,
+		RoundTripTimeMs:             s.RoundTripTimeMs,
+		JitterMs:                    s.JitterMs,
+		AvailableOutgoingBitrate:    s.AvailableOutgoingBitrate,
+		AvailableIncomingBitrate:    s.AvailableIncomingBitrate,
+		CurrentRTTMs:                s.CurrentRTTMs,
+		TotalRTTMs:                  s.TotalRTTMs,
+		ResponsesReceived:           s.ResponsesReceived,
+		FramesEncoded:               int(s.FramesEncoded),
+		FramesDecoded:               int(s.FramesDecoded),
+		FramesDropped:               int(s.FramesDropped),
+		KeyFramesEncoded:            int(s.KeyFramesEncoded),
+		KeyFramesDecoded:            int(s.KeyFramesDecoded),
+		NACKCount:                   int(s.NACKCount),
+		PLICount:                    int(s.PLICount),
+		FIRCount:                    int(s.FIRCount),
+		QPSum:                       int(s.QPSum),
+		AudioLevel:                  s.AudioLevel,
+		TotalAudioEnergy:            s.TotalAudioEnergy,
+		ConcealmentEvents:           int(s.ConcealmentEvents),
+		DataChannelsOpened:          s.DataChannelsOpened,
+		DataChannelsClosed:          s.DataChannelsClosed,
+		MessagesSent:                s.MessagesSent,
+		MessagesReceived:            s.MessagesReceived,
+		BytesSentDataChannel:        s.BytesSentDataChannel,
+		BytesReceivedDataChannel:    s.BytesReceivedDataChannel,
+		QualityLimitationReason:     QualityLimitationReason(s.QualityLimitationReason),
+		QualityLimitationDurationMs: int(s.QualityLimitationDurationMs),
+		RemotePacketsLost:           s.RemotePacketsLost,
+		RemoteJitterMs:              s.RemoteJitterMs,
+		RemoteRoundTripTimeMs:       s.RemoteRoundTripTimeMs,
+	}
 }
 
 // RTPReceiver represents an RTP receiver.
@@ -288,6 +571,29 @@ type RTPReceiver struct {
 // Track returns the receiver's track.
 func (r *RTPReceiver) Track() *Track {
 	return r.track
+}
+
+// GetStats gets statistics for this receiver.
+func (r *RTPReceiver) GetStats() (*RTCStats, error) {
+	if r.handle == 0 {
+		return nil, errors.New("receiver not initialized")
+	}
+
+	ffiStats, err := ffi.RTPReceiverGetStats(r.handle)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertFFIStats(ffiStats), nil
+}
+
+// RequestKeyframe requests a keyframe from the sender (sends PLI).
+func (r *RTPReceiver) RequestKeyframe() error {
+	if r.handle == 0 {
+		return errors.New("receiver not initialized")
+	}
+
+	return ffi.RTPReceiverRequestKeyframe(r.handle)
 }
 
 // RTPTransceiver represents an RTP transceiver.
@@ -332,21 +638,47 @@ func (t *RTPTransceiver) Sender() *RTPSender { return t.sender }
 func (t *RTPTransceiver) Receiver() *RTPReceiver { return t.receiver }
 
 // Direction returns current direction.
-func (t *RTPTransceiver) Direction() TransceiverDirection { return t.direction }
+func (t *RTPTransceiver) Direction() TransceiverDirection {
+	if t.handle != 0 {
+		dir := ffi.TransceiverGetDirection(t.handle)
+		return TransceiverDirection(dir)
+	}
+	return t.direction
+}
 
 // SetDirection sets the direction.
 func (t *RTPTransceiver) SetDirection(d TransceiverDirection) error {
-	// TODO: Call FFI
+	if t.handle != 0 {
+		if err := ffi.TransceiverSetDirection(t.handle, ffi.TransceiverDirection(d)); err != nil {
+			return err
+		}
+	}
 	t.direction = d
 	return nil
 }
 
+// CurrentDirection returns the current direction as negotiated in SDP.
+func (t *RTPTransceiver) CurrentDirection() TransceiverDirection {
+	if t.handle != 0 {
+		dir := ffi.TransceiverGetCurrentDirection(t.handle)
+		return TransceiverDirection(dir)
+	}
+	return t.direction
+}
+
 // Mid returns the transceiver's mid.
-func (t *RTPTransceiver) Mid() string { return t.mid }
+func (t *RTPTransceiver) Mid() string {
+	if t.handle != 0 {
+		return ffi.TransceiverMid(t.handle)
+	}
+	return t.mid
+}
 
 // Stop stops the transceiver.
 func (t *RTPTransceiver) Stop() error {
-	// TODO: Call FFI
+	if t.handle != 0 {
+		return ffi.TransceiverStop(t.handle)
+	}
 	return nil
 }
 
@@ -705,6 +1037,108 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 	}
 	pc.handle = handle
 
+	// Set up connection state change callback
+	ffi.PeerConnectionSetOnConnectionStateChange(handle, func(state int) {
+		newState := PeerConnectionState(state)
+		pc.connectionState.Store(newState)
+		if pc.OnConnectionStateChange != nil {
+			pc.OnConnectionStateChange(newState)
+		}
+	})
+
+	// Set up ICE candidate callback
+	ffi.PeerConnectionSetOnICECandidate(handle, func(candidate, sdpMid string, sdpMLineIndex int) {
+		if pc.OnICECandidate != nil {
+			pc.OnICECandidate(&ICECandidate{
+				Candidate:     candidate,
+				SDPMid:        sdpMid,
+				SDPMLineIndex: uint16(sdpMLineIndex),
+			})
+		}
+	})
+
+	// Set up track callback
+	ffi.PeerConnectionSetOnTrack(handle, func(trackHandle, receiverHandle uintptr, streams string) {
+		if pc.OnTrack != nil {
+			// Create track wrapper
+			kind := ffi.TrackKind(trackHandle)
+			trackID := ffi.TrackID(trackHandle)
+
+			track := &Track{
+				handle: trackHandle,
+				id:     trackID,
+				kind:   kind,
+				pc:     pc,
+			}
+			track.enabled.Store(true)
+
+			receiver := &RTPReceiver{
+				handle: receiverHandle,
+				track:  track,
+				pc:     pc,
+			}
+
+			pc.mu.Lock()
+			pc.receivers = append(pc.receivers, receiver)
+			pc.mu.Unlock()
+
+			// Split streams by comma if multiple
+			var streamIDs []string
+			if streams != "" {
+				streamIDs = []string{streams}
+			}
+
+			pc.OnTrack(track, receiver, streamIDs)
+		}
+	})
+
+	// Set up data channel callback
+	ffi.PeerConnectionSetOnDataChannel(handle, func(dcHandle uintptr) {
+		if pc.OnDataChannel != nil {
+			label := ffi.DataChannelLabel(dcHandle)
+			dc := &DataChannel{
+				handle: dcHandle,
+				label:  label,
+				pc:     pc,
+			}
+			pc.OnDataChannel(dc)
+		}
+	})
+
+	// Set up signaling state change callback
+	ffi.PeerConnectionSetOnSignalingStateChange(handle, func(state int) {
+		newState := SignalingState(state)
+		pc.signalingState.Store(newState)
+		if pc.OnSignalingStateChange != nil {
+			pc.OnSignalingStateChange(newState)
+		}
+	})
+
+	// Set up ICE connection state change callback
+	ffi.PeerConnectionSetOnICEConnectionStateChange(handle, func(state int) {
+		newState := ICEConnectionState(state)
+		pc.iceConnectionState.Store(newState)
+		if pc.OnICEConnectionStateChange != nil {
+			pc.OnICEConnectionStateChange(newState)
+		}
+	})
+
+	// Set up ICE gathering state change callback
+	ffi.PeerConnectionSetOnICEGatheringStateChange(handle, func(state int) {
+		newState := ICEGatheringState(state)
+		pc.iceGatheringState.Store(newState)
+		if pc.OnICEGatheringStateChange != nil {
+			pc.OnICEGatheringStateChange(newState)
+		}
+	})
+
+	// Set up negotiation needed callback
+	ffi.PeerConnectionSetOnNegotiationNeeded(handle, func() {
+		if pc.OnNegotiationNeeded != nil {
+			pc.OnNegotiationNeeded()
+		}
+	})
+
 	return pc, nil
 }
 
@@ -941,15 +1375,43 @@ func (pc *PeerConnection) AddTransceiver(kind string, init *TransceiverInit) (*R
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
-	// TODO: Call FFI to add transceiver
-
-	transceiver := &RTPTransceiver{
-		pc:        pc,
-		direction: TransceiverDirectionSendRecv,
+	// Determine media kind
+	var mediaKind ffi.MediaKind
+	if kind == "video" {
+		mediaKind = ffi.MediaKindVideo
+	} else if kind == "audio" {
+		mediaKind = ffi.MediaKindAudio
+	} else {
+		return nil, errors.New("unknown media kind")
 	}
 
+	// Determine direction
+	direction := TransceiverDirectionSendRecv
 	if init != nil {
-		transceiver.direction = init.Direction
+		direction = init.Direction
+	}
+
+	// Call FFI to add transceiver
+	handle := ffi.PeerConnectionAddTransceiver(pc.handle, mediaKind, ffi.TransceiverDirection(direction))
+	if handle == 0 {
+		return nil, errors.New("failed to add transceiver")
+	}
+
+	transceiver := &RTPTransceiver{
+		handle:    handle,
+		pc:        pc,
+		direction: direction,
+	}
+
+	// Get sender and receiver handles
+	senderHandle := ffi.TransceiverGetSender(handle)
+	receiverHandle := ffi.TransceiverGetReceiver(handle)
+
+	if senderHandle != 0 {
+		transceiver.sender = &RTPSender{handle: senderHandle, pc: pc}
+	}
+	if receiverHandle != 0 {
+		transceiver.receiver = &RTPReceiver{handle: receiverHandle, pc: pc}
 	}
 
 	pc.transceivers = append(pc.transceivers, transceiver)
@@ -1116,12 +1578,38 @@ func (pc *PeerConnection) CreateAudioTrackWithOptions(id string, sampleRate, cha
 // --- Stats API ---
 
 // GetStats returns connection statistics.
-func (pc *PeerConnection) GetStats() (map[string]interface{}, error) {
+func (pc *PeerConnection) GetStats() (*RTCStats, error) {
 	if pc.closed.Load() {
 		return nil, ErrPeerConnectionClosed
 	}
 
-	// TODO: Call FFI to get stats
+	pc.mu.RLock()
+	defer pc.mu.RUnlock()
 
-	return make(map[string]interface{}), nil
+	if pc.handle == 0 {
+		return nil, errors.New("peer connection not initialized")
+	}
+
+	ffiStats, err := ffi.PeerConnectionGetStats(pc.handle)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertFFIStats(ffiStats), nil
+}
+
+// RestartICE triggers an ICE restart on the next offer.
+func (pc *PeerConnection) RestartICE() error {
+	if pc.closed.Load() {
+		return ErrPeerConnectionClosed
+	}
+
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+
+	if pc.handle == 0 {
+		return errors.New("peer connection not initialized")
+	}
+
+	return ffi.PeerConnectionRestartICE(pc.handle)
 }

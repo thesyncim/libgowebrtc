@@ -174,3 +174,22 @@ func GoString(ptr uintptr) string {
 	bytes := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), length)
 	return string(bytes)
 }
+
+// UintptrFromSlice returns a uintptr to the first element of any slice.
+func UintptrFromSlice[T any](s []T) uintptr {
+	if len(s) == 0 {
+		return 0
+	}
+	return uintptr(unsafe.Pointer(&s[0]))
+}
+
+// ByteArrayToString converts a fixed-size byte array to a Go string,
+// stopping at the first null byte.
+func ByteArrayToString(b []byte) string {
+	for i, c := range b {
+		if c == 0 {
+			return string(b[:i])
+		}
+	}
+	return string(b)
+}

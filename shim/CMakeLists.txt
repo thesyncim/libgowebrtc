@@ -28,6 +28,8 @@ set(LIBWEBRTC_INCLUDE_DIRS
     ${LIBWEBRTC_DIR}/include/third_party/abseil-cpp
     ${LIBWEBRTC_DIR}/include/third_party/boringssl/src/include
     ${LIBWEBRTC_DIR}/include/third_party/libyuv/include
+    ${LIBWEBRTC_DIR}/include/third_party/opus/src/include
+    ${LIBWEBRTC_DIR}/include/build
 )
 
 # libwebrtc library
@@ -74,9 +76,20 @@ if(NOT EXISTS ${LIBWEBRTC_LIBRARY})
     message(FATAL_ERROR "libwebrtc library not found at: ${LIBWEBRTC_LIBRARY}")
 endif()
 
-# Shim library sources
+# Shim library sources (modular)
 set(SHIM_SOURCES
-    shim.cc
+    shim_common.cc
+    shim_video_codec.cc
+    shim_audio_codec.cc
+    shim_packetizer.cc
+    shim_peer_connection.cc
+    shim_rtp_sender.cc
+    shim_rtp_transceiver.cc
+    shim_track_source.cc
+    shim_data_channel.cc
+    shim_capture.cc
+    shim_remote_sink.cc
+    shim_stats.cc
 )
 
 # Create the shared library
@@ -136,7 +149,7 @@ install(TARGETS webrtc_shim
     RUNTIME DESTINATION bin
 )
 
-install(FILES shim.h DESTINATION include)
+install(FILES shim.h shim_common.h DESTINATION include)
 
 # Print configuration
 message(STATUS "")

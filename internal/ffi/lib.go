@@ -150,6 +150,55 @@ var (
 	shimTrackRemoveAudioSink func(track uintptr)
 	shimTrackKind            func(track uintptr) uintptr
 	shimTrackID              func(track uintptr) uintptr
+
+	// RTPSender Parameters
+	shimRTPSenderGetParameters     func(sender uintptr, outParams uintptr, encodings uintptr, maxEncodings int) int
+	shimRTPSenderSetParameters     func(sender uintptr, params uintptr) int
+	shimRTPSenderGetTrack          func(sender uintptr) uintptr
+	shimRTPSenderGetStats          func(sender uintptr, outStats uintptr) int
+	shimRTPSenderSetOnRTCPFeedback func(sender uintptr, callback uintptr, ctx uintptr)
+	shimRTPSenderSetLayerActive    func(sender uintptr, rid uintptr, active int) int
+	shimRTPSenderSetLayerBitrate   func(sender uintptr, rid uintptr, maxBitrate uint32) int
+	shimRTPSenderGetActiveLayers   func(sender uintptr, outSpatial uintptr, outTemporal uintptr) int
+
+	// RTPReceiver
+	shimRTPReceiverGetTrack        func(receiver uintptr) uintptr
+	shimRTPReceiverGetStats        func(receiver uintptr, outStats uintptr) int
+	shimRTPReceiverRequestKeyframe func(receiver uintptr) int
+
+	// RTPTransceiver
+	shimTransceiverGetDirection        func(transceiver uintptr) int
+	shimTransceiverSetDirection        func(transceiver uintptr, direction int) int
+	shimTransceiverGetCurrentDirection func(transceiver uintptr) int
+	shimTransceiverStop                func(transceiver uintptr) int
+	shimTransceiverMid                 func(transceiver uintptr) uintptr
+	shimTransceiverGetSender           func(transceiver uintptr) uintptr
+	shimTransceiverGetReceiver         func(transceiver uintptr) uintptr
+
+	// PeerConnection Extended
+	shimPeerConnectionAddTransceiver                func(pc uintptr, kind int, direction int) uintptr
+	shimPeerConnectionGetSenders                    func(pc uintptr, senders uintptr, maxSenders int, outCount uintptr) int
+	shimPeerConnectionGetReceivers                  func(pc uintptr, receivers uintptr, maxReceivers int, outCount uintptr) int
+	shimPeerConnectionGetTransceivers               func(pc uintptr, transceivers uintptr, maxTransceivers int, outCount uintptr) int
+	shimPeerConnectionRestartICE                    func(pc uintptr) int
+	shimPeerConnectionGetStats                      func(pc uintptr, outStats uintptr) int
+	shimPeerConnectionSetOnSignalingStateChange     func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionSetOnICEConnectionStateChange func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionSetOnICEGatheringStateChange  func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionSetOnNegotiationNeeded        func(pc uintptr, callback uintptr, ctx uintptr)
+
+	// RTPSender Scalability Mode
+	shimRTPSenderSetScalabilityMode func(sender uintptr, mode uintptr) int
+	shimRTPSenderGetScalabilityMode func(sender uintptr, modeOut uintptr, modeOutSize int) int
+
+	// Codec Capabilities
+	shimGetSupportedVideoCodecs func(codecs uintptr, maxCodecs int, outCount uintptr) int
+	shimGetSupportedAudioCodecs func(codecs uintptr, maxCodecs int, outCount uintptr) int
+	shimIsCodecSupported        func(mimeType uintptr) int
+
+	// Bandwidth Estimation
+	shimPeerConnectionSetOnBandwidthEstimate func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionGetBandwidthEstimate   func(pc uintptr, outEstimate uintptr) int
 )
 
 // LoadLibrary loads the libwebrtc_shim shared library.
@@ -389,6 +438,55 @@ func registerFunctions() error {
 	purego.RegisterLibFunc(&shimTrackRemoveAudioSink, libHandle, "shim_track_remove_audio_sink")
 	purego.RegisterLibFunc(&shimTrackKind, libHandle, "shim_track_kind")
 	purego.RegisterLibFunc(&shimTrackID, libHandle, "shim_track_id")
+
+	// RTPSender Parameters
+	purego.RegisterLibFunc(&shimRTPSenderGetParameters, libHandle, "shim_rtp_sender_get_parameters")
+	purego.RegisterLibFunc(&shimRTPSenderSetParameters, libHandle, "shim_rtp_sender_set_parameters")
+	purego.RegisterLibFunc(&shimRTPSenderGetTrack, libHandle, "shim_rtp_sender_get_track")
+	purego.RegisterLibFunc(&shimRTPSenderGetStats, libHandle, "shim_rtp_sender_get_stats")
+	purego.RegisterLibFunc(&shimRTPSenderSetOnRTCPFeedback, libHandle, "shim_rtp_sender_set_on_rtcp_feedback")
+	purego.RegisterLibFunc(&shimRTPSenderSetLayerActive, libHandle, "shim_rtp_sender_set_layer_active")
+	purego.RegisterLibFunc(&shimRTPSenderSetLayerBitrate, libHandle, "shim_rtp_sender_set_layer_bitrate")
+	purego.RegisterLibFunc(&shimRTPSenderGetActiveLayers, libHandle, "shim_rtp_sender_get_active_layers")
+
+	// RTPReceiver
+	purego.RegisterLibFunc(&shimRTPReceiverGetTrack, libHandle, "shim_rtp_receiver_get_track")
+	purego.RegisterLibFunc(&shimRTPReceiverGetStats, libHandle, "shim_rtp_receiver_get_stats")
+	purego.RegisterLibFunc(&shimRTPReceiverRequestKeyframe, libHandle, "shim_rtp_receiver_request_keyframe")
+
+	// RTPTransceiver
+	purego.RegisterLibFunc(&shimTransceiverGetDirection, libHandle, "shim_transceiver_get_direction")
+	purego.RegisterLibFunc(&shimTransceiverSetDirection, libHandle, "shim_transceiver_set_direction")
+	purego.RegisterLibFunc(&shimTransceiverGetCurrentDirection, libHandle, "shim_transceiver_get_current_direction")
+	purego.RegisterLibFunc(&shimTransceiverStop, libHandle, "shim_transceiver_stop")
+	purego.RegisterLibFunc(&shimTransceiverMid, libHandle, "shim_transceiver_mid")
+	purego.RegisterLibFunc(&shimTransceiverGetSender, libHandle, "shim_transceiver_get_sender")
+	purego.RegisterLibFunc(&shimTransceiverGetReceiver, libHandle, "shim_transceiver_get_receiver")
+
+	// PeerConnection Extended
+	purego.RegisterLibFunc(&shimPeerConnectionAddTransceiver, libHandle, "shim_peer_connection_add_transceiver")
+	purego.RegisterLibFunc(&shimPeerConnectionGetSenders, libHandle, "shim_peer_connection_get_senders")
+	purego.RegisterLibFunc(&shimPeerConnectionGetReceivers, libHandle, "shim_peer_connection_get_receivers")
+	purego.RegisterLibFunc(&shimPeerConnectionGetTransceivers, libHandle, "shim_peer_connection_get_transceivers")
+	purego.RegisterLibFunc(&shimPeerConnectionRestartICE, libHandle, "shim_peer_connection_restart_ice")
+	purego.RegisterLibFunc(&shimPeerConnectionGetStats, libHandle, "shim_peer_connection_get_stats")
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnSignalingStateChange, libHandle, "shim_peer_connection_set_on_signaling_state_change")
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnICEConnectionStateChange, libHandle, "shim_peer_connection_set_on_ice_connection_state_change")
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnICEGatheringStateChange, libHandle, "shim_peer_connection_set_on_ice_gathering_state_change")
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnNegotiationNeeded, libHandle, "shim_peer_connection_set_on_negotiation_needed")
+
+	// RTPSender Scalability Mode
+	purego.RegisterLibFunc(&shimRTPSenderSetScalabilityMode, libHandle, "shim_rtp_sender_set_scalability_mode")
+	purego.RegisterLibFunc(&shimRTPSenderGetScalabilityMode, libHandle, "shim_rtp_sender_get_scalability_mode")
+
+	// Codec Capabilities
+	purego.RegisterLibFunc(&shimGetSupportedVideoCodecs, libHandle, "shim_get_supported_video_codecs")
+	purego.RegisterLibFunc(&shimGetSupportedAudioCodecs, libHandle, "shim_get_supported_audio_codecs")
+	purego.RegisterLibFunc(&shimIsCodecSupported, libHandle, "shim_is_codec_supported")
+
+	// Bandwidth Estimation
+	purego.RegisterLibFunc(&shimPeerConnectionSetOnBandwidthEstimate, libHandle, "shim_peer_connection_set_on_bandwidth_estimate")
+	purego.RegisterLibFunc(&shimPeerConnectionGetBandwidthEstimate, libHandle, "shim_peer_connection_get_bandwidth_estimate")
 
 	return err
 }

@@ -385,6 +385,30 @@ SHIM_EXPORT void shim_peer_connection_set_on_data_channel(
     ShimOnDataChannel callback,
     void* ctx
 );
+SHIM_EXPORT void shim_peer_connection_set_on_signaling_state_change(
+    ShimPeerConnection* pc,
+    ShimOnSignalingStateChange callback,
+    void* ctx
+);
+SHIM_EXPORT void shim_peer_connection_set_on_ice_connection_state_change(
+    ShimPeerConnection* pc,
+    ShimOnICEConnectionStateChange callback,
+    void* ctx
+);
+SHIM_EXPORT void shim_peer_connection_set_on_ice_gathering_state_change(
+    ShimPeerConnection* pc,
+    ShimOnICEGatheringStateChange callback,
+    void* ctx
+);
+
+/* Negotiation needed callback */
+typedef void (*ShimOnNegotiationNeeded)(void* ctx);
+
+SHIM_EXPORT void shim_peer_connection_set_on_negotiation_needed(
+    ShimPeerConnection* pc,
+    ShimOnNegotiationNeeded callback,
+    void* ctx
+);
 
 /* Create offer/answer */
 SHIM_EXPORT int shim_peer_connection_create_offer(
@@ -459,6 +483,495 @@ SHIM_EXPORT void shim_peer_connection_close(ShimPeerConnection* pc);
 SHIM_EXPORT int shim_rtp_sender_set_bitrate(ShimRTPSender* sender, uint32_t bitrate);
 SHIM_EXPORT int shim_rtp_sender_replace_track(ShimRTPSender* sender, void* track);
 SHIM_EXPORT void shim_rtp_sender_destroy(ShimRTPSender* sender);
+
+/* ============================================================================
+ * RTPSender Parameters API (SetParameters/GetParameters)
+ * ========================================================================== */
+
+typedef struct {
+    char rid[64];                   /* RID for simulcast */
+    uint32_t max_bitrate_bps;
+    uint32_t min_bitrate_bps;
+    double max_framerate;
+    double scale_resolution_down_by;
+    int active;                     /* 0=inactive, 1=active */
+    char scalability_mode[32];      /* e.g., "L3T3_KEY" */
+} ShimRTPEncodingParameters;
+
+typedef struct {
+    ShimRTPEncodingParameters* encodings;
+    int encoding_count;
+    char transaction_id[64];
+} ShimRTPSendParameters;
+
+/*
+ * Get current RTP send parameters.
+ *
+ * @param sender RTPSender handle
+ * @param out_params Pre-allocated output structure
+ * @param encodings Pre-allocated array for encodings
+ * @param max_encodings Maximum number of encodings
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_get_parameters(
+    ShimRTPSender* sender,
+    ShimRTPSendParameters* out_params,
+    ShimRTPEncodingParameters* encodings,
+    int max_encodings
+);
+
+/*
+ * Set RTP send parameters (for bitrate/simulcast control).
+ *
+ * @param sender RTPSender handle
+ * @param params Parameters to set
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_set_parameters(
+    ShimRTPSender* sender,
+    const ShimRTPSendParameters* params
+);
+
+/* Get the track associated with this sender */
+SHIM_EXPORT void* shim_rtp_sender_get_track(ShimRTPSender* sender);
+
+/* ============================================================================
+ * RTPReceiver API
+ * ========================================================================== */
+
+/* Get the track associated with this receiver */
+SHIM_EXPORT void* shim_rtp_receiver_get_track(ShimRTPReceiver* receiver);
+
+/* ============================================================================
+ * RTPTransceiver API
+ * ========================================================================== */
+
+typedef struct ShimRTPTransceiver ShimRTPTransceiver;
+
+/* Transceiver direction enum */
+typedef enum {
+    SHIM_TRANSCEIVER_DIRECTION_SENDRECV = 0,
+    SHIM_TRANSCEIVER_DIRECTION_SENDONLY = 1,
+    SHIM_TRANSCEIVER_DIRECTION_RECVONLY = 2,
+    SHIM_TRANSCEIVER_DIRECTION_INACTIVE = 3,
+    SHIM_TRANSCEIVER_DIRECTION_STOPPED = 4,
+} ShimTransceiverDirection;
+
+/*
+ * Get the current direction of the transceiver.
+ */
+SHIM_EXPORT int shim_transceiver_get_direction(ShimRTPTransceiver* transceiver);
+
+/*
+ * Set the direction of the transceiver.
+ *
+ * @param transceiver Transceiver handle
+ * @param direction New direction (ShimTransceiverDirection)
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_transceiver_set_direction(
+    ShimRTPTransceiver* transceiver,
+    int direction
+);
+
+/*
+ * Get the current direction as negotiated in SDP.
+ */
+SHIM_EXPORT int shim_transceiver_get_current_direction(ShimRTPTransceiver* transceiver);
+
+/*
+ * Stop the transceiver.
+ */
+SHIM_EXPORT int shim_transceiver_stop(ShimRTPTransceiver* transceiver);
+
+/*
+ * Get the mid (media ID) of the transceiver.
+ */
+SHIM_EXPORT const char* shim_transceiver_mid(ShimRTPTransceiver* transceiver);
+
+/*
+ * Get the sender associated with this transceiver.
+ */
+SHIM_EXPORT ShimRTPSender* shim_transceiver_get_sender(ShimRTPTransceiver* transceiver);
+
+/*
+ * Get the receiver associated with this transceiver.
+ */
+SHIM_EXPORT ShimRTPReceiver* shim_transceiver_get_receiver(ShimRTPTransceiver* transceiver);
+
+/* ============================================================================
+ * PeerConnection Extended API
+ * ========================================================================== */
+
+/*
+ * Add a transceiver with specified media kind and direction.
+ *
+ * @param pc PeerConnection handle
+ * @param kind Media kind (0=audio, 1=video)
+ * @param direction Initial direction (ShimTransceiverDirection)
+ * @return Transceiver handle, or NULL on failure
+ */
+SHIM_EXPORT ShimRTPTransceiver* shim_peer_connection_add_transceiver(
+    ShimPeerConnection* pc,
+    int kind,
+    int direction
+);
+
+/*
+ * Get all senders associated with this PeerConnection.
+ *
+ * @param pc PeerConnection handle
+ * @param senders Pre-allocated array for sender pointers
+ * @param max_senders Maximum number of senders
+ * @param out_count Output: actual number of senders
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_peer_connection_get_senders(
+    ShimPeerConnection* pc,
+    ShimRTPSender** senders,
+    int max_senders,
+    int* out_count
+);
+
+/*
+ * Get all receivers associated with this PeerConnection.
+ *
+ * @param pc PeerConnection handle
+ * @param receivers Pre-allocated array for receiver pointers
+ * @param max_receivers Maximum number of receivers
+ * @param out_count Output: actual number of receivers
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_peer_connection_get_receivers(
+    ShimPeerConnection* pc,
+    ShimRTPReceiver** receivers,
+    int max_receivers,
+    int* out_count
+);
+
+/*
+ * Get all transceivers associated with this PeerConnection.
+ *
+ * @param pc PeerConnection handle
+ * @param transceivers Pre-allocated array for transceiver pointers
+ * @param max_transceivers Maximum number of transceivers
+ * @param out_count Output: actual number of transceivers
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_peer_connection_get_transceivers(
+    ShimPeerConnection* pc,
+    ShimRTPTransceiver** transceivers,
+    int max_transceivers,
+    int* out_count
+);
+
+/*
+ * Trigger an ICE restart on the next offer.
+ *
+ * @param pc PeerConnection handle
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_peer_connection_restart_ice(ShimPeerConnection* pc);
+
+/* ============================================================================
+ * Statistics API
+ * ========================================================================== */
+
+typedef struct {
+    /* Timestamp of this stats report */
+    int64_t timestamp_us;
+
+    /* Transport stats */
+    int64_t bytes_sent;
+    int64_t bytes_received;
+    int64_t packets_sent;
+    int64_t packets_received;
+    int64_t packets_lost;
+
+    /* Connection quality */
+    double round_trip_time_ms;
+    double jitter_ms;
+    double available_outgoing_bitrate;
+    double available_incoming_bitrate;
+
+    /* ICE candidate pair stats */
+    int64_t current_rtt_ms;
+    int64_t total_rtt_ms;
+    int64_t responses_received;
+
+    /* Video specific */
+    int frames_encoded;
+    int frames_decoded;
+    int frames_dropped;
+    int key_frames_encoded;
+    int key_frames_decoded;
+    int nack_count;
+    int pli_count;
+    int fir_count;
+    int qp_sum;
+
+    /* Audio specific */
+    double audio_level;
+    double total_audio_energy;
+    int concealment_events;
+
+    /* SCTP/DataChannel stats */
+    int64_t data_channels_opened;
+    int64_t data_channels_closed;
+    int64_t messages_sent;
+    int64_t messages_received;
+    int64_t bytes_sent_data_channel;
+    int64_t bytes_received_data_channel;
+
+    /* Quality limitation */
+    int quality_limitation_reason;  /* 0=none, 1=cpu, 2=bandwidth, 3=other */
+    int quality_limitation_duration_ms;
+
+    /* Remote inbound/outbound RTP stats */
+    int64_t remote_packets_lost;
+    double remote_jitter_ms;
+    double remote_round_trip_time_ms;
+} ShimRTCStats;
+
+/* Quality limitation reasons */
+#define SHIM_QUALITY_LIMITATION_NONE      0
+#define SHIM_QUALITY_LIMITATION_CPU       1
+#define SHIM_QUALITY_LIMITATION_BANDWIDTH 2
+#define SHIM_QUALITY_LIMITATION_OTHER     3
+
+/* ============================================================================
+ * Codec Capability API
+ * ========================================================================== */
+
+/* Codec capability info */
+typedef struct {
+    char mime_type[64];        /* e.g., "video/VP9", "audio/opus" */
+    int clock_rate;            /* Clock rate in Hz */
+    int channels;              /* Audio channels (0 for video) */
+    char sdp_fmtp_line[256];   /* SDP format parameters */
+    int payload_type;          /* Preferred payload type */
+} ShimCodecCapability;
+
+/*
+ * Get supported video send codecs.
+ *
+ * @param codecs Pre-allocated array of codec capabilities
+ * @param max_codecs Maximum codecs to return
+ * @param out_count Output: actual number of codecs
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_get_supported_video_codecs(
+    ShimCodecCapability* codecs,
+    int max_codecs,
+    int* out_count
+);
+
+/*
+ * Get supported audio send codecs.
+ *
+ * @param codecs Pre-allocated array of codec capabilities
+ * @param max_codecs Maximum codecs to return
+ * @param out_count Output: actual number of codecs
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_get_supported_audio_codecs(
+    ShimCodecCapability* codecs,
+    int max_codecs,
+    int* out_count
+);
+
+/*
+ * Check if a specific codec is supported for encoding.
+ *
+ * @param mime_type MIME type (e.g., "video/VP9")
+ * @return 1 if supported, 0 otherwise
+ */
+SHIM_EXPORT int shim_is_codec_supported(const char* mime_type);
+
+/* ============================================================================
+ * Bandwidth Estimation API
+ * ========================================================================== */
+
+/* Bandwidth estimation info */
+typedef struct {
+    int64_t timestamp_us;
+    int64_t target_bitrate_bps;      /* Target bitrate from BWE */
+    int64_t available_send_bps;       /* Available send bandwidth */
+    int64_t available_recv_bps;       /* Available receive bandwidth */
+    int64_t pacing_rate_bps;          /* Current pacing rate */
+    int congestion_window;            /* Congestion window size */
+    double loss_rate;                 /* Observed packet loss rate (0.0-1.0) */
+} ShimBandwidthEstimate;
+
+/* Callback for bandwidth estimate updates */
+typedef void (*ShimOnBandwidthEstimate)(void* ctx, const ShimBandwidthEstimate* estimate);
+
+/*
+ * Set bandwidth estimate callback.
+ *
+ * @param pc PeerConnection handle
+ * @param callback Callback function
+ * @param ctx User context
+ */
+SHIM_EXPORT void shim_peer_connection_set_on_bandwidth_estimate(
+    ShimPeerConnection* pc,
+    ShimOnBandwidthEstimate callback,
+    void* ctx
+);
+
+/*
+ * Get current bandwidth estimate.
+ *
+ * @param pc PeerConnection handle
+ * @param out_estimate Pre-allocated estimate structure
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_peer_connection_get_bandwidth_estimate(
+    ShimPeerConnection* pc,
+    ShimBandwidthEstimate* out_estimate
+);
+
+/*
+ * Get connection statistics.
+ *
+ * @param pc PeerConnection handle
+ * @param out_stats Pre-allocated stats structure
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_peer_connection_get_stats(
+    ShimPeerConnection* pc,
+    ShimRTCStats* out_stats
+);
+
+/*
+ * Get statistics for a specific sender.
+ *
+ * @param sender RTPSender handle
+ * @param out_stats Pre-allocated stats structure
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_get_stats(
+    ShimRTPSender* sender,
+    ShimRTCStats* out_stats
+);
+
+/*
+ * Get statistics for a specific receiver.
+ *
+ * @param receiver RTPReceiver handle
+ * @param out_stats Pre-allocated stats structure
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_receiver_get_stats(
+    ShimRTPReceiver* receiver,
+    ShimRTCStats* out_stats
+);
+
+/* ============================================================================
+ * RTCP Feedback API
+ * ========================================================================== */
+
+/*
+ * Request a keyframe from the sender (send PLI).
+ *
+ * @param receiver RTPReceiver handle
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_receiver_request_keyframe(ShimRTPReceiver* receiver);
+
+/*
+ * Callback for RTCP feedback events.
+ *
+ * @param ctx User context
+ * @param type Feedback type (0=PLI, 1=FIR, 2=NACK)
+ * @param ssrc SSRC of the affected stream
+ */
+typedef void (*ShimOnRTCPFeedback)(void* ctx, int type, uint32_t ssrc);
+
+/*
+ * Set RTCP feedback callback on a sender.
+ *
+ * @param sender RTPSender handle
+ * @param callback Callback function
+ * @param ctx User context
+ */
+SHIM_EXPORT void shim_rtp_sender_set_on_rtcp_feedback(
+    ShimRTPSender* sender,
+    ShimOnRTCPFeedback callback,
+    void* ctx
+);
+
+/* ============================================================================
+ * Simulcast/SVC Layer Control API
+ * ========================================================================== */
+
+/*
+ * Enable or disable a specific simulcast layer.
+ *
+ * @param sender RTPSender handle
+ * @param rid RID of the layer (e.g., "low", "mid", "high")
+ * @param active 1 to enable, 0 to disable
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_set_layer_active(
+    ShimRTPSender* sender,
+    const char* rid,
+    int active
+);
+
+/*
+ * Set the maximum bitrate for a specific layer.
+ *
+ * @param sender RTPSender handle
+ * @param rid RID of the layer
+ * @param max_bitrate_bps Maximum bitrate in bps
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_set_layer_bitrate(
+    ShimRTPSender* sender,
+    const char* rid,
+    uint32_t max_bitrate_bps
+);
+
+/*
+ * Get the number of active layers.
+ *
+ * @param sender RTPSender handle
+ * @param out_spatial Output: number of spatial layers
+ * @param out_temporal Output: number of temporal layers
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_get_active_layers(
+    ShimRTPSender* sender,
+    int* out_spatial,
+    int* out_temporal
+);
+
+/*
+ * Set the scalability mode for a sender (e.g., "L3T3_KEY", "L1T2").
+ *
+ * @param sender RTPSender handle
+ * @param scalability_mode Scalability mode string
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_set_scalability_mode(
+    ShimRTPSender* sender,
+    const char* scalability_mode
+);
+
+/*
+ * Get the current scalability mode for a sender.
+ *
+ * @param sender RTPSender handle
+ * @param mode_out Pre-allocated buffer for mode string
+ * @param mode_out_size Size of output buffer
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_get_scalability_mode(
+    ShimRTPSender* sender,
+    char* mode_out,
+    int mode_out_size
+);
 
 /* ============================================================================
  * Video Track Source API (for frame injection)
