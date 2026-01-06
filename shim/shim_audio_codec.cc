@@ -35,7 +35,7 @@ SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
     }
 
     webrtc::AudioEncoderOpusConfig opus_config;
-    opus_config.frame_size_ms = 20;
+    opus_config.frame_size_ms = 10;  // 10ms for immediate output per Encode call
     opus_config.sample_rate_hz = config->sample_rate;
     opus_config.num_channels = config->channels;
     opus_config.bitrate_bps = config->bitrate_bps > 0 ? config->bitrate_bps : 64000;
@@ -58,7 +58,7 @@ SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
     shim_encoder->encoder = std::move(encoder);
     shim_encoder->sample_rate = config->sample_rate;
     shim_encoder->channels = config->channels;
-    shim_encoder->frame_size = (config->sample_rate * 20) / 1000;  // 20ms
+    shim_encoder->frame_size = (config->sample_rate * 10) / 1000;  // 10ms
 
     return shim_encoder.release();
 }

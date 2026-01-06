@@ -88,7 +88,8 @@ func (e *opusEncoder) EncodeInto(src *frame.AudioFrame, dst []byte) (int, error)
 		return 0, ErrEncoderClosed
 	}
 
-	n, err := ffi.AudioEncoderEncodeInto(e.handle, src.Samples, src.NumSamples*src.Channels, dst)
+	// Pass samples per channel, not total samples - shim multiplies by channels
+	n, err := ffi.AudioEncoderEncodeInto(e.handle, src.Samples, src.NumSamples, dst)
 	if err != nil {
 		return 0, err
 	}

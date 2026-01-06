@@ -107,7 +107,7 @@ func TestOpusRoundtrip(t *testing.T) {
 
 	sampleRate := 48000
 	channels := 2
-	frameDuration := 20 // ms
+	frameDuration := 10 // ms - WebRTC expects 10ms frames per Encode call
 	samplesPerFrame := sampleRate * frameDuration / 1000
 
 	// Create encoder
@@ -145,14 +145,15 @@ func TestOpusRoundtrip(t *testing.T) {
 
 	t.Logf("Opus: encoded %d samples to %d bytes", samplesPerFrame, encodedSize)
 
-	// Decode
-	dstFrame := frame.NewAudioFrameS16(sampleRate, channels, samplesPerFrame)
-	_, err = dec.DecodeInto(encBuf[:encodedSize], dstFrame)
+	// Decode - need buffer for max possible decoded samples (up to 120ms at 48kHz)
+	maxSamplesPerChannel := 48000 * 120 / 1000 // 5760 samples per channel
+	dstFrame := frame.NewAudioFrameS16(sampleRate, channels, maxSamplesPerChannel)
+	decodedSamples, err := dec.DecodeInto(encBuf[:encodedSize], dstFrame)
 	if err != nil {
 		t.Fatalf("Decode failed: %v", err)
 	}
 
-	t.Logf("Opus: decoded back to %d samples", dstFrame.NumSamples)
+	t.Logf("Opus: decoded back to %d samples per channel", decodedSamples)
 }
 
 // TestEncoderBitrateControl tests runtime bitrate changes.

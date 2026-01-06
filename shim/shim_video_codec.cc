@@ -17,6 +17,9 @@
 #include "api/video/video_frame.h"
 #include "api/video/encoded_image.h"
 #include "modules/video_coding/include/video_error_codes.h"
+// InternalEncoderFactory provides all codecs when libwebrtc is built with rtc_use_h264=true
+#include "media/engine/internal_encoder_factory.h"
+#include "media/engine/internal_decoder_factory.h"
 
 /* ============================================================================
  * Video Encoder Implementation
@@ -72,14 +75,12 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
         return nullptr;
     }
 
-    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
-    if (!factory) {
-        return nullptr;
-    }
+    // Use InternalEncoderFactory - same as libwebrtc uses internally
+    // This provides access to all codecs: VP8, VP9, H264 (OpenH264), AV1 (libaom)
+    webrtc::InternalEncoderFactory factory;
 
-    // M141: Use Create(env, format) instead of CreateVideoEncoder(format)
     auto format = shim::CreateSdpVideoFormat(codec, config->h264_profile);
-    auto encoder = factory->Create(shim::GetEnvironment(), format);
+    auto encoder = factory.Create(shim::GetEnvironment(), format);
     if (!encoder) {
         return nullptr;
     }
@@ -288,7 +289,8 @@ SHIM_EXPORT void shim_video_encoder_destroy(ShimVideoEncoder* encoder) {
 struct ShimVideoDecoder {
     std::unique_ptr<webrtc::VideoDecoder> decoder;
     ShimCodecType codec_type;
-    std::mutex mutex;
+    std::mutex decode_mutex;   // Protects decode calls
+    std::mutex output_mutex;   // Protects output access (separate to avoid deadlock)
 
     // Decoded frame storage
     webrtc::scoped_refptr<webrtc::I420BufferInterface> decoded_buffer;
@@ -300,7 +302,8 @@ public:
     explicit DecoderCallback(ShimVideoDecoder* dec) : decoder_(dec) {}
 
     int32_t Decoded(webrtc::VideoFrame& frame) override {
-        std::lock_guard<std::mutex> lock(decoder_->mutex);
+        // Use output_mutex, not decode_mutex to avoid deadlock
+        std::lock_guard<std::mutex> lock(decoder_->output_mutex);
 
         auto buffer = frame.video_frame_buffer()->ToI420();
         decoder_->decoded_buffer = buffer;
@@ -314,14 +317,11 @@ private:
 };
 
 SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(ShimCodecType codec) {
-    auto factory = webrtc::CreateBuiltinVideoDecoderFactory();
-    if (!factory) {
-        return nullptr;
-    }
+    // Use InternalDecoderFactory - same as libwebrtc uses internally
+    webrtc::InternalDecoderFactory factory;
 
-    // M141: Use Create(env, format) instead of CreateVideoDecoder(format)
     auto format = shim::CreateSdpVideoFormat(codec, nullptr);
-    auto decoder = factory->Create(shim::GetEnvironment(), format);
+    auto decoder = factory.Create(shim::GetEnvironment(), format);
     if (!decoder) {
         return nullptr;
     }
@@ -366,7 +366,12 @@ SHIM_EXPORT int shim_video_decoder_decode(
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    std::lock_guard<std::mutex> lock(decoder->mutex);
+    // Reset output state under output_mutex
+    {
+        std::lock_guard<std::mutex> lock(decoder->output_mutex);
+        decoder->has_output = false;
+        decoder->decoded_buffer = nullptr;
+    }
 
     // Create encoded image
     webrtc::EncodedImage encoded;
@@ -378,18 +383,22 @@ SHIM_EXPORT int shim_video_decoder_decode(
         ? webrtc::VideoFrameType::kVideoFrameKey
         : webrtc::VideoFrameType::kVideoFrameDelta;
 
-    // Reset output state
-    decoder->has_output = false;
-    decoder->decoded_buffer = nullptr;
+    // Decode under decode_mutex (callback uses output_mutex, so no deadlock)
+    int result;
+    {
+        std::lock_guard<std::mutex> lock(decoder->decode_mutex);
+        result = decoder->decoder->Decode(encoded, false, 0);
+    }
 
-    // Decode
-    int result = decoder->decoder->Decode(encoded, false, 0);
     if (result != WEBRTC_VIDEO_CODEC_OK) {
         if (result == WEBRTC_VIDEO_CODEC_OK_REQUEST_KEYFRAME) {
             return SHIM_ERROR_NEED_MORE_DATA;
         }
         return SHIM_ERROR_DECODE_FAILED;
     }
+
+    // Check and copy output under output_mutex
+    std::lock_guard<std::mutex> lock(decoder->output_mutex);
 
     if (!decoder->has_output || !decoder->decoded_buffer) {
         return SHIM_ERROR_NEED_MORE_DATA;
@@ -452,14 +461,9 @@ SHIM_EXPORT int shim_get_supported_video_codecs(
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    // Query the actual factory for supported formats
-    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
-    if (!factory) {
-        *out_count = 0;
-        return SHIM_OK;
-    }
-
-    auto formats = factory->GetSupportedFormats();
+    // Use InternalEncoderFactory - same as libwebrtc uses internally
+    webrtc::InternalEncoderFactory factory;
+    auto formats = factory.GetSupportedFormats();
     int count = 0;
     int payload_type = 96;
 
@@ -500,11 +504,9 @@ SHIM_EXPORT int shim_is_codec_supported(const char* mime_type) {
         }
     }
 
-    // Check video codecs against the actual factory
-    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
-    if (!factory) return 0;
-
-    auto formats = factory->GetSupportedFormats();
+    // Check video codecs against InternalEncoderFactory
+    webrtc::InternalEncoderFactory factory;
+    auto formats = factory.GetSupportedFormats();
     for (const auto& format : formats) {
         std::string mime = "video/" + format.name;
         if (strcasecmp(mime_type, mime.c_str()) == 0) {
