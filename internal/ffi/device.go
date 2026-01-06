@@ -53,24 +53,26 @@ type shimDeviceInfo struct {
 
 // CapturedVideoFrame represents a video frame captured from a device.
 // The frame data is in I420 (YUV420P) format.
+// NOTE: int32 fields match C ABI (int = 32-bit)
 type CapturedVideoFrame struct {
 	YPlane      []byte
 	UPlane      []byte
 	VPlane      []byte
-	Width       int
-	Height      int
-	YStride     int
-	UStride     int
-	VStride     int
+	Width       int32
+	Height      int32
+	YStride     int32
+	UStride     int32
+	VStride     int32
 	TimestampUs int64
 }
 
 // CapturedAudioFrame represents an audio frame captured from a device.
 // Samples are S16LE interleaved.
+// NOTE: int32 fields match C ABI (int = 32-bit)
 type CapturedAudioFrame struct {
 	Samples     []int16
-	NumChannels int
-	SampleRate  int
+	NumChannels int32
+	SampleRate  int32
 	TimestampUs int64
 }
 
@@ -131,22 +133,23 @@ var (
 )
 
 // Device capture FFI function pointers
+// NOTE: All int/uint types are explicitly sized to match C ABI (int = int32)
 var (
-	shimEnumerateDevices func(devices uintptr, maxDevices int, outCount uintptr) int
+	shimEnumerateDevices func(devices uintptr, maxDevices int32, outCount uintptr) int32
 
-	shimVideoCaptureCreate  func(deviceID uintptr, width, height, fps int) uintptr
-	shimVideoCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int
+	shimVideoCaptureCreate  func(deviceID uintptr, width, height, fps int32) uintptr
+	shimVideoCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
 	shimVideoCaptureStop    func(capturePtr uintptr)
 	shimVideoCaptureDestroy func(capturePtr uintptr)
 
-	shimAudioCaptureCreate  func(deviceID uintptr, sampleRate, channels int) uintptr
-	shimAudioCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int
+	shimAudioCaptureCreate  func(deviceID uintptr, sampleRate, channels int32) uintptr
+	shimAudioCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
 	shimAudioCaptureStop    func(capturePtr uintptr)
 	shimAudioCaptureDestroy func(capturePtr uintptr)
 
-	shimEnumerateScreens     func(screens uintptr, maxScreens int, outCount uintptr) int
-	shimScreenCaptureCreate  func(id int64, isWindow int, fps int) uintptr
-	shimScreenCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int
+	shimEnumerateScreens     func(screens uintptr, maxScreens int32, outCount uintptr) int32
+	shimScreenCaptureCreate  func(id int64, isWindow int32, fps int32) uintptr
+	shimScreenCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
 	shimScreenCaptureStop    func(capturePtr uintptr)
 	shimScreenCaptureDestroy func(capturePtr uintptr)
 )
@@ -159,7 +162,7 @@ var ErrCaptureAlreadyStarted = errors.New("capture already started")
 
 // EnumerateDevices returns a list of available media devices.
 func EnumerateDevices() ([]DeviceInfo, error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return nil, ErrLibraryNotLoaded
 	}
 
@@ -192,7 +195,7 @@ func EnumerateDevices() ([]DeviceInfo, error) {
 // NewVideoCapture creates a new video capture device.
 // deviceID can be empty to use the default device.
 func NewVideoCapture(deviceID string, width, height, fps int) (*VideoCapture, error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return nil, ErrLibraryNotLoaded
 	}
 
@@ -203,7 +206,7 @@ func NewVideoCapture(deviceID string, width, height, fps int) (*VideoCapture, er
 		deviceIDPtr = uintptr(unsafe.Pointer(&deviceIDBytes[0]))
 	}
 
-	ptr := shimVideoCaptureCreate(deviceIDPtr, width, height, fps)
+	ptr := shimVideoCaptureCreate(deviceIDPtr, int32(width), int32(height), int32(fps))
 	// Keep deviceIDBytes alive until after the FFI call completes
 	runtime.KeepAlive(deviceIDBytes)
 
@@ -215,11 +218,12 @@ func NewVideoCapture(deviceID string, width, height, fps int) (*VideoCapture, er
 }
 
 // videoCaptureCallbackBridge is the C-callable callback that dispatches to Go.
+// NOTE: C uses 'int' (32-bit) for width/height/strides, so we must use int32 to match.
 func videoCaptureCallbackBridge(
 	ctx uintptr,
 	yPlane, uPlane, vPlane uintptr,
-	width, height int,
-	yStride, uStride, vStride int,
+	width, height int32,
+	yStride, uStride, vStride int32,
 	timestampUs int64,
 ) {
 	captureRegistryMu.RLock()
@@ -245,10 +249,10 @@ func videoCaptureCallbackBridge(
 	}
 
 	// Calculate plane sizes
-	ySize := yStride * height
-	uvHeight := (height + 1) / 2
-	uSize := uStride * uvHeight
-	vSize := vStride * uvHeight
+	ySize := int(yStride) * int(height)
+	uvHeight := (int(height) + 1) / 2
+	uSize := int(uStride) * uvHeight
+	vSize := int(vStride) * uvHeight
 
 	// Additional sanity check for total size
 	const maxFrameSize = 64 * 1024 * 1024 // 64MB max
@@ -362,7 +366,7 @@ func (c *VideoCapture) IsRunning() bool {
 // NewAudioCapture creates a new audio capture device.
 // deviceID can be empty to use the default device.
 func NewAudioCapture(deviceID string, sampleRate, channels int) (*AudioCapture, error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return nil, ErrLibraryNotLoaded
 	}
 
@@ -373,7 +377,7 @@ func NewAudioCapture(deviceID string, sampleRate, channels int) (*AudioCapture, 
 		deviceIDPtr = uintptr(unsafe.Pointer(&deviceIDBytes[0]))
 	}
 
-	ptr := shimAudioCaptureCreate(deviceIDPtr, sampleRate, channels)
+	ptr := shimAudioCaptureCreate(deviceIDPtr, int32(sampleRate), int32(channels))
 	// Keep deviceIDBytes alive until after the FFI call completes
 	runtime.KeepAlive(deviceIDBytes)
 
@@ -385,12 +389,13 @@ func NewAudioCapture(deviceID string, sampleRate, channels int) (*AudioCapture, 
 }
 
 // audioCaptureCallbackBridge is the C-callable callback that dispatches to Go.
+// NOTE: C uses 'int' (32-bit) for count/channels/rate, so we must use int32 to match.
 func audioCaptureCallbackBridge(
 	ctx uintptr,
 	samples uintptr,
-	numSamples int,
-	numChannels int,
-	sampleRate int,
+	numSamples int32,
+	numChannels int32,
+	sampleRate int32,
 	timestampUs int64,
 ) {
 	captureRegistryMu.RLock()
@@ -411,7 +416,7 @@ func audioCaptureCallbackBridge(
 
 	// Copy data from C memory to Go-managed memory for safety.
 	// This ensures the callback can safely store/use the data after returning.
-	sampleCount := numSamples * numChannels
+	sampleCount := int(numSamples) * int(numChannels)
 	samplesData := make([]int16, sampleCount)
 	copy(samplesData, unsafe.Slice((*int16)(unsafe.Pointer(samples)), sampleCount))
 
@@ -506,7 +511,7 @@ func (c *AudioCapture) IsRunning() bool {
 
 // EnumerateScreens returns a list of available screens and windows for capture.
 func EnumerateScreens() ([]ScreenInfo, error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return nil, ErrLibraryNotLoaded
 	}
 
@@ -538,16 +543,16 @@ func EnumerateScreens() ([]ScreenInfo, error) {
 
 // NewScreenCapture creates a new screen or window capture.
 func NewScreenCapture(id int64, isWindow bool, fps int) (*ScreenCapture, error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return nil, ErrLibraryNotLoaded
 	}
 
-	isWindowInt := 0
+	var isWindowInt int32 = 0
 	if isWindow {
 		isWindowInt = 1
 	}
 
-	ptr := shimScreenCaptureCreate(id, isWindowInt, fps)
+	ptr := shimScreenCaptureCreate(id, isWindowInt, int32(fps))
 	if ptr == 0 {
 		return nil, errors.New("failed to create screen capture")
 	}
@@ -557,11 +562,12 @@ func NewScreenCapture(id int64, isWindow bool, fps int) (*ScreenCapture, error) 
 
 // screenCaptureCallbackBridge is the C-callable callback that dispatches to Go.
 // Uses the same signature as videoCaptureCallbackBridge since screen capture produces video frames.
+// NOTE: C uses 'int' (32-bit) for width/height/strides, so we must use int32 to match.
 func screenCaptureCallbackBridge(
 	ctx uintptr,
 	yPlane, uPlane, vPlane uintptr,
-	width, height int,
-	yStride, uStride, vStride int,
+	width, height int32,
+	yStride, uStride, vStride int32,
 	timestampUs int64,
 ) {
 	captureRegistryMu.RLock()
@@ -587,10 +593,10 @@ func screenCaptureCallbackBridge(
 	}
 
 	// Calculate plane sizes
-	ySize := yStride * height
-	uvHeight := (height + 1) / 2
-	uSize := uStride * uvHeight
-	vSize := vStride * uvHeight
+	ySize := int(yStride) * int(height)
+	uvHeight := (int(height) + 1) / 2
+	uSize := int(uStride) * uvHeight
+	vSize := int(vStride) * uvHeight
 
 	// Additional sanity check for total size
 	const maxFrameSize = 64 * 1024 * 1024 // 64MB max

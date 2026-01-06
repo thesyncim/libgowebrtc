@@ -2,10 +2,10 @@ package ffi
 
 // CreateVideoDecoder creates a video decoder for the specified codec.
 func CreateVideoDecoder(codec CodecType) uintptr {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0
 	}
-	return shimVideoDecoderCreate(int(codec))
+	return shimVideoDecoderCreate(int32(codec))
 }
 
 // VideoDecoderDecodeInto decodes encoded video data into pre-allocated buffers.
@@ -18,13 +18,13 @@ func VideoDecoderDecodeInto(
 	isKeyframe bool,
 	yDst, uDst, vDst []byte,
 ) (width, height, yStride, uStride, vStride int, err error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0, 0, 0, 0, 0, ErrLibraryNotLoaded
 	}
 
-	var outW, outH, outYStride, outUStride, outVStride int
+	var outW, outH, outYStride, outUStride, outVStride int32
 
-	keyframe := 0
+	var keyframe int32 = 0
 	if isKeyframe {
 		keyframe = 1
 	}
@@ -33,29 +33,29 @@ func VideoDecoderDecodeInto(
 	result := shimVideoDecoderDecode(
 		decoder,
 		ByteSlicePtr(src),
-		len(src),
+		int32(len(src)),
 		timestamp,
 		keyframe,
 		ByteSlicePtr(yDst),
 		ByteSlicePtr(uDst),
 		ByteSlicePtr(vDst),
-		IntPtr(&outW),
-		IntPtr(&outH),
-		IntPtr(&outYStride),
-		IntPtr(&outUStride),
-		IntPtr(&outVStride),
+		Int32Ptr(&outW),
+		Int32Ptr(&outH),
+		Int32Ptr(&outYStride),
+		Int32Ptr(&outUStride),
+		Int32Ptr(&outVStride),
 	)
 
 	if err := ShimError(result); err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
 
-	return outW, outH, outYStride, outUStride, outVStride, nil
+	return int(outW), int(outH), int(outYStride), int(outUStride), int(outVStride), nil
 }
 
 // VideoDecoderDestroy destroys a video decoder.
 func VideoDecoderDestroy(decoder uintptr) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return
 	}
 	shimVideoDecoderDestroy(decoder)
@@ -63,40 +63,40 @@ func VideoDecoderDestroy(decoder uintptr) {
 
 // CreateAudioDecoder creates an audio decoder.
 func CreateAudioDecoder(sampleRate, channels int) uintptr {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0
 	}
-	return shimAudioDecoderCreate(sampleRate, channels)
+	return shimAudioDecoderCreate(int32(sampleRate), int32(channels))
 }
 
 // AudioDecoderDecodeInto decodes encoded audio into a pre-allocated buffer.
 // samplesDst must be pre-allocated (as bytes, will hold int16 samples).
 // Returns the number of samples per channel decoded.
 func AudioDecoderDecodeInto(decoder uintptr, src []byte, samplesDst []byte) (numSamples int, err error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
 	}
 
-	var outNumSamples int
+	var outNumSamples int32
 
 	result := shimAudioDecoderDecode(
 		decoder,
 		ByteSlicePtr(src),
-		len(src),
+		int32(len(src)),
 		ByteSlicePtr(samplesDst),
-		IntPtr(&outNumSamples),
+		Int32Ptr(&outNumSamples),
 	)
 
 	if err := ShimError(result); err != nil {
 		return 0, err
 	}
 
-	return outNumSamples, nil
+	return int(outNumSamples), nil
 }
 
 // AudioDecoderDestroy destroys an audio decoder.
 func AudioDecoderDestroy(decoder uintptr) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return
 	}
 	shimAudioDecoderDestroy(decoder)

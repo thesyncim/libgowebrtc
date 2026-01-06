@@ -219,7 +219,7 @@ func (c *ICEServerConfig) Ptr() uintptr {
 
 // CreatePeerConnection creates a new PeerConnection.
 func CreatePeerConnection(config *PeerConnectionConfig) uintptr {
-	if !libLoaded || shimPeerConnectionCreate == nil {
+	if !libLoaded.Load() || shimPeerConnectionCreate == nil {
 		return 0
 	}
 	return shimPeerConnectionCreate(config.Ptr())
@@ -227,7 +227,7 @@ func CreatePeerConnection(config *PeerConnectionConfig) uintptr {
 
 // PeerConnectionDestroy destroys a PeerConnection.
 func PeerConnectionDestroy(pc uintptr) {
-	if !libLoaded || shimPeerConnectionDestroy == nil {
+	if !libLoaded.Load() || shimPeerConnectionDestroy == nil {
 		return
 	}
 	shimPeerConnectionDestroy(pc)
@@ -236,73 +236,73 @@ func PeerConnectionDestroy(pc uintptr) {
 // PeerConnectionCreateOffer creates an SDP offer.
 // Returns the SDP string written to the provided buffer.
 func PeerConnectionCreateOffer(pc uintptr, sdpBuf []byte) (int, error) {
-	if !libLoaded || shimPeerConnectionCreateOffer == nil {
+	if !libLoaded.Load() || shimPeerConnectionCreateOffer == nil {
 		return 0, ErrLibraryNotLoaded
 	}
 
-	var sdpLen int
+	var sdpLen int32
 	result := shimPeerConnectionCreateOffer(
 		pc,
 		ByteSlicePtr(sdpBuf),
-		len(sdpBuf),
-		IntPtr(&sdpLen),
+		int32(len(sdpBuf)),
+		Int32Ptr(&sdpLen),
 	)
 
 	if err := ShimError(result); err != nil {
 		return 0, err
 	}
 
-	return sdpLen, nil
+	return int(sdpLen), nil
 }
 
 // PeerConnectionCreateAnswer creates an SDP answer.
 func PeerConnectionCreateAnswer(pc uintptr, sdpBuf []byte) (int, error) {
-	if !libLoaded || shimPeerConnectionCreateAnswer == nil {
+	if !libLoaded.Load() || shimPeerConnectionCreateAnswer == nil {
 		return 0, ErrLibraryNotLoaded
 	}
 
-	var sdpLen int
+	var sdpLen int32
 	result := shimPeerConnectionCreateAnswer(
 		pc,
 		ByteSlicePtr(sdpBuf),
-		len(sdpBuf),
-		IntPtr(&sdpLen),
+		int32(len(sdpBuf)),
+		Int32Ptr(&sdpLen),
 	)
 
 	if err := ShimError(result); err != nil {
 		return 0, err
 	}
 
-	return sdpLen, nil
+	return int(sdpLen), nil
 }
 
 // PeerConnectionSetLocalDescription sets the local SDP description.
 func PeerConnectionSetLocalDescription(pc uintptr, sdpType int, sdp string) error {
-	if !libLoaded || shimPeerConnectionSetLocalDescription == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetLocalDescription == nil {
 		return ErrLibraryNotLoaded
 	}
 
 	sdpCStr := CString(sdp)
-	result := shimPeerConnectionSetLocalDescription(pc, sdpType, ByteSlicePtr(sdpCStr))
+	result := shimPeerConnectionSetLocalDescription(pc, int32(sdpType), ByteSlicePtr(sdpCStr))
 	runtime.KeepAlive(sdpCStr)
 	return ShimError(result)
 }
 
 // PeerConnectionSetRemoteDescription sets the remote SDP description.
 func PeerConnectionSetRemoteDescription(pc uintptr, sdpType int, sdp string) error {
-	if !libLoaded || shimPeerConnectionSetRemoteDescription == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetRemoteDescription == nil {
 		return ErrLibraryNotLoaded
 	}
 
 	sdpCStr := CString(sdp)
-	result := shimPeerConnectionSetRemoteDescription(pc, sdpType, ByteSlicePtr(sdpCStr))
+	result := shimPeerConnectionSetRemoteDescription(pc, int32(sdpType), ByteSlicePtr(sdpCStr))
 	runtime.KeepAlive(sdpCStr)
 	return ShimError(result)
 }
 
 // PeerConnectionAddICECandidate adds an ICE candidate.
 func PeerConnectionAddICECandidate(pc uintptr, candidate, sdpMid string, sdpMLineIndex int) error {
-	if !libLoaded || shimPeerConnectionAddICECandidate == nil {
+	if !libLoaded.Load() || shimPeerConnectionAddICECandidate == nil {
 		return ErrLibraryNotLoaded
 	}
 
@@ -312,7 +312,7 @@ func PeerConnectionAddICECandidate(pc uintptr, candidate, sdpMid string, sdpMLin
 		pc,
 		ByteSlicePtr(candidateCStr),
 		ByteSlicePtr(sdpMidCStr),
-		sdpMLineIndex,
+		int32(sdpMLineIndex),
 	)
 	runtime.KeepAlive(candidateCStr)
 	runtime.KeepAlive(sdpMidCStr)
@@ -321,39 +321,39 @@ func PeerConnectionAddICECandidate(pc uintptr, candidate, sdpMid string, sdpMLin
 
 // PeerConnectionSignalingState returns the signaling state.
 func PeerConnectionSignalingState(pc uintptr) int {
-	if !libLoaded || shimPeerConnectionSignalingState == nil {
+	if !libLoaded.Load() || shimPeerConnectionSignalingState == nil {
 		return -1
 	}
-	return shimPeerConnectionSignalingState(pc)
+	return int(shimPeerConnectionSignalingState(pc))
 }
 
 // PeerConnectionICEConnectionState returns the ICE connection state.
 func PeerConnectionICEConnectionState(pc uintptr) int {
-	if !libLoaded || shimPeerConnectionICEConnectionState == nil {
+	if !libLoaded.Load() || shimPeerConnectionICEConnectionState == nil {
 		return -1
 	}
-	return shimPeerConnectionICEConnectionState(pc)
+	return int(shimPeerConnectionICEConnectionState(pc))
 }
 
 // PeerConnectionICEGatheringState returns the ICE gathering state.
 func PeerConnectionICEGatheringState(pc uintptr) int {
-	if !libLoaded || shimPeerConnectionICEGatheringState == nil {
+	if !libLoaded.Load() || shimPeerConnectionICEGatheringState == nil {
 		return -1
 	}
-	return shimPeerConnectionICEGatheringState(pc)
+	return int(shimPeerConnectionICEGatheringState(pc))
 }
 
 // PeerConnectionConnectionState returns the connection state.
 func PeerConnectionConnectionState(pc uintptr) int {
-	if !libLoaded || shimPeerConnectionConnectionState == nil {
+	if !libLoaded.Load() || shimPeerConnectionConnectionState == nil {
 		return -1
 	}
-	return shimPeerConnectionConnectionState(pc)
+	return int(shimPeerConnectionConnectionState(pc))
 }
 
 // PeerConnectionAddTrack adds a track to the peer connection.
 func PeerConnectionAddTrack(pc uintptr, codec CodecType, trackID, streamID string) uintptr {
-	if !libLoaded || shimPeerConnectionAddTrack == nil {
+	if !libLoaded.Load() || shimPeerConnectionAddTrack == nil {
 		return 0
 	}
 
@@ -361,7 +361,7 @@ func PeerConnectionAddTrack(pc uintptr, codec CodecType, trackID, streamID strin
 	streamIDCStr := CString(streamID)
 	result := shimPeerConnectionAddTrack(
 		pc,
-		int(codec),
+		int32(codec),
 		ByteSlicePtr(trackIDCStr),
 		ByteSlicePtr(streamIDCStr),
 	)
@@ -372,7 +372,7 @@ func PeerConnectionAddTrack(pc uintptr, codec CodecType, trackID, streamID strin
 
 // PeerConnectionRemoveTrack removes a track from the peer connection.
 func PeerConnectionRemoveTrack(pc uintptr, sender uintptr) error {
-	if !libLoaded || shimPeerConnectionRemoveTrack == nil {
+	if !libLoaded.Load() || shimPeerConnectionRemoveTrack == nil {
 		return ErrLibraryNotLoaded
 	}
 	result := shimPeerConnectionRemoveTrack(pc, sender)
@@ -381,14 +381,14 @@ func PeerConnectionRemoveTrack(pc uintptr, sender uintptr) error {
 
 // PeerConnectionCreateDataChannel creates a data channel.
 func PeerConnectionCreateDataChannel(pc uintptr, label string, ordered bool, maxRetransmits int, protocol string) uintptr {
-	if !libLoaded || shimPeerConnectionCreateDataChannel == nil {
+	if !libLoaded.Load() || shimPeerConnectionCreateDataChannel == nil {
 		return 0
 	}
 
 	labelCStr := CString(label)
 	protocolCStr := CString(protocol)
 
-	orderedInt := 0
+	var orderedInt int32 = 0
 	if ordered {
 		orderedInt = 1
 	}
@@ -397,7 +397,7 @@ func PeerConnectionCreateDataChannel(pc uintptr, label string, ordered bool, max
 		pc,
 		ByteSlicePtr(labelCStr),
 		orderedInt,
-		maxRetransmits,
+		int32(maxRetransmits),
 		ByteSlicePtr(protocolCStr),
 	)
 	runtime.KeepAlive(labelCStr)
@@ -407,7 +407,7 @@ func PeerConnectionCreateDataChannel(pc uintptr, label string, ordered bool, max
 
 // PeerConnectionClose closes the peer connection.
 func PeerConnectionClose(pc uintptr) {
-	if !libLoaded || shimPeerConnectionClose == nil {
+	if !libLoaded.Load() || shimPeerConnectionClose == nil {
 		return
 	}
 	shimPeerConnectionClose(pc)
@@ -415,7 +415,7 @@ func PeerConnectionClose(pc uintptr) {
 
 // RTPSenderSetBitrate sets the bitrate for an RTP sender.
 func RTPSenderSetBitrate(sender uintptr, bitrate uint32) error {
-	if !libLoaded || shimRTPSenderSetBitrate == nil {
+	if !libLoaded.Load() || shimRTPSenderSetBitrate == nil {
 		return ErrLibraryNotLoaded
 	}
 	result := shimRTPSenderSetBitrate(sender, bitrate)
@@ -424,7 +424,7 @@ func RTPSenderSetBitrate(sender uintptr, bitrate uint32) error {
 
 // RTPSenderDestroy destroys an RTP sender.
 func RTPSenderDestroy(sender uintptr) {
-	if !libLoaded || shimRTPSenderDestroy == nil {
+	if !libLoaded.Load() || shimRTPSenderDestroy == nil {
 		return
 	}
 	shimRTPSenderDestroy(sender)
@@ -432,7 +432,7 @@ func RTPSenderDestroy(sender uintptr) {
 
 // RTPSenderReplaceTrack replaces the track on an RTP sender.
 func RTPSenderReplaceTrack(sender uintptr, track uintptr) error {
-	if !libLoaded || shimRTPSenderReplaceTrack == nil {
+	if !libLoaded.Load() || shimRTPSenderReplaceTrack == nil {
 		return ErrLibraryNotLoaded
 	}
 	result := shimRTPSenderReplaceTrack(sender, track)
@@ -441,30 +441,30 @@ func RTPSenderReplaceTrack(sender uintptr, track uintptr) error {
 
 // DataChannelSend sends data on a data channel.
 func DataChannelSend(dc uintptr, data []byte, isBinary bool) error {
-	if !libLoaded || shimDataChannelSend == nil {
+	if !libLoaded.Load() || shimDataChannelSend == nil {
 		return ErrLibraryNotLoaded
 	}
 
-	isBinaryInt := 0
+	var isBinaryInt int32 = 0
 	if isBinary {
 		isBinaryInt = 1
 	}
 
-	result := shimDataChannelSend(dc, ByteSlicePtr(data), len(data), isBinaryInt)
+	result := shimDataChannelSend(dc, ByteSlicePtr(data), int32(len(data)), isBinaryInt)
 	return ShimError(result)
 }
 
 // DataChannelReadyState returns the ready state of a data channel.
 func DataChannelReadyState(dc uintptr) int {
-	if !libLoaded || shimDataChannelReadyState == nil {
+	if !libLoaded.Load() || shimDataChannelReadyState == nil {
 		return -1
 	}
-	return shimDataChannelReadyState(dc)
+	return int(shimDataChannelReadyState(dc))
 }
 
 // DataChannelLabel returns the label of a data channel.
 func DataChannelLabel(dc uintptr) string {
-	if !libLoaded || shimDataChannelLabel == nil {
+	if !libLoaded.Load() || shimDataChannelLabel == nil {
 		return ""
 	}
 	ptr := shimDataChannelLabel(dc)
@@ -473,7 +473,7 @@ func DataChannelLabel(dc uintptr) string {
 
 // DataChannelClose closes a data channel.
 func DataChannelClose(dc uintptr) {
-	if !libLoaded || shimDataChannelClose == nil {
+	if !libLoaded.Load() || shimDataChannelClose == nil {
 		return
 	}
 	shimDataChannelClose(dc)
@@ -481,7 +481,7 @@ func DataChannelClose(dc uintptr) {
 
 // DataChannelDestroy destroys a data channel.
 func DataChannelDestroy(dc uintptr) {
-	if !libLoaded || shimDataChannelDestroy == nil {
+	if !libLoaded.Load() || shimDataChannelDestroy == nil {
 		return
 	}
 	shimDataChannelDestroy(dc)
@@ -573,7 +573,7 @@ func initDCCloseCallback() {
 
 // DataChannelSetOnMessage sets the message callback for a data channel.
 func DataChannelSetOnMessage(dc uintptr, cb OnDataChannelMessageCallback) {
-	if !libLoaded || shimDataChannelSetOnMessage == nil {
+	if !libLoaded.Load() || shimDataChannelSetOnMessage == nil {
 		return
 	}
 	initDCMessageCallback()
@@ -585,7 +585,7 @@ func DataChannelSetOnMessage(dc uintptr, cb OnDataChannelMessageCallback) {
 
 // DataChannelSetOnOpen sets the open callback for a data channel.
 func DataChannelSetOnOpen(dc uintptr, cb OnDataChannelStateCallback) {
-	if !libLoaded || shimDataChannelSetOnOpen == nil {
+	if !libLoaded.Load() || shimDataChannelSetOnOpen == nil {
 		return
 	}
 	initDCOpenCallback()
@@ -597,7 +597,7 @@ func DataChannelSetOnOpen(dc uintptr, cb OnDataChannelStateCallback) {
 
 // DataChannelSetOnClose sets the close callback for a data channel.
 func DataChannelSetOnClose(dc uintptr, cb OnDataChannelStateCallback) {
-	if !libLoaded || shimDataChannelSetOnClose == nil {
+	if !libLoaded.Load() || shimDataChannelSetOnClose == nil {
 		return
 	}
 	initDCCloseCallback()
@@ -624,15 +624,15 @@ func UnregisterDataChannelCallbacks(dc uintptr) {
 
 // VideoTrackSourceCreate creates a video track source for frame injection.
 func VideoTrackSourceCreate(pc uintptr, width, height int) uintptr {
-	if !libLoaded || shimVideoTrackSourceCreate == nil {
+	if !libLoaded.Load() || shimVideoTrackSourceCreate == nil {
 		return 0
 	}
-	return shimVideoTrackSourceCreate(pc, width, height)
+	return shimVideoTrackSourceCreate(pc, int32(width), int32(height))
 }
 
 // VideoTrackSourcePushFrame pushes an I420 frame to the video track source.
 func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) error {
-	if !libLoaded || shimVideoTrackSourcePushFrame == nil {
+	if !libLoaded.Load() || shimVideoTrackSourcePushFrame == nil {
 		return ErrLibraryNotLoaded
 	}
 
@@ -647,7 +647,7 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 		ByteSlicePtr(yPlane),
 		ByteSlicePtr(uPlane),
 		ByteSlicePtr(vPlane),
-		yStride, uStride, vStride,
+		int32(yStride), int32(uStride), int32(vStride),
 		timestampUs,
 	)
 	return ShimError(result)
@@ -657,7 +657,7 @@ var static_counter int
 
 // PeerConnectionAddVideoTrackFromSource adds a video track using a source.
 func PeerConnectionAddVideoTrackFromSource(pc, source uintptr, trackID, streamID string) uintptr {
-	if !libLoaded || shimPeerConnectionAddVideoTrackFromSource == nil {
+	if !libLoaded.Load() || shimPeerConnectionAddVideoTrackFromSource == nil {
 		return 0
 	}
 
@@ -676,7 +676,7 @@ func PeerConnectionAddVideoTrackFromSource(pc, source uintptr, trackID, streamID
 
 // VideoTrackSourceDestroy destroys a video track source.
 func VideoTrackSourceDestroy(source uintptr) {
-	if !libLoaded || shimVideoTrackSourceDestroy == nil {
+	if !libLoaded.Load() || shimVideoTrackSourceDestroy == nil {
 		return
 	}
 	shimVideoTrackSourceDestroy(source)
@@ -684,22 +684,22 @@ func VideoTrackSourceDestroy(source uintptr) {
 
 // AudioTrackSourceCreate creates an audio track source for frame injection.
 func AudioTrackSourceCreate(pc uintptr, sampleRate, channels int) uintptr {
-	if !libLoaded || shimAudioTrackSourceCreate == nil {
+	if !libLoaded.Load() || shimAudioTrackSourceCreate == nil {
 		return 0
 	}
-	return shimAudioTrackSourceCreate(pc, sampleRate, channels)
+	return shimAudioTrackSourceCreate(pc, int32(sampleRate), int32(channels))
 }
 
 // AudioTrackSourcePushFrame pushes audio samples to the audio track source.
 func AudioTrackSourcePushFrame(source uintptr, samples []int16, timestampUs int64) error {
-	if !libLoaded || shimAudioTrackSourcePushFrame == nil {
+	if !libLoaded.Load() || shimAudioTrackSourcePushFrame == nil {
 		return ErrLibraryNotLoaded
 	}
 
 	result := shimAudioTrackSourcePushFrame(
 		source,
 		Int16SlicePtr(samples),
-		len(samples),
+		int32(len(samples)),
 		timestampUs,
 	)
 	return ShimError(result)
@@ -707,7 +707,7 @@ func AudioTrackSourcePushFrame(source uintptr, samples []int16, timestampUs int6
 
 // PeerConnectionAddAudioTrackFromSource adds an audio track using a source.
 func PeerConnectionAddAudioTrackFromSource(pc, source uintptr, trackID, streamID string) uintptr {
-	if !libLoaded || shimPeerConnectionAddAudioTrackFromSource == nil {
+	if !libLoaded.Load() || shimPeerConnectionAddAudioTrackFromSource == nil {
 		return 0
 	}
 
@@ -726,7 +726,7 @@ func PeerConnectionAddAudioTrackFromSource(pc, source uintptr, trackID, streamID
 
 // AudioTrackSourceDestroy destroys an audio track source.
 func AudioTrackSourceDestroy(source uintptr) {
-	if !libLoaded || shimAudioTrackSourceDestroy == nil {
+	if !libLoaded.Load() || shimAudioTrackSourceDestroy == nil {
 		return
 	}
 	shimAudioTrackSourceDestroy(source)
@@ -734,7 +734,7 @@ func AudioTrackSourceDestroy(source uintptr) {
 
 // TrackSetVideoSink sets a video frame callback on a remote track.
 func TrackSetVideoSink(track uintptr, callback uintptr, ctx uintptr) error {
-	if !libLoaded || shimTrackSetVideoSink == nil {
+	if !libLoaded.Load() || shimTrackSetVideoSink == nil {
 		return ErrLibraryNotLoaded
 	}
 	result := shimTrackSetVideoSink(track, callback, ctx)
@@ -743,7 +743,7 @@ func TrackSetVideoSink(track uintptr, callback uintptr, ctx uintptr) error {
 
 // TrackSetAudioSink sets an audio frame callback on a remote track.
 func TrackSetAudioSink(track uintptr, callback uintptr, ctx uintptr) error {
-	if !libLoaded || shimTrackSetAudioSink == nil {
+	if !libLoaded.Load() || shimTrackSetAudioSink == nil {
 		return ErrLibraryNotLoaded
 	}
 	result := shimTrackSetAudioSink(track, callback, ctx)
@@ -752,7 +752,7 @@ func TrackSetAudioSink(track uintptr, callback uintptr, ctx uintptr) error {
 
 // TrackRemoveVideoSink removes a video sink from a track.
 func TrackRemoveVideoSink(track uintptr) {
-	if !libLoaded || shimTrackRemoveVideoSink == nil {
+	if !libLoaded.Load() || shimTrackRemoveVideoSink == nil {
 		return
 	}
 	shimTrackRemoveVideoSink(track)
@@ -760,7 +760,7 @@ func TrackRemoveVideoSink(track uintptr) {
 
 // TrackRemoveAudioSink removes an audio sink from a track.
 func TrackRemoveAudioSink(track uintptr) {
-	if !libLoaded || shimTrackRemoveAudioSink == nil {
+	if !libLoaded.Load() || shimTrackRemoveAudioSink == nil {
 		return
 	}
 	shimTrackRemoveAudioSink(track)
@@ -768,7 +768,7 @@ func TrackRemoveAudioSink(track uintptr) {
 
 // TrackKind returns the track kind ("video" or "audio").
 func TrackKind(track uintptr) string {
-	if !libLoaded || shimTrackKind == nil {
+	if !libLoaded.Load() || shimTrackKind == nil {
 		return ""
 	}
 	ptr := shimTrackKind(track)
@@ -777,7 +777,7 @@ func TrackKind(track uintptr) string {
 
 // TrackID returns the track ID.
 func TrackID(track uintptr) string {
-	if !libLoaded || shimTrackID == nil {
+	if !libLoaded.Load() || shimTrackID == nil {
 		return ""
 	}
 	ptr := shimTrackID(track)
@@ -808,7 +808,7 @@ type RTPSendParameters struct {
 
 // RTPSenderGetParameters gets the current RTP send parameters.
 func RTPSenderGetParameters(sender uintptr, encodings []RTPEncodingParameters) (*RTPSendParameters, int, error) {
-	if !libLoaded || shimRTPSenderGetParameters == nil {
+	if !libLoaded.Load() || shimRTPSenderGetParameters == nil {
 		return nil, 0, ErrLibraryNotLoaded
 	}
 
@@ -817,7 +817,7 @@ func RTPSenderGetParameters(sender uintptr, encodings []RTPEncodingParameters) (
 		sender,
 		uintptr(unsafe.Pointer(&params)),
 		uintptr(unsafe.Pointer(&encodings[0])),
-		len(encodings),
+		int32(len(encodings)),
 	)
 
 	if err := ShimError(result); err != nil {
@@ -829,7 +829,7 @@ func RTPSenderGetParameters(sender uintptr, encodings []RTPEncodingParameters) (
 
 // RTPSenderSetParameters sets the RTP send parameters.
 func RTPSenderSetParameters(sender uintptr, params *RTPSendParameters) error {
-	if !libLoaded || shimRTPSenderSetParameters == nil {
+	if !libLoaded.Load() || shimRTPSenderSetParameters == nil {
 		return ErrLibraryNotLoaded
 	}
 
@@ -839,7 +839,7 @@ func RTPSenderSetParameters(sender uintptr, params *RTPSendParameters) error {
 
 // RTPSenderGetTrack gets the track associated with a sender.
 func RTPSenderGetTrack(sender uintptr) uintptr {
-	if !libLoaded || shimRTPSenderGetTrack == nil {
+	if !libLoaded.Load() || shimRTPSenderGetTrack == nil {
 		return 0
 	}
 	return shimRTPSenderGetTrack(sender)
@@ -922,7 +922,7 @@ type BandwidthEstimate struct {
 
 // RTPSenderGetStats gets statistics for a sender.
 func RTPSenderGetStats(sender uintptr) (*RTCStats, error) {
-	if !libLoaded || shimRTPSenderGetStats == nil {
+	if !libLoaded.Load() || shimRTPSenderGetStats == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 
@@ -971,7 +971,7 @@ func initRTCPCallback() {
 
 // RTPSenderSetOnRTCPFeedback sets the RTCP feedback callback.
 func RTPSenderSetOnRTCPFeedback(sender uintptr, cb RTCPFeedbackCallback) {
-	if !libLoaded || shimRTPSenderSetOnRTCPFeedback == nil {
+	if !libLoaded.Load() || shimRTPSenderSetOnRTCPFeedback == nil {
 		return
 	}
 
@@ -993,12 +993,12 @@ func UnregisterRTCPFeedbackCallback(sender uintptr) {
 
 // RTPSenderSetLayerActive enables or disables a simulcast layer.
 func RTPSenderSetLayerActive(sender uintptr, rid string, active bool) error {
-	if !libLoaded || shimRTPSenderSetLayerActive == nil {
+	if !libLoaded.Load() || shimRTPSenderSetLayerActive == nil {
 		return ErrLibraryNotLoaded
 	}
 
 	ridCStr := CString(rid)
-	activeInt := 0
+	var activeInt int32 = 0
 	if active {
 		activeInt = 1
 	}
@@ -1010,7 +1010,7 @@ func RTPSenderSetLayerActive(sender uintptr, rid string, active bool) error {
 
 // RTPSenderSetLayerBitrate sets the maximum bitrate for a layer.
 func RTPSenderSetLayerBitrate(sender uintptr, rid string, maxBitrate uint32) error {
-	if !libLoaded || shimRTPSenderSetLayerBitrate == nil {
+	if !libLoaded.Load() || shimRTPSenderSetLayerBitrate == nil {
 		return ErrLibraryNotLoaded
 	}
 
@@ -1022,12 +1022,13 @@ func RTPSenderSetLayerBitrate(sender uintptr, rid string, maxBitrate uint32) err
 
 // RTPSenderGetActiveLayers gets the number of active layers.
 func RTPSenderGetActiveLayers(sender uintptr) (spatial, temporal int, err error) {
-	if !libLoaded || shimRTPSenderGetActiveLayers == nil {
+	if !libLoaded.Load() || shimRTPSenderGetActiveLayers == nil {
 		return 0, 0, ErrLibraryNotLoaded
 	}
 
-	result := shimRTPSenderGetActiveLayers(sender, IntPtr(&spatial), IntPtr(&temporal))
-	return spatial, temporal, ShimError(result)
+	var spatialOut, temporalOut int32
+	result := shimRTPSenderGetActiveLayers(sender, Int32Ptr(&spatialOut), Int32Ptr(&temporalOut))
+	return int(spatialOut), int(temporalOut), ShimError(result)
 }
 
 // ============================================================================
@@ -1036,7 +1037,7 @@ func RTPSenderGetActiveLayers(sender uintptr) (spatial, temporal int, err error)
 
 // RTPReceiverGetTrack gets the track associated with a receiver.
 func RTPReceiverGetTrack(receiver uintptr) uintptr {
-	if !libLoaded || shimRTPReceiverGetTrack == nil {
+	if !libLoaded.Load() || shimRTPReceiverGetTrack == nil {
 		return 0
 	}
 	return shimRTPReceiverGetTrack(receiver)
@@ -1044,7 +1045,7 @@ func RTPReceiverGetTrack(receiver uintptr) uintptr {
 
 // RTPReceiverGetStats gets statistics for a receiver.
 func RTPReceiverGetStats(receiver uintptr) (*RTCStats, error) {
-	if !libLoaded || shimRTPReceiverGetStats == nil {
+	if !libLoaded.Load() || shimRTPReceiverGetStats == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 
@@ -1059,7 +1060,7 @@ func RTPReceiverGetStats(receiver uintptr) (*RTCStats, error) {
 
 // RTPReceiverRequestKeyframe requests a keyframe from the sender.
 func RTPReceiverRequestKeyframe(receiver uintptr) error {
-	if !libLoaded || shimRTPReceiverRequestKeyframe == nil {
+	if !libLoaded.Load() || shimRTPReceiverRequestKeyframe == nil {
 		return ErrLibraryNotLoaded
 	}
 
@@ -1084,7 +1085,7 @@ const (
 
 // TransceiverGetDirection gets the current direction of a transceiver.
 func TransceiverGetDirection(transceiver uintptr) TransceiverDirection {
-	if !libLoaded || shimTransceiverGetDirection == nil {
+	if !libLoaded.Load() || shimTransceiverGetDirection == nil {
 		return TransceiverDirectionInactive
 	}
 	return TransceiverDirection(shimTransceiverGetDirection(transceiver))
@@ -1092,17 +1093,17 @@ func TransceiverGetDirection(transceiver uintptr) TransceiverDirection {
 
 // TransceiverSetDirection sets the direction of a transceiver.
 func TransceiverSetDirection(transceiver uintptr, direction TransceiverDirection) error {
-	if !libLoaded || shimTransceiverSetDirection == nil {
+	if !libLoaded.Load() || shimTransceiverSetDirection == nil {
 		return ErrLibraryNotLoaded
 	}
 
-	result := shimTransceiverSetDirection(transceiver, int(direction))
+	result := shimTransceiverSetDirection(transceiver, int32(direction))
 	return ShimError(result)
 }
 
 // TransceiverGetCurrentDirection gets the current direction as negotiated in SDP.
 func TransceiverGetCurrentDirection(transceiver uintptr) TransceiverDirection {
-	if !libLoaded || shimTransceiverGetCurrentDirection == nil {
+	if !libLoaded.Load() || shimTransceiverGetCurrentDirection == nil {
 		return TransceiverDirectionInactive
 	}
 	return TransceiverDirection(shimTransceiverGetCurrentDirection(transceiver))
@@ -1110,7 +1111,7 @@ func TransceiverGetCurrentDirection(transceiver uintptr) TransceiverDirection {
 
 // TransceiverStop stops the transceiver.
 func TransceiverStop(transceiver uintptr) error {
-	if !libLoaded || shimTransceiverStop == nil {
+	if !libLoaded.Load() || shimTransceiverStop == nil {
 		return ErrLibraryNotLoaded
 	}
 
@@ -1120,7 +1121,7 @@ func TransceiverStop(transceiver uintptr) error {
 
 // TransceiverMid gets the mid of a transceiver.
 func TransceiverMid(transceiver uintptr) string {
-	if !libLoaded || shimTransceiverMid == nil {
+	if !libLoaded.Load() || shimTransceiverMid == nil {
 		return ""
 	}
 	ptr := shimTransceiverMid(transceiver)
@@ -1129,7 +1130,7 @@ func TransceiverMid(transceiver uintptr) string {
 
 // TransceiverGetSender gets the sender associated with a transceiver.
 func TransceiverGetSender(transceiver uintptr) uintptr {
-	if !libLoaded || shimTransceiverGetSender == nil {
+	if !libLoaded.Load() || shimTransceiverGetSender == nil {
 		return 0
 	}
 	return shimTransceiverGetSender(transceiver)
@@ -1137,7 +1138,7 @@ func TransceiverGetSender(transceiver uintptr) uintptr {
 
 // TransceiverGetReceiver gets the receiver associated with a transceiver.
 func TransceiverGetReceiver(transceiver uintptr) uintptr {
-	if !libLoaded || shimTransceiverGetReceiver == nil {
+	if !libLoaded.Load() || shimTransceiverGetReceiver == nil {
 		return 0
 	}
 	return shimTransceiverGetReceiver(transceiver)
@@ -1157,21 +1158,21 @@ const (
 
 // PeerConnectionAddTransceiver adds a transceiver with the specified kind and direction.
 func PeerConnectionAddTransceiver(pc uintptr, kind MediaKind, direction TransceiverDirection) uintptr {
-	if !libLoaded || shimPeerConnectionAddTransceiver == nil {
+	if !libLoaded.Load() || shimPeerConnectionAddTransceiver == nil {
 		return 0
 	}
-	return shimPeerConnectionAddTransceiver(pc, int(kind), int(direction))
+	return shimPeerConnectionAddTransceiver(pc, int32(kind), int32(direction))
 }
 
 // PeerConnectionGetSenders gets all senders associated with a PeerConnection.
 func PeerConnectionGetSenders(pc uintptr, maxSenders int) ([]uintptr, error) {
-	if !libLoaded || shimPeerConnectionGetSenders == nil {
+	if !libLoaded.Load() || shimPeerConnectionGetSenders == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 
 	senders := make([]uintptr, maxSenders)
-	var count int
-	result := shimPeerConnectionGetSenders(pc, uintptr(unsafe.Pointer(&senders[0])), maxSenders, IntPtr(&count))
+	var count int32
+	result := shimPeerConnectionGetSenders(pc, uintptr(unsafe.Pointer(&senders[0])), int32(maxSenders), Int32Ptr(&count))
 
 	if err := ShimError(result); err != nil {
 		return nil, err
@@ -1182,13 +1183,13 @@ func PeerConnectionGetSenders(pc uintptr, maxSenders int) ([]uintptr, error) {
 
 // PeerConnectionGetReceivers gets all receivers associated with a PeerConnection.
 func PeerConnectionGetReceivers(pc uintptr, maxReceivers int) ([]uintptr, error) {
-	if !libLoaded || shimPeerConnectionGetReceivers == nil {
+	if !libLoaded.Load() || shimPeerConnectionGetReceivers == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 
 	receivers := make([]uintptr, maxReceivers)
-	var count int
-	result := shimPeerConnectionGetReceivers(pc, uintptr(unsafe.Pointer(&receivers[0])), maxReceivers, IntPtr(&count))
+	var count int32
+	result := shimPeerConnectionGetReceivers(pc, uintptr(unsafe.Pointer(&receivers[0])), int32(maxReceivers), Int32Ptr(&count))
 
 	if err := ShimError(result); err != nil {
 		return nil, err
@@ -1199,13 +1200,13 @@ func PeerConnectionGetReceivers(pc uintptr, maxReceivers int) ([]uintptr, error)
 
 // PeerConnectionGetTransceivers gets all transceivers associated with a PeerConnection.
 func PeerConnectionGetTransceivers(pc uintptr, maxTransceivers int) ([]uintptr, error) {
-	if !libLoaded || shimPeerConnectionGetTransceivers == nil {
+	if !libLoaded.Load() || shimPeerConnectionGetTransceivers == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 
 	transceivers := make([]uintptr, maxTransceivers)
-	var count int
-	result := shimPeerConnectionGetTransceivers(pc, uintptr(unsafe.Pointer(&transceivers[0])), maxTransceivers, IntPtr(&count))
+	var count int32
+	result := shimPeerConnectionGetTransceivers(pc, uintptr(unsafe.Pointer(&transceivers[0])), int32(maxTransceivers), Int32Ptr(&count))
 
 	if err := ShimError(result); err != nil {
 		return nil, err
@@ -1216,7 +1217,7 @@ func PeerConnectionGetTransceivers(pc uintptr, maxTransceivers int) ([]uintptr, 
 
 // PeerConnectionRestartICE triggers an ICE restart on the next offer.
 func PeerConnectionRestartICE(pc uintptr) error {
-	if !libLoaded || shimPeerConnectionRestartICE == nil {
+	if !libLoaded.Load() || shimPeerConnectionRestartICE == nil {
 		return ErrLibraryNotLoaded
 	}
 
@@ -1226,7 +1227,7 @@ func PeerConnectionRestartICE(pc uintptr) error {
 
 // PeerConnectionGetStats gets connection statistics.
 func PeerConnectionGetStats(pc uintptr) (*RTCStats, error) {
-	if !libLoaded || shimPeerConnectionGetStats == nil {
+	if !libLoaded.Load() || shimPeerConnectionGetStats == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 
@@ -1279,7 +1280,7 @@ func initConnectionStateCallback() {
 
 // PeerConnectionSetOnConnectionStateChange sets the connection state change callback.
 func PeerConnectionSetOnConnectionStateChange(pc uintptr, cb ConnectionStateCallback) {
-	if !libLoaded || shimPeerConnectionSetOnConnectionStateChange == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnConnectionStateChange == nil {
 		return
 	}
 
@@ -1339,7 +1340,7 @@ func initOnTrackCallback() {
 
 // PeerConnectionSetOnTrack sets the on track callback.
 func PeerConnectionSetOnTrack(pc uintptr, cb OnTrackCallback) {
-	if !libLoaded || shimPeerConnectionSetOnTrack == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnTrack == nil {
 		return
 	}
 
@@ -1407,7 +1408,7 @@ func initOnICECandidateCallback() {
 
 // PeerConnectionSetOnICECandidate sets the on ICE candidate callback.
 func PeerConnectionSetOnICECandidate(pc uintptr, cb OnICECandidateCallback) {
-	if !libLoaded || shimPeerConnectionSetOnICECandidate == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnICECandidate == nil {
 		return
 	}
 
@@ -1466,7 +1467,7 @@ func initOnDataChannelCallback() {
 
 // PeerConnectionSetOnDataChannel sets the on data channel callback.
 func PeerConnectionSetOnDataChannel(pc uintptr, cb OnDataChannelCallback) {
-	if !libLoaded || shimPeerConnectionSetOnDataChannel == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnDataChannel == nil {
 		return
 	}
 
@@ -1526,7 +1527,7 @@ func initSignalingStateCallback() {
 
 // PeerConnectionSetOnSignalingStateChange sets the signaling state change callback.
 func PeerConnectionSetOnSignalingStateChange(pc uintptr, cb SignalingStateCallback) {
-	if !libLoaded || shimPeerConnectionSetOnSignalingStateChange == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnSignalingStateChange == nil {
 		return
 	}
 
@@ -1586,7 +1587,7 @@ func initICEConnectionStateCallback() {
 
 // PeerConnectionSetOnICEConnectionStateChange sets the ICE connection state change callback.
 func PeerConnectionSetOnICEConnectionStateChange(pc uintptr, cb ICEConnectionStateCallback) {
-	if !libLoaded || shimPeerConnectionSetOnICEConnectionStateChange == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnICEConnectionStateChange == nil {
 		return
 	}
 
@@ -1646,7 +1647,7 @@ func initICEGatheringStateCallback() {
 
 // PeerConnectionSetOnICEGatheringStateChange sets the ICE gathering state change callback.
 func PeerConnectionSetOnICEGatheringStateChange(pc uintptr, cb ICEGatheringStateCallback) {
-	if !libLoaded || shimPeerConnectionSetOnICEGatheringStateChange == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnICEGatheringStateChange == nil {
 		return
 	}
 
@@ -1705,7 +1706,7 @@ func initNegotiationNeededCallback() {
 
 // PeerConnectionSetOnNegotiationNeeded sets the negotiation needed callback.
 func PeerConnectionSetOnNegotiationNeeded(pc uintptr, cb NegotiationNeededCallback) {
-	if !libLoaded || shimPeerConnectionSetOnNegotiationNeeded == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnNegotiationNeeded == nil {
 		return
 	}
 
@@ -1731,7 +1732,7 @@ func UnregisterNegotiationNeededCallback(pc uintptr) {
 
 // RTPSenderSetScalabilityMode sets the scalability mode for a sender.
 func RTPSenderSetScalabilityMode(sender uintptr, mode string) error {
-	if !libLoaded || shimRTPSenderSetScalabilityMode == nil {
+	if !libLoaded.Load() || shimRTPSenderSetScalabilityMode == nil {
 		return ErrLibraryNotLoaded
 	}
 
@@ -1743,12 +1744,12 @@ func RTPSenderSetScalabilityMode(sender uintptr, mode string) error {
 
 // RTPSenderGetScalabilityMode gets the current scalability mode for a sender.
 func RTPSenderGetScalabilityMode(sender uintptr) (string, error) {
-	if !libLoaded || shimRTPSenderGetScalabilityMode == nil {
+	if !libLoaded.Load() || shimRTPSenderGetScalabilityMode == nil {
 		return "", ErrLibraryNotLoaded
 	}
 
 	modeBuf := make([]byte, 64)
-	result := shimRTPSenderGetScalabilityMode(sender, ByteSlicePtr(modeBuf), len(modeBuf))
+	result := shimRTPSenderGetScalabilityMode(sender, ByteSlicePtr(modeBuf), int32(len(modeBuf)))
 	runtime.KeepAlive(modeBuf)
 	if err := ShimError(result); err != nil {
 		return "", err
@@ -1769,16 +1770,16 @@ func RTPSenderGetScalabilityMode(sender uintptr) (string, error) {
 
 // GetSupportedVideoCodecs returns a list of supported video codecs.
 func GetSupportedVideoCodecs() ([]CodecCapability, error) {
-	if !libLoaded || shimGetSupportedVideoCodecs == nil {
+	if !libLoaded.Load() || shimGetSupportedVideoCodecs == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 
 	codecs := make([]CodecCapability, 16)
-	var count int
+	var count int32
 	result := shimGetSupportedVideoCodecs(
 		uintptr(unsafe.Pointer(&codecs[0])),
-		len(codecs),
-		IntPtr(&count),
+		int32(len(codecs)),
+		Int32Ptr(&count),
 	)
 	runtime.KeepAlive(&count)
 	runtime.KeepAlive(&codecs)
@@ -1801,16 +1802,16 @@ func GetSupportedVideoCodecs() ([]CodecCapability, error) {
 
 // GetSupportedAudioCodecs returns a list of supported audio codecs.
 func GetSupportedAudioCodecs() ([]CodecCapability, error) {
-	if !libLoaded || shimGetSupportedAudioCodecs == nil {
+	if !libLoaded.Load() || shimGetSupportedAudioCodecs == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 
 	codecs := make([]CodecCapability, 16)
-	var count int
+	var count int32
 	result := shimGetSupportedAudioCodecs(
 		uintptr(unsafe.Pointer(&codecs[0])),
-		len(codecs),
-		IntPtr(&count),
+		int32(len(codecs)),
+		Int32Ptr(&count),
 	)
 	runtime.KeepAlive(&count)
 	runtime.KeepAlive(&codecs)
@@ -1831,7 +1832,7 @@ func GetSupportedAudioCodecs() ([]CodecCapability, error) {
 
 // IsCodecSupported checks if a specific codec is supported.
 func IsCodecSupported(mimeType string) bool {
-	if !libLoaded || shimIsCodecSupported == nil {
+	if !libLoaded.Load() || shimIsCodecSupported == nil {
 		return false
 	}
 
@@ -1881,7 +1882,7 @@ func initBWECallback() {
 
 // PeerConnectionSetOnBandwidthEstimate sets the bandwidth estimate callback.
 func PeerConnectionSetOnBandwidthEstimate(pc uintptr, cb BandwidthEstimateCallback) {
-	if !libLoaded || shimPeerConnectionSetOnBandwidthEstimate == nil {
+	if !libLoaded.Load() || shimPeerConnectionSetOnBandwidthEstimate == nil {
 		return
 	}
 
@@ -1903,7 +1904,7 @@ func UnregisterBandwidthEstimateCallback(pc uintptr) {
 
 // PeerConnectionGetBandwidthEstimate gets the current bandwidth estimate.
 func PeerConnectionGetBandwidthEstimate(pc uintptr) (*BandwidthEstimate, error) {
-	if !libLoaded || shimPeerConnectionGetBandwidthEstimate == nil {
+	if !libLoaded.Load() || shimPeerConnectionGetBandwidthEstimate == nil {
 		return nil, ErrLibraryNotLoaded
 	}
 

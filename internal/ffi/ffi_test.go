@@ -8,7 +8,7 @@ import (
 
 func TestShimErrorCodes(t *testing.T) {
 	tests := []struct {
-		code    int
+		code    int32
 		wantErr bool
 		errMsg  string
 	}{

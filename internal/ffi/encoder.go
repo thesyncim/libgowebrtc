@@ -6,10 +6,10 @@ import (
 
 // CreateVideoEncoder creates a video encoder for the specified codec.
 func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) uintptr {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0
 	}
-	return shimVideoEncoderCreate(int(codec), config.Ptr())
+	return shimVideoEncoderCreate(int32(codec), config.Ptr())
 }
 
 // VideoEncoderEncodeInto encodes a video frame into a pre-allocated buffer.
@@ -23,14 +23,14 @@ func VideoEncoderEncodeInto(
 	forceKeyframe bool,
 	dst []byte,
 ) (n int, isKeyframe bool, err error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0, false, ErrLibraryNotLoaded
 	}
 
-	var outSize int
+	var outSize int32
 	var outIsKeyframe int32
 
-	forceKF := 0
+	var forceKF int32 = 0
 	if forceKeyframe {
 		forceKF = 1
 	}
@@ -41,25 +41,25 @@ func VideoEncoderEncodeInto(
 		ByteSlicePtr(yPlane),
 		ByteSlicePtr(uPlane),
 		ByteSlicePtr(vPlane),
-		yStride, uStride, vStride,
+		int32(yStride), int32(uStride), int32(vStride),
 		timestamp,
 		forceKF,
 		ByteSlicePtr(dst), // dst buffer for shim to write into
-		len(dst),          // buffer size for overflow protection
-		IntPtr(&outSize),
-		BoolPtr(&outIsKeyframe),
+		int32(len(dst)),   // buffer size for overflow protection
+		Int32Ptr(&outSize),
+		Int32Ptr(&outIsKeyframe),
 	)
 
 	if err := ShimError(result); err != nil {
 		return 0, false, err
 	}
 
-	return outSize, outIsKeyframe != 0, nil
+	return int(outSize), outIsKeyframe != 0, nil
 }
 
 // VideoEncoderSetBitrate updates the encoder bitrate.
 func VideoEncoderSetBitrate(encoder uintptr, bitrate uint32) error {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return ErrLibraryNotLoaded
 	}
 	result := shimVideoEncoderSetBitrate(encoder, bitrate)
@@ -68,7 +68,7 @@ func VideoEncoderSetBitrate(encoder uintptr, bitrate uint32) error {
 
 // VideoEncoderSetFramerate updates the encoder framerate.
 func VideoEncoderSetFramerate(encoder uintptr, framerate float32) error {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return ErrLibraryNotLoaded
 	}
 	result := shimVideoEncoderSetFramerate(encoder, framerate)
@@ -77,7 +77,7 @@ func VideoEncoderSetFramerate(encoder uintptr, framerate float32) error {
 
 // VideoEncoderRequestKeyframe requests the encoder to produce a keyframe.
 func VideoEncoderRequestKeyframe(encoder uintptr) error {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return ErrLibraryNotLoaded
 	}
 	result := shimVideoEncoderRequestKeyframe(encoder)
@@ -86,7 +86,7 @@ func VideoEncoderRequestKeyframe(encoder uintptr) error {
 
 // VideoEncoderDestroy destroys a video encoder.
 func VideoEncoderDestroy(encoder uintptr) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return
 	}
 	shimVideoEncoderDestroy(encoder)
@@ -94,7 +94,7 @@ func VideoEncoderDestroy(encoder uintptr) {
 
 // CreateAudioEncoder creates an audio encoder.
 func CreateAudioEncoder(config *AudioEncoderConfig) uintptr {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0
 	}
 	return shimAudioEncoderCreate(config.Ptr())
@@ -103,30 +103,30 @@ func CreateAudioEncoder(config *AudioEncoderConfig) uintptr {
 // AudioEncoderEncodeInto encodes audio samples into a pre-allocated buffer.
 // Returns the number of bytes written.
 func AudioEncoderEncodeInto(encoder uintptr, samples []byte, numSamples int, dst []byte) (int, error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
 	}
 
-	var outSize int
+	var outSize int32
 
 	result := shimAudioEncoderEncode(
 		encoder,
 		ByteSlicePtr(samples),
-		numSamples,
+		int32(numSamples),
 		ByteSlicePtr(dst),
-		IntPtr(&outSize),
+		Int32Ptr(&outSize),
 	)
 
 	if err := ShimError(result); err != nil {
 		return 0, err
 	}
 
-	return outSize, nil
+	return int(outSize), nil
 }
 
 // AudioEncoderSetBitrate updates the encoder bitrate.
 func AudioEncoderSetBitrate(encoder uintptr, bitrate uint32) error {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return ErrLibraryNotLoaded
 	}
 	result := shimAudioEncoderSetBitrate(encoder, bitrate)
@@ -135,7 +135,7 @@ func AudioEncoderSetBitrate(encoder uintptr, bitrate uint32) error {
 
 // AudioEncoderDestroy destroys an audio encoder.
 func AudioEncoderDestroy(encoder uintptr) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return
 	}
 	shimAudioEncoderDestroy(encoder)

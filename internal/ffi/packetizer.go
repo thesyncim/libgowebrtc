@@ -2,7 +2,7 @@ package ffi
 
 // CreatePacketizer creates an RTP packetizer.
 func CreatePacketizer(config *PacketizerConfig) uintptr {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0
 	}
 	return shimPacketizerCreate(config.Ptr())
@@ -20,13 +20,13 @@ func PacketizerPacketizeInto(
 	sizes []int32,
 	maxPackets int,
 ) (int, error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
 	}
 
-	var outCount int
+	var outCount int32
 
-	keyframe := 0
+	var keyframe int32 = 0
 	if isKeyframe {
 		keyframe = 1
 	}
@@ -34,26 +34,26 @@ func PacketizerPacketizeInto(
 	result := shimPacketizerPacketize(
 		packetizer,
 		ByteSlicePtr(data),
-		len(data),
+		int32(len(data)),
 		timestamp,
 		keyframe,
 		ByteSlicePtr(dst),
 		Int32SlicePtr(offsets),
 		Int32SlicePtr(sizes),
-		maxPackets,
-		IntPtr(&outCount),
+		int32(maxPackets),
+		Int32Ptr(&outCount),
 	)
 
 	if err := ShimError(result); err != nil {
 		return 0, err
 	}
 
-	return outCount, nil
+	return int(outCount), nil
 }
 
 // PacketizerSequenceNumber returns the current sequence number.
 func PacketizerSequenceNumber(packetizer uintptr) uint16 {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0
 	}
 	return shimPacketizerSeqNum(packetizer)
@@ -61,7 +61,7 @@ func PacketizerSequenceNumber(packetizer uintptr) uint16 {
 
 // PacketizerDestroy destroys a packetizer.
 func PacketizerDestroy(packetizer uintptr) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return
 	}
 	shimPacketizerDestroy(packetizer)
@@ -69,50 +69,50 @@ func PacketizerDestroy(packetizer uintptr) {
 
 // CreateDepacketizer creates an RTP depacketizer.
 func CreateDepacketizer(codec CodecType) uintptr {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0
 	}
-	return shimDepacketizerCreate(int(codec))
+	return shimDepacketizerCreate(int32(codec))
 }
 
 // DepacketizerPush pushes an RTP packet for reassembly.
 func DepacketizerPush(depacketizer uintptr, packet []byte) error {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return ErrLibraryNotLoaded
 	}
 
-	result := shimDepacketizerPush(depacketizer, ByteSlicePtr(packet), len(packet))
+	result := shimDepacketizerPush(depacketizer, ByteSlicePtr(packet), int32(len(packet)))
 	return ShimError(result)
 }
 
 // DepacketizerPopInto pops a complete frame into a pre-allocated buffer.
 func DepacketizerPopInto(depacketizer uintptr, dst []byte) (size int, timestamp uint32, isKeyframe bool, err error) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return 0, 0, false, ErrLibraryNotLoaded
 	}
 
-	var outSize int
+	var outSize int32
 	var outTimestamp uint32
 	var outIsKeyframe int32
 
 	result := shimDepacketizerPop(
 		depacketizer,
 		ByteSlicePtr(dst),
-		IntPtr(&outSize),
+		Int32Ptr(&outSize),
 		Uint32Ptr(&outTimestamp),
-		BoolPtr(&outIsKeyframe),
+		Int32Ptr(&outIsKeyframe),
 	)
 
 	if err := ShimError(result); err != nil {
 		return 0, 0, false, err
 	}
 
-	return outSize, outTimestamp, outIsKeyframe != 0, nil
+	return int(outSize), outTimestamp, outIsKeyframe != 0, nil
 }
 
 // DepacketizerDestroy destroys a depacketizer.
 func DepacketizerDestroy(depacketizer uintptr) {
-	if !libLoaded {
+	if !libLoaded.Load() {
 		return
 	}
 	shimDepacketizerDestroy(depacketizer)

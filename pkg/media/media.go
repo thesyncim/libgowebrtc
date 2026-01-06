@@ -681,11 +681,11 @@ func (t *videoStreamTrack) startVideoCapture() error {
 
 		// Convert ffi.CapturedVideoFrame to frame.VideoFrame
 		videoFrame := &frame.VideoFrame{
-			Width:  captured.Width,
-			Height: captured.Height,
+			Width:  int(captured.Width),
+			Height: int(captured.Height),
 			Format: frame.PixelFormatI420,
 			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
-			Stride: []int{captured.YStride, captured.UStride, captured.VStride},
+			Stride: []int{int(captured.YStride), int(captured.UStride), int(captured.VStride)},
 		}
 
 		// Write to track - ignore ErrNotBound (track not yet added to PeerConnection)
@@ -721,11 +721,11 @@ func (t *videoStreamTrack) startScreenCapture(screenID int64, isWindow bool) err
 		}
 
 		videoFrame := &frame.VideoFrame{
-			Width:  captured.Width,
-			Height: captured.Height,
+			Width:  int(captured.Width),
+			Height: int(captured.Height),
 			Format: frame.PixelFormatI420,
 			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
-			Stride: []int{captured.YStride, captured.UStride, captured.VStride},
+			Stride: []int{int(captured.YStride), int(captured.UStride), int(captured.VStride)},
 		}
 
 		_ = t.track.WriteFrame(videoFrame, false)
@@ -831,8 +831,8 @@ func (t *audioStreamTrack) startAudioCapture() error {
 		// Convert ffi.CapturedAudioFrame to frame.AudioFrame
 		audioFrame := frame.NewAudioFrameFromS16(
 			captured.Samples,
-			captured.SampleRate,
-			captured.NumChannels,
+			int(captured.SampleRate),
+			int(captured.NumChannels),
 		)
 
 		// Write to track - ignore ErrNotBound (track not yet added to PeerConnection)

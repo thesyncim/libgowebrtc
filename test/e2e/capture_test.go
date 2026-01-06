@@ -88,8 +88,8 @@ func TestScreenCapture(t *testing.T) {
 
 	err = capture.Start(func(frame *ffi.CapturedVideoFrame) {
 		frameCount.Add(1)
-		lastWidth = frame.Width
-		lastHeight = frame.Height
+		lastWidth = int(frame.Width)
+		lastHeight = int(frame.Height)
 	})
 	if err != nil {
 		t.Fatalf("Start failed: %v", err)
@@ -148,8 +148,8 @@ func TestVideoCaptureWithDevice(t *testing.T) {
 
 	err = capture.Start(func(frame *ffi.CapturedVideoFrame) {
 		frameCount.Add(1)
-		lastWidth = frame.Width
-		lastHeight = frame.Height
+		lastWidth = int(frame.Width)
+		lastHeight = int(frame.Height)
 	})
 	if err != nil {
 		t.Fatalf("Start failed: %v", err)
