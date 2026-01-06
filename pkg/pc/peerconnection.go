@@ -1837,3 +1837,59 @@ func (pc *PeerConnection) RestartICE() error {
 
 	return ffi.PeerConnectionRestartICE(pc.handle)
 }
+
+// BandwidthEstimate contains bandwidth estimation data from libwebrtc's BWE engine.
+type BandwidthEstimate struct {
+	TimestampUs      int64
+	TargetBitrateBps int64
+	AvailableSendBps int64
+	AvailableRecvBps int64
+	PacingRateBps    int64
+	CongestionWindow int32
+	LossRate         float64
+}
+
+// SetOnBandwidthEstimate sets a callback for bandwidth estimation updates from libwebrtc.
+// This exposes libwebrtc's internal BWE (TWCC/GCC) for observability or for wiring
+// to pkg/track tracks when using Pion interop.
+func (pc *PeerConnection) SetOnBandwidthEstimate(cb func(*BandwidthEstimate)) {
+	if pc.closed.Load() || pc.handle == 0 {
+		return
+	}
+
+	ffi.PeerConnectionSetOnBandwidthEstimate(pc.handle, func(bwe *ffi.BandwidthEstimate) {
+		if cb != nil && bwe != nil {
+			cb(&BandwidthEstimate{
+				TimestampUs:      bwe.TimestampUs,
+				TargetBitrateBps: bwe.TargetBitrateBps,
+				AvailableSendBps: bwe.AvailableSendBps,
+				AvailableRecvBps: bwe.AvailableRecvBps,
+				PacingRateBps:    bwe.PacingRateBps,
+				CongestionWindow: bwe.CongestionWindow,
+				LossRate:         bwe.LossRate,
+			})
+		}
+	})
+}
+
+// GetCurrentBandwidthEstimate returns the current bandwidth estimate from libwebrtc.
+func (pc *PeerConnection) GetCurrentBandwidthEstimate() *BandwidthEstimate {
+	if pc.closed.Load() || pc.handle == 0 {
+		return nil
+	}
+
+	bwe, err := ffi.PeerConnectionGetBandwidthEstimate(pc.handle)
+	if err != nil || bwe == nil {
+		return nil
+	}
+
+	return &BandwidthEstimate{
+		TimestampUs:      bwe.TimestampUs,
+		TargetBitrateBps: bwe.TargetBitrateBps,
+		AvailableSendBps: bwe.AvailableSendBps,
+		AvailableRecvBps: bwe.AvailableRecvBps,
+		PacingRateBps:    bwe.PacingRateBps,
+		CongestionWindow: bwe.CongestionWindow,
+		LossRate:         bwe.LossRate,
+	}
+}

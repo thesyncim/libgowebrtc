@@ -6,6 +6,7 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
+	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
 
 func TestNewVideoTrack(t *testing.T) {
@@ -367,5 +368,263 @@ func TestAudioTrackSetBitrateUnbound(t *testing.T) {
 	err := track.SetBitrate(128000)
 	if err != nil {
 		t.Errorf("SetBitrate should succeed when unbound: %v", err)
+	}
+}
+
+func TestVideoTrackSetParameters(t *testing.T) {
+	track, err := NewVideoTrack(VideoTrackConfig{
+		ID:      "video-0",
+		Codec:   codec.H264,
+		Width:   1920,
+		Height:  1080,
+		Bitrate: 2_000_000,
+		FPS:     30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create track: %v", err)
+	}
+	defer track.Close()
+
+	// Test SetParameters
+	err = track.SetParameters(TrackParameters{
+		Active:                true,
+		MaxBitrate:            1_000_000,
+		MaxFramerate:          15,
+		ScaleResolutionDownBy: 2.0,
+	})
+	if err != nil {
+		t.Errorf("SetParameters failed: %v", err)
+	}
+
+	// Verify values were applied
+	if track.adaptation.currentBitrate != 1_000_000 {
+		t.Errorf("Expected bitrate 1000000, got %d", track.adaptation.currentBitrate)
+	}
+	if track.adaptation.currentFramerate != 15 {
+		t.Errorf("Expected framerate 15, got %f", track.adaptation.currentFramerate)
+	}
+	if track.scaleFactor != 2.0 {
+		t.Errorf("Expected scale factor 2.0, got %f", track.scaleFactor)
+	}
+
+	// Test pausing track
+	err = track.SetParameters(TrackParameters{
+		Active: false,
+	})
+	if err != nil {
+		t.Errorf("SetParameters (pause) failed: %v", err)
+	}
+	if !track.paused.Load() {
+		t.Error("Track should be paused")
+	}
+
+	// Test resuming track
+	err = track.SetParameters(TrackParameters{
+		Active: true,
+	})
+	if err != nil {
+		t.Errorf("SetParameters (resume) failed: %v", err)
+	}
+	if track.paused.Load() {
+		t.Error("Track should not be paused")
+	}
+}
+
+func TestVideoTrackAutoAdaptationDefaults(t *testing.T) {
+	// Test that auto adaptation defaults to true
+	track, err := NewVideoTrack(VideoTrackConfig{
+		ID:      "video-0",
+		Codec:   codec.H264,
+		Width:   1280,
+		Height:  720,
+		Bitrate: 2_000_000,
+		FPS:     30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create track: %v", err)
+	}
+	defer track.Close()
+
+	// All auto features should default to true
+	if !track.config.AutoKeyframe {
+		t.Error("AutoKeyframe should default to true")
+	}
+	if !track.config.AutoBitrate {
+		t.Error("AutoBitrate should default to true")
+	}
+	if !track.config.AutoFramerate {
+		t.Error("AutoFramerate should default to true")
+	}
+	if !track.config.AutoResolution {
+		t.Error("AutoResolution should default to true")
+	}
+}
+
+func TestVideoTrackHandleRTCPFeedback(t *testing.T) {
+	track, err := NewVideoTrack(VideoTrackConfig{
+		ID:           "video-0",
+		Codec:        codec.H264,
+		Width:        1280,
+		Height:       720,
+		AutoKeyframe: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create track: %v", err)
+	}
+	defer track.Close()
+
+	// PLI should set pending keyframe
+	track.HandleRTCPFeedback(0, 12345) // PLI
+	if !track.keyframePend.Load() {
+		t.Error("PLI should set pending keyframe")
+	}
+
+	// Reset
+	track.keyframePend.Store(false)
+
+	// FIR should also set pending keyframe
+	track.HandleRTCPFeedback(1, 12345) // FIR
+	if !track.keyframePend.Load() {
+		t.Error("FIR should set pending keyframe")
+	}
+}
+
+func TestVideoTrackSetBWESource(t *testing.T) {
+	track, err := NewVideoTrack(VideoTrackConfig{
+		ID:          "video-0",
+		Codec:       codec.H264,
+		Width:       1280,
+		Height:      720,
+		AutoBitrate: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create track: %v", err)
+	}
+
+	// Setting BWE source should start adaptation loop
+	bwe := &BandwidthEstimate{
+		TargetBitrateBps: 1_000_000,
+	}
+	track.SetBWESource(func() *BandwidthEstimate {
+		return bwe
+	})
+
+	// Close should stop the adapt loop cleanly
+	err = track.Close()
+	if err != nil {
+		t.Errorf("Close failed: %v", err)
+	}
+}
+
+func TestScaleI420Frame(t *testing.T) {
+	// Test scaling a 640x480 frame down to 320x240 (scale factor 2.0)
+	srcW, srcH := 640, 480
+	dstW, dstH := 320, 240
+
+	// Create source frame with test pattern
+	src := &frame.VideoFrame{
+		Width:  srcW,
+		Height: srcH,
+		Format: frame.PixelFormatI420,
+		Data: [][]byte{
+			make([]byte, srcW*srcH),         // Y
+			make([]byte, (srcW/2)*(srcH/2)), // U
+			make([]byte, (srcW/2)*(srcH/2)), // V
+		},
+		Stride: []int{srcW, srcW / 2, srcW / 2},
+	}
+
+	// Fill source with gradient (different values in different areas)
+	for y := 0; y < srcH; y++ {
+		for x := 0; x < srcW; x++ {
+			src.Data[0][y*srcW+x] = byte((x + y) % 256)
+		}
+	}
+	for y := 0; y < srcH/2; y++ {
+		for x := 0; x < srcW/2; x++ {
+			src.Data[1][y*(srcW/2)+x] = 128 // U
+			src.Data[2][y*(srcW/2)+x] = 128 // V
+		}
+	}
+
+	// Create destination frame
+	dst := &frame.VideoFrame{
+		Width:  dstW,
+		Height: dstH,
+		Format: frame.PixelFormatI420,
+		Data: [][]byte{
+			make([]byte, dstW*dstH),         // Y
+			make([]byte, (dstW/2)*(dstH/2)), // U
+			make([]byte, (dstW/2)*(dstH/2)), // V
+		},
+		Stride: []int{dstW, dstW / 2, dstW / 2},
+	}
+
+	// Scale
+	ScaleI420Frame(src, dst, 2.0)
+
+	// Verify dimensions match
+	if len(dst.Data[0]) != dstW*dstH {
+		t.Errorf("Y plane size mismatch: got %d, want %d", len(dst.Data[0]), dstW*dstH)
+	}
+
+	// Verify some pixels are non-zero (scaling happened)
+	nonZero := 0
+	for _, v := range dst.Data[0] {
+		if v != 0 {
+			nonZero++
+		}
+	}
+	if nonZero == 0 {
+		t.Error("All Y pixels are zero after scaling")
+	}
+}
+
+func TestScaleI420FrameFast(t *testing.T) {
+	// Test fast (nearest neighbor) scaling
+	srcW, srcH := 640, 480
+	dstW, dstH := 320, 240
+
+	src := &frame.VideoFrame{
+		Width:  srcW,
+		Height: srcH,
+		Format: frame.PixelFormatI420,
+		Data: [][]byte{
+			make([]byte, srcW*srcH),
+			make([]byte, (srcW/2)*(srcH/2)),
+			make([]byte, (srcW/2)*(srcH/2)),
+		},
+		Stride: []int{srcW, srcW / 2, srcW / 2},
+	}
+
+	// Fill with known pattern
+	for i := range src.Data[0] {
+		src.Data[0][i] = 200
+	}
+	for i := range src.Data[1] {
+		src.Data[1][i] = 128
+		src.Data[2][i] = 128
+	}
+
+	dst := &frame.VideoFrame{
+		Width:  dstW,
+		Height: dstH,
+		Format: frame.PixelFormatI420,
+		Data: [][]byte{
+			make([]byte, dstW*dstH),
+			make([]byte, (dstW/2)*(dstH/2)),
+			make([]byte, (dstW/2)*(dstH/2)),
+		},
+		Stride: []int{dstW, dstW / 2, dstW / 2},
+	}
+
+	ScaleI420FrameFast(src, dst, 2.0)
+
+	// All Y values should be 200 (nearest neighbor preserves exact values)
+	for i, v := range dst.Data[0] {
+		if v != 200 {
+			t.Errorf("Y[%d] = %d, want 200", i, v)
+			break
+		}
 	}
 }

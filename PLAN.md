@@ -1609,3 +1609,99 @@ Cleaned up public API to hide C implementation details and provide more browser/
 
 - **VideoConstraints migration**: Converting existing `int`/`float64` fields to `IntConstraint`/`FloatConstraint` is deferred due to invasive changes required across the codebase
 
+---
+
+## Browser-like RTCP/BWE Handling (January 2025)
+
+Added browser-like automatic RTCP feedback and bandwidth estimation handling to `pkg/track` for Pion interop.
+
+### Two Paths
+
+| Path | Description | BWE Source |
+|------|-------------|------------|
+| `pkg/pc` | Full libwebrtc pipeline | Internal (automatic) |
+| `pkg/track` | Pion interop with manual encoding | External via callback |
+
+**pkg/pc path** already provides full browser-like behavior - libwebrtc handles encoding, BWE, RTCP internally via VideoSendStream.
+
+**pkg/track path** now supports browser-like auto-adaptation when wired to a BWE source.
+
+### New VideoTrackConfig Options
+
+```go
+type VideoTrackConfig struct {
+    // ... existing fields ...
+
+    // Auto adaptation (all default true for browser-like behavior)
+    AutoKeyframe   bool  // PLI/FIR → RequestKeyFrame()
+    AutoBitrate    bool  // BWE → adjust bitrate
+    AutoFramerate  bool  // BWE → adjust framerate
+    AutoResolution bool  // BWE → scale resolution
+
+    // Constraints (like browser MediaTrackConstraints)
+    MinBitrate   uint32  // Floor for bitrate adaptation
+    MaxBitrate   uint32  // Ceiling for bitrate adaptation
+    MinFramerate float64 // Floor for framerate
+    MaxFramerate float64 // Ceiling for framerate
+    MinWidth     int     // Don't scale below this
+    MinHeight    int     // Don't scale below this
+}
+```
+
+### New APIs
+
+**pkg/track:**
+```go
+// Browser-like SetParameters (mirrors RTCRtpSender.setParameters)
+track.SetParameters(track.TrackParameters{
+    Active:                true,
+    MaxBitrate:            1_000_000,
+    MaxFramerate:          15,
+    ScaleResolutionDownBy: 2.0,
+    ScalabilityMode:       "L3T3_KEY",
+    Priority:              "high",
+})
+
+// Wire up BWE from libwebrtc PeerConnection
+track.SetBWESource(func() *track.BandwidthEstimate {
+    return convertBWE(pc.GetCurrentBandwidthEstimate())
+})
+
+// Handle RTCP feedback (PLI/FIR/NACK)
+track.HandleRTCPFeedback(feedbackType, ssrc)
+```
+
+**pkg/pc:**
+```go
+// Get libwebrtc's BWE (TWCC/GCC)
+pc.SetOnBandwidthEstimate(func(bwe *pc.BandwidthEstimate) {
+    log.Printf("BWE: target=%d", bwe.TargetBitrateBps)
+})
+
+bwe := pc.GetCurrentBandwidthEstimate()
+```
+
+### Frame Scaling
+
+Added I420 frame scaling utilities in `pkg/track/scale.go`:
+- `ScaleI420Frame()` - Box filter downsampling (quality)
+- `ScaleI420FrameFast()` - Nearest neighbor (performance)
+
+### Files Added/Modified
+
+| File | Change |
+|------|--------|
+| `pkg/track/local.go` | Added adaptation config, TrackParameters, SetParameters(), adaptLoop(), BWE wiring |
+| `pkg/track/scale.go` | NEW: I420 frame scaling utilities |
+| `pkg/track/track_test.go` | Added tests for SetParameters, adaptation, scaling |
+| `pkg/pc/peerconnection.go` | Added SetOnBandwidthEstimate(), GetCurrentBandwidthEstimate() |
+
+### Comparison with Browser API
+
+| Browser API | libgowebrtc |
+|-------------|-------------|
+| `sender.setParameters({encodings: [{maxBitrate}]})` | `track.SetParameters({MaxBitrate})` |
+| `sender.setParameters({encodings: [{scaleResolutionDownBy}]})` | `track.SetParameters({ScaleResolutionDownBy})` |
+| BWE auto-adjusts internally | `AutoBitrate: true` + adaptLoop() |
+| PLI triggers keyframe internally | `AutoKeyframe: true` + HandleRTCPFeedback() |
+

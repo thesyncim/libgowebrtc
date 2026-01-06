@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
@@ -34,6 +35,49 @@ type VideoTrackConfig struct {
 	Bitrate  uint32
 	FPS      float64
 	MTU      uint16 // RTP MTU (default 1200)
+
+	// Auto adaptation (all default true for browser-like behavior)
+	AutoKeyframe   bool // PLI/FIR → RequestKeyFrame()
+	AutoBitrate    bool // BWE → adjust bitrate
+	AutoFramerate  bool // BWE → adjust framerate
+	AutoResolution bool // BWE → scale resolution
+
+	// Constraints (like browser MediaTrackConstraints)
+	MinBitrate   uint32  // Floor for bitrate adaptation
+	MaxBitrate   uint32  // Ceiling for bitrate adaptation
+	MinFramerate float64 // Floor for framerate
+	MaxFramerate float64 // Ceiling for framerate
+	MinWidth     int     // Don't scale below this
+	MinHeight    int     // Don't scale below this
+}
+
+// BandwidthEstimate contains bandwidth estimation data from the network.
+type BandwidthEstimate struct {
+	TimestampUs      int64
+	TargetBitrateBps int64
+	AvailableSendBps int64
+	PacingRateBps    int64
+	LossRate         float64
+}
+
+// BandwidthEstimateSource is a function that returns the current BWE.
+type BandwidthEstimateSource func() *BandwidthEstimate
+
+// TrackParameters mirrors browser RTCRtpEncodingParameters for manual control.
+type TrackParameters struct {
+	Active                bool
+	MaxBitrate            uint32
+	MaxFramerate          float64
+	ScaleResolutionDownBy float64
+	ScalabilityMode       string // SVC mode (e.g., "L3T3_KEY", "L1T2")
+	Priority              string // "very-low", "low", "medium", "high"
+}
+
+// adaptationState tracks the current adaptation parameters.
+type adaptationState struct {
+	currentBitrate   uint32
+	currentFramerate float64
+	currentScale     float64
 }
 
 // VideoTrack implements webrtc.TrackLocal using libwebrtc encoder.
@@ -59,12 +103,22 @@ type VideoTrack struct {
 	packetBuf  []byte
 	packetInfo []packetizer.PacketInfo
 
+	// Browser-like adaptation
+	adaptation   adaptationState
+	bweSource    BandwidthEstimateSource
+	scaleFactor  float64
+	scaledFrame  *frame.VideoFrame // Reusable scaled frame buffer
+	paused       atomic.Bool
+	adaptStop    chan struct{}
+	keyframePend atomic.Bool // Pending keyframe request from RTCP
+
 	mu     sync.Mutex
 	closed atomic.Bool
 	bound  atomic.Bool
 }
 
 // NewVideoTrack creates a new video track backed by libwebrtc encoder.
+// Auto adaptation features default to true for browser-like behavior.
 func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 	if cfg.ID == "" {
 		return nil, ErrInvalidConfig
@@ -76,11 +130,40 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 		cfg.MTU = 1200
 	}
 
+	// Default auto adaptation to true (browser-like behavior)
+	// Use explicit false to disable
+	if !cfg.AutoKeyframe && cfg.MinBitrate == 0 && cfg.MaxBitrate == 0 {
+		cfg.AutoKeyframe = true
+	}
+	if !cfg.AutoBitrate && cfg.MinBitrate == 0 && cfg.MaxBitrate == 0 {
+		cfg.AutoBitrate = true
+	}
+	if !cfg.AutoFramerate && cfg.MinFramerate == 0 && cfg.MaxFramerate == 0 {
+		cfg.AutoFramerate = true
+	}
+	if !cfg.AutoResolution && cfg.MinWidth == 0 && cfg.MinHeight == 0 {
+		cfg.AutoResolution = true
+	}
+
+	// Set default constraints if not specified
+	if cfg.MaxFramerate == 0 {
+		cfg.MaxFramerate = cfg.FPS
+	}
+	if cfg.MinFramerate == 0 {
+		cfg.MinFramerate = 1.0
+	}
+
 	t := &VideoTrack{
-		id:       cfg.ID,
-		streamID: cfg.StreamID,
-		codec:    cfg.Codec,
-		config:   cfg,
+		id:          cfg.ID,
+		streamID:    cfg.StreamID,
+		codec:       cfg.Codec,
+		config:      cfg,
+		scaleFactor: 1.0, // No scaling by default
+		adaptation: adaptationState{
+			currentBitrate:   cfg.Bitrate,
+			currentFramerate: cfg.FPS,
+			currentScale:     1.0,
+		},
 	}
 
 	return t, nil
@@ -210,6 +293,16 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 		return ErrNotBound
 	}
 
+	// Check if track is paused (SetParameters with Active=false)
+	if t.paused.Load() {
+		return nil // Silently drop frames when paused
+	}
+
+	// Check for pending keyframe request from RTCP (PLI/FIR)
+	if t.keyframePend.CompareAndSwap(true, false) {
+		forceKeyframe = true
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -217,8 +310,16 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 		return ErrNotBound
 	}
 
+	// Apply frame scaling if needed
+	frameToEncode := f
+	if t.scaleFactor > 1.0 && t.scaledFrame != nil {
+		ScaleI420Frame(f, t.scaledFrame, t.scaleFactor)
+		frameToEncode = t.scaledFrame
+		frameToEncode.PTS = f.PTS // Preserve timestamp
+	}
+
 	// Encode frame
-	result, err := t.enc.EncodeInto(f, t.encBuf, forceKeyframe)
+	result, err := t.enc.EncodeInto(frameToEncode, t.encBuf, forceKeyframe)
 	if err != nil {
 		return err
 	}
@@ -353,11 +454,281 @@ func (t *VideoTrack) SetFramerate(fps float64) error {
 	return nil
 }
 
+// SetParameters allows manual control like browser RTCRtpSender.setParameters().
+func (t *VideoTrack) SetParameters(params TrackParameters) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if !params.Active {
+		t.paused.Store(true)
+		return nil
+	}
+	t.paused.Store(false)
+
+	if params.MaxBitrate > 0 {
+		t.adaptation.currentBitrate = params.MaxBitrate
+		if t.enc != nil {
+			t.enc.SetBitrate(params.MaxBitrate)
+		}
+	}
+	if params.MaxFramerate > 0 {
+		t.adaptation.currentFramerate = params.MaxFramerate
+		if t.enc != nil {
+			t.enc.SetFramerate(params.MaxFramerate)
+		}
+	}
+	if params.ScaleResolutionDownBy > 0 {
+		t.setScaleFactorLocked(params.ScaleResolutionDownBy)
+	}
+	return nil
+}
+
+// SetBWESource sets the bandwidth estimation source for auto adaptation.
+// This is typically wired up when the track is added to a PeerConnection.
+func (t *VideoTrack) SetBWESource(source BandwidthEstimateSource) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.bweSource = source
+
+	// Start adaptation loop if we have a BWE source and any auto feature enabled
+	if source != nil && (t.config.AutoBitrate || t.config.AutoFramerate || t.config.AutoResolution) {
+		t.startAdaptLoopLocked()
+	}
+}
+
+// HandleRTCPFeedback handles RTCP feedback for browser-like behavior.
+// feedbackType: 0=PLI, 1=FIR, 2=NACK
+func (t *VideoTrack) HandleRTCPFeedback(feedbackType int, ssrc uint32) {
+	if !t.config.AutoKeyframe {
+		return
+	}
+
+	switch feedbackType {
+	case 0, 1: // PLI or FIR
+		t.keyframePend.Store(true)
+	case 2: // NACK - handled by packetizer/transport layer
+		// No action needed here
+	}
+}
+
+func (t *VideoTrack) startAdaptLoopLocked() {
+	if t.adaptStop != nil {
+		return // Already running
+	}
+	t.adaptStop = make(chan struct{})
+	go t.adaptLoop()
+}
+
+func (t *VideoTrack) stopAdaptLoop() {
+	t.mu.Lock()
+	stop := t.adaptStop
+	t.adaptStop = nil
+	t.mu.Unlock()
+
+	if stop != nil {
+		close(stop)
+	}
+}
+
+func (t *VideoTrack) adaptLoop() {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if t.closed.Load() {
+				return
+			}
+			t.mu.Lock()
+			bweSource := t.bweSource
+			t.mu.Unlock()
+
+			if bweSource == nil {
+				continue
+			}
+
+			bwe := bweSource()
+			if bwe == nil {
+				continue
+			}
+
+			t.adapt(bwe)
+
+		case <-t.adaptStop:
+			return
+		}
+	}
+}
+
+func (t *VideoTrack) adapt(bwe *BandwidthEstimate) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.enc == nil {
+		return
+	}
+
+	targetBps := bwe.TargetBitrateBps
+
+	// Apply constraints
+	if t.config.MinBitrate > 0 && uint32(targetBps) < t.config.MinBitrate {
+		targetBps = int64(t.config.MinBitrate)
+	}
+	if t.config.MaxBitrate > 0 && uint32(targetBps) > t.config.MaxBitrate {
+		targetBps = int64(t.config.MaxBitrate)
+	}
+
+	// Bitrate adaptation
+	if t.config.AutoBitrate && uint32(targetBps) != t.adaptation.currentBitrate {
+		t.adaptation.currentBitrate = uint32(targetBps)
+		t.enc.SetBitrate(uint32(targetBps))
+	}
+
+	// Resolution adaptation (when bitrate too low for current resolution)
+	if t.config.AutoResolution {
+		scale := t.calculateScale(targetBps)
+		if scale != t.adaptation.currentScale {
+			t.setScaleFactorLocked(scale)
+		}
+	}
+
+	// Framerate adaptation
+	if t.config.AutoFramerate {
+		fps := t.calculateFramerate(targetBps)
+		if fps != t.adaptation.currentFramerate {
+			t.adaptation.currentFramerate = fps
+			t.enc.SetFramerate(fps)
+		}
+	}
+}
+
+// calculateScale determines the resolution scale factor based on available bandwidth.
+// Returns 1.0 for full resolution, 2.0 for half, 4.0 for quarter.
+func (t *VideoTrack) calculateScale(targetBps int64) float64 {
+	// Estimate bits per pixel for current codec at reasonable quality
+	// These are rough estimates - adjust based on codec efficiency
+	bitsPerPixel := 0.1 // Good quality H264/VP8
+	switch t.codec {
+	case codec.VP9, codec.AV1:
+		bitsPerPixel = 0.07 // More efficient codecs
+	}
+
+	currentPixels := float64(t.config.Width * t.config.Height)
+	currentFps := t.adaptation.currentFramerate
+	if currentFps <= 0 {
+		currentFps = 30
+	}
+
+	// Required bitrate for full resolution at current fps
+	requiredBps := currentPixels * currentFps * bitsPerPixel
+
+	// If we have enough bandwidth, no scaling
+	if float64(targetBps) >= requiredBps {
+		return 1.0
+	}
+
+	// Calculate what scale factor we need
+	// scale^2 reduces pixel count, so bandwidth requirement drops by scale^2
+	ratio := float64(targetBps) / requiredBps
+	scale := 1.0 / ratio
+
+	// Snap to standard scale factors and respect min dimensions
+	minScale := 1.0
+	if t.config.MinWidth > 0 {
+		maxScaleW := float64(t.config.Width) / float64(t.config.MinWidth)
+		if maxScaleW > minScale {
+			minScale = maxScaleW
+		}
+	}
+	if t.config.MinHeight > 0 {
+		maxScaleH := float64(t.config.Height) / float64(t.config.MinHeight)
+		if maxScaleH > minScale {
+			minScale = maxScaleH
+		}
+	}
+
+	// Clamp and snap to standard values
+	if scale <= 1.0 {
+		return 1.0
+	} else if scale <= 1.5 {
+		return 1.0
+	} else if scale <= 2.5 {
+		if 2.0 > minScale {
+			return minScale
+		}
+		return 2.0
+	} else {
+		if 4.0 > minScale {
+			return minScale
+		}
+		return 4.0
+	}
+}
+
+// calculateFramerate determines the target framerate based on available bandwidth.
+func (t *VideoTrack) calculateFramerate(targetBps int64) float64 {
+	// If we have lots of bandwidth, use max framerate
+	// If bandwidth is limited, reduce framerate
+
+	maxFps := t.config.MaxFramerate
+	minFps := t.config.MinFramerate
+	if maxFps <= 0 {
+		maxFps = 30
+	}
+	if minFps <= 0 {
+		minFps = 1
+	}
+
+	// Estimate bandwidth needed for max fps at current resolution/scale
+	currentPixels := float64(t.config.Width*t.config.Height) / (t.scaleFactor * t.scaleFactor)
+	bitsPerPixel := 0.1
+	requiredForMax := currentPixels * maxFps * bitsPerPixel
+
+	if float64(targetBps) >= requiredForMax {
+		return maxFps
+	}
+
+	// Scale framerate linearly with available bandwidth
+	ratio := float64(targetBps) / requiredForMax
+	fps := maxFps * ratio
+
+	// Clamp to range
+	if fps < minFps {
+		return minFps
+	}
+	if fps > maxFps {
+		return maxFps
+	}
+
+	return fps
+}
+
+func (t *VideoTrack) setScaleFactorLocked(scale float64) {
+	if scale < 1.0 {
+		scale = 1.0
+	}
+	t.scaleFactor = scale
+	t.adaptation.currentScale = scale
+
+	// Allocate scaled frame buffer if needed
+	if scale > 1.0 {
+		newW := int(float64(t.config.Width) / scale)
+		newH := int(float64(t.config.Height) / scale)
+		if t.scaledFrame == nil || t.scaledFrame.Width != newW || t.scaledFrame.Height != newH {
+			t.scaledFrame = frame.NewI420Frame(newW, newH)
+		}
+	}
+}
+
 // Close releases all resources.
 func (t *VideoTrack) Close() error {
 	if !t.closed.CompareAndSwap(false, true) {
 		return nil
 	}
+
+	// Stop adaptation loop
+	t.stopAdaptLoop()
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
