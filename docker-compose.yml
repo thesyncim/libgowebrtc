@@ -1,0 +1,121 @@
+# libgowebrtc Docker Compose
+#
+# Quick Start:
+#   # Run unit tests (no libwebrtc needed)
+#   docker compose up unit
+#
+#   # Run all tests with pre-built libwebrtc (mount your local build)
+#   LIBWEBRTC_DIR=~/libwebrtc docker compose up test-prebuilt
+#
+#   # Run lint checks
+#   docker compose up lint
+#
+# Building with libwebrtc:
+#   # Build image with full libwebrtc (SLOW - 2-3 hours first time)
+#   docker compose build test
+#
+#   # Build image for mounting pre-built libwebrtc (FAST)
+#   docker compose build test-prebuilt
+
+services:
+  # Full test suite - builds libwebrtc from source (first build is slow)
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: go test -v ./...
+    volumes:
+      - go-cache:/go
+      - go-build-cache:/root/.cache/go-build
+
+  # Full test suite with pre-built libwebrtc (mount your local build)
+  test-prebuilt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SKIP_LIBWEBRTC_BUILD: "1"
+    command: >
+      sh -c "
+        if [ -f /opt/libwebrtc/lib/libwebrtc.a ]; then
+          # Build shim from mounted libwebrtc
+          mkdir -p shim/build &&
+          cd shim/build &&
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DLIBWEBRTC_DIR=/opt/libwebrtc -DBUILD_SHARED_LIBS=ON &&
+          cmake --build . --config Release -j$$(nproc) &&
+          mkdir -p /workspace/lib/linux_amd64 &&
+          cp libwebrtc_shim.so /workspace/lib/linux_amd64/ &&
+          cd /workspace &&
+          go test -v ./...
+        else
+          echo 'ERROR: libwebrtc not found. Mount it with LIBWEBRTC_DIR=~/libwebrtc docker compose up test-prebuilt'
+          exit 1
+        fi
+      "
+    volumes:
+      - ${LIBWEBRTC_DIR:-~/libwebrtc}:/opt/libwebrtc:ro
+      - go-cache:/go
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      - LIBWEBRTC_DIR=/opt/libwebrtc
+
+  # Unit tests only (no shim required, very fast)
+  unit:
+    image: golang:1.25
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - go-cache:/go
+      - go-build-cache:/root/.cache/go-build
+    command: go test -v -race ./pkg/frame/... ./pkg/codec/...
+
+  # Lint and vet
+  lint:
+    image: golangci/golangci-lint:latest
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - go-cache:/go
+      - lint-cache:/root/.cache/golangci-lint
+    command: >
+      sh -c "
+        golangci-lint run ./... || true;
+        go vet $$(go list ./... | grep -v '/internal/ffi') &&
+        go vet -unsafeptr=false ./internal/ffi/...
+      "
+
+  # Development environment with shell
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/workspace
+      - go-cache:/go
+      - go-build-cache:/root/.cache/go-build
+    command: bash
+
+  # Development with pre-built libwebrtc
+  dev-prebuilt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SKIP_LIBWEBRTC_BUILD: "1"
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/workspace
+      - ${LIBWEBRTC_DIR:-~/libwebrtc}:/opt/libwebrtc:ro
+      - go-cache:/go
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      - LIBWEBRTC_DIR=/opt/libwebrtc
+    command: bash
+
+volumes:
+  go-cache:
+  go-build-cache:
+  lint-cache:

@@ -13,27 +13,17 @@ on:
 
 env:
   GO_VERSION: '1.25'
+  WEBRTC_BRANCH: 'branch-heads/7390'
 
 jobs:
   build-shim:
     name: Build Shim (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-arm64
-            runner: macos-14
-            target_os: mac
-            target_cpu: arm64
-            shim_name: libwebrtc_shim.dylib
-            archive_name: libwebrtc_shim-darwin-arm64
-          - os: macos-x64
-            runner: macos-13
-            target_os: mac
-            target_cpu: x64
-            shim_name: libwebrtc_shim.dylib
-            archive_name: libwebrtc_shim-darwin-amd64
           - os: linux-x64
             runner: ubuntu-22.04
             target_os: linux
@@ -44,30 +34,70 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download libwebrtc (macOS arm64)
-        if: matrix.os == 'macos-arm64'
+      - name: Install build dependencies (Linux)
+        if: matrix.target_os == 'linux'
         run: |
-          mkdir -p ~/libwebrtc
-          curl -L -o ~/libwebrtc.tar.gz \
-            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-mac-arm64.tar.gz"
-          tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            python3 \
+            pkg-config \
+            cmake \
+            ninja-build \
+            rsync \
+            libglib2.0-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxdamage-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxrandr-dev \
+            libxtst-dev \
+            libxrender-dev \
+            libdrm-dev \
+            libgbm-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev
 
-      - name: Download libwebrtc (macOS x64)
-        if: matrix.os == 'macos-x64'
+      # Cache depot_tools
+      - name: Cache depot_tools
+        uses: actions/cache@v4
+        with:
+          path: ~/depot_tools
+          key: depot_tools-${{ matrix.target_os }}-v1
+
+      - name: Setup depot_tools
         run: |
-          mkdir -p ~/libwebrtc
-          curl -L -o ~/libwebrtc.tar.gz \
-            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-mac-x64.tar.gz"
-          tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+          if [ ! -d ~/depot_tools ]; then
+            git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ~/depot_tools
+          fi
+          echo "$HOME/depot_tools" >> $GITHUB_PATH
 
-      - name: Download libwebrtc (Linux)
-        if: matrix.os == 'linux-x64'
+      # Cache libwebrtc
+      - name: Cache libwebrtc
+        id: cache-libwebrtc
+        uses: actions/cache@v4
+        with:
+          path: ~/libwebrtc
+          key: libwebrtc-${{ matrix.target_os }}-${{ matrix.target_cpu }}-${{ env.WEBRTC_BRANCH }}-v2
+
+      # Build libwebrtc if not cached
+      - name: Build libwebrtc
+        if: steps.cache-libwebrtc.outputs.cache-hit != 'true'
         run: |
-          mkdir -p ~/libwebrtc
-          curl -L -o ~/libwebrtc.tar.gz \
-            "https://github.com/aspect-build/aspect-lib/releases/download/lib%2Flibwebrtc%2Fv141.7390.2.0/libwebrtc-linux-x64.tar.gz"
-          tar -xzf ~/libwebrtc.tar.gz -C ~/libwebrtc --strip-components=1
+          export BUILD_DIR=~/webrtc_build
+          export INSTALL_DIR=~/libwebrtc
+          export DEPOT_TOOLS_DIR=~/depot_tools
+          export TARGET_OS=${{ matrix.target_os }}
+          export TARGET_CPU=${{ matrix.target_cpu }}
 
+          chmod +x scripts/build_libwebrtc.sh
+          ./scripts/build_libwebrtc.sh
+
+      # Build shim
       - name: Build shim
         run: |
           mkdir -p shim/build
@@ -92,9 +122,94 @@ jobs:
           name: ${{ matrix.archive_name }}
           path: dist/${{ matrix.archive_name }}.tar.gz
 
+  # macOS builds use pre-built libwebrtc or self-hosted runners
+  build-shim-macos:
+    name: Build Shim (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-arm64
+            runner: macos-14
+            target_os: mac
+            target_cpu: arm64
+            shim_name: libwebrtc_shim.dylib
+            archive_name: libwebrtc_shim-darwin-arm64
+          - os: macos-x64
+            runner: macos-13
+            target_os: mac
+            target_cpu: x64
+            shim_name: libwebrtc_shim.dylib
+            archive_name: libwebrtc_shim-darwin-amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cache depot_tools
+      - name: Cache depot_tools
+        uses: actions/cache@v4
+        with:
+          path: ~/depot_tools
+          key: depot_tools-${{ matrix.target_os }}-v1
+
+      - name: Setup depot_tools
+        run: |
+          if [ ! -d ~/depot_tools ]; then
+            git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git ~/depot_tools
+          fi
+          echo "$HOME/depot_tools" >> $GITHUB_PATH
+
+      # Cache libwebrtc
+      - name: Cache libwebrtc
+        id: cache-libwebrtc
+        uses: actions/cache@v4
+        with:
+          path: ~/libwebrtc
+          key: libwebrtc-${{ matrix.target_os }}-${{ matrix.target_cpu }}-${{ env.WEBRTC_BRANCH }}-v2
+
+      # Build libwebrtc if not cached
+      - name: Build libwebrtc
+        if: steps.cache-libwebrtc.outputs.cache-hit != 'true'
+        run: |
+          export BUILD_DIR=~/webrtc_build
+          export INSTALL_DIR=~/libwebrtc
+          export DEPOT_TOOLS_DIR=~/depot_tools
+          export TARGET_OS=${{ matrix.target_os }}
+          export TARGET_CPU=${{ matrix.target_cpu }}
+
+          chmod +x scripts/build_libwebrtc.sh
+          ./scripts/build_libwebrtc.sh
+
+      # Build shim
+      - name: Build shim
+        run: |
+          mkdir -p shim/build
+          cd shim/build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLIBWEBRTC_DIR=$HOME/libwebrtc \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build . --config Release -j$(sysctl -n hw.ncpu)
+
+      - name: Package shim
+        run: |
+          mkdir -p dist
+          cp shim/build/${{ matrix.shim_name }} dist/
+          cp shim/shim.h dist/
+          cd dist
+          tar -czvf ${{ matrix.archive_name }}.tar.gz *
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive_name }}
+          path: dist/${{ matrix.archive_name }}.tar.gz
+
   release:
     name: Create Release
-    needs: build-shim
+    needs: [build-shim, build-shim-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
