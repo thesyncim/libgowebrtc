@@ -25,6 +25,11 @@
 #include "api/rtp_sender_interface.h"
 #include "api/rtp_receiver_interface.h"
 #include "api/rtp_transceiver_interface.h"
+#include "api/stats/rtc_stats.h"
+#include "api/stats/rtc_stats_report.h"
+#include "api/stats/rtcstats_objects.h"
+#include "api/scoped_refptr.h"
+#include "rtc_base/ref_counted_object.h"
 #include "media/base/media_channel.h"
 #include "rtc_base/time_utils.h"
 
@@ -750,10 +755,202 @@ SHIM_EXPORT int shim_peer_connection_restart_ice(ShimPeerConnection* pc) {
     return SHIM_OK;
 }
 
+/* RTCStatsCollector callback for synchronous stats retrieval */
+class StatsCollectorCallback : public webrtc::RTCStatsCollectorCallback {
+public:
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool done = false;
+    webrtc::scoped_refptr<const webrtc::RTCStatsReport> report;
+
+    void OnStatsDelivered(const webrtc::scoped_refptr<const webrtc::RTCStatsReport>& r) override {
+        std::lock_guard<std::mutex> lock(mutex);
+        report = r;
+        done = true;
+        cv.notify_one();
+    }
+};
+
 SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCStats* out_stats) {
     if (!pc || !pc->peer_connection || !out_stats) return SHIM_ERROR_INVALID_PARAM;
     memset(out_stats, 0, sizeof(ShimRTCStats));
-    // TODO: Implement proper stats collection via GetStats() callback
+
+    // Create callback and get stats asynchronously
+    auto callback = webrtc::make_ref_counted<StatsCollectorCallback>();
+    pc->peer_connection->GetStats(callback.get());
+
+    // Wait for completion
+    {
+        std::unique_lock<std::mutex> lock(callback->mutex);
+        callback->cv.wait(lock, [&]() { return callback->done; });
+    }
+
+    if (!callback->report) {
+        return SHIM_ERROR_INIT_FAILED;
+    }
+
+    out_stats->timestamp_us = webrtc::TimeMicros();
+
+    // Iterate through all stats and aggregate them
+    for (const auto& stat : *callback->report) {
+        // Outbound RTP stream stats (sending)
+        if (stat.type() == webrtc::RTCOutboundRtpStreamStats::kType) {
+            const auto& outbound = stat.cast_to<webrtc::RTCOutboundRtpStreamStats>();
+            if (outbound.bytes_sent.has_value()) {
+                out_stats->bytes_sent += *outbound.bytes_sent;
+            }
+            if (outbound.packets_sent.has_value()) {
+                out_stats->packets_sent += *outbound.packets_sent;
+            }
+            if (outbound.frames_encoded.has_value()) {
+                out_stats->frames_encoded += *outbound.frames_encoded;
+            }
+            if (outbound.key_frames_encoded.has_value()) {
+                out_stats->key_frames_encoded += *outbound.key_frames_encoded;
+            }
+            if (outbound.nack_count.has_value()) {
+                out_stats->nack_count += *outbound.nack_count;
+            }
+            if (outbound.pli_count.has_value()) {
+                out_stats->pli_count += *outbound.pli_count;
+            }
+            if (outbound.fir_count.has_value()) {
+                out_stats->fir_count += *outbound.fir_count;
+            }
+            if (outbound.qp_sum.has_value()) {
+                out_stats->qp_sum += *outbound.qp_sum;
+            }
+            if (outbound.quality_limitation_reason.has_value()) {
+                const std::string& reason = *outbound.quality_limitation_reason;
+                if (reason == "none") out_stats->quality_limitation_reason = SHIM_QUALITY_LIMITATION_NONE;
+                else if (reason == "cpu") out_stats->quality_limitation_reason = SHIM_QUALITY_LIMITATION_CPU;
+                else if (reason == "bandwidth") out_stats->quality_limitation_reason = SHIM_QUALITY_LIMITATION_BANDWIDTH;
+                else out_stats->quality_limitation_reason = SHIM_QUALITY_LIMITATION_OTHER;
+            }
+        }
+
+        // Inbound RTP stream stats (receiving) - includes jitter buffer stats
+        if (stat.type() == webrtc::RTCInboundRtpStreamStats::kType) {
+            const auto& inbound = stat.cast_to<webrtc::RTCInboundRtpStreamStats>();
+            if (inbound.bytes_received.has_value()) {
+                out_stats->bytes_received += *inbound.bytes_received;
+            }
+            if (inbound.packets_received.has_value()) {
+                out_stats->packets_received += *inbound.packets_received;
+            }
+            if (inbound.packets_lost.has_value()) {
+                out_stats->packets_lost += *inbound.packets_lost;
+            }
+            if (inbound.jitter.has_value()) {
+                // jitter is in seconds, convert to ms
+                out_stats->jitter_ms = *inbound.jitter * 1000.0;
+            }
+            if (inbound.frames_decoded.has_value()) {
+                out_stats->frames_decoded += *inbound.frames_decoded;
+            }
+            if (inbound.key_frames_decoded.has_value()) {
+                out_stats->key_frames_decoded += *inbound.key_frames_decoded;
+            }
+            if (inbound.frames_dropped.has_value()) {
+                out_stats->frames_dropped += *inbound.frames_dropped;
+            }
+            if (inbound.nack_count.has_value()) {
+                out_stats->nack_count += *inbound.nack_count;
+            }
+            if (inbound.pli_count.has_value()) {
+                out_stats->pli_count += *inbound.pli_count;
+            }
+            if (inbound.fir_count.has_value()) {
+                out_stats->fir_count += *inbound.fir_count;
+            }
+            if (inbound.qp_sum.has_value()) {
+                out_stats->qp_sum += *inbound.qp_sum;
+            }
+            // Audio specific
+            if (inbound.audio_level.has_value()) {
+                out_stats->audio_level = *inbound.audio_level;
+            }
+            if (inbound.total_audio_energy.has_value()) {
+                out_stats->total_audio_energy = *inbound.total_audio_energy;
+            }
+            if (inbound.concealment_events.has_value()) {
+                out_stats->concealment_events += *inbound.concealment_events;
+            }
+
+            // JITTER BUFFER STATS (what the user specifically wants!)
+            if (inbound.jitter_buffer_delay.has_value()) {
+                // jitter_buffer_delay is total delay in seconds, convert to ms
+                out_stats->jitter_buffer_delay_ms = *inbound.jitter_buffer_delay * 1000.0;
+            }
+            if (inbound.jitter_buffer_target_delay.has_value()) {
+                out_stats->jitter_buffer_target_delay_ms = *inbound.jitter_buffer_target_delay * 1000.0;
+            }
+            if (inbound.jitter_buffer_minimum_delay.has_value()) {
+                out_stats->jitter_buffer_minimum_delay_ms = *inbound.jitter_buffer_minimum_delay * 1000.0;
+            }
+            if (inbound.jitter_buffer_emitted_count.has_value()) {
+                out_stats->jitter_buffer_emitted_count = *inbound.jitter_buffer_emitted_count;
+            }
+        }
+
+        // Remote inbound RTP stats (from RTCP receiver reports)
+        if (stat.type() == webrtc::RTCRemoteInboundRtpStreamStats::kType) {
+            const auto& remote = stat.cast_to<webrtc::RTCRemoteInboundRtpStreamStats>();
+            if (remote.packets_lost.has_value()) {
+                out_stats->remote_packets_lost = *remote.packets_lost;
+            }
+            if (remote.jitter.has_value()) {
+                out_stats->remote_jitter_ms = *remote.jitter * 1000.0;
+            }
+            if (remote.round_trip_time.has_value()) {
+                out_stats->remote_round_trip_time_ms = *remote.round_trip_time * 1000.0;
+            }
+        }
+
+        // ICE candidate pair stats
+        if (stat.type() == webrtc::RTCIceCandidatePairStats::kType) {
+            const auto& pair = stat.cast_to<webrtc::RTCIceCandidatePairStats>();
+            if (pair.current_round_trip_time.has_value()) {
+                out_stats->current_rtt_ms = static_cast<int64_t>(*pair.current_round_trip_time * 1000.0);
+            }
+            if (pair.total_round_trip_time.has_value()) {
+                out_stats->total_rtt_ms = static_cast<int64_t>(*pair.total_round_trip_time * 1000.0);
+            }
+            if (pair.responses_received.has_value()) {
+                out_stats->responses_received = *pair.responses_received;
+            }
+            if (pair.available_outgoing_bitrate.has_value()) {
+                out_stats->available_outgoing_bitrate = *pair.available_outgoing_bitrate;
+            }
+            if (pair.available_incoming_bitrate.has_value()) {
+                out_stats->available_incoming_bitrate = *pair.available_incoming_bitrate;
+            }
+        }
+
+        // Data channel stats
+        if (stat.type() == webrtc::RTCDataChannelStats::kType) {
+            const auto& dc = stat.cast_to<webrtc::RTCDataChannelStats>();
+            if (dc.messages_sent.has_value()) {
+                out_stats->messages_sent += *dc.messages_sent;
+            }
+            if (dc.messages_received.has_value()) {
+                out_stats->messages_received += *dc.messages_received;
+            }
+            if (dc.bytes_sent.has_value()) {
+                out_stats->bytes_sent_data_channel += *dc.bytes_sent;
+            }
+            if (dc.bytes_received.has_value()) {
+                out_stats->bytes_received_data_channel += *dc.bytes_received;
+            }
+        }
+    }
+
+    // Calculate average RTT if we have data
+    if (out_stats->responses_received > 0 && out_stats->total_rtt_ms > 0) {
+        out_stats->round_trip_time_ms = static_cast<double>(out_stats->total_rtt_ms) /
+                                        static_cast<double>(out_stats->responses_received);
+    }
+
     return SHIM_OK;
 }
 

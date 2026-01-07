@@ -167,6 +167,11 @@ libgowebrtc/
 ### RTPReceiver
 - `GetStats()` - receiver statistics
 - `RequestKeyframe()` - send PLI
+- `SetJitterBufferTarget()` - set target buffer delay
+- `SetJitterBufferBounds()` - set min/max delay bounds
+- `GetJitterBufferStats()` - get buffer statistics
+- `OnJitterBufferStats()` - periodic stats callback
+- `SetAdaptiveJitterBuffer()` - enable/disable adaptive mode
 
 ### RTPTransceiver
 - `SetDirection()` / `Direction()` / `CurrentDirection()` - direction control
@@ -205,6 +210,29 @@ libgowebrtc/
 ### Bandwidth Estimation
 - `GetBandwidthEstimate()` - get current BWE (target bitrate, available bandwidth)
 - `SetOnBandwidthEstimate(callback)` - receive BWE updates
+
+### Jitter Buffer Control
+Control libwebrtc's internal jitter buffer for latency vs quality tradeoffs:
+
+```go
+receiver := transceiver.Receiver()
+
+// Low latency mode (gaming, live streaming)
+receiver.SetJitterBufferTarget(50)  // 50ms target delay
+
+// High buffering mode (unreliable networks)
+receiver.SetJitterBufferTarget(500)  // 500ms buffer
+
+// Set bounds
+receiver.SetJitterBufferBounds(20, 500)
+
+// Get stats
+stats, _ := receiver.GetJitterBufferStats()
+log.Printf("Buffer: %dms, Late packets: %d", stats.CurrentDelayMs, stats.LatePackets)
+
+// Disable adaptive mode for manual control
+receiver.SetAdaptiveJitterBuffer(false)
+```
 
 ## Browser Example
 

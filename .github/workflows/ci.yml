@@ -31,7 +31,11 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Run go vet
-        run: go vet ./...
+        run: |
+          # Run vet on all packages except internal/ffi which uses legitimate unsafe patterns for FFI
+          go vet $(go list ./... | grep -v '/internal/ffi')
+          # Run vet on internal/ffi with unsafeptr disabled (FFI requires uintptr<->unsafe.Pointer conversions)
+          go vet -unsafeptr=false ./internal/ffi/...
 
       - name: Run staticcheck
         uses: dominikh/staticcheck-action@v1

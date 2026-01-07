@@ -177,7 +177,8 @@ lint:
 
 vet:
 	@echo "==> Running go vet..."
-	$(GOVET) $(PACKAGES)
+	$(GOVET) $$(go list ./... | grep -v '/internal/ffi')
+	$(GOVET) -unsafeptr=false ./internal/ffi/...
 
 fmt:
 	@echo "==> Formatting code..."

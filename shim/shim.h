@@ -733,6 +733,12 @@ typedef struct {
     int64_t remote_packets_lost;
     double remote_jitter_ms;
     double remote_round_trip_time_ms;
+
+    /* Jitter buffer stats (from RTCInboundRtpStreamStats) */
+    double jitter_buffer_delay_ms;          /* Total time spent in jitter buffer / emitted count */
+    double jitter_buffer_target_delay_ms;   /* Target delay for adaptive buffer */
+    double jitter_buffer_minimum_delay_ms;  /* User-configured minimum delay */
+    int64_t jitter_buffer_emitted_count;    /* Number of samples/frames emitted from buffer */
 } ShimRTCStats;
 
 /* Quality limitation reasons */
@@ -1412,6 +1418,35 @@ SHIM_EXPORT int shim_screen_capture_start(
 
 SHIM_EXPORT void shim_screen_capture_stop(ShimScreenCapture* cap);
 SHIM_EXPORT void shim_screen_capture_destroy(ShimScreenCapture* cap);
+
+/* ============================================================================
+ * Jitter Buffer Control API
+ *
+ * NOTE: libwebrtc provides limited jitter buffer control via RtpReceiverInterface.
+ * Only SetJitterBufferMinimumDelay() is available - this sets a floor for the
+ * adaptive jitter buffer algorithm.
+ *
+ * For full jitter buffer stats, use PeerConnection::GetStats() which provides
+ * RTCInboundRtpStreamStats with jitterBufferDelay, jitterBufferTargetDelay, etc.
+ * ========================================================================== */
+
+/*
+ * Set the minimum jitter buffer delay for a receiver.
+ *
+ * This sets a floor for libwebrtc's adaptive jitter buffer. The actual delay
+ * may be higher based on network conditions, but won't go below this value.
+ *
+ * Note: This calls RtpReceiverInterface::SetJitterBufferMinimumDelay() internally.
+ * There is no API to set a maximum delay or disable adaptive mode.
+ *
+ * @param receiver RTPReceiver handle
+ * @param min_delay_ms Minimum delay in milliseconds (0 = let libwebrtc decide)
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_receiver_set_jitter_buffer_min_delay(
+    ShimRTPReceiver* receiver,
+    int min_delay_ms
+);
 
 /* ============================================================================
  * Memory helpers

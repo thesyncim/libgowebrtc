@@ -542,6 +542,12 @@ type RTCStats struct {
 	RemotePacketsLost     int64
 	RemoteJitterMs        float64
 	RemoteRoundTripTimeMs float64
+
+	// Jitter buffer stats (from RTCInboundRtpStreamStats)
+	JitterBufferDelayMs        float64 // Total time spent in jitter buffer / emitted count
+	JitterBufferTargetDelayMs  float64 // Target delay for adaptive buffer
+	JitterBufferMinimumDelayMs float64 // User-configured minimum delay
+	JitterBufferEmittedCount   int64   // Number of samples/frames emitted from buffer
 }
 
 // QualityLimitationReason indicates why quality is limited.
@@ -610,6 +616,11 @@ func convertFFIStats(s *ffi.RTCStats) *RTCStats {
 		RemotePacketsLost:           s.RemotePacketsLost,
 		RemoteJitterMs:              s.RemoteJitterMs,
 		RemoteRoundTripTimeMs:       s.RemoteRoundTripTimeMs,
+		// Jitter buffer stats
+		JitterBufferDelayMs:        s.JitterBufferDelayMs,
+		JitterBufferTargetDelayMs:  s.JitterBufferTargetDelayMs,
+		JitterBufferMinimumDelayMs: s.JitterBufferMinimumDelayMs,
+		JitterBufferEmittedCount:   s.JitterBufferEmittedCount,
 	}
 }
 
@@ -645,13 +656,22 @@ func (r *RTPReceiver) GetStats() (*RTCStats, error) {
 	return convertFFIStats(ffiStats), nil
 }
 
-// RequestKeyframe requests a keyframe from the sender (sends PLI).
-func (r *RTPReceiver) RequestKeyframe() error {
+// SetJitterBufferMinDelay sets the minimum jitter buffer delay in milliseconds.
+// This sets a floor for libwebrtc's adaptive jitter buffer. The actual delay
+// may be higher based on network conditions, but won't go below this value.
+// Pass 0 to let libwebrtc's adaptive algorithm decide without a minimum floor.
+//
+// For jitter buffer statistics, use GetStats() which returns RTCStats with:
+// - JitterBufferDelayMs: Total time spent in buffer / emitted count
+// - JitterBufferTargetDelayMs: Target delay for adaptive buffer
+// - JitterBufferMinimumDelayMs: User-configured minimum delay
+// - JitterBufferEmittedCount: Number of samples/frames emitted from buffer
+func (r *RTPReceiver) SetJitterBufferMinDelay(minDelayMs int) error {
 	if r.handle == 0 {
 		return errors.New("receiver not initialized")
 	}
 
-	return ffi.RTPReceiverRequestKeyframe(r.handle)
+	return ffi.RTPReceiverSetJitterBufferMinDelay(r.handle, minDelayMs)
 }
 
 // RTPTransceiver represents an RTP transceiver.

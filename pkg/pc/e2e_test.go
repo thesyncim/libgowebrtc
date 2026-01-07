@@ -522,3 +522,103 @@ func TestIsCodecSupported(t *testing.T) {
 		t.Error("Unknown codec should not be supported")
 	}
 }
+
+// ============================================================================
+// Jitter Buffer Control Tests
+// ============================================================================
+
+func TestJitterBufferMinDelay(t *testing.T) {
+	// Test that jitter buffer minimum delay can be set on a receiver
+	pc, err := NewPeerConnection(DefaultConfiguration())
+	if err != nil {
+		t.Fatalf("NewPeerConnection failed: %v", err)
+	}
+	defer pc.Close()
+
+	// Add a transceiver that will receive
+	transceiver, err := pc.AddTransceiver("video", &TransceiverInit{
+		Direction: TransceiverDirectionRecvOnly,
+	})
+	if err != nil {
+		t.Fatalf("AddTransceiver failed: %v", err)
+	}
+
+	receiver := transceiver.Receiver()
+	if receiver == nil {
+		t.Fatal("Receiver should not be nil")
+	}
+
+	// Test setting minimum delay (floor for adaptive jitter buffer)
+	err = receiver.SetJitterBufferMinDelay(100) // 100ms minimum
+	if err != nil {
+		t.Errorf("SetJitterBufferMinDelay(100) failed: %v", err)
+	}
+
+	// Test with different values
+	err = receiver.SetJitterBufferMinDelay(50) // Lower minimum
+	if err != nil {
+		t.Errorf("SetJitterBufferMinDelay(50) failed: %v", err)
+	}
+
+	err = receiver.SetJitterBufferMinDelay(500) // Higher minimum
+	if err != nil {
+		t.Errorf("SetJitterBufferMinDelay(500) failed: %v", err)
+	}
+
+	// Clear minimum delay (let adaptive algorithm decide)
+	err = receiver.SetJitterBufferMinDelay(0)
+	if err != nil {
+		t.Errorf("SetJitterBufferMinDelay(0) failed: %v", err)
+	}
+
+	t.Log("Jitter buffer minimum delay setting succeeded")
+}
+
+func TestJitterBufferStatsViaGetStats(t *testing.T) {
+	// Test that jitter buffer stats are available through GetStats()
+	pc, err := NewPeerConnection(DefaultConfiguration())
+	if err != nil {
+		t.Fatalf("NewPeerConnection failed: %v", err)
+	}
+	defer pc.Close()
+
+	transceiver, err := pc.AddTransceiver("video", &TransceiverInit{
+		Direction: TransceiverDirectionRecvOnly,
+	})
+	if err != nil {
+		t.Fatalf("AddTransceiver failed: %v", err)
+	}
+
+	receiver := transceiver.Receiver()
+
+	// Get stats - jitter buffer info is in RTCStats now
+	stats, err := receiver.GetStats()
+	if err != nil {
+		t.Errorf("GetStats failed: %v", err)
+	}
+
+	if stats == nil {
+		t.Fatal("Stats should not be nil")
+	}
+
+	// Log jitter buffer values (will be zeros without actual media flow)
+	t.Logf("Jitter buffer stats from GetStats():")
+	t.Logf("  JitterBufferDelayMs: %.2f", stats.JitterBufferDelayMs)
+	t.Logf("  JitterBufferTargetDelayMs: %.2f", stats.JitterBufferTargetDelayMs)
+	t.Logf("  JitterBufferMinimumDelayMs: %.2f", stats.JitterBufferMinimumDelayMs)
+	t.Logf("  JitterBufferEmittedCount: %d", stats.JitterBufferEmittedCount)
+
+	t.Log("Jitter buffer stats retrieval via GetStats() succeeded")
+}
+
+func TestJitterBufferOnNilReceiver(t *testing.T) {
+	// Test that methods fail gracefully on nil/invalid receiver
+	receiver := &RTPReceiver{}
+
+	err := receiver.SetJitterBufferMinDelay(100)
+	if err == nil {
+		t.Error("SetJitterBufferMinDelay on nil receiver should fail")
+	}
+
+	t.Log("Nil receiver error handling succeeded")
+}

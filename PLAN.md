@@ -1705,3 +1705,314 @@ Added I420 frame scaling utilities in `pkg/track/scale.go`:
 | BWE auto-adjusts internally | `AutoBitrate: true` + adaptLoop() |
 | PLI triggers keyframe internally | `AutoKeyframe: true` + HandleRTCPFeedback() |
 
+---
+
+## Phase 15: Advanced Browser Features (Planned)
+
+Features that would differentiate libgowebrtc from any other Go WebRTC library.
+
+### Priority Rankings
+
+| # | Feature | Impact | Complexity | Status |
+|---|---------|--------|------------|--------|
+| 🥇 | Insertable Streams (Encoded Transform) | E2E encryption - killer feature | Medium | ⏳ Planned |
+| 🥈 | Congestion Control Internals | Unique GCC visibility | Medium | ⏳ Planned |
+| 🥉 | Jitter Buffer Control | Latency vs quality tradeoff | Low | ✅ Complete |
+| 4 | FEC Control | Packet loss resilience | Low | ⏳ Planned |
+| 5 | RTP Header Extension Access | SFU layer selection | Medium | ⏳ Planned |
+| 6 | Pacer/Send Queue Visibility | Congestion early warning | Low | ⏳ Planned |
+
+---
+
+### 🥇 1. Insertable Streams (Encoded Transform)
+
+**Why:** E2E encryption like Zoom/Google Meet. No Go library has this today.
+
+**Browser API:** `RTCRtpScriptTransform`
+
+**Proposed Go API:**
+```go
+// Sender side - transform before RTP packetization
+sender.SetEncodedFrameTransform(func(frame *EncodedFrame) *EncodedFrame {
+    // E2E encrypt, watermark, or ML processing
+    encrypted := encryptFrame(frame.Data, e2eKey)
+    return &EncodedFrame{
+        Data:       encrypted,
+        Timestamp:  frame.Timestamp,
+        IsKeyframe: frame.IsKeyframe,
+        Metadata:   frame.Metadata,
+    }
+})
+
+// Receiver side - transform after RTP depacketization
+receiver.SetEncodedFrameTransform(func(frame *EncodedFrame) *EncodedFrame {
+    decrypted := decryptFrame(frame.Data, e2eKey)
+    return &EncodedFrame{Data: decrypted, ...}
+})
+
+// EncodedFrame exposes codec-specific metadata
+type EncodedFrame struct {
+    Data       []byte
+    Timestamp  uint32
+    IsKeyframe bool
+    Codec      codec.Type
+    // H264: NAL units, VP8/VP9: frame header, AV1: OBUs
+    Metadata   *FrameMetadata
+}
+```
+
+**Shim additions:**
+```c
+// Set transform callback on sender
+void rtp_sender_set_encoded_transform(RTPSender* sender,
+    EncodedFrameCallback callback, void* ctx);
+
+// Set transform callback on receiver
+void rtp_receiver_set_encoded_transform(RTPReceiver* receiver,
+    EncodedFrameCallback callback, void* ctx);
+```
+
+---
+
+### 🥈 2. Congestion Control Internals
+
+**Why:** Unique visibility into GCC (Google Congestion Control) for building adaptive streaming logic.
+
+**Proposed Go API:**
+```go
+pc.SetOnCongestionState(func(state *CongestionState) {
+    log.Printf("GCC: delay_gradient=%.2f loss_estimate=%d probe=%d",
+        state.DelayGradient,
+        state.LossBasedEstimateBps,
+        state.ProbeResultBps)
+})
+
+type CongestionState struct {
+    // Delay-based estimation (TWCC)
+    DelayGradient        float64  // Positive = congestion building
+    DelayBasedEstimateBps int64
+
+    // Loss-based estimation
+    LossBasedEstimateBps int64
+    LossFraction         float64
+
+    // Bandwidth probing
+    ProbeResultBps       int64
+    ProbeState           ProbeState  // NotProbing, Probing, Success, Failure
+
+    // Controller state
+    InSlowStart          bool  // Initial ramp-up
+    InRecovery           bool  // After loss event
+    InAlr                bool  // Application-limited region
+
+    // Timing
+    LastUpdateTime       time.Time
+    RttMs                float64
+}
+
+type ProbeState int
+const (
+    ProbeStateNotProbing ProbeState = iota
+    ProbeStateProbing
+    ProbeStateSuccess
+    ProbeStateFailure
+)
+```
+
+**Use cases:**
+- Custom ABR (Adaptive Bitrate) algorithms
+- Debugging congestion issues
+- Research/logging
+
+---
+
+### 🥉 3. Jitter Buffer Control
+
+**Why:** Critical for latency-sensitive apps (gaming, live streaming, real-time collaboration).
+
+**Proposed Go API:**
+```go
+// Set target jitter buffer delay
+receiver.SetJitterBufferTarget(50 * time.Millisecond)   // Ultra-low latency
+receiver.SetJitterBufferTarget(200 * time.Millisecond)  // Smooth playback
+
+// Set min/max bounds
+receiver.SetJitterBufferBounds(20*time.Millisecond, 500*time.Millisecond)
+
+// Get real-time stats
+receiver.OnJitterBufferStats(func(stats *JitterBufferStats) {
+    if stats.LatePacketRatio > 0.05 {
+        // 5% late packets - increase buffer
+        receiver.SetJitterBufferTarget(stats.CurrentDelayMs * 1.2)
+    }
+})
+
+type JitterBufferStats struct {
+    CurrentDelayMs    int     // Current buffer delay
+    TargetDelayMs     int     // Target delay
+    MinDelayMs        int     // Minimum achievable
+    BufferSizePackets int     // Packets in buffer
+    BufferSizeMs      int     // Buffer duration
+    LatePackets       int64   // Packets arrived too late
+    LatePacketRatio   float64 // Late / total
+    Underruns         int64   // Buffer ran empty
+}
+```
+
+---
+
+### 4. FEC Control (Forward Error Correction)
+
+**Why:** Tune redundancy for lossy networks without re-encoding.
+
+**Proposed Go API:**
+```go
+// Video FEC
+sender.SetFECEnabled(true)
+sender.SetFECRate(0.2)  // 20% redundancy
+sender.SetFECMode(FECModeFlexFEC)  // or RED, ULPFEC
+
+type FECMode int
+const (
+    FECModeNone FECMode = iota
+    FECModeRED      // Redundant Encoding
+    FECModeULPFEC   // Unequal Level Protection
+    FECModeFlexFEC  // Flexible FEC (newer)
+)
+
+// Audio FEC (Opus)
+audioTrack.SetInbandFEC(true)
+audioTrack.SetExpectedPacketLoss(10)  // Tune for 10% loss
+```
+
+---
+
+### 5. RTP Header Extension Access
+
+**Why:** Essential for SFU layer selection, speaker detection, A/V sync.
+
+**Proposed Go API:**
+```go
+receiver.OnRTPExtension(func(ext *RTPExtensions) {
+    // Speaker detection
+    if ext.AudioLevel != nil {
+        if ext.AudioLevel.Level > -30 {
+            markAsSpeaking(ext.SSRC)
+        }
+    }
+
+    // SVC layer selection
+    if ext.DependencyDescriptor != nil {
+        dd := ext.DependencyDescriptor
+        // Forward only base layer to constrained subscribers
+        if dd.SpatialLayer == 0 && dd.TemporalLayer == 0 {
+            forwardToLowBandwidthPeers(packet)
+        }
+    }
+})
+
+type RTPExtensions struct {
+    SSRC                 uint32
+    AudioLevel           *AudioLevelExtension
+    VideoOrientation     *VideoOrientationExtension
+    PlayoutDelay         *PlayoutDelayExtension
+    DependencyDescriptor *DependencyDescriptorExtension
+    AbsSendTime          *AbsSendTimeExtension
+    TransportCC          *TransportCCExtension
+}
+
+type DependencyDescriptorExtension struct {
+    SpatialLayer   int
+    TemporalLayer  int
+    IsKeyframe     bool
+    Dependencies   []int  // Frame dependencies
+    DecodeTargets  []int  // Which targets can decode this
+}
+```
+
+---
+
+### 6. Pacer/Send Queue Visibility
+
+**Why:** Know when you're congested before frames start dropping.
+
+**Proposed Go API:**
+```go
+pc.OnPacerStats(func(stats *PacerStats) {
+    if stats.Congested {
+        // Slow down frame production
+        videoSource.SetFramerate(15)
+    }
+
+    if stats.QueueDelayMs > 500 {
+        // Queue backing up - drop quality
+        encoder.SetBitrate(encoder.GetBitrate() / 2)
+    }
+})
+
+type PacerStats struct {
+    QueuedPackets   int
+    QueuedBytes     int64
+    QueueDelayMs    int      // Estimated delay to send all queued
+    PacingRateBps   int64    // Current pacing rate
+    Congested       bool     // Pacer is behind
+    MediaRateBps    int64    // Rate media is being added
+    PaddingRateBps  int64    // Rate of padding being sent
+}
+```
+
+---
+
+### Implementation Order
+
+**Phase 15a: Jitter Buffer Control** ✅ COMPLETE
+- [x] Add shim functions for jitter buffer target/bounds (shim_peer_connection.cc)
+- [x] Add FFI bindings (internal/ffi/peerconnection.go)
+- [x] Add receiver.SetJitterBufferTarget() API (pkg/pc/peerconnection.go)
+- [x] Add receiver.SetJitterBufferBounds() API
+- [x] Add receiver.GetJitterBufferStats() API
+- [x] Add receiver.OnJitterBufferStats() callback
+- [x] Add receiver.SetAdaptiveJitterBuffer() API
+- [x] Add tests (pkg/pc/e2e_test.go)
+
+**Usage:**
+```go
+// Get a receiver from transceiver
+receiver := transceiver.Receiver()
+
+// Set target delay (low latency mode)
+receiver.SetJitterBufferTarget(50)  // 50ms
+
+// Or high buffering mode for unreliable networks
+receiver.SetJitterBufferTarget(500)  // 500ms
+
+// Set bounds
+receiver.SetJitterBufferBounds(20, 500)  // min 20ms, max 500ms
+
+// Disable adaptive mode for manual control
+receiver.SetAdaptiveJitterBuffer(false)
+
+// Get stats
+stats, _ := receiver.GetJitterBufferStats()
+log.Printf("Buffer: %dms current, %dms target, %d packets",
+    stats.CurrentDelayMs, stats.TargetDelayMs, stats.BufferSizePackets)
+
+// Periodic stats callback
+receiver.OnJitterBufferStats(func(stats *JitterBufferStats) {
+    log.Printf("Underruns: %d, Late: %d", stats.Underruns, stats.LatePackets)
+}, 1000)  // Every 1000ms
+```
+
+**Phase 15b: Insertable Streams** (Medium complexity, killer feature)
+- [ ] Add EncodedFrame type to shim
+- [ ] Add transform callbacks to sender/receiver
+- [ ] Add FFI bindings with proper buffer management
+- [ ] Add Go API with zero-copy where possible
+- [ ] Example: E2E encryption demo
+
+**Phase 15c: Congestion Control Internals** (Medium complexity, unique feature)
+- [ ] Expose GCC state from libwebrtc
+- [ ] Add CongestionState struct
+- [ ] Add pc.SetOnCongestionState() callback
+- [ ] Example: Custom ABR algorithm
+

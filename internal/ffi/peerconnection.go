@@ -44,6 +44,8 @@ var (
 
 // initCallbacks initializes the purego callbacks for remote track sinks.
 // This must be called before setting any track sinks.
+//
+//go:nocheckptr
 func initCallbacks() {
 	callbackInitMu.Lock()
 	defer callbackInitMu.Unlock()
@@ -468,7 +470,7 @@ func DataChannelLabel(dc uintptr) string {
 		return ""
 	}
 	ptr := shimDataChannelLabel(dc)
-	return GoString(ptr)
+	return GoString(unsafe.Pointer(ptr))
 }
 
 // DataChannelClose closes a data channel.
@@ -509,6 +511,7 @@ var (
 	dcCloseInitialized bool
 )
 
+//go:nocheckptr
 func initDCMessageCallback() {
 	callbackInitMu.Lock()
 	defer callbackInitMu.Unlock()
@@ -772,7 +775,7 @@ func TrackKind(track uintptr) string {
 		return ""
 	}
 	ptr := shimTrackKind(track)
-	return GoString(ptr)
+	return GoString(unsafe.Pointer(ptr))
 }
 
 // TrackID returns the track ID.
@@ -781,7 +784,7 @@ func TrackID(track uintptr) string {
 		return ""
 	}
 	ptr := shimTrackID(track)
-	return GoString(ptr)
+	return GoString(unsafe.Pointer(ptr))
 }
 
 // ============================================================================
@@ -889,6 +892,12 @@ type RTCStats struct {
 	RemotePacketsLost     int64
 	RemoteJitterMs        float64
 	RemoteRoundTripTimeMs float64
+
+	// Jitter buffer stats (from RTCInboundRtpStreamStats)
+	JitterBufferDelayMs        float64 // Total time spent in jitter buffer / emitted count
+	JitterBufferTargetDelayMs  float64 // Target delay for adaptive buffer
+	JitterBufferMinimumDelayMs float64 // User-configured minimum delay
+	JitterBufferEmittedCount   int64   // Number of samples/frames emitted from buffer
 }
 
 // Quality limitation reason constants
@@ -1058,16 +1067,6 @@ func RTPReceiverGetStats(receiver uintptr) (*RTCStats, error) {
 	return &stats, nil
 }
 
-// RTPReceiverRequestKeyframe requests a keyframe from the sender.
-func RTPReceiverRequestKeyframe(receiver uintptr) error {
-	if !libLoaded.Load() || shimRTPReceiverRequestKeyframe == nil {
-		return ErrLibraryNotLoaded
-	}
-
-	result := shimRTPReceiverRequestKeyframe(receiver)
-	return ShimError(result)
-}
-
 // ============================================================================
 // RTPTransceiver API
 // ============================================================================
@@ -1125,7 +1124,7 @@ func TransceiverMid(transceiver uintptr) string {
 		return ""
 	}
 	ptr := shimTransceiverMid(transceiver)
-	return GoString(ptr)
+	return GoString(unsafe.Pointer(ptr))
 }
 
 // TransceiverGetSender gets the sender associated with a transceiver.
@@ -1328,7 +1327,7 @@ func initOnTrackCallback() {
 		onTrackCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			streamsStr := GoString(streams)
+			streamsStr := GoString(unsafe.Pointer(streams))
 			safeCallback(func() {
 				cb(track, receiver, streamsStr)
 			})
@@ -1395,8 +1394,8 @@ func initOnICECandidateCallback() {
 			sdpMidPtr := *(*uintptr)(unsafe.Pointer(candidatePtr + unsafe.Sizeof(uintptr(0))))
 			sdpMLineIndex := *(*int32)(unsafe.Pointer(candidatePtr + 2*unsafe.Sizeof(uintptr(0))))
 
-			candidate := GoString(candidateStrPtr)
-			sdpMid := GoString(sdpMidPtr)
+			candidate := GoString(unsafe.Pointer(candidateStrPtr))
+			sdpMid := GoString(unsafe.Pointer(sdpMidPtr))
 			safeCallback(func() {
 				cb(candidate, sdpMid, int(sdpMLineIndex))
 			})
@@ -1915,4 +1914,29 @@ func PeerConnectionGetBandwidthEstimate(pc uintptr) (*BandwidthEstimate, error) 
 	}
 
 	return &estimate, nil
+}
+
+// ============================================================================
+// Jitter Buffer Control API
+//
+// NOTE: libwebrtc provides limited jitter buffer control via RtpReceiverInterface.
+// Only SetJitterBufferMinimumDelay() is available - this sets a floor for the
+// adaptive jitter buffer algorithm.
+//
+// For full jitter buffer stats, use PeerConnectionGetStats() or RTPReceiverGetStats()
+// which provides RTCStats with jitter buffer fields (JitterBufferDelayMs,
+// JitterBufferTargetDelayMs, JitterBufferMinimumDelayMs, JitterBufferEmittedCount).
+// ============================================================================
+
+// RTPReceiverSetJitterBufferMinDelay sets the minimum jitter buffer delay.
+// This sets a floor for libwebrtc's adaptive jitter buffer. The actual delay
+// may be higher based on network conditions, but won't go below this value.
+// Pass 0 to let libwebrtc's adaptive algorithm decide without a minimum floor.
+func RTPReceiverSetJitterBufferMinDelay(receiver uintptr, minDelayMs int) error {
+	if !libLoaded.Load() || shimRTPReceiverSetJitterBufferMinDelay == nil {
+		return ErrLibraryNotLoaded
+	}
+
+	result := shimRTPReceiverSetJitterBufferMinDelay(receiver, int32(minDelayMs))
+	return ShimError(result)
 }

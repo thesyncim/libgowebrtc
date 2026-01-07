@@ -176,9 +176,9 @@ var (
 	shimRTPSenderGetActiveLayers   func(sender uintptr, outSpatial uintptr, outTemporal uintptr) int32
 
 	// RTPReceiver
-	shimRTPReceiverGetTrack        func(receiver uintptr) uintptr
-	shimRTPReceiverGetStats        func(receiver uintptr, outStats uintptr) int32
-	shimRTPReceiverRequestKeyframe func(receiver uintptr) int32
+	shimRTPReceiverGetTrack                func(receiver uintptr) uintptr
+	shimRTPReceiverGetStats                func(receiver uintptr, outStats uintptr) int32
+	shimRTPReceiverSetJitterBufferMinDelay func(receiver uintptr, minDelayMs int32) int32
 
 	// RTPTransceiver
 	shimTransceiverGetDirection        func(transceiver uintptr) int32
@@ -483,7 +483,7 @@ func registerFunctions() error {
 	// RTPReceiver
 	purego.RegisterLibFunc(&shimRTPReceiverGetTrack, libHandle, "shim_rtp_receiver_get_track")
 	purego.RegisterLibFunc(&shimRTPReceiverGetStats, libHandle, "shim_rtp_receiver_get_stats")
-	purego.RegisterLibFunc(&shimRTPReceiverRequestKeyframe, libHandle, "shim_rtp_receiver_request_keyframe")
+	purego.RegisterLibFunc(&shimRTPReceiverSetJitterBufferMinDelay, libHandle, "shim_rtp_receiver_set_jitter_buffer_min_delay")
 
 	// RTPTransceiver
 	purego.RegisterLibFunc(&shimTransceiverGetDirection, libHandle, "shim_transceiver_get_direction")

@@ -93,6 +93,7 @@ set(SHIM_SOURCES
     shim_packetizer.cc
     shim_peer_connection.cc
     shim_rtp_sender.cc
+    shim_rtp_receiver.cc
     shim_rtp_transceiver.cc
     shim_track_source.cc
     shim_data_channel.cc

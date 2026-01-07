@@ -252,27 +252,4 @@ SHIM_EXPORT int shim_rtp_sender_get_scalability_mode(
     return SHIM_OK;
 }
 
-/* ============================================================================
- * RTPReceiver Implementation
- * ========================================================================== */
-
-SHIM_EXPORT void* shim_rtp_receiver_get_track(ShimRTPReceiver* receiver) {
-    if (!receiver) return nullptr;
-    auto webrtc_receiver = reinterpret_cast<webrtc::RtpReceiverInterface*>(receiver);
-    return webrtc_receiver->track().get();
-}
-
-SHIM_EXPORT int shim_rtp_receiver_get_stats(ShimRTPReceiver* receiver, ShimRTCStats* out_stats) {
-    if (!receiver || !out_stats) return SHIM_ERROR_INVALID_PARAM;
-    memset(out_stats, 0, sizeof(ShimRTCStats));
-    // TODO: Implement stats collection
-    return SHIM_OK;
-}
-
-SHIM_EXPORT int shim_rtp_receiver_request_keyframe(ShimRTPReceiver* receiver) {
-    if (!receiver) return SHIM_ERROR_INVALID_PARAM;
-    // TODO: Send PLI via RTCP
-    return SHIM_OK;
-}
-
 }  // extern "C"

@@ -219,6 +219,8 @@ func NewVideoCapture(deviceID string, width, height, fps int) (*VideoCapture, er
 
 // videoCaptureCallbackBridge is the C-callable callback that dispatches to Go.
 // NOTE: C uses 'int' (32-bit) for width/height/strides, so we must use int32 to match.
+//
+//go:nocheckptr
 func videoCaptureCallbackBridge(
 	ctx uintptr,
 	yPlane, uPlane, vPlane uintptr,
@@ -390,6 +392,8 @@ func NewAudioCapture(deviceID string, sampleRate, channels int) (*AudioCapture, 
 
 // audioCaptureCallbackBridge is the C-callable callback that dispatches to Go.
 // NOTE: C uses 'int' (32-bit) for count/channels/rate, so we must use int32 to match.
+//
+//go:nocheckptr
 func audioCaptureCallbackBridge(
 	ctx uintptr,
 	samples uintptr,
@@ -563,6 +567,8 @@ func NewScreenCapture(id int64, isWindow bool, fps int) (*ScreenCapture, error) 
 // screenCaptureCallbackBridge is the C-callable callback that dispatches to Go.
 // Uses the same signature as videoCaptureCallbackBridge since screen capture produces video frames.
 // NOTE: C uses 'int' (32-bit) for width/height/strides, so we must use int32 to match.
+//
+//go:nocheckptr
 func screenCaptureCallbackBridge(
 	ctx uintptr,
 	yPlane, uPlane, vPlane uintptr,

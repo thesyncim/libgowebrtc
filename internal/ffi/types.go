@@ -108,6 +108,8 @@ func UintptrSlicePtr(s []uintptr) uintptr {
 }
 
 // GoBytes copies C memory to a Go byte slice and frees the C memory.
+//
+//go:nocheckptr
 func GoBytes(ptr uintptr, size int) []byte {
 	// Bounds validation
 	const maxSize = 256 * 1024 * 1024 // 256MB max
@@ -127,6 +129,8 @@ func GoBytes(ptr uintptr, size int) []byte {
 }
 
 // GoInt16Slice copies C int16 array to a Go slice and frees the C memory.
+//
+//go:nocheckptr
 func GoInt16Slice(ptr uintptr, numSamples int) []int16 {
 	// Bounds validation
 	const maxSamples = 48000 * 8 * 10 // 10 seconds of 8-channel 48kHz audio
@@ -156,14 +160,14 @@ func CString(s string) []byte {
 }
 
 // GoString converts a C string pointer to a Go string.
-func GoString(ptr uintptr) string {
-	if ptr == 0 {
+func GoString(ptr unsafe.Pointer) string {
+	if ptr == nil {
 		return ""
 	}
-	// Find the null terminator
+	// Find the null terminator using unsafe.Add for safe pointer arithmetic
 	var length int
 	for {
-		b := *(*byte)(unsafe.Pointer(ptr + uintptr(length)))
+		b := *(*byte)(unsafe.Add(ptr, length))
 		if b == 0 {
 			break
 		}
@@ -177,7 +181,7 @@ func GoString(ptr uintptr) string {
 		return ""
 	}
 	// Create slice header pointing to the data
-	bytes := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), length)
+	bytes := unsafe.Slice((*byte)(ptr), length)
 	return string(bytes)
 }
 
