@@ -21,27 +21,31 @@ var (
 	ErrLibraryNotFound = errors.New("libwebrtc_shim library not found")
 
 	// FFI error sentinels - these match shim error codes and support errors.Is().
-	ErrInvalidParam   = errors.New("invalid parameter")
-	ErrInitFailed     = errors.New("initialization failed")
-	ErrEncodeFailed   = errors.New("encode failed")
-	ErrDecodeFailed   = errors.New("decode failed")
-	ErrOutOfMemory    = errors.New("out of memory")
-	ErrNotSupported   = errors.New("not supported")
-	ErrNeedMoreData   = errors.New("need more data")
-	ErrBufferTooSmall = errors.New("buffer too small")
+	ErrInvalidParam        = errors.New("invalid parameter")
+	ErrInitFailed          = errors.New("initialization failed")
+	ErrEncodeFailed        = errors.New("encode failed")
+	ErrDecodeFailed        = errors.New("decode failed")
+	ErrOutOfMemory         = errors.New("out of memory")
+	ErrNotSupported        = errors.New("not supported")
+	ErrNeedMoreData        = errors.New("need more data")
+	ErrBufferTooSmall      = errors.New("buffer too small")
+	ErrNotFound            = errors.New("not found")
+	ErrRenegotiationNeeded = errors.New("renegotiation needed")
 )
 
 // Error codes from shim (int32 to match C int)
 const (
-	ShimOK                int32 = 0
-	ShimErrInvalidParam   int32 = -1
-	ShimErrInitFailed     int32 = -2
-	ShimErrEncodeFailed   int32 = -3
-	ShimErrDecodeFailed   int32 = -4
-	ShimErrOutOfMemory    int32 = -5
-	ShimErrNotSupported   int32 = -6
-	ShimErrNeedMoreData   int32 = -7
-	ShimErrBufferTooSmall int32 = -8
+	ShimOK                     int32 = 0
+	ShimErrInvalidParam        int32 = -1
+	ShimErrInitFailed          int32 = -2
+	ShimErrEncodeFailed        int32 = -3
+	ShimErrDecodeFailed        int32 = -4
+	ShimErrOutOfMemory         int32 = -5
+	ShimErrNotSupported        int32 = -6
+	ShimErrNeedMoreData        int32 = -7
+	ShimErrBufferTooSmall      int32 = -8
+	ShimErrNotFound            int32 = -9
+	ShimErrRenegotiationNeeded int32 = -10
 )
 
 // CodecType matches ShimCodecType in shim.h (int32 to match C int)
@@ -188,6 +192,8 @@ var (
 	shimTransceiverMid                 func(transceiver uintptr) uintptr
 	shimTransceiverGetSender           func(transceiver uintptr) uintptr
 	shimTransceiverGetReceiver         func(transceiver uintptr) uintptr
+	shimTransceiverSetCodecPreferences func(transceiver uintptr, codecs uintptr, count int32) int32
+	shimTransceiverGetCodecPreferences func(transceiver uintptr, codecs uintptr, maxCodecs int32, outCount uintptr) int32
 
 	// PeerConnection Extended
 	shimPeerConnectionAddTransceiver                func(pc uintptr, kind int32, direction int32) uintptr
@@ -209,6 +215,10 @@ var (
 	shimGetSupportedVideoCodecs func(codecs uintptr, maxCodecs int32, outCount uintptr) int32
 	shimGetSupportedAudioCodecs func(codecs uintptr, maxCodecs int32, outCount uintptr) int32
 	shimIsCodecSupported        func(mimeType uintptr) int32
+
+	// RTPSender Codec API
+	shimRTPSenderGetNegotiatedCodecs func(sender uintptr, codecs uintptr, maxCodecs int32, outCount uintptr) int32
+	shimRTPSenderSetPreferredCodec   func(sender uintptr, mimeType uintptr, payloadType int32) int32
 
 	// Bandwidth Estimation
 	shimPeerConnectionSetOnBandwidthEstimate func(pc uintptr, callback uintptr, ctx uintptr)
@@ -493,6 +503,8 @@ func registerFunctions() error {
 	purego.RegisterLibFunc(&shimTransceiverMid, libHandle, "shim_transceiver_mid")
 	purego.RegisterLibFunc(&shimTransceiverGetSender, libHandle, "shim_transceiver_get_sender")
 	purego.RegisterLibFunc(&shimTransceiverGetReceiver, libHandle, "shim_transceiver_get_receiver")
+	purego.RegisterLibFunc(&shimTransceiverSetCodecPreferences, libHandle, "shim_transceiver_set_codec_preferences")
+	purego.RegisterLibFunc(&shimTransceiverGetCodecPreferences, libHandle, "shim_transceiver_get_codec_preferences")
 
 	// PeerConnection Extended
 	purego.RegisterLibFunc(&shimPeerConnectionAddTransceiver, libHandle, "shim_peer_connection_add_transceiver")
@@ -514,6 +526,10 @@ func registerFunctions() error {
 	purego.RegisterLibFunc(&shimGetSupportedVideoCodecs, libHandle, "shim_get_supported_video_codecs")
 	purego.RegisterLibFunc(&shimGetSupportedAudioCodecs, libHandle, "shim_get_supported_audio_codecs")
 	purego.RegisterLibFunc(&shimIsCodecSupported, libHandle, "shim_is_codec_supported")
+
+	// RTPSender Codec API
+	purego.RegisterLibFunc(&shimRTPSenderGetNegotiatedCodecs, libHandle, "shim_rtp_sender_get_negotiated_codecs")
+	purego.RegisterLibFunc(&shimRTPSenderSetPreferredCodec, libHandle, "shim_rtp_sender_set_preferred_codec")
 
 	// Bandwidth Estimation
 	purego.RegisterLibFunc(&shimPeerConnectionSetOnBandwidthEstimate, libHandle, "shim_peer_connection_set_on_bandwidth_estimate")
@@ -544,6 +560,10 @@ func ShimError(code int32) error {
 		return ErrNeedMoreData
 	case ShimErrBufferTooSmall:
 		return ErrBufferTooSmall
+	case ShimErrNotFound:
+		return ErrNotFound
+	case ShimErrRenegotiationNeeded:
+		return ErrRenegotiationNeeded
 	default:
 		return fmt.Errorf("unknown shim error: %d", code)
 	}

@@ -41,6 +41,8 @@ typedef enum {
     SHIM_ERROR_NOT_SUPPORTED = -6,
     SHIM_ERROR_NEED_MORE_DATA = -7,
     SHIM_ERROR_BUFFER_TOO_SMALL = -8,
+    SHIM_ERROR_NOT_FOUND = -9,
+    SHIM_ERROR_RENEGOTIATION_NEEDED = -10,
 } ShimError;
 
 /* ============================================================================
@@ -795,6 +797,80 @@ SHIM_EXPORT int shim_get_supported_audio_codecs(
  * @return 1 if supported, 0 otherwise
  */
 SHIM_EXPORT int shim_is_codec_supported(const char* mime_type);
+
+/* ============================================================================
+ * RTPSender Codec API
+ * ========================================================================== */
+
+/*
+ * Get negotiated codecs for this sender from RtpParameters.
+ * These are the codecs that were actually negotiated in SDP.
+ *
+ * @param sender RTPSender handle
+ * @param codecs Pre-allocated array for codec capabilities
+ * @param max_codecs Maximum codecs to return
+ * @param out_count Output: actual number of codecs
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_rtp_sender_get_negotiated_codecs(
+    ShimRTPSender* sender,
+    ShimCodecCapability* codecs,
+    int max_codecs,
+    int* out_count
+);
+
+/*
+ * Set the preferred codec for this sender.
+ * This reorders the codec list in RtpParameters to prefer the specified codec.
+ * The codec must have been negotiated in SDP.
+ * After calling this, a renegotiation is typically needed for the change to take effect.
+ *
+ * @param sender RTPSender handle
+ * @param mime_type Codec MIME type (e.g., "video/AV1")
+ * @param payload_type Optional payload type (0 to auto-detect)
+ * @return SHIM_OK on success, SHIM_ERROR_NOT_FOUND if codec not negotiated
+ */
+SHIM_EXPORT int shim_rtp_sender_set_preferred_codec(
+    ShimRTPSender* sender,
+    const char* mime_type,
+    int payload_type
+);
+
+/* ============================================================================
+ * Transceiver Codec Preferences API
+ * ========================================================================== */
+
+/*
+ * Set codec preferences for a transceiver.
+ * This controls which codecs are negotiated in SDP.
+ * Must be called before creating offer/answer.
+ *
+ * @param transceiver Transceiver handle
+ * @param codecs Array of codec capabilities (use GetSupportedVideoCodecs/GetSupportedAudioCodecs)
+ * @param count Number of codecs in array
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_transceiver_set_codec_preferences(
+    ShimRTPTransceiver* transceiver,
+    const ShimCodecCapability* codecs,
+    int count
+);
+
+/*
+ * Get codec preferences for a transceiver.
+ *
+ * @param transceiver Transceiver handle
+ * @param codecs Output array to fill
+ * @param max_codecs Maximum number of codecs to return
+ * @param out_count Output: actual count
+ * @return SHIM_OK on success
+ */
+SHIM_EXPORT int shim_transceiver_get_codec_preferences(
+    ShimRTPTransceiver* transceiver,
+    ShimCodecCapability* codecs,
+    int max_codecs,
+    int* out_count
+);
 
 /* ============================================================================
  * Bandwidth Estimation API

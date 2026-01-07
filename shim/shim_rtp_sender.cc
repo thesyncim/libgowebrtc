@@ -13,6 +13,8 @@
 #include "api/rtp_sender_interface.h"
 #include "api/rtp_receiver_interface.h"
 #include "api/rtp_parameters.h"
+#include "api/media_types.h"
+#include "media/base/media_constants.h"
 
 extern "C" {
 
@@ -247,6 +249,114 @@ SHIM_EXPORT int shim_rtp_sender_get_scalability_mode(
         mode_out[mode_out_size - 1] = '\0';
     } else {
         mode_out[0] = '\0';
+    }
+
+    return SHIM_OK;
+}
+
+SHIM_EXPORT int shim_rtp_sender_get_negotiated_codecs(
+    ShimRTPSender* sender,
+    ShimCodecCapability* codecs,
+    int max_codecs,
+    int* out_count
+) {
+    if (!sender || !codecs || !out_count) return SHIM_ERROR_INVALID_PARAM;
+
+    auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
+    auto params = webrtc_sender->GetParameters();
+
+    int count = 0;
+    for (const auto& codec : params.codecs) {
+        if (count >= max_codecs) break;
+
+        memset(&codecs[count], 0, sizeof(ShimCodecCapability));
+
+        // Build mime type from kind + name
+        std::string kind_str = (webrtc_sender->media_type() == webrtc::MediaType::VIDEO) ? "video" : "audio";
+        std::string mime = kind_str + "/" + codec.name;
+        strncpy(codecs[count].mime_type, mime.c_str(), sizeof(codecs[count].mime_type) - 1);
+
+        codecs[count].clock_rate = codec.clock_rate.value_or(0);
+        codecs[count].channels = codec.num_channels.value_or(0);
+        codecs[count].payload_type = codec.payload_type;
+
+        // Build sdp_fmtp_line from parameters
+        std::string fmtp;
+        for (const auto& [key, value] : codec.parameters) {
+            if (!fmtp.empty()) fmtp += ";";
+            fmtp += key + "=" + value;
+        }
+        strncpy(codecs[count].sdp_fmtp_line, fmtp.c_str(), sizeof(codecs[count].sdp_fmtp_line) - 1);
+
+        count++;
+    }
+
+    *out_count = count;
+    return SHIM_OK;
+}
+
+SHIM_EXPORT int shim_rtp_sender_set_preferred_codec(
+    ShimRTPSender* sender,
+    const char* mime_type,
+    int payload_type
+) {
+    if (!sender || !mime_type) return SHIM_ERROR_INVALID_PARAM;
+
+    auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
+    auto params = webrtc_sender->GetParameters();
+
+    if (params.codecs.empty()) {
+        return SHIM_ERROR_NOT_FOUND;
+    }
+
+    // Parse mime_type to get kind and codec name
+    std::string mime = mime_type;
+    std::string codec_name;
+    webrtc::MediaType kind = webrtc::MediaType::VIDEO;
+    size_t slash = mime.find('/');
+    if (slash != std::string::npos) {
+        std::string kind_str = mime.substr(0, slash);
+        codec_name = mime.substr(slash + 1);
+        if (kind_str == "audio") {
+            kind = webrtc::MediaType::AUDIO;
+        }
+    } else {
+        codec_name = mime;
+    }
+
+    // Find the codec in the negotiated list
+    const webrtc::RtpCodecParameters* found_codec = nullptr;
+    for (const auto& codec : params.codecs) {
+        bool name_match = (codec.name == codec_name);
+        bool pt_match = (payload_type == 0 || codec.payload_type == payload_type);
+        if (name_match && pt_match) {
+            found_codec = &codec;
+            break;
+        }
+    }
+
+    if (!found_codec) {
+        return SHIM_ERROR_NOT_FOUND;
+    }
+
+    // Set the codec on each encoding using the encoding.codec field
+    // This tells the encoder which codec to use without reordering the codecs list
+    for (auto& encoding : params.encodings) {
+        webrtc::RtpCodec preferred;
+        preferred.name = found_codec->name;
+        preferred.kind = kind;
+        preferred.clock_rate = found_codec->clock_rate;
+        preferred.num_channels = found_codec->num_channels;
+        preferred.parameters = found_codec->parameters;
+        encoding.codec = preferred;
+    }
+
+    // Set the updated parameters
+    auto result = webrtc_sender->SetParameters(params);
+    if (!result.ok()) {
+        // Log the error for debugging
+        fprintf(stderr, "SHIM DEBUG: SetParameters failed: %s\n", result.message());
+        return SHIM_ERROR_RENEGOTIATION_NEEDED;
     }
 
     return SHIM_OK;

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>libgowebrtc Codec Preferences Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 {
+            color: #00d9ff;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        .stats {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: monospace;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        .label {
+            color: #888;
+        }
+        .value {
+            color: #00d9ff;
+            font-weight: bold;
+        }
+        button {
+            background: #00d9ff;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #00b8d9;
+        }
+        button:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+        .info {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        pre {
+            background: #16213e;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>libgowebrtc SetCodecPreferences Demo</h1>
+    <p>Demonstrates codec negotiation with pure libgowebrtc (pkg/pc)</p>
+
+    <div class="info">
+        <strong>What this demo shows:</strong>
+        <ul>
+            <li>SetCodecPreferences API to control which codecs appear in SDP</li>
+            <li>Both VP8 and AV1 negotiated in the initial SDP</li>
+            <li>Video encoded and sent using libwebrtc's internal encoder</li>
+        </ul>
+        <p><strong>Note:</strong> True mid-stream codec switching without renegotiation requires RTP-level control.
+        With pure libwebrtc, the codec is determined by SDP negotiation.</p>
+    </div>
+
+    <button id="startBtn" onclick="start()">Start Demo</button>
+
+    <video id="video" autoplay playsinline muted></video>
+
+    <div class="stats">
+        <div class="stats-row">
+            <span class="label">Connection State:</span>
+            <span id="connState" class="value">-</span>
+        </div>
+        <div class="stats-row">
+            <span class="label">Current Codec:</span>
+            <span id="codec" class="value">-</span>
+        </div>
+        <div class="stats-row">
+            <span class="label">Packets Received:</span>
+            <span id="packets" class="value">0</span>
+        </div>
+        <div class="stats-row">
+            <span class="label">Bytes Received:</span>
+            <span id="bytes" class="value">0</span>
+        </div>
+        <div class="stats-row">
+            <span class="label">Frames Decoded:</span>
+            <span id="frames" class="value">0</span>
+        </div>
+        <div class="stats-row">
+            <span class="label">Resolution:</span>
+            <span id="resolution" class="value">-</span>
+        </div>
+    </div>
+
+    <h3>Negotiated Codecs in SDP:</h3>
+    <pre id="sdpCodecs">Click Start to see negotiated codecs</pre>
+
+    <script>
+        let pc = null;
+
+        async function start() {
+            document.getElementById('startBtn').disabled = true;
+
+            // Create peer connection
+            pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            pc.onconnectionstatechange = () => {
+                document.getElementById('connState').textContent = pc.connectionState;
+            };
+
+            pc.ontrack = (event) => {
+                console.log('Track received:', event.track.kind);
+                document.getElementById('video').srcObject = event.streams[0];
+            };
+
+            // Add transceiver for video (receive only)
+            // Request both VP8 and AV1 codecs
+            const transceiver = pc.addTransceiver('video', { direction: 'recvonly' });
+
+            // Try to set codec preferences if supported
+            if (transceiver.setCodecPreferences) {
+                const codecs = RTCRtpReceiver.getCapabilities('video').codecs;
+                console.log('Available browser codecs:', codecs.map(c => c.mimeType));
+
+                // Filter to only VP8 and AV1, VP8 first
+                const preferredCodecs = codecs.filter(c =>
+                    c.mimeType === 'video/VP8' || c.mimeType === 'video/AV1'
+                );
+                console.log('Setting preferred codecs:', preferredCodecs.map(c => c.mimeType));
+
+                if (preferredCodecs.length > 0) {
+                    transceiver.setCodecPreferences(preferredCodecs);
+                }
+            }
+
+            // Create offer
+            const offer = await pc.createOffer();
+            console.log('Offer SDP:', offer.sdp);
+            await pc.setLocalDescription(offer);
+
+            // Wait for ICE gathering
+            await new Promise(resolve => {
+                if (pc.iceGatheringState === 'complete') {
+                    resolve();
+                } else {
+                    pc.onicegatheringstatechange = () => {
+                        if (pc.iceGatheringState === 'complete') resolve();
+                    };
+                }
+            });
+
+            // Send offer to server
+            const response = await fetch('/offer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pc.localDescription)
+            });
+
+            const answer = await response.json();
+            console.log('Answer SDP:', answer.sdp);
+            await pc.setRemoteDescription(answer);
+
+            // Show negotiated codecs from SDP
+            showNegotiatedCodecs(answer.sdp);
+
+            // Start stats polling
+            setInterval(updateStats, 1000);
+        }
+
+        function showNegotiatedCodecs(sdp) {
+            // Parse SDP for codec info
+            const lines = sdp.split('\n');
+            const codecLines = [];
+
+            for (const line of lines) {
+                if (line.startsWith('a=rtpmap:') || line.startsWith('a=fmtp:')) {
+                    codecLines.push(line.trim());
+                }
+            }
+
+            document.getElementById('sdpCodecs').textContent = codecLines.join('\n') || 'No codecs found';
+        }
+
+        async function updateStats() {
+            if (!pc) return;
+
+            const stats = await pc.getStats();
+
+            stats.forEach(report => {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                    document.getElementById('packets').textContent = report.packetsReceived || 0;
+                    document.getElementById('bytes').textContent = formatBytes(report.bytesReceived || 0);
+                    document.getElementById('frames').textContent = report.framesDecoded || 0;
+
+                    // Get codec from codecId
+                    if (report.codecId) {
+                        const codecReport = stats.get(report.codecId);
+                        if (codecReport) {
+                            document.getElementById('codec').textContent = codecReport.mimeType;
+                        }
+                    }
+                }
+            });
+
+            // Update resolution
+            const video = document.getElementById('video');
+            if (video.videoWidth > 0) {
+                document.getElementById('resolution').textContent =
+                    `${video.videoWidth}x${video.videoHeight}`;
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+        }
+    </script>
+</body>
+</html>

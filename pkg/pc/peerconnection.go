@@ -476,6 +476,48 @@ func (s *RTPSender) GetScalabilityMode() (string, error) {
 	return ffi.RTPSenderGetScalabilityMode(s.handle)
 }
 
+// GetNegotiatedCodecs returns the list of codecs negotiated in SDP for this sender.
+// These are the codecs available for use with SetPreferredCodec.
+func (s *RTPSender) GetNegotiatedCodecs() ([]CodecCapability, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == 0 {
+		return nil, errors.New("sender not initialized")
+	}
+
+	ffiCodecs, err := ffi.RTPSenderGetNegotiatedCodecs(s.handle)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertCodecCapabilities(ffiCodecs), nil
+}
+
+// SetPreferredCodec sets the preferred codec for this sender.
+// The codec must have been negotiated in the initial SDP (check GetNegotiatedCodecs).
+// Pass payloadType=0 to auto-select based on mimeType.
+//
+// Note: Due to WebRTC limitations, this may require renegotiation to take effect.
+// If renegotiation is needed, returns ErrRenegotiationNeeded.
+// After setting, call CreateOffer/SetLocalDescription to apply the change.
+func (s *RTPSender) SetPreferredCodec(mimeType string, payloadType int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.handle == 0 {
+		return errors.New("sender not initialized")
+	}
+
+	return ffi.RTPSenderSetPreferredCodec(s.handle, mimeType, payloadType)
+}
+
+// ErrRenegotiationNeeded is returned when codec switching requires SDP renegotiation.
+var ErrRenegotiationNeeded = ffi.ErrRenegotiationNeeded
+
+// ErrNotFound is returned when the requested codec was not negotiated.
+var ErrNotFound = ffi.ErrNotFound
+
 // RTCPFeedbackType represents the type of RTCP feedback.
 type RTCPFeedbackType int
 
@@ -763,6 +805,27 @@ func (t *RTPTransceiver) Stop() error {
 		return ffi.TransceiverStop(t.handle)
 	}
 	return nil
+}
+
+// SetCodecPreferences sets which codecs are negotiated for this transceiver.
+// Must be called before creating offer/answer.
+// This allows specifying which codecs should be included in SDP negotiation.
+func (t *RTPTransceiver) SetCodecPreferences(codecs []CodecCapability) error {
+	if t.handle == 0 {
+		return errors.New("transceiver not initialized")
+	}
+
+	// Convert to FFI format
+	ffiCodecs := make([]ffi.CodecCapability, len(codecs))
+	for i, c := range codecs {
+		copy(ffiCodecs[i].MimeType[:], c.MimeType)
+		ffiCodecs[i].ClockRate = int32(c.ClockRate)
+		ffiCodecs[i].Channels = int32(c.Channels)
+		copy(ffiCodecs[i].SDPFmtpLine[:], c.SDPFmtpLine)
+		ffiCodecs[i].PayloadType = int32(c.PayloadType)
+	}
+
+	return ffi.TransceiverSetCodecPreferences(t.handle, ffiCodecs)
 }
 
 // RTPSendParameters for sender configuration.
@@ -1659,11 +1722,64 @@ type TransceiverInit struct {
 }
 
 // GetTransceivers returns all transceivers.
+// This queries libwebrtc for the current list, which includes transceivers
+// created implicitly by AddTrack().
 func (pc *PeerConnection) GetTransceivers() []*RTPTransceiver {
-	pc.mu.RLock()
-	defer pc.mu.RUnlock()
-	result := make([]*RTPTransceiver, len(pc.transceivers))
-	copy(result, pc.transceivers)
+	if pc.closed.Load() || pc.handle == 0 {
+		return nil
+	}
+
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+
+	// Query libwebrtc for actual transceivers
+	const maxTransceivers = 16
+	handles, err := ffi.PeerConnectionGetTransceivers(pc.handle, maxTransceivers)
+	if err != nil {
+		return nil
+	}
+
+	result := make([]*RTPTransceiver, 0, len(handles))
+	for _, handle := range handles {
+		if handle == 0 {
+			continue
+		}
+
+		// Check if we already have this transceiver cached
+		var existing *RTPTransceiver
+		for _, t := range pc.transceivers {
+			if t.handle == handle {
+				existing = t
+				break
+			}
+		}
+
+		if existing != nil {
+			result = append(result, existing)
+		} else {
+			// Create new wrapper for transceiver we haven't seen
+			transceiver := &RTPTransceiver{
+				handle: handle,
+				pc:     pc,
+			}
+
+			// Get sender and receiver handles
+			senderHandle := ffi.TransceiverGetSender(handle)
+			receiverHandle := ffi.TransceiverGetReceiver(handle)
+
+			if senderHandle != 0 {
+				transceiver.sender = &RTPSender{handle: senderHandle, pc: pc}
+			}
+			if receiverHandle != 0 {
+				transceiver.receiver = &RTPReceiver{handle: receiverHandle, pc: pc}
+			}
+
+			// Cache for future calls
+			pc.transceivers = append(pc.transceivers, transceiver)
+			result = append(result, transceiver)
+		}
+	}
+
 	return result
 }
 

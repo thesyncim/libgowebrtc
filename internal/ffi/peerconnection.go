@@ -1143,6 +1143,42 @@ func TransceiverGetReceiver(transceiver uintptr) uintptr {
 	return shimTransceiverGetReceiver(transceiver)
 }
 
+// TransceiverSetCodecPreferences sets which codecs are negotiated for this transceiver.
+// Must be called before creating offer/answer.
+func TransceiverSetCodecPreferences(transceiver uintptr, codecs []CodecCapability) error {
+	if !libLoaded.Load() || shimTransceiverSetCodecPreferences == nil {
+		return ErrLibraryNotLoaded
+	}
+
+	if len(codecs) == 0 {
+		// Clear preferences (use default)
+		result := shimTransceiverSetCodecPreferences(transceiver, 0, 0)
+		return ShimError(result)
+	}
+
+	// CodecCapability already matches shim structure, pass directly
+	result := shimTransceiverSetCodecPreferences(transceiver, uintptr(unsafe.Pointer(&codecs[0])), int32(len(codecs)))
+	return ShimError(result)
+}
+
+// TransceiverGetCodecPreferences gets the codec preferences for this transceiver.
+func TransceiverGetCodecPreferences(transceiver uintptr) ([]CodecCapability, error) {
+	if !libLoaded.Load() || shimTransceiverGetCodecPreferences == nil {
+		return nil, ErrLibraryNotLoaded
+	}
+
+	const maxCodecs = 32
+	codecs := make([]CodecCapability, maxCodecs)
+	var count int32
+
+	result := shimTransceiverGetCodecPreferences(transceiver, uintptr(unsafe.Pointer(&codecs[0])), maxCodecs, Int32Ptr(&count))
+	if err := ShimError(result); err != nil {
+		return nil, err
+	}
+
+	return codecs[:count], nil
+}
+
 // ============================================================================
 // PeerConnection Extended API
 // ============================================================================
@@ -1839,6 +1875,55 @@ func IsCodecSupported(mimeType string) bool {
 	result := shimIsCodecSupported(ByteSlicePtr(cstr)) != 0
 	runtime.KeepAlive(cstr)
 	return result
+}
+
+// ============================================================================
+// RTPSender Codec API
+// ============================================================================
+
+// RTPSenderGetNegotiatedCodecs returns the list of codecs negotiated for a sender.
+func RTPSenderGetNegotiatedCodecs(sender uintptr) ([]CodecCapability, error) {
+	if !libLoaded.Load() || shimRTPSenderGetNegotiatedCodecs == nil {
+		return nil, ErrLibraryNotLoaded
+	}
+
+	codecs := make([]CodecCapability, 16)
+	var count int32
+	result := shimRTPSenderGetNegotiatedCodecs(
+		sender,
+		uintptr(unsafe.Pointer(&codecs[0])),
+		int32(len(codecs)),
+		Int32Ptr(&count),
+	)
+	runtime.KeepAlive(&count)
+	runtime.KeepAlive(&codecs)
+	if err := ShimError(result); err != nil {
+		return nil, err
+	}
+
+	// Find actual count by checking for non-empty mime types
+	actualCount := 0
+	for i := range codecs {
+		if codecs[i].MimeType[0] != 0 {
+			actualCount++
+		}
+	}
+
+	return codecs[:actualCount], nil
+}
+
+// RTPSenderSetPreferredCodec sets the preferred codec for a sender.
+// Returns ErrNotFound if the codec was not negotiated.
+// Returns ErrRenegotiationNeeded if SetParameters rejected the change.
+func RTPSenderSetPreferredCodec(sender uintptr, mimeType string, payloadType int) error {
+	if !libLoaded.Load() || shimRTPSenderSetPreferredCodec == nil {
+		return ErrLibraryNotLoaded
+	}
+
+	cstr := CString(mimeType)
+	result := shimRTPSenderSetPreferredCodec(sender, ByteSlicePtr(cstr), int32(payloadType))
+	runtime.KeepAlive(cstr)
+	return ShimError(result)
 }
 
 // ============================================================================
