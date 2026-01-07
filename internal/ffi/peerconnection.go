@@ -90,19 +90,9 @@ func initCallbacks() {
 		}
 
 		// Copy data from C memory to Go slices (avoid holding pointers across calls)
-		yData := make([]byte, ySize)
-		uData := make([]byte, uSize)
-		vData := make([]byte, vSize)
-
-		if yPlane != 0 {
-			copy(yData, unsafe.Slice((*byte)(unsafe.Pointer(yPlane)), ySize))
-		}
-		if uPlane != 0 {
-			copy(uData, unsafe.Slice((*byte)(unsafe.Pointer(uPlane)), uSize))
-		}
-		if vPlane != 0 {
-			copy(vData, unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize))
-		}
+		yData := CopyBytesFromC(yPlane, ySize)
+		uData := CopyBytesFromC(uPlane, uSize)
+		vData := CopyBytesFromC(vPlane, vSize)
 
 		safeCallback(func() {
 			cb(int(width), int(height), yData, uData, vData, int(yStride), int(uStride), int(vStride), timestampUs)
@@ -130,10 +120,7 @@ func initCallbacks() {
 		totalSamples := int(numSamples) * int(channels)
 
 		// Copy data from C memory to Go slice
-		samplesData := make([]int16, totalSamples)
-		if samples != 0 {
-			copy(samplesData, unsafe.Slice((*int16)(unsafe.Pointer(samples)), totalSamples))
-		}
+		samplesData := CopyInt16FromC(samples, totalSamples)
 
 		safeCallback(func() {
 			cb(samplesData, int(sampleRate), int(channels), timestampUs)
@@ -470,7 +457,7 @@ func DataChannelLabel(dc uintptr) string {
 		return ""
 	}
 	ptr := shimDataChannelLabel(dc)
-	return GoString(unsafe.Pointer(ptr))
+	return GoStringFromC(ptr)
 }
 
 // DataChannelClose closes a data channel.
@@ -530,9 +517,12 @@ func initDCMessageCallback() {
 				return
 			}
 			// Copy data before callback (C memory may be reused)
-			goData := make([]byte, size)
-			if size > 0 && data != 0 {
-				copy(goData, unsafe.Slice((*byte)(unsafe.Pointer(data)), size))
+			// Note: size=0 is valid for empty messages
+			var goData []byte
+			if size > 0 {
+				goData = CopyBytesFromC(data, int(size))
+			} else {
+				goData = []byte{}
 			}
 			safeCallback(func() { cb(goData, isBinary != 0) })
 		}
@@ -775,7 +765,7 @@ func TrackKind(track uintptr) string {
 		return ""
 	}
 	ptr := shimTrackKind(track)
-	return GoString(unsafe.Pointer(ptr))
+	return GoStringFromC(ptr)
 }
 
 // TrackID returns the track ID.
@@ -784,7 +774,7 @@ func TrackID(track uintptr) string {
 		return ""
 	}
 	ptr := shimTrackID(track)
-	return GoString(unsafe.Pointer(ptr))
+	return GoStringFromC(ptr)
 }
 
 // ============================================================================
@@ -927,6 +917,19 @@ type BandwidthEstimate struct {
 	CongestionWindow int32
 	_                int32 // padding
 	LossRate         float64
+}
+
+// ReadBandwidthEstimateFromC copies a BandwidthEstimate from C memory.
+//
+//go:nocheckptr
+func ReadBandwidthEstimateFromC(ptr uintptr) *BandwidthEstimate {
+	if ptr == 0 {
+		return nil
+	}
+	src := (*BandwidthEstimate)(unsafe.Pointer(ptr))
+	// Copy the struct to avoid holding C pointers
+	estimate := *src
+	return &estimate
 }
 
 // RTPSenderGetStats gets statistics for a sender.
@@ -1124,7 +1127,7 @@ func TransceiverMid(transceiver uintptr) string {
 		return ""
 	}
 	ptr := shimTransceiverMid(transceiver)
-	return GoString(unsafe.Pointer(ptr))
+	return GoStringFromC(ptr)
 }
 
 // TransceiverGetSender gets the sender associated with a transceiver.
@@ -1363,7 +1366,7 @@ func initOnTrackCallback() {
 		onTrackCallbackMu.RUnlock()
 
 		if ok && cb != nil {
-			streamsStr := GoString(unsafe.Pointer(streams))
+			streamsStr := GoStringFromC(streams)
 			safeCallback(func() {
 				cb(track, receiver, streamsStr)
 			})
@@ -1426,12 +1429,12 @@ func initOnICECandidateCallback() {
 		if ok && cb != nil && candidatePtr != 0 {
 			// Read ICECandidate fields from memory
 			// struct layout: const char* candidate; const char* sdp_mid; int sdp_mline_index;
-			candidateStrPtr := *(*uintptr)(unsafe.Pointer(candidatePtr))
-			sdpMidPtr := *(*uintptr)(unsafe.Pointer(candidatePtr + unsafe.Sizeof(uintptr(0))))
-			sdpMLineIndex := *(*int32)(unsafe.Pointer(candidatePtr + 2*unsafe.Sizeof(uintptr(0))))
+			candidateStrPtr := ReadUintptrFromC(candidatePtr)
+			sdpMidPtr := ReadUintptrFromC(PtrAt(candidatePtr, unsafe.Sizeof(uintptr(0))))
+			sdpMLineIndex := ReadInt32FromC(PtrAt(candidatePtr, 2*unsafe.Sizeof(uintptr(0))))
 
-			candidate := GoString(unsafe.Pointer(candidateStrPtr))
-			sdpMid := GoString(unsafe.Pointer(sdpMidPtr))
+			candidate := GoStringFromC(candidateStrPtr)
+			sdpMid := GoStringFromC(sdpMidPtr)
 			safeCallback(func() {
 				cb(candidate, sdpMid, int(sdpMLineIndex))
 			})
@@ -1954,10 +1957,13 @@ func initBWECallback() {
 		bweCallbackMu.RUnlock()
 
 		if ok && cb != nil && estimatePtr != 0 {
-			estimate := (*BandwidthEstimate)(unsafe.Pointer(estimatePtr))
-			safeCallback(func() {
-				cb(estimate)
-			})
+			// Copy the estimate from C memory to avoid holding C pointers
+			estimate := ReadBandwidthEstimateFromC(estimatePtr)
+			if estimate != nil {
+				safeCallback(func() {
+					cb(estimate)
+				})
+			}
 		}
 	})
 

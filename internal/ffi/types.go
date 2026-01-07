@@ -108,8 +108,6 @@ func UintptrSlicePtr(s []uintptr) uintptr {
 }
 
 // GoBytes copies C memory to a Go byte slice and frees the C memory.
-//
-//go:nocheckptr
 func GoBytes(ptr uintptr, size int) []byte {
 	// Bounds validation
 	const maxSize = 256 * 1024 * 1024 // 256MB max
@@ -117,10 +115,8 @@ func GoBytes(ptr uintptr, size int) []byte {
 		return nil
 	}
 
-	// Copy the data
-	data := make([]byte, size)
-	src := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), size)
-	copy(data, src)
+	// Copy the data using helper
+	data := CopyBytesFromC(ptr, size)
 
 	// Free the C memory
 	shimFreeBuffer(ptr)
@@ -129,8 +125,6 @@ func GoBytes(ptr uintptr, size int) []byte {
 }
 
 // GoInt16Slice copies C int16 array to a Go slice and frees the C memory.
-//
-//go:nocheckptr
 func GoInt16Slice(ptr uintptr, numSamples int) []int16 {
 	// Bounds validation
 	const maxSamples = 48000 * 8 * 10 // 10 seconds of 8-channel 48kHz audio
@@ -138,10 +132,8 @@ func GoInt16Slice(ptr uintptr, numSamples int) []int16 {
 		return nil
 	}
 
-	// Copy the data
-	samples := make([]int16, numSamples)
-	src := unsafe.Slice((*int16)(unsafe.Pointer(ptr)), numSamples)
-	copy(samples, src)
+	// Copy the data using helper
+	samples := CopyInt16FromC(ptr, numSamples)
 
 	// Free the C memory
 	shimFreeBuffer(ptr)
@@ -202,4 +194,101 @@ func ByteArrayToString(b []byte) string {
 		}
 	}
 	return string(b)
+}
+
+// ============================================================================
+// C Memory Access Helpers
+// ============================================================================
+// These functions safely convert C memory pointers to Go types.
+// They use //go:nocheckptr because go vet cannot verify that uintptr values
+// from FFI callbacks point to valid C memory. This is a known limitation
+// documented in https://github.com/golang/go/issues/58625
+
+// CopyBytesFromC copies bytes from C memory to a new Go slice.
+// Returns nil if ptr is 0 or size <= 0.
+//
+//go:nocheckptr
+func CopyBytesFromC(ptr uintptr, size int) []byte {
+	if ptr == 0 || size <= 0 {
+		return nil
+	}
+	data := make([]byte, size)
+	copy(data, unsafe.Slice((*byte)(unsafe.Pointer(ptr)), size))
+	return data
+}
+
+// CopyInt16FromC copies int16 values from C memory to a new Go slice.
+// Returns nil if ptr is 0 or length <= 0.
+//
+//go:nocheckptr
+func CopyInt16FromC(ptr uintptr, length int) []int16 {
+	if ptr == 0 || length <= 0 {
+		return nil
+	}
+	data := make([]int16, length)
+	copy(data, unsafe.Slice((*int16)(unsafe.Pointer(ptr)), length))
+	return data
+}
+
+// ReadUintptrFromC reads a uintptr value from C memory at the given address.
+//
+//go:nocheckptr
+func ReadUintptrFromC(ptr uintptr) uintptr {
+	if ptr == 0 {
+		return 0
+	}
+	return *(*uintptr)(unsafe.Pointer(ptr))
+}
+
+// ReadInt32FromC reads an int32 value from C memory at the given address.
+//
+//go:nocheckptr
+func ReadInt32FromC(ptr uintptr) int32 {
+	if ptr == 0 {
+		return 0
+	}
+	return *(*int32)(unsafe.Pointer(ptr))
+}
+
+// ReadUint32FromC reads a uint32 value from C memory at the given address.
+//
+//go:nocheckptr
+func ReadUint32FromC(ptr uintptr) uint32 {
+	if ptr == 0 {
+		return 0
+	}
+	return *(*uint32)(unsafe.Pointer(ptr))
+}
+
+// ReadFloat64FromC reads a float64 value from C memory at the given address.
+//
+//go:nocheckptr
+func ReadFloat64FromC(ptr uintptr) float64 {
+	if ptr == 0 {
+		return 0
+	}
+	return *(*float64)(unsafe.Pointer(ptr))
+}
+
+// PtrAt returns pointer offset by n bytes from base.
+func PtrAt(base uintptr, offset uintptr) uintptr {
+	return base + offset
+}
+
+// UnsafePointerFromC converts a uintptr from C to unsafe.Pointer.
+// This is used for C string pointers returned by FFI functions.
+//
+//go:nocheckptr
+//go:noinline
+func UnsafePointerFromC(ptr uintptr) unsafe.Pointer {
+	return unsafe.Pointer(ptr)
+}
+
+// GoStringFromC converts a C string pointer (as uintptr) to a Go string.
+// This is a convenience function that combines UnsafePointerFromC and GoString.
+func GoStringFromC(ptr uintptr) string {
+	if ptr == 0 {
+		return ""
+	}
+	return GoString(UnsafePointerFromC(ptr))
 }

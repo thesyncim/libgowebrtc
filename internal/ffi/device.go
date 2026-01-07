@@ -264,12 +264,9 @@ func videoCaptureCallbackBridge(
 
 	// Copy data from C memory to Go-managed memory for safety.
 	// This ensures the callback can safely store/use the data after returning.
-	yData := make([]byte, ySize)
-	uData := make([]byte, uSize)
-	vData := make([]byte, vSize)
-	copy(yData, unsafe.Slice((*byte)(unsafe.Pointer(yPlane)), ySize))
-	copy(uData, unsafe.Slice((*byte)(unsafe.Pointer(uPlane)), uSize))
-	copy(vData, unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize))
+	yData := CopyBytesFromC(yPlane, ySize)
+	uData := CopyBytesFromC(uPlane, uSize)
+	vData := CopyBytesFromC(vPlane, vSize)
 
 	frame := &CapturedVideoFrame{
 		YPlane:      yData,
@@ -421,8 +418,7 @@ func audioCaptureCallbackBridge(
 	// Copy data from C memory to Go-managed memory for safety.
 	// This ensures the callback can safely store/use the data after returning.
 	sampleCount := int(numSamples) * int(numChannels)
-	samplesData := make([]int16, sampleCount)
-	copy(samplesData, unsafe.Slice((*int16)(unsafe.Pointer(samples)), sampleCount))
+	samplesData := CopyInt16FromC(samples, sampleCount)
 
 	frame := &CapturedAudioFrame{
 		Samples:     samplesData,
@@ -612,12 +608,9 @@ func screenCaptureCallbackBridge(
 
 	// Copy data from C memory to Go-managed memory for safety.
 	// This ensures the callback can safely store/use the data after returning.
-	yData := make([]byte, ySize)
-	uData := make([]byte, uSize)
-	vData := make([]byte, vSize)
-	copy(yData, unsafe.Slice((*byte)(unsafe.Pointer(yPlane)), ySize))
-	copy(uData, unsafe.Slice((*byte)(unsafe.Pointer(uPlane)), uSize))
-	copy(vData, unsafe.Slice((*byte)(unsafe.Pointer(vPlane)), vSize))
+	yData := CopyBytesFromC(yPlane, ySize)
+	uData := CopyBytesFromC(uPlane, uSize)
+	vData := CopyBytesFromC(vPlane, vSize)
 
 	frame := &CapturedVideoFrame{
 		YPlane:      yData,
