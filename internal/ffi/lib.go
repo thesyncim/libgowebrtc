@@ -460,6 +460,12 @@ func registerFunctions() error {
 	purego.RegisterLibFunc(&shimScreenCaptureStop, libHandle, "shim_screen_capture_stop")
 	purego.RegisterLibFunc(&shimScreenCaptureDestroy, libHandle, "shim_screen_capture_destroy")
 
+	// Permission Functions
+	purego.RegisterLibFunc(&shimCheckCameraPermission, libHandle, "shim_check_camera_permission")
+	purego.RegisterLibFunc(&shimCheckMicrophonePermission, libHandle, "shim_check_microphone_permission")
+	purego.RegisterLibFunc(&shimRequestCameraPermission, libHandle, "shim_request_camera_permission")
+	purego.RegisterLibFunc(&shimRequestMicrophonePermission, libHandle, "shim_request_microphone_permission")
+
 	// Video Track Source
 	purego.RegisterLibFunc(&shimVideoTrackSourceCreate, libHandle, "shim_video_track_source_create")
 	purego.RegisterLibFunc(&shimVideoTrackSourcePushFrame, libHandle, "shim_video_track_source_push_frame")

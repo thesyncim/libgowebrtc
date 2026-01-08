@@ -297,11 +297,13 @@ SHIM_EXPORT int shim_enumerate_devices(
     );
     if (video_info) {
         int num_video = video_info->NumberOfDevices();
+        fprintf(stderr, "SHIM DEBUG: Found %d video capture devices\n", num_video);
         for (int i = 0; i < num_video && count < max_devices; i++) {
             char device_name[256] = {0};
             char unique_id[256] = {0};
             if (video_info->GetDeviceName(i, device_name, sizeof(device_name),
                                           unique_id, sizeof(unique_id)) == 0) {
+                fprintf(stderr, "SHIM DEBUG: Video device %d: %s (%s)\n", i, device_name, unique_id);
                 strncpy(devices[count].device_id, unique_id, 255);
                 devices[count].device_id[255] = '\0';
                 strncpy(devices[count].label, device_name, 255);
@@ -310,6 +312,8 @@ SHIM_EXPORT int shim_enumerate_devices(
                 count++;
             }
         }
+    } else {
+        fprintf(stderr, "SHIM DEBUG: VideoCaptureFactory::CreateDeviceInfo() returned nullptr - camera access may be denied\n");
     }
 
     // Enumerate audio devices using AudioDeviceModule
@@ -325,7 +329,12 @@ SHIM_EXPORT int shim_enumerate_devices(
             char device_name[webrtc::kAdmMaxDeviceNameSize] = {0};
             char guid[webrtc::kAdmMaxGuidSize] = {0};
             if (adm->RecordingDeviceName(i, device_name, guid) == 0) {
-                strncpy(devices[count].device_id, guid, 255);
+                // Use GUID if available, otherwise use "audioinput:<index>" as device ID
+                if (guid[0] != '\0') {
+                    strncpy(devices[count].device_id, guid, 255);
+                } else {
+                    snprintf(devices[count].device_id, 256, "audioinput:%d", i);
+                }
                 devices[count].device_id[255] = '\0';
                 strncpy(devices[count].label, device_name, 255);
                 devices[count].label[255] = '\0';
@@ -340,7 +349,12 @@ SHIM_EXPORT int shim_enumerate_devices(
             char device_name[webrtc::kAdmMaxDeviceNameSize] = {0};
             char guid[webrtc::kAdmMaxGuidSize] = {0};
             if (adm->PlayoutDeviceName(i, device_name, guid) == 0) {
-                strncpy(devices[count].device_id, guid, 255);
+                // Use GUID if available, otherwise use "audiooutput:<index>" as device ID
+                if (guid[0] != '\0') {
+                    strncpy(devices[count].device_id, guid, 255);
+                } else {
+                    snprintf(devices[count].device_id, 256, "audiooutput:%d", i);
+                }
                 devices[count].device_id[255] = '\0';
                 strncpy(devices[count].label, device_name, 255);
                 devices[count].label[255] = '\0';
@@ -502,14 +516,21 @@ SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
     }
 
     if (!capture->device_id.empty()) {
-        int16_t num_devices = capture->adm->RecordingDevices();
-        for (int16_t i = 0; i < num_devices; i++) {
-            char name[webrtc::kAdmMaxDeviceNameSize] = {0};
-            char guid[webrtc::kAdmMaxGuidSize] = {0};
-            if (capture->adm->RecordingDeviceName(i, name, guid) == 0) {
-                if (capture->device_id == guid) {
-                    capture->device_index = i;
-                    break;
+        // Check if device_id is in format "audioinput:<index>"
+        if (capture->device_id.rfind("audioinput:", 0) == 0) {
+            // Parse index from device ID
+            capture->device_index = std::atoi(capture->device_id.c_str() + 11);
+        } else {
+            // Try to match by GUID
+            int16_t num_devices = capture->adm->RecordingDevices();
+            for (int16_t i = 0; i < num_devices; i++) {
+                char name[webrtc::kAdmMaxDeviceNameSize] = {0};
+                char guid[webrtc::kAdmMaxGuidSize] = {0};
+                if (capture->adm->RecordingDeviceName(i, name, guid) == 0) {
+                    if (capture->device_id == guid) {
+                        capture->device_index = i;
+                        break;
+                    }
                 }
             }
         }

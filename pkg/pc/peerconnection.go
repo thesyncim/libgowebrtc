@@ -671,7 +671,6 @@ type RTPReceiver struct {
 	handle uintptr
 	track  *Track
 	pc     *PeerConnection
-	id     string
 }
 
 // IsValid returns true if the receiver has a valid native handle.

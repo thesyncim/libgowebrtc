@@ -152,6 +152,12 @@ var (
 	shimScreenCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
 	shimScreenCaptureStop    func(capturePtr uintptr)
 	shimScreenCaptureDestroy func(capturePtr uintptr)
+
+	// Permission functions
+	shimCheckCameraPermission       func() int32
+	shimCheckMicrophonePermission   func() int32
+	shimRequestCameraPermission     func() int32
+	shimRequestMicrophonePermission func() int32
 )
 
 // ErrCaptureNotStarted is returned when trying to stop a capture that wasn't started.
@@ -159,6 +165,46 @@ var ErrCaptureNotStarted = errors.New("capture not started")
 
 // ErrCaptureAlreadyStarted is returned when trying to start a capture that's already running.
 var ErrCaptureAlreadyStarted = errors.New("capture already started")
+
+// CheckCameraPermission checks if camera access is authorized.
+// Returns true if authorized, false otherwise.
+func CheckCameraPermission() bool {
+	if !libLoaded.Load() {
+		return false
+	}
+	return shimCheckCameraPermission() == 1
+}
+
+// CheckMicrophonePermission checks if microphone access is authorized.
+// Returns true if authorized, false otherwise.
+func CheckMicrophonePermission() bool {
+	if !libLoaded.Load() {
+		return false
+	}
+	return shimCheckMicrophonePermission() == 1
+}
+
+// RequestCameraPermission requests camera access permission.
+// On macOS, this shows the system permission dialog if needed.
+// Returns true if authorized, false if denied.
+// Note: This is a blocking call that may show a system dialog.
+func RequestCameraPermission() bool {
+	if !libLoaded.Load() {
+		return false
+	}
+	return shimRequestCameraPermission() == 1
+}
+
+// RequestMicrophonePermission requests microphone access permission.
+// On macOS, this shows the system permission dialog if needed.
+// Returns true if authorized, false if denied.
+// Note: This is a blocking call that may show a system dialog.
+func RequestMicrophonePermission() bool {
+	if !libLoaded.Load() {
+		return false
+	}
+	return shimRequestMicrophonePermission() == 1
+}
 
 // EnumerateDevices returns a list of available media devices.
 func EnumerateDevices() ([]DeviceInfo, error) {

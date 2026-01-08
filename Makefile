@@ -220,6 +220,11 @@ shim-install:
 	@echo "==> Installing shim to $(LIB_DIR)/$(PLATFORM)..."
 	@mkdir -p $(LIB_DIR)/$(PLATFORM)
 	cp $(SHIM_BUILD_DIR)/$(SHIM_LIB) $(LIB_DIR)/$(PLATFORM)/
+ifeq ($(GOOS),darwin)
+	@echo "==> Signing shim for macOS..."
+	xattr -cr $(LIB_DIR)/$(PLATFORM)/$(SHIM_LIB)
+	codesign -s - $(LIB_DIR)/$(PLATFORM)/$(SHIM_LIB)
+endif
 	@echo "==> Shim installed"
 
 shim-clean:

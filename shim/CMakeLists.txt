@@ -102,6 +102,13 @@ set(SHIM_SOURCES
     shim_stats.cc
 )
 
+# Platform-specific permission sources
+if(APPLE)
+    list(APPEND SHIM_SOURCES shim_permission_mac.mm)
+else()
+    list(APPEND SHIM_SOURCES shim_permission.cc)
+endif()
+
 # Create the shared library
 add_library(webrtc_shim ${SHIM_SOURCES})
 

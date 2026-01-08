@@ -1,9 +1,5 @@
 package ffi
 
-import (
-	"unsafe"
-)
-
 // CreateVideoEncoder creates a video encoder for the specified codec.
 func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) uintptr {
 	if !libLoaded.Load() {
@@ -139,9 +135,4 @@ func AudioEncoderDestroy(encoder uintptr) {
 		return
 	}
 	shimAudioEncoderDestroy(encoder)
-}
-
-// Helper to get raw pointer from byte slice for FFI output parameters
-func rawPtr(p *uintptr) uintptr {
-	return uintptr(unsafe.Pointer(p))
 }

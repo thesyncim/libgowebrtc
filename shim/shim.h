@@ -1336,6 +1336,34 @@ SHIM_EXPORT int shim_enumerate_devices(
     int* out_count
 );
 
+/*
+ * Check if camera access is authorized.
+ * @return 1 if authorized, 0 if not authorized or undetermined, -1 on error
+ */
+SHIM_EXPORT int shim_check_camera_permission(void);
+
+/*
+ * Check if microphone access is authorized.
+ * @return 1 if authorized, 0 if not authorized or undetermined, -1 on error
+ */
+SHIM_EXPORT int shim_check_microphone_permission(void);
+
+/*
+ * Request camera access permission (blocking).
+ * On macOS, this shows the system permission dialog if needed.
+ * On other platforms, returns 1 immediately.
+ * @return 1 if authorized, 0 if denied
+ */
+SHIM_EXPORT int shim_request_camera_permission(void);
+
+/*
+ * Request microphone access permission (blocking).
+ * On macOS, this shows the system permission dialog if needed.
+ * On other platforms, returns 1 immediately.
+ * @return 1 if authorized, 0 if denied
+ */
+SHIM_EXPORT int shim_request_microphone_permission(void);
+
 /* ============================================================================
  * Video Capture API
  * ========================================================================== */

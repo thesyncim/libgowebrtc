@@ -92,11 +92,10 @@ type VideoTrack struct {
 	pkt    packetizer.Packetizer
 
 	// Bound state
-	writer       webrtc.TrackLocalWriter
-	codecParams  webrtc.RTPCodecParameters
-	ssrc         webrtc.SSRC
-	payloadType  webrtc.PayloadType
-	rtpTimestamp uint32
+	writer      webrtc.TrackLocalWriter
+	codecParams webrtc.RTPCodecParameters
+	ssrc        webrtc.SSRC
+	payloadType webrtc.PayloadType
 
 	// Pre-allocated buffers for allocation-free encoding
 	encBuf     []byte
@@ -799,11 +798,10 @@ type AudioTrack struct {
 	enc    encoder.AudioEncoder
 	pkt    packetizer.Packetizer
 
-	writer       webrtc.TrackLocalWriter
-	codecParams  webrtc.RTPCodecParameters
-	ssrc         webrtc.SSRC
-	payloadType  webrtc.PayloadType
-	rtpTimestamp uint32
+	writer      webrtc.TrackLocalWriter
+	codecParams webrtc.RTPCodecParameters
+	ssrc        webrtc.SSRC
+	payloadType webrtc.PayloadType
 
 	// Pre-allocated buffers
 	encBuf     []byte
