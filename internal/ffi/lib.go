@@ -230,8 +230,9 @@ var (
 // LoadLibrary loads the libwebrtc_shim shared library.
 // It searches in the following locations:
 // 1. Path specified by LIBWEBRTC_SHIM_PATH environment variable
-// 2. ./lib/{os}_{arch}/
-// 3. System library paths
+// 2. ./lib/{os}_{arch}/ (module-relative)
+// 3. Auto-download from GitHub Releases (unless disabled)
+// 4. System library paths
 func LoadLibrary() error {
 	libMu.Lock()
 	defer libMu.Unlock()
@@ -240,13 +241,16 @@ func LoadLibrary() error {
 		return nil
 	}
 
-	libPath, err := findLibrary()
+	libPath, downloadErr, err := resolveLibrary()
 	if err != nil {
 		return err
 	}
 
 	handle, err := purego.Dlopen(libPath, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 	if err != nil {
+		if downloadErr != nil {
+			return fmt.Errorf("failed to load %s: %w (auto-download failed: %v)", libPath, err, downloadErr)
+		}
 		return fmt.Errorf("failed to load %s: %w", libPath, err)
 	}
 
@@ -291,11 +295,11 @@ func Close() error {
 	return nil
 }
 
-func findLibrary() (string, error) {
+func findLocalLibrary() (string, bool) {
 	// Check environment variable first
 	if path := os.Getenv("LIBWEBRTC_SHIM_PATH"); path != "" {
 		if _, err := os.Stat(path); err == nil {
-			return path, nil
+			return path, true
 		}
 	}
 
@@ -338,12 +342,11 @@ func findLibrary() (string, error) {
 	for _, path := range searchPaths {
 		if _, err := os.Stat(path); err == nil {
 			absPath, _ := filepath.Abs(path)
-			return absPath, nil
+			return absPath, true
 		}
 	}
 
-	// Try system library paths (let dlopen find it)
-	return libName, nil
+	return "", false
 }
 
 func getLibraryName() string {

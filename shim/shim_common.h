@@ -18,6 +18,7 @@
 #include "rtc_base/thread.h"
 #include "api/environment/environment.h"
 #include "api/environment/environment_factory.h"
+#include "api/rtc_error.h"
 #include "api/video_codecs/video_encoder.h"
 #include "api/video_codecs/video_decoder.h"
 #include "api/video_codecs/sdp_video_format.h"

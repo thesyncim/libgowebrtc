@@ -22,6 +22,37 @@
 #include "media/engine/internal_encoder_factory.h"
 #include "media/engine/internal_decoder_factory.h"
 
+namespace shim {
+
+static std::string VideoCodecErrorString(int code) {
+    switch (code) {
+        case WEBRTC_VIDEO_CODEC_OK:
+            return "ok";
+        case WEBRTC_VIDEO_CODEC_OK_REQUEST_KEYFRAME:
+            return "keyframe requested";
+        case WEBRTC_VIDEO_CODEC_ERROR:
+            return "generic video codec error";
+        case WEBRTC_VIDEO_CODEC_MEMORY:
+            return "out of memory";
+        case WEBRTC_VIDEO_CODEC_ERR_PARAMETER:
+            return "invalid parameter";
+        case WEBRTC_VIDEO_CODEC_UNINITIALIZED:
+            return "uninitialized";
+        case WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE:
+            return "fallback to software";
+        case WEBRTC_VIDEO_CODEC_TARGET_BITRATE_OVERSHOOT:
+            return "target bitrate overshoot";
+        case WEBRTC_VIDEO_CODEC_ERR_SIMULCAST_PARAMETERS_NOT_SUPPORTED:
+            return "simulcast parameters not supported";
+        case WEBRTC_VIDEO_CODEC_TIMEOUT:
+            return "timeout";
+        default:
+            return "video codec error " + std::to_string(code);
+    }
+}
+
+}  // namespace shim
+
 /* ============================================================================
  * Video Encoder Implementation
  * ========================================================================== */

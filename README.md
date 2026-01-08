@@ -21,7 +21,39 @@
 go get github.com/thesyncim/libgowebrtc
 ```
 
-**Note:** Requires the pre-built `libwebrtc_shim` library. Set `LIBWEBRTC_SHIM_PATH` to point to it.
+By default, the runtime will auto-download the prebuilt `libwebrtc_shim` for your OS/arch
+from GitHub Releases and cache it under `~/.libgowebrtc`.
+
+Override behavior with:
+
+- `LIBWEBRTC_SHIM_PATH=/path/to/libwebrtc_shim.{so|dylib|dll}` (use a local shim)
+- `LIBWEBRTC_SHIM_DISABLE_DOWNLOAD=1` (disable auto-download)
+- `LIBWEBRTC_SHIM_CACHE_DIR=/custom/cache/dir` (override cache location)
+- `LIBWEBRTC_SHIM_FLAVOR=h264` (opt-in H.264 shim flavor; see below)
+
+### H.264 Opt-In
+
+H.264 is published under a separate release tag due to licensing considerations.
+To enable it, set:
+
+```bash
+export LIBWEBRTC_SHIM_FLAVOR=h264
+```
+
+Ensure you have published the H.264 shim assets and updated `internal/ffi/shim_manifest.json`
+with the correct release tag and SHA256 checksums.
+
+### Publishing Shims (Local Builds)
+
+Build and package the shim on each target OS/arch locally, then upload the assets
+to GitHub Releases and update the manifest:
+
+```bash
+LIBWEBRTC_DIR=/path/to/libwebrtc RELEASE_TAG=shim-v0.1.0 ./scripts/release_shim.sh
+```
+
+For H.264, publish under a separate tag (for example: `shim-h264-v0.1.0`) and
+set `SHIM_FLAVOR=h264`.
 
 ## Quick Start
 

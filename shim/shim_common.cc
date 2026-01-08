@@ -12,7 +12,7 @@
 namespace shim {
 
 // Version strings
-const char* kShimVersion = "1.0.0";
+const char* kShimVersion = "0.1.0";
 const char* kLibWebRTCVersion = "M141";  // crow-misia/libwebrtc-bin 141.7390.2.0
 
 namespace {
