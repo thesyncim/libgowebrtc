@@ -104,7 +104,7 @@ func (d *depacketizer) PopInto(dst []byte) (FrameInfo, error) {
 
 	size, timestamp, isKeyframe, err := ffi.DepacketizerPopInto(d.handle, dst)
 	if err != nil {
-		if err.Error() == "need more data" {
+		if errors.Is(err, ffi.ErrNeedMoreData) {
 			return FrameInfo{}, ErrNeedMoreData
 		}
 		return FrameInfo{}, err

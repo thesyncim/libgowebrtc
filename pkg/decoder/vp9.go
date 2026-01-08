@@ -49,7 +49,7 @@ func (d *vp9Decoder) DecodeInto(src []byte, dst *frame.VideoFrame, timestamp uin
 	if len(src) == 0 {
 		return ErrInvalidData
 	}
-	if dst == nil || len(dst.Data) < 3 {
+	if dst == nil || len(dst.Data) < 3 || len(dst.Stride) < 3 {
 		return ErrBufferTooSmall
 	}
 

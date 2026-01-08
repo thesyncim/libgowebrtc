@@ -1442,9 +1442,7 @@ func (pc *PeerConnection) CreateOffer(options *OfferOptions) (*SessionDescriptio
 		return nil, ErrPeerConnectionClosed
 	}
 
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
+	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock.
 	// Allocate buffer for SDP output
 	sdpBuf := make([]byte, maxSDPSize)
 	sdpLen, err := ffi.PeerConnectionCreateOffer(pc.handle, sdpBuf)
@@ -1464,9 +1462,7 @@ func (pc *PeerConnection) CreateAnswer(options *AnswerOptions) (*SessionDescript
 		return nil, ErrPeerConnectionClosed
 	}
 
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
+	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock.
 	// Allocate buffer for SDP output
 	sdpBuf := make([]byte, maxSDPSize)
 	sdpLen, err := ffi.PeerConnectionCreateAnswer(pc.handle, sdpBuf)
@@ -1643,6 +1639,11 @@ func (pc *PeerConnection) RemoveTrack(sender *RTPSender) error {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
+	var trackToRemove *Track
+	if sender != nil {
+		trackToRemove = sender.track
+	}
+
 	// Call FFI to remove track
 	if sender.handle != 0 {
 		if err := ffi.PeerConnectionRemoveTrack(pc.handle, sender.handle); err != nil {
@@ -1655,6 +1656,22 @@ func (pc *PeerConnection) RemoveTrack(sender *RTPSender) error {
 			pc.senders = append(pc.senders[:i], pc.senders[i+1:]...)
 			break
 		}
+	}
+
+	for i, t := range pc.localTracks {
+		if t == trackToRemove {
+			pc.localTracks = append(pc.localTracks[:i], pc.localTracks[i+1:]...)
+			break
+		}
+	}
+
+	if trackToRemove != nil && trackToRemove.sourceHandle != 0 {
+		if trackToRemove.kind == "video" {
+			ffi.VideoTrackSourceDestroy(trackToRemove.sourceHandle)
+		} else if trackToRemove.kind == "audio" {
+			ffi.AudioTrackSourceDestroy(trackToRemove.sourceHandle)
+		}
+		trackToRemove.sourceHandle = 0
 	}
 
 	return nil

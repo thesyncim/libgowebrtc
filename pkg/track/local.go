@@ -193,12 +193,13 @@ func (t *VideoTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParamete
 	if t.closed.Load() {
 		return webrtc.RTPCodecParameters{}, ErrTrackClosed
 	}
-	if t.bound.Load() {
-		return webrtc.RTPCodecParameters{}, ErrAlreadyBound
-	}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	if t.bound.Load() {
+		return webrtc.RTPCodecParameters{}, ErrAlreadyBound
+	}
 
 	// Find matching codec from offered codecs
 	codecs := ctx.CodecParameters()
@@ -866,12 +867,13 @@ func (t *AudioTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParamete
 	if t.closed.Load() {
 		return webrtc.RTPCodecParameters{}, ErrTrackClosed
 	}
-	if t.bound.Load() {
-		return webrtc.RTPCodecParameters{}, ErrAlreadyBound
-	}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	if t.bound.Load() {
+		return webrtc.RTPCodecParameters{}, ErrAlreadyBound
+	}
 
 	// Find Opus codec
 	codecs := ctx.CodecParameters()
