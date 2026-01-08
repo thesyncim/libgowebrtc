@@ -11,7 +11,7 @@
         },
         "darwin_arm64": {
           "file": "libwebrtc_shim_darwin_arm64_basic.tar.gz",
-          "sha256": "61aa5917df69c2537986122d762a52b241c8056029945bf5cf5cd81f1509744e"
+          "sha256": "3f8ef12078c44e8c9516bd3af65edda31b1dce5b7aad702238c9f2f2c842c5e8"
         },
         "linux_amd64": {
           "file": "libwebrtc_shim_linux_amd64_basic.tar.gz",
