@@ -1,6 +1,7 @@
 package encoder
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -72,9 +73,9 @@ func (e *h264Encoder) init() error {
 		PreferHW:         1,
 	}
 
-	handle := ffi.CreateVideoEncoder(ffi.CodecH264, ffiConfig)
-	if handle == 0 {
-		return ErrEncodeFailed
+	handle, err := ffi.CreateVideoEncoder(ffi.CodecH264, ffiConfig)
+	if err != nil {
+		return fmt.Errorf("create H264 encoder: %w", err)
 	}
 
 	e.handle = handle

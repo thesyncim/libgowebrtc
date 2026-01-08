@@ -13,9 +13,9 @@ func TestCreatePeerConnection(t *testing.T) {
 		ICECandidatePoolSize: 0,
 	}
 
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection returned 0 handle")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -24,9 +24,9 @@ func TestCreatePeerConnection(t *testing.T) {
 
 func TestPeerConnectionCreateOffer(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -48,9 +48,9 @@ func TestPeerConnectionCreateOffer(t *testing.T) {
 
 func TestPeerConnectionSetLocalDescription(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -74,9 +74,9 @@ func TestPeerConnectionSetLocalDescription(t *testing.T) {
 
 func TestPeerConnectionSignalingState(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -91,9 +91,9 @@ func TestPeerConnectionSignalingState(t *testing.T) {
 
 func TestPeerConnectionICEConnectionState(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -108,9 +108,9 @@ func TestPeerConnectionICEConnectionState(t *testing.T) {
 
 func TestPeerConnectionConnectionState(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -125,9 +125,9 @@ func TestPeerConnectionConnectionState(t *testing.T) {
 
 func TestPeerConnectionAddTrack(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -142,9 +142,9 @@ func TestPeerConnectionAddTrack(t *testing.T) {
 
 func TestPeerConnectionRemoveTrack(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -155,7 +155,7 @@ func TestPeerConnectionRemoveTrack(t *testing.T) {
 	}
 
 	// Remove track
-	err := PeerConnectionRemoveTrack(handle, senderHandle)
+	err = PeerConnectionRemoveTrack(handle, senderHandle)
 	if err != nil {
 		t.Fatalf("RemoveTrack failed: %v", err)
 	}
@@ -165,9 +165,9 @@ func TestPeerConnectionRemoveTrack(t *testing.T) {
 
 func TestPeerConnectionCreateDataChannel(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -182,9 +182,9 @@ func TestPeerConnectionCreateDataChannel(t *testing.T) {
 
 func TestPeerConnectionClose(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 
 	// Close
@@ -200,15 +200,15 @@ func TestOfferAnswerExchange(t *testing.T) {
 	// Create two peer connections
 	cfg := &PeerConnectionConfig{}
 
-	pc1 := CreatePeerConnection(cfg)
-	if pc1 == 0 {
-		t.Fatal("CreatePeerConnection (offerer) failed")
+	pc1, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection (offerer) failed: %v", err)
 	}
 	defer PeerConnectionDestroy(pc1)
 
-	pc2 := CreatePeerConnection(cfg)
-	if pc2 == 0 {
-		t.Fatal("CreatePeerConnection (answerer) failed")
+	pc2, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection (answerer) failed: %v", err)
 	}
 	defer PeerConnectionDestroy(pc2)
 
@@ -257,9 +257,9 @@ func TestOfferAnswerExchange(t *testing.T) {
 
 func TestDataChannelSend(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -271,7 +271,7 @@ func TestDataChannelSend(t *testing.T) {
 
 	// Try to send data (may fail if not connected, but shouldn't crash)
 	data := []byte("hello world")
-	err := DataChannelSend(dcHandle, data, false)
+	err = DataChannelSend(dcHandle, data, false)
 	if err != nil {
 		t.Logf("DataChannelSend: %v (expected if not connected)", err)
 	}
@@ -281,9 +281,9 @@ func TestDataChannelSend(t *testing.T) {
 
 func TestRTPSenderSetBitrate(t *testing.T) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		t.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 
@@ -294,7 +294,7 @@ func TestRTPSenderSetBitrate(t *testing.T) {
 	}
 
 	// Set bitrate
-	err := RTPSenderSetBitrate(senderHandle, 2_000_000)
+	err = RTPSenderSetBitrate(senderHandle, 2_000_000)
 	if err != nil {
 		t.Logf("SetBitrate: %v (may be expected)", err)
 	}
@@ -306,19 +306,20 @@ func TestRTPSenderSetBitrate(t *testing.T) {
 func BenchmarkFFICreatePeerConnection(b *testing.B) {
 	cfg := &PeerConnectionConfig{}
 	for i := 0; i < b.N; i++ {
-		handle := CreatePeerConnection(cfg)
-		if handle != 0 {
-			PeerConnectionDestroy(handle)
+		handle, err := CreatePeerConnection(cfg)
+		if err != nil {
+			b.Fatalf("CreatePeerConnection failed: %v", err)
 		}
+		PeerConnectionDestroy(handle)
 	}
 }
 
 // Benchmark offer creation at FFI level
 func BenchmarkFFICreateOffer(b *testing.B) {
 	cfg := &PeerConnectionConfig{}
-	handle := CreatePeerConnection(cfg)
-	if handle == 0 {
-		b.Fatal("CreatePeerConnection failed")
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		b.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
 

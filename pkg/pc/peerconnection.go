@@ -4,6 +4,7 @@ package pc
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -1299,11 +1300,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 
 	// Build FFI config - keep data alive during FFI call
 	configData := buildFFIConfig(&config)
-	handle := ffi.CreatePeerConnection(configData.config)
+	handle, err := ffi.CreatePeerConnection(configData.config)
 	// Ensure configData is kept alive until after FFI call completes
 	_ = configData
-	if handle == 0 {
-		return nil, errors.New("failed to create peer connection")
+	if err != nil {
+		return nil, fmt.Errorf("create peer connection: %w", err)
 	}
 	pc.handle = handle
 

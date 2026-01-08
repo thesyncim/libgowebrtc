@@ -282,9 +282,11 @@ extern "C" {
 SHIM_EXPORT int shim_enumerate_devices(
     ShimDeviceInfo* devices,
     int max_devices,
-    int* out_count
+    int* out_count,
+    ShimErrorBuffer* error_out
 ) {
     if (!devices || max_devices <= 0 || !out_count) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -375,9 +377,11 @@ SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
     const char* device_id,
     int width,
     int height,
-    int fps
+    int fps,
+    ShimErrorBuffer* error_out
 ) {
     if (width <= 0 || height <= 0 || fps <= 0) {
+        shim::SetErrorMessage(error_out, "invalid capture dimensions or fps", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
 
@@ -405,6 +409,7 @@ SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
     if (!unique_id.empty()) {
         capture->capture_module = webrtc::VideoCaptureFactory::Create(unique_id.c_str());
         if (!capture->capture_module) {
+            shim::SetErrorMessage(error_out, "video capture module creation failed");
             return nullptr;
         }
     }
@@ -416,15 +421,18 @@ SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
 SHIM_EXPORT int shim_video_capture_start(
     ShimVideoCapture* cap,
     ShimVideoCaptureCallback callback,
-    void* ctx
+    void* ctx,
+    ShimErrorBuffer* error_out
 ) {
     if (!cap || !callback) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
     std::lock_guard<std::mutex> lock(cap->mutex);
 
     if (cap->running) {
+        shim::SetErrorMessage(error_out, "capture already running", SHIM_ERROR_INIT_FAILED);
         return SHIM_ERROR_INIT_FAILED;
     }
 
@@ -443,10 +451,14 @@ SHIM_EXPORT int shim_video_capture_start(
         cap->data_callback = std::make_unique<VideoCaptureDataCallback>(cap);
         cap->capture_module->RegisterCaptureDataCallback(cap->data_callback.get());
 
-        if (cap->capture_module->StartCapture(capability) != 0) {
+        int result = cap->capture_module->StartCapture(capability);
+        if (result != 0) {
             cap->running = false;
             cap->callback = nullptr;
             cap->callback_ctx = nullptr;
+            char msg[64];
+            snprintf(msg, sizeof(msg), "StartCapture failed with code %d", result);
+            shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INIT_FAILED);
             return SHIM_ERROR_INIT_FAILED;
         }
     }
@@ -491,9 +503,11 @@ SHIM_EXPORT void shim_video_capture_destroy(ShimVideoCapture* cap) {
 SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
     const char* device_id,
     int sample_rate,
-    int channels
+    int channels,
+    ShimErrorBuffer* error_out
 ) {
     if (sample_rate <= 0 || channels <= 0 || channels > 2) {
+        shim::SetErrorMessage(error_out, "invalid sample rate or channels", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
 
@@ -511,7 +525,13 @@ SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
         webrtc::AudioDeviceModule::kPlatformDefaultAudio
     );
 
-    if (!capture->adm || capture->adm->Init() != 0) {
+    if (!capture->adm) {
+        shim::SetErrorMessage(error_out, "failed to create audio device module");
+        return nullptr;
+    }
+
+    if (capture->adm->Init() != 0) {
+        shim::SetErrorMessage(error_out, "audio device module initialization failed");
         return nullptr;
     }
 
@@ -543,15 +563,18 @@ SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
 SHIM_EXPORT int shim_audio_capture_start(
     ShimAudioCapture* cap,
     ShimAudioCaptureCallback callback,
-    void* ctx
+    void* ctx,
+    ShimErrorBuffer* error_out
 ) {
     if (!cap || !callback) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
     std::lock_guard<std::mutex> lock(cap->mutex);
 
     if (cap->running) {
+        shim::SetErrorMessage(error_out, "audio capture already running", SHIM_ERROR_INIT_FAILED);
         return SHIM_ERROR_INIT_FAILED;
     }
 
@@ -566,16 +589,19 @@ SHIM_EXPORT int shim_audio_capture_start(
 
         if (cap->adm->SetRecordingDevice(cap->device_index) != 0) {
             cap->running = false;
+            shim::SetErrorMessage(error_out, "SetRecordingDevice failed");
             return SHIM_ERROR_INIT_FAILED;
         }
 
         if (cap->adm->InitRecording() != 0) {
             cap->running = false;
+            shim::SetErrorMessage(error_out, "InitRecording failed");
             return SHIM_ERROR_INIT_FAILED;
         }
 
         if (cap->adm->StartRecording() != 0) {
             cap->running = false;
+            shim::SetErrorMessage(error_out, "StartRecording failed");
             return SHIM_ERROR_INIT_FAILED;
         }
     }
@@ -623,9 +649,11 @@ SHIM_EXPORT void shim_audio_capture_destroy(ShimAudioCapture* cap) {
 SHIM_EXPORT int shim_enumerate_screens(
     ShimScreenInfo* screens,
     int max_screens,
-    int* out_count
+    int* out_count,
+    ShimErrorBuffer* error_out
 ) {
     if (!screens || max_screens <= 0 || !out_count) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 

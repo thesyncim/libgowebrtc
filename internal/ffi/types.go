@@ -1,8 +1,106 @@
 package ffi
 
 import (
+	"fmt"
 	"unsafe"
 )
+
+// MaxErrorMsgLen matches SHIM_MAX_ERROR_MSG_LEN in shim.h
+const MaxErrorMsgLen = 512
+
+// ShimErrorBuffer matches the C struct for error message passing.
+// This struct is memory-compatible with the C ShimErrorBuffer type.
+type ShimErrorBuffer struct {
+	Message [MaxErrorMsgLen]byte
+}
+
+// Ptr returns a uintptr to this error buffer for FFI calls.
+func (e *ShimErrorBuffer) Ptr() uintptr {
+	return uintptr(unsafe.Pointer(e))
+}
+
+// String returns the error message as a Go string.
+func (e *ShimErrorBuffer) String() string {
+	for i, b := range e.Message {
+		if b == 0 {
+			return string(e.Message[:i])
+		}
+	}
+	return string(e.Message[:])
+}
+
+// Clear resets the error buffer.
+func (e *ShimErrorBuffer) Clear() {
+	e.Message[0] = 0
+}
+
+// ShimErrorWithMessage wraps a shim error code with a detailed message.
+// It implements error and supports errors.Is()/errors.As().
+type ShimErrorWithMessage struct {
+	Code    int32
+	Message string
+}
+
+// Error returns the error string including the message.
+func (e *ShimErrorWithMessage) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("%s: %s", shimErrorName(e.Code), e.Message)
+	}
+	return shimErrorName(e.Code)
+}
+
+// Is implements errors.Is for sentinel error comparison.
+func (e *ShimErrorWithMessage) Is(target error) bool {
+	return ShimError(e.Code) == target
+}
+
+// Unwrap returns the underlying sentinel error.
+func (e *ShimErrorWithMessage) Unwrap() error {
+	return ShimError(e.Code)
+}
+
+// shimErrorName returns the error name for a code.
+func shimErrorName(code int32) string {
+	switch code {
+	case ShimOK:
+		return "ok"
+	case ShimErrInvalidParam:
+		return "invalid parameter"
+	case ShimErrInitFailed:
+		return "initialization failed"
+	case ShimErrEncodeFailed:
+		return "encode failed"
+	case ShimErrDecodeFailed:
+		return "decode failed"
+	case ShimErrOutOfMemory:
+		return "out of memory"
+	case ShimErrNotSupported:
+		return "not supported"
+	case ShimErrNeedMoreData:
+		return "need more data"
+	case ShimErrBufferTooSmall:
+		return "buffer too small"
+	case ShimErrNotFound:
+		return "not found"
+	case ShimErrRenegotiationNeeded:
+		return "renegotiation needed"
+	default:
+		return fmt.Sprintf("unknown error %d", code)
+	}
+}
+
+// ToError converts the error buffer and code to a Go error.
+// Returns nil if code is ShimOK.
+func (e *ShimErrorBuffer) ToError(code int32) error {
+	if code == ShimOK {
+		return nil
+	}
+	msg := e.String()
+	if msg == "" {
+		return ShimError(code)
+	}
+	return &ShimErrorWithMessage{Code: code, Message: msg}
+}
 
 // VideoEncoderConfig matches ShimVideoEncoderConfig in shim.h
 type VideoEncoderConfig struct {

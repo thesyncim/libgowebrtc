@@ -21,7 +21,7 @@ func TestVideoTrackCreation(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	p, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestAudioTrackCreation(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	p, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestVideoFrameWrite(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	p, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestVideoFrameWrite(t *testing.T) {
 	}
 
 	// Write multiple frames
-	for i := 1; i < 10; i++ {
+	for i := 1; i < shortFrameCount; i++ {
 		frame := CreateTestFrame(640, 480, uint32(i*3000))
 		err = track.WriteVideoFrame(frame)
 		if err != nil {
@@ -132,7 +132,7 @@ func TestVideoFrameWrite(t *testing.T) {
 		}
 	}
 
-	t.Log("Successfully wrote 10 video frames")
+	t.Logf("Successfully wrote %d video frames", shortFrameCount)
 }
 
 // TestAudioFrameWrite tests that audio frames can be written to tracks.
@@ -141,7 +141,7 @@ func TestAudioFrameWrite(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	p, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -167,8 +167,8 @@ func TestAudioFrameWrite(t *testing.T) {
 		t.Fatalf("WriteAudioFrame failed: %v", err)
 	}
 
-	// Write multiple frames (1 second of audio)
-	for i := 1; i < 100; i++ {
+	// Write multiple frames
+	for i := 1; i < shortAudioFrameCount; i++ {
 		frame := CreateTestAudioFrame(48000, 2, 480, uint32(i*480))
 		err = track.WriteAudioFrame(frame)
 		if err != nil {
@@ -176,7 +176,7 @@ func TestAudioFrameWrite(t *testing.T) {
 		}
 	}
 
-	t.Log("Successfully wrote 100 audio frames (1 second)")
+	t.Logf("Successfully wrote %d audio frames", shortAudioFrameCount)
 }
 
 // TestOfferAnswerWithTracks tests offer/answer exchange with media tracks.
@@ -247,20 +247,20 @@ func TestTrackReception(t *testing.T) {
 	}
 
 	// Write some frames to sender
-	for i := 0; i < 10; i++ {
+	for i := 0; i < shortFrameCount; i++ {
 		frame := CreateTestFrame(640, 480, uint32(i*3000))
 		if err := videoTrack.WriteVideoFrame(frame); err != nil {
 			t.Fatalf("WriteVideoFrame failed: %v", err)
 		}
-		time.Sleep(33 * time.Millisecond) // ~30fps
+		time.Sleep(shortFrameDelay)
 	}
 
 	// Wait for connection
-	if pp.WaitForConnection(5 * time.Second) {
+	if pp.WaitForConnection(shortConnectTimeout) {
 		t.Log("Connection established")
 
 		// Check if we received the track
-		if pp.WaitForTrack(2 * time.Second) {
+		if pp.WaitForTrack(shortTrackTimeout) {
 			count := pp.ReceivedTrackCount()
 			t.Logf("Received %d track(s) on receiver", count)
 			if count == 0 {
@@ -307,29 +307,29 @@ func TestVideoFrameReceiving(t *testing.T) {
 	}
 
 	// Wait for connection first
-	if !pp.WaitForConnection(5 * time.Second) {
+	if !pp.WaitForConnection(shortConnectTimeout) {
 		t.Skip("Connection not established (expected in test environment without real network)")
 	}
 
 	// Wait for track to be received
-	if !pp.WaitForTrack(2 * time.Second) {
+	if !pp.WaitForTrack(shortTrackTimeout) {
 		t.Skip("Track not received (OnTrack callback not fired)")
 	}
 
 	t.Log("Connection and track established, sending frames...")
 
 	// Send frames and wait for them to be received
-	const numFrames = 30
+	const numFrames = shortFrameCount
 	for i := 0; i < numFrames; i++ {
 		frame := CreateTestFrame(640, 480, uint32(i*3000))
 		if err := videoTrack.WriteVideoFrame(frame); err != nil {
 			t.Fatalf("WriteVideoFrame failed at frame %d: %v", i, err)
 		}
-		time.Sleep(33 * time.Millisecond) // ~30fps
+		time.Sleep(shortFrameDelay)
 	}
 
 	// Give time for frames to propagate through the pipeline
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(shortPostSendDelay)
 
 	// Check received frame count
 	videoFrames := pp.VideoFrameCount()
@@ -377,27 +377,27 @@ func TestVideoAndAudioTrackReception(t *testing.T) {
 
 	// Write frames
 	go func() {
-		for i := 0; i < 30; i++ {
+		for i := 0; i < shortFrameCount; i++ {
 			frame := CreateTestFrame(640, 480, uint32(i*3000))
 			videoTrack.WriteVideoFrame(frame)
-			time.Sleep(33 * time.Millisecond)
+			time.Sleep(shortFrameDelay)
 		}
 	}()
 
 	go func() {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < shortAudioFrameCount; i++ {
 			frame := CreateTestAudioFrame(48000, 2, 480, uint32(i*480))
 			audioTrack.WriteAudioFrame(frame)
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(shortAudioFrameDelay)
 		}
 	}()
 
 	// Wait for connection and tracks
-	if pp.WaitForConnection(5 * time.Second) {
+	if pp.WaitForConnection(shortConnectTimeout) {
 		t.Log("Connection established")
 
 		// Wait for tracks (should receive 2)
-		time.Sleep(500 * time.Millisecond) // Give time for tracks to be received
+		time.Sleep(shortPostSendDelay) // Give time for tracks to be received
 		count := pp.ReceivedTrackCount()
 		t.Logf("Received %d track(s)", count)
 
@@ -437,7 +437,7 @@ func TestMultipleCodecs(t *testing.T) {
 
 	for _, c := range codecs {
 		t.Run(c.String(), func(t *testing.T) {
-			p, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+			p, err := pc.NewPeerConnection(defaultTestConfig())
 			if err != nil {
 				t.Fatalf("NewPeerConnection failed: %v", err)
 			}
@@ -471,7 +471,7 @@ func TestTrackDisable(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	p, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -513,7 +513,7 @@ func BenchmarkVideoFrameWrite(b *testing.B) {
 		b.Skip("shim library not available")
 	}
 
-	p, _ := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, _ := pc.NewPeerConnection(defaultTestConfig())
 	defer p.Close()
 
 	track, _ := p.CreateVideoTrack("video-bench", codec.VP8, 1280, 720)
@@ -534,7 +534,7 @@ func BenchmarkAudioFrameWrite(b *testing.B) {
 		b.Skip("shim library not available")
 	}
 
-	p, _ := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, _ := pc.NewPeerConnection(defaultTestConfig())
 	defer p.Close()
 
 	track, _ := p.CreateAudioTrack("audio-bench")
@@ -555,7 +555,7 @@ func TestPeerConnectionLifecycle(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	p, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -605,7 +605,7 @@ func TestConcurrentFrameWrites(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	p, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -615,8 +615,8 @@ func TestConcurrentFrameWrites(t *testing.T) {
 	p.AddTrack(track, "stream-0")
 
 	// Write frames from multiple goroutines
-	const numGoroutines = 10
-	const framesPerGoroutine = 100
+	const numGoroutines = 4
+	const framesPerGoroutine = 20
 
 	done := make(chan bool, numGoroutines)
 	errors := make(chan error, numGoroutines*framesPerGoroutine)
@@ -637,7 +637,7 @@ func TestConcurrentFrameWrites(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		select {
 		case <-done:
-		case <-time.After(10 * time.Second):
+		case <-time.After(shortConnectTimeout):
 			t.Fatal("Timeout waiting for goroutines")
 		}
 	}

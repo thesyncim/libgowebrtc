@@ -13,6 +13,23 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
+const (
+	shortFrameCount      = 5
+	shortAudioFrameCount = 20
+	shortFrameDelay      = 5 * time.Millisecond
+	shortAudioFrameDelay = 5 * time.Millisecond
+	shortConnectTimeout  = 2 * time.Second
+	shortTrackTimeout    = 1 * time.Second
+	shortPostSendDelay   = 50 * time.Millisecond
+	shortICEGatherDelay  = 50 * time.Millisecond
+)
+
+func defaultTestConfig() pc.Configuration {
+	cfg := pc.DefaultConfiguration()
+	cfg.ICEServers = nil
+	return cfg
+}
+
 // LibPeerPair represents two libwebrtc PeerConnections for loopback testing.
 type LibPeerPair struct {
 	Sender   *pc.PeerConnection
@@ -39,11 +56,7 @@ type LibPeerPair struct {
 func NewLibPeerPair(t *testing.T) *LibPeerPair {
 	t.Helper()
 
-	cfg := pc.DefaultConfiguration()
-	// Add STUN server for ICE
-	cfg.ICEServers = []pc.ICEServer{
-		{URLs: []string{"stun:stun.l.google.com:19302"}},
-	}
+	cfg := defaultTestConfig()
 
 	sender, err := pc.NewPeerConnection(cfg)
 	if err != nil {
@@ -204,7 +217,7 @@ func (pp *LibPeerPair) Connect() error {
 	}
 
 	// Wait a bit for ICE candidates to be gathered
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(shortICEGatherDelay)
 
 	return pp.ExchangeICECandidates()
 }

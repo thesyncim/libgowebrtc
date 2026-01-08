@@ -1,11 +1,20 @@
 package ffi
 
 // CreateVideoEncoder creates a video encoder for the specified codec.
-func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) uintptr {
+func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) (uintptr, error) {
 	if !libLoaded.Load() {
-		return 0
+		return 0, ErrLibraryNotLoaded
 	}
-	return shimVideoEncoderCreate(int32(codec), config.Ptr())
+	var errBuf ShimErrorBuffer
+	encoder := shimVideoEncoderCreate(int32(codec), config.Ptr(), errBuf.Ptr())
+	if encoder == 0 {
+		msg := errBuf.String()
+		if msg != "" {
+			return 0, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: msg}
+		}
+		return 0, ErrInitFailed
+	}
+	return encoder, nil
 }
 
 // VideoEncoderEncodeInto encodes a video frame into a pre-allocated buffer.
@@ -32,6 +41,7 @@ func VideoEncoderEncodeInto(
 	}
 
 	// Pass dst buffer pointer and size - shim writes directly into it
+	var errBuf ShimErrorBuffer
 	result := shimVideoEncoderEncode(
 		encoder,
 		ByteSlicePtr(yPlane),
@@ -44,9 +54,10 @@ func VideoEncoderEncodeInto(
 		int32(len(dst)),   // buffer size for overflow protection
 		Int32Ptr(&outSize),
 		Int32Ptr(&outIsKeyframe),
+		errBuf.Ptr(),
 	)
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		return 0, false, err
 	}
 
@@ -89,11 +100,20 @@ func VideoEncoderDestroy(encoder uintptr) {
 }
 
 // CreateAudioEncoder creates an audio encoder.
-func CreateAudioEncoder(config *AudioEncoderConfig) uintptr {
+func CreateAudioEncoder(config *AudioEncoderConfig) (uintptr, error) {
 	if !libLoaded.Load() {
-		return 0
+		return 0, ErrLibraryNotLoaded
 	}
-	return shimAudioEncoderCreate(config.Ptr())
+	var errBuf ShimErrorBuffer
+	encoder := shimAudioEncoderCreate(config.Ptr(), errBuf.Ptr())
+	if encoder == 0 {
+		msg := errBuf.String()
+		if msg != "" {
+			return 0, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: msg}
+		}
+		return 0, ErrInitFailed
+	}
+	return encoder, nil
 }
 
 // AudioEncoderEncodeInto encodes audio samples into a pre-allocated buffer.

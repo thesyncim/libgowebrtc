@@ -352,37 +352,27 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
     ShimPeerConnection* pc,
     ShimVideoTrackSource* source,
     const char* track_id,
-    const char* stream_id
+    const char* stream_id,
+    ShimErrorBuffer* error_out
 ) {
-    fprintf(stderr, "SHIM DEBUG: add_video_track_from_source called, track_id=%s\n", track_id ? track_id : "NULL");
-    fflush(stderr);
-
     if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
-        fprintf(stderr, "SHIM DEBUG: add_video_track_from_source - invalid params\n");
-        fflush(stderr);
+        shim::SetErrorMessage(error_out, "invalid parameter");
         return nullptr;
     }
 
-    // Create video track from source (source first, then label)
+    // Create video track from source
     source->track = pc->factory->CreateVideoTrack(
         source->source,
         track_id
     );
 
     if (!source->track) {
-        fprintf(stderr, "SHIM DEBUG: CreateVideoTrack failed!\n");
-        fflush(stderr);
+        shim::SetErrorMessage(error_out, "CreateVideoTrack failed");
         return nullptr;
     }
 
-    fprintf(stderr, "SHIM DEBUG: VideoTrack created successfully, enabled=%d, state=%d\n",
-            source->track->enabled(), static_cast<int>(source->track->state()));
-    fflush(stderr);
-
     // Ensure track is enabled
     source->track->set_enabled(true);
-    fprintf(stderr, "SHIM DEBUG: Track enabled set to true\n");
-    fflush(stderr);
 
     // Add track to peer connection
     std::vector<std::string> stream_ids;
@@ -392,13 +382,9 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
 
     auto result = pc->peer_connection->AddTrack(source->track, stream_ids);
     if (!result.ok()) {
-        fprintf(stderr, "SHIM DEBUG: AddTrack failed: %s\n", result.error().message());
-        fflush(stderr);
+        shim::SetErrorFromRTCError(error_out, result.error());
         return nullptr;
     }
-
-    fprintf(stderr, "SHIM DEBUG: Track added to PeerConnection successfully\n");
-    fflush(stderr);
 
     auto sender = result.value();
     pc->senders.push_back(sender);
@@ -410,9 +396,11 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
     ShimPeerConnection* pc,
     ShimAudioTrackSource* source,
     const char* track_id,
-    const char* stream_id
+    const char* stream_id,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
+        shim::SetErrorMessage(error_out, "invalid parameter");
         return nullptr;
     }
 
@@ -423,6 +411,7 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
     );
 
     if (!source->track) {
+        shim::SetErrorMessage(error_out, "CreateAudioTrack failed");
         return nullptr;
     }
 
@@ -434,6 +423,7 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
 
     auto result = pc->peer_connection->AddTrack(source->track, stream_ids);
     if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result.error());
         return nullptr;
     }
 

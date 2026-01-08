@@ -134,20 +134,21 @@ var (
 
 // Device capture FFI function pointers
 // NOTE: All int/uint types are explicitly sized to match C ABI (int = int32)
+// NOTE: Functions with error_out parameter take uintptr to ShimErrorBuffer as last parameter
 var (
-	shimEnumerateDevices func(devices uintptr, maxDevices int32, outCount uintptr) int32
+	shimEnumerateDevices func(devices uintptr, maxDevices int32, outCount uintptr, errorOut uintptr) int32
 
-	shimVideoCaptureCreate  func(deviceID uintptr, width, height, fps int32) uintptr
-	shimVideoCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
+	shimVideoCaptureCreate  func(deviceID uintptr, width, height, fps int32, errorOut uintptr) uintptr
+	shimVideoCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr, errorOut uintptr) int32
 	shimVideoCaptureStop    func(capturePtr uintptr)
 	shimVideoCaptureDestroy func(capturePtr uintptr)
 
-	shimAudioCaptureCreate  func(deviceID uintptr, sampleRate, channels int32) uintptr
-	shimAudioCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
+	shimAudioCaptureCreate  func(deviceID uintptr, sampleRate, channels int32, errorOut uintptr) uintptr
+	shimAudioCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr, errorOut uintptr) int32
 	shimAudioCaptureStop    func(capturePtr uintptr)
 	shimAudioCaptureDestroy func(capturePtr uintptr)
 
-	shimEnumerateScreens     func(screens uintptr, maxScreens int32, outCount uintptr) int32
+	shimEnumerateScreens     func(screens uintptr, maxScreens int32, outCount uintptr, errorOut uintptr) int32
 	shimScreenCaptureCreate  func(id int64, isWindow int32, fps int32) uintptr
 	shimScreenCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
 	shimScreenCaptureStop    func(capturePtr uintptr)
@@ -215,14 +216,16 @@ func EnumerateDevices() ([]DeviceInfo, error) {
 	const maxDevices = 64
 	devices := make([]shimDeviceInfo, maxDevices)
 	var count int32
+	var errBuf ShimErrorBuffer
 
 	result := shimEnumerateDevices(
 		uintptr(unsafe.Pointer(&devices[0])),
 		maxDevices,
 		uintptr(unsafe.Pointer(&count)),
+		errBuf.Ptr(),
 	)
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		return nil, err
 	}
 
@@ -252,11 +255,16 @@ func NewVideoCapture(deviceID string, width, height, fps int) (*VideoCapture, er
 		deviceIDPtr = uintptr(unsafe.Pointer(&deviceIDBytes[0]))
 	}
 
-	ptr := shimVideoCaptureCreate(deviceIDPtr, int32(width), int32(height), int32(fps))
+	var errBuf ShimErrorBuffer
+	ptr := shimVideoCaptureCreate(deviceIDPtr, int32(width), int32(height), int32(fps), errBuf.Ptr())
 	// Keep deviceIDBytes alive until after the FFI call completes
 	runtime.KeepAlive(deviceIDBytes)
 
 	if ptr == 0 {
+		msg := errBuf.String()
+		if msg != "" {
+			return nil, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: msg}
+		}
 		return nil, errors.New("failed to create video capture")
 	}
 
@@ -353,9 +361,10 @@ func (c *VideoCapture) Start(callback VideoCaptureCallback) error {
 	// Create purego callback
 	c.callbackFn = purego.NewCallback(videoCaptureCallbackBridge)
 
-	result := shimVideoCaptureStart(c.ptr, c.callbackFn, c.ptr)
+	var errBuf ShimErrorBuffer
+	result := shimVideoCaptureStart(c.ptr, c.callbackFn, c.ptr, errBuf.Ptr())
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		captureRegistryMu.Lock()
 		delete(videoCaptureRegistry, c.ptr)
 		captureRegistryMu.Unlock()
@@ -422,11 +431,16 @@ func NewAudioCapture(deviceID string, sampleRate, channels int) (*AudioCapture, 
 		deviceIDPtr = uintptr(unsafe.Pointer(&deviceIDBytes[0]))
 	}
 
-	ptr := shimAudioCaptureCreate(deviceIDPtr, int32(sampleRate), int32(channels))
+	var errBuf ShimErrorBuffer
+	ptr := shimAudioCaptureCreate(deviceIDPtr, int32(sampleRate), int32(channels), errBuf.Ptr())
 	// Keep deviceIDBytes alive until after the FFI call completes
 	runtime.KeepAlive(deviceIDBytes)
 
 	if ptr == 0 {
+		msg := errBuf.String()
+		if msg != "" {
+			return nil, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: msg}
+		}
 		return nil, errors.New("failed to create audio capture")
 	}
 
@@ -500,9 +514,10 @@ func (c *AudioCapture) Start(callback AudioCaptureCallback) error {
 	// Create purego callback
 	c.callbackFn = purego.NewCallback(audioCaptureCallbackBridge)
 
-	result := shimAudioCaptureStart(c.ptr, c.callbackFn, c.ptr)
+	var errBuf ShimErrorBuffer
+	result := shimAudioCaptureStart(c.ptr, c.callbackFn, c.ptr, errBuf.Ptr())
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		captureRegistryMu.Lock()
 		delete(audioCaptureRegistry, c.ptr)
 		captureRegistryMu.Unlock()
@@ -564,14 +579,16 @@ func EnumerateScreens() ([]ScreenInfo, error) {
 	const maxScreens = 64
 	screens := make([]shimScreenInfo, maxScreens)
 	var count int32
+	var errBuf ShimErrorBuffer
 
 	result := shimEnumerateScreens(
 		uintptr(unsafe.Pointer(&screens[0])),
 		maxScreens,
 		uintptr(unsafe.Pointer(&count)),
+		errBuf.Ptr(),
 	)
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		return nil, err
 	}
 

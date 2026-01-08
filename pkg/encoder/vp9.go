@@ -58,9 +58,9 @@ func (e *vp9Encoder) init() error {
 		PreferHW:         1,
 	}
 
-	handle := ffi.CreateVideoEncoder(ffi.CodecVP9, ffiConfig)
-	if handle == 0 {
-		return ErrEncodeFailed
+	handle, err := ffi.CreateVideoEncoder(ffi.CodecVP9, ffiConfig)
+	if err != nil {
+		return err
 	}
 
 	e.handle = handle

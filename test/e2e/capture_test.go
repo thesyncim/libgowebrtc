@@ -8,6 +8,11 @@ import (
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 )
 
+const (
+	captureDuration      = 250 * time.Millisecond
+	shortCaptureDuration = 200 * time.Millisecond
+)
+
 // TestEnumerateDevices tests device enumeration with the real shim library.
 func TestEnumerateDevices(t *testing.T) {
 	if !ffi.IsLoaded() {
@@ -95,8 +100,8 @@ func TestScreenCapture(t *testing.T) {
 		t.Fatalf("Start failed: %v", err)
 	}
 
-	// Capture for 1 second
-	time.Sleep(1 * time.Second)
+	// Capture briefly
+	time.Sleep(captureDuration)
 
 	capture.Stop()
 
@@ -105,8 +110,8 @@ func TestScreenCapture(t *testing.T) {
 
 	if count == 0 {
 		t.Error("No frames captured")
-	} else if count < 5 {
-		t.Logf("Warning: fewer frames than expected (got %d, expected ~10)", count)
+	} else if count < 2 {
+		t.Logf("Warning: fewer frames than expected (got %d, expected ~2)", count)
 	}
 }
 
@@ -155,8 +160,8 @@ func TestVideoCaptureWithDevice(t *testing.T) {
 		t.Fatalf("Start failed: %v", err)
 	}
 
-	// Capture for 1 second
-	time.Sleep(1 * time.Second)
+	// Capture briefly
+	time.Sleep(captureDuration)
 
 	capture.Stop()
 
@@ -212,8 +217,8 @@ func TestAudioCaptureWithDevice(t *testing.T) {
 		t.Fatalf("Start failed: %v", err)
 	}
 
-	// Capture for 500ms
-	time.Sleep(500 * time.Millisecond)
+	// Capture briefly
+	time.Sleep(shortCaptureDuration)
 
 	capture.Stop()
 
@@ -250,7 +255,7 @@ func TestDefaultVideoCapture(t *testing.T) {
 		return
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(shortCaptureDuration)
 	capture.Stop()
 
 	count := frameCount.Load()

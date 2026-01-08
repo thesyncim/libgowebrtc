@@ -33,9 +33,9 @@ func (d *vp9Decoder) init() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	handle := ffi.CreateVideoDecoder(ffi.CodecVP9)
-	if handle == 0 {
-		return ErrDecodeFailed
+	handle, err := ffi.CreateVideoDecoder(ffi.CodecVP9)
+	if err != nil {
+		return err
 	}
 
 	d.handle = handle

@@ -41,9 +41,9 @@ func (d *opusDecoder) init() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	handle := ffi.CreateAudioDecoder(d.sampleRate, d.channels)
-	if handle == 0 {
-		return ErrDecodeFailed
+	handle, err := ffi.CreateAudioDecoder(d.sampleRate, d.channels)
+	if err != nil {
+		return err
 	}
 
 	d.handle = handle

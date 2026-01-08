@@ -1,11 +1,20 @@
 package ffi
 
 // CreateVideoDecoder creates a video decoder for the specified codec.
-func CreateVideoDecoder(codec CodecType) uintptr {
+func CreateVideoDecoder(codec CodecType) (uintptr, error) {
 	if !libLoaded.Load() {
-		return 0
+		return 0, ErrLibraryNotLoaded
 	}
-	return shimVideoDecoderCreate(int32(codec))
+	var errBuf ShimErrorBuffer
+	decoder := shimVideoDecoderCreate(int32(codec), errBuf.Ptr())
+	if decoder == 0 {
+		msg := errBuf.String()
+		if msg != "" {
+			return 0, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: msg}
+		}
+		return 0, ErrInitFailed
+	}
+	return decoder, nil
 }
 
 // VideoDecoderDecodeInto decodes encoded video data into pre-allocated buffers.
@@ -30,6 +39,7 @@ func VideoDecoderDecodeInto(
 	}
 
 	// Pass destination buffers - shim writes directly into them
+	var errBuf ShimErrorBuffer
 	result := shimVideoDecoderDecode(
 		decoder,
 		ByteSlicePtr(src),
@@ -44,9 +54,10 @@ func VideoDecoderDecodeInto(
 		Int32Ptr(&outYStride),
 		Int32Ptr(&outUStride),
 		Int32Ptr(&outVStride),
+		errBuf.Ptr(),
 	)
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
 
@@ -62,11 +73,20 @@ func VideoDecoderDestroy(decoder uintptr) {
 }
 
 // CreateAudioDecoder creates an audio decoder.
-func CreateAudioDecoder(sampleRate, channels int) uintptr {
+func CreateAudioDecoder(sampleRate, channels int) (uintptr, error) {
 	if !libLoaded.Load() {
-		return 0
+		return 0, ErrLibraryNotLoaded
 	}
-	return shimAudioDecoderCreate(int32(sampleRate), int32(channels))
+	var errBuf ShimErrorBuffer
+	decoder := shimAudioDecoderCreate(int32(sampleRate), int32(channels), errBuf.Ptr())
+	if decoder == 0 {
+		msg := errBuf.String()
+		if msg != "" {
+			return 0, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: msg}
+		}
+		return 0, ErrInitFailed
+	}
+	return decoder, nil
 }
 
 // AudioDecoderDecodeInto decodes encoded audio into a pre-allocated buffer.
@@ -79,15 +99,17 @@ func AudioDecoderDecodeInto(decoder uintptr, src []byte, samplesDst []byte) (num
 
 	var outNumSamples int32
 
+	var errBuf ShimErrorBuffer
 	result := shimAudioDecoderDecode(
 		decoder,
 		ByteSlicePtr(src),
 		int32(len(src)),
 		ByteSlicePtr(samplesDst),
 		Int32Ptr(&outNumSamples),
+		errBuf.Ptr(),
 	)
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		return 0, err
 	}
 

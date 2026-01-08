@@ -22,8 +22,15 @@ extern "C" {
  * RTPSender Implementation
  * ========================================================================== */
 
-SHIM_EXPORT int shim_rtp_sender_set_bitrate(ShimRTPSender* sender, uint32_t bitrate) {
-    if (!sender) return SHIM_ERROR_INVALID_PARAM;
+SHIM_EXPORT int shim_rtp_sender_set_bitrate(
+    ShimRTPSender* sender,
+    uint32_t bitrate,
+    ShimErrorBuffer* error_out
+) {
+    if (!sender) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
     auto params = webrtc_sender->GetParameters();
@@ -33,7 +40,11 @@ SHIM_EXPORT int shim_rtp_sender_set_bitrate(ShimRTPSender* sender, uint32_t bitr
     }
 
     auto result = webrtc_sender->SetParameters(params);
-    return result.ok() ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result);
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT int shim_rtp_sender_replace_track(ShimRTPSender* sender, void* track) {
@@ -98,9 +109,13 @@ SHIM_EXPORT int shim_rtp_sender_get_parameters(
 
 SHIM_EXPORT int shim_rtp_sender_set_parameters(
     ShimRTPSender* sender,
-    const ShimRTPSendParameters* params
+    const ShimRTPSendParameters* params,
+    ShimErrorBuffer* error_out
 ) {
-    if (!sender || !params) return SHIM_ERROR_INVALID_PARAM;
+    if (!sender || !params) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
     auto rtp_params = webrtc_sender->GetParameters();
@@ -122,7 +137,11 @@ SHIM_EXPORT int shim_rtp_sender_set_parameters(
     }
 
     auto result = webrtc_sender->SetParameters(rtp_params);
-    return result.ok() ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result);
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT void* shim_rtp_sender_get_track(ShimRTPSender* sender) {
@@ -149,9 +168,13 @@ SHIM_EXPORT void shim_rtp_sender_set_on_rtcp_feedback(
 SHIM_EXPORT int shim_rtp_sender_set_layer_active(
     ShimRTPSender* sender,
     const char* rid,
-    int active
+    int active,
+    ShimErrorBuffer* error_out
 ) {
-    if (!sender) return SHIM_ERROR_INVALID_PARAM;
+    if (!sender) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
     auto params = webrtc_sender->GetParameters();
@@ -165,18 +188,31 @@ SHIM_EXPORT int shim_rtp_sender_set_layer_active(
         }
     }
 
-    if (!found) return SHIM_ERROR_INVALID_PARAM;
+    if (!found) {
+        std::string msg = "RID not found: ";
+        msg += rid ? rid : "(null)";
+        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto result = webrtc_sender->SetParameters(params);
-    return result.ok() ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result);
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT int shim_rtp_sender_set_layer_bitrate(
     ShimRTPSender* sender,
     const char* rid,
-    uint32_t max_bitrate_bps
+    uint32_t max_bitrate_bps,
+    ShimErrorBuffer* error_out
 ) {
-    if (!sender) return SHIM_ERROR_INVALID_PARAM;
+    if (!sender) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
     auto params = webrtc_sender->GetParameters();
@@ -190,10 +226,19 @@ SHIM_EXPORT int shim_rtp_sender_set_layer_bitrate(
         }
     }
 
-    if (!found) return SHIM_ERROR_INVALID_PARAM;
+    if (!found) {
+        std::string msg = "RID not found: ";
+        msg += rid ? rid : "(null)";
+        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto result = webrtc_sender->SetParameters(params);
-    return result.ok() ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result);
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT int shim_rtp_sender_get_active_layers(
@@ -219,9 +264,13 @@ SHIM_EXPORT int shim_rtp_sender_get_active_layers(
 
 SHIM_EXPORT int shim_rtp_sender_set_scalability_mode(
     ShimRTPSender* sender,
-    const char* scalability_mode
+    const char* scalability_mode,
+    ShimErrorBuffer* error_out
 ) {
-    if (!sender || !scalability_mode) return SHIM_ERROR_INVALID_PARAM;
+    if (!sender || !scalability_mode) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
     auto params = webrtc_sender->GetParameters();
@@ -231,7 +280,11 @@ SHIM_EXPORT int shim_rtp_sender_set_scalability_mode(
     }
 
     auto result = webrtc_sender->SetParameters(params);
-    return result.ok() ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result);
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT int shim_rtp_sender_get_scalability_mode(
@@ -298,14 +351,19 @@ SHIM_EXPORT int shim_rtp_sender_get_negotiated_codecs(
 SHIM_EXPORT int shim_rtp_sender_set_preferred_codec(
     ShimRTPSender* sender,
     const char* mime_type,
-    int payload_type
+    int payload_type,
+    ShimErrorBuffer* error_out
 ) {
-    if (!sender || !mime_type) return SHIM_ERROR_INVALID_PARAM;
+    if (!sender || !mime_type) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
     auto params = webrtc_sender->GetParameters();
 
     if (params.codecs.empty()) {
+        shim::SetErrorMessage(error_out, "no codecs negotiated", SHIM_ERROR_NOT_FOUND);
         return SHIM_ERROR_NOT_FOUND;
     }
 
@@ -336,11 +394,12 @@ SHIM_EXPORT int shim_rtp_sender_set_preferred_codec(
     }
 
     if (!found_codec) {
+        std::string msg = "codec not found: " + mime;
+        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_NOT_FOUND);
         return SHIM_ERROR_NOT_FOUND;
     }
 
     // Set the codec on each encoding using the encoding.codec field
-    // This tells the encoder which codec to use without reordering the codecs list
     for (auto& encoding : params.encodings) {
         webrtc::RtpCodec preferred;
         preferred.name = found_codec->name;
@@ -354,8 +413,7 @@ SHIM_EXPORT int shim_rtp_sender_set_preferred_codec(
     // Set the updated parameters
     auto result = webrtc_sender->SetParameters(params);
     if (!result.ok()) {
-        // Log the error for debugging
-        fprintf(stderr, "SHIM DEBUG: SetParameters failed: %s\n", result.message());
+        shim::SetErrorFromRTCError(error_out, result, SHIM_ERROR_RENEGOTIATION_NEEDED);
         return SHIM_ERROR_RENEGOTIATION_NEEDED;
     }
 

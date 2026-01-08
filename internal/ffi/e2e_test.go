@@ -17,16 +17,16 @@ func TestVideoEncoderDecoderPipeline(t *testing.T) {
 		PreferHW:         0,
 	}
 
-	encoder := CreateVideoEncoder(CodecVP8, encCfg)
-	if encoder == 0 {
-		t.Fatal("Failed to create VP8 encoder")
+	encoder, err := CreateVideoEncoder(CodecVP8, encCfg)
+	if err != nil {
+		t.Fatalf("Failed to create VP8 encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(encoder)
 
 	// Create decoder
-	decoder := CreateVideoDecoder(CodecVP8)
-	if decoder == 0 {
-		t.Fatal("Failed to create VP8 decoder")
+	decoder, err := CreateVideoDecoder(CodecVP8)
+	if err != nil {
+		t.Fatalf("Failed to create VP8 decoder: %v", err)
 	}
 	defer VideoDecoderDestroy(decoder)
 
@@ -112,16 +112,16 @@ func TestAudioEncoderDecoderPipeline(t *testing.T) {
 		BitrateBps: 64000,
 	}
 
-	encoder := CreateAudioEncoder(encCfg)
-	if encoder == 0 {
-		t.Fatal("Failed to create Opus encoder")
+	encoder, err := CreateAudioEncoder(encCfg)
+	if err != nil {
+		t.Fatalf("Failed to create Opus encoder: %v", err)
 	}
 	defer AudioEncoderDestroy(encoder)
 
 	// Create decoder
-	decoder := CreateAudioDecoder(48000, 2)
-	if decoder == 0 {
-		t.Fatal("Failed to create Opus decoder")
+	decoder, err := CreateAudioDecoder(48000, 2)
+	if err != nil {
+		t.Fatalf("Failed to create Opus decoder: %v", err)
 	}
 	defer AudioDecoderDestroy(decoder)
 
@@ -267,13 +267,13 @@ func TestMultiCodecEncoders(t *testing.T) {
 			}
 
 			if tc.codec == CodecH264 {
-				profile := CString("42e014")
+				profile := CString("42e01f")
 				cfg.H264Profile = &profile[0]
 			}
 
-			encoder := CreateVideoEncoder(tc.codec, cfg)
-			if encoder == 0 {
-				t.Fatalf("Failed to create %s encoder", tc.name)
+			encoder, err := CreateVideoEncoder(tc.codec, cfg)
+			if err != nil {
+				t.Fatalf("Failed to create %s encoder: %v", tc.name, err)
 			}
 			defer VideoEncoderDestroy(encoder)
 
@@ -326,9 +326,9 @@ func TestEncoderBitrateChange(t *testing.T) {
 		PreferHW:   0,
 	}
 
-	encoder := CreateVideoEncoder(CodecVP8, cfg)
-	if encoder == 0 {
-		t.Fatal("Failed to create encoder")
+	encoder, err := CreateVideoEncoder(CodecVP8, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(encoder)
 
@@ -363,15 +363,15 @@ func BenchmarkFullEncodeDecode(b *testing.B) {
 		PreferHW:   0,
 	}
 
-	encoder := CreateVideoEncoder(CodecVP8, encCfg)
-	if encoder == 0 {
-		b.Fatal("Failed to create encoder")
+	encoder, err := CreateVideoEncoder(CodecVP8, encCfg)
+	if err != nil {
+		b.Fatalf("Failed to create encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(encoder)
 
-	decoder := CreateVideoDecoder(CodecVP8)
-	if decoder == 0 {
-		b.Fatal("Failed to create decoder")
+	decoder, err := CreateVideoDecoder(CodecVP8)
+	if err != nil {
+		b.Fatalf("Failed to create decoder: %v", err)
 	}
 	defer VideoDecoderDestroy(decoder)
 

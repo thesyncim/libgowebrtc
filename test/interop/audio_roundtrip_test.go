@@ -95,7 +95,7 @@ func TestAudioTrackRoundtrip(t *testing.T) {
 		count := len(receivedPackets)
 		packetsMu.Unlock()
 		t.Logf("Received %d RTP packets", count)
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopShortTimeout):
 		t.Log("Audio track not received (expected without full ICE connectivity)")
 	}
 }
@@ -145,7 +145,7 @@ func TestPionToLibWebRTCAudio(t *testing.T) {
 	select {
 	case <-trackReceived:
 		t.Log("Audio track was received by libwebrtc")
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopShortTimeout):
 		t.Log("Audio track not received (expected without full ICE connectivity)")
 	}
 }
@@ -299,18 +299,17 @@ func TestAudioAndVideoTogether(t *testing.T) {
 	}
 
 	// Wait briefly for tracks (won't arrive without ICE)
-	timeout := time.After(2 * time.Second)
 	select {
 	case <-receivedVideo:
 		t.Log("Video track received")
-	case <-timeout:
+	case <-time.After(interopShortTimeout):
 		t.Log("Video track not received (expected without ICE)")
 	}
 
 	select {
 	case <-receivedAudio:
 		t.Log("Audio track received")
-	case <-timeout:
+	case <-time.After(interopShortTimeout):
 		t.Log("Audio track not received (expected without ICE)")
 	}
 
@@ -352,13 +351,13 @@ func TestAudioTrackWithICE(t *testing.T) {
 	}
 
 	// Wait for connection
-	if pp.WaitForConnection(10 * time.Second) {
+	if pp.WaitForConnection(interopShortTimeout) {
 		t.Log("Connection established with ICE")
 
 		select {
 		case <-trackReceived:
 			t.Log("Audio track received with ICE connectivity")
-		case <-time.After(5 * time.Second):
+		case <-time.After(interopShortTimeout):
 			t.Log("Audio track not received within timeout")
 		}
 	} else {

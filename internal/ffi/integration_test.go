@@ -6,8 +6,6 @@ import (
 )
 
 // Integration tests require the shim library to be present.
-// Run with: go test -tags=integration ./internal/ffi/...
-//
 // Set LIBWEBRTC_SHIM_PATH environment variable to the path of the shim library.
 
 func TestMain(m *testing.M) {
@@ -56,7 +54,7 @@ func TestListSupportedCodecs(t *testing.T) {
 }
 
 func TestCreateVideoEncoderH264(t *testing.T) {
-	profile := CString("42e014") // Constrained Baseline
+	profile := CString("42e01f") // Constrained Baseline
 	cfg := &VideoEncoderConfig{
 		Width:            1280,
 		Height:           720,
@@ -67,9 +65,9 @@ func TestCreateVideoEncoderH264(t *testing.T) {
 		PreferHW:         0,
 	}
 
-	handle := CreateVideoEncoder(CodecH264, cfg)
-	if handle == 0 {
-		t.Fatal("Failed to create H264 encoder")
+	handle, err := CreateVideoEncoder(CodecH264, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create H264 encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(handle)
 
@@ -86,9 +84,9 @@ func TestCreateVideoEncoderVP8(t *testing.T) {
 		PreferHW:         0,
 	}
 
-	handle := CreateVideoEncoder(CodecVP8, cfg)
-	if handle == 0 {
-		t.Fatal("Failed to create VP8 encoder")
+	handle, err := CreateVideoEncoder(CodecVP8, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create VP8 encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(handle)
 
@@ -106,9 +104,9 @@ func TestCreateVideoEncoderVP9(t *testing.T) {
 		PreferHW:         0,
 	}
 
-	handle := CreateVideoEncoder(CodecVP9, cfg)
-	if handle == 0 {
-		t.Fatal("Failed to create VP9 encoder")
+	handle, err := CreateVideoEncoder(CodecVP9, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create VP9 encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(handle)
 
@@ -116,9 +114,9 @@ func TestCreateVideoEncoderVP9(t *testing.T) {
 }
 
 func TestCreateVideoDecoderH264(t *testing.T) {
-	handle := CreateVideoDecoder(CodecH264)
-	if handle == 0 {
-		t.Fatal("Failed to create H264 decoder")
+	handle, err := CreateVideoDecoder(CodecH264)
+	if err != nil {
+		t.Fatalf("Failed to create H264 decoder: %v", err)
 	}
 	defer VideoDecoderDestroy(handle)
 
@@ -126,9 +124,9 @@ func TestCreateVideoDecoderH264(t *testing.T) {
 }
 
 func TestCreateVideoDecoderVP8(t *testing.T) {
-	handle := CreateVideoDecoder(CodecVP8)
-	if handle == 0 {
-		t.Fatal("Failed to create VP8 decoder")
+	handle, err := CreateVideoDecoder(CodecVP8)
+	if err != nil {
+		t.Fatalf("Failed to create VP8 decoder: %v", err)
 	}
 	defer VideoDecoderDestroy(handle)
 
@@ -136,9 +134,9 @@ func TestCreateVideoDecoderVP8(t *testing.T) {
 }
 
 func TestCreateVideoDecoderVP9(t *testing.T) {
-	handle := CreateVideoDecoder(CodecVP9)
-	if handle == 0 {
-		t.Fatal("Failed to create VP9 decoder")
+	handle, err := CreateVideoDecoder(CodecVP9)
+	if err != nil {
+		t.Fatalf("Failed to create VP9 decoder: %v", err)
 	}
 	defer VideoDecoderDestroy(handle)
 
@@ -152,9 +150,9 @@ func TestCreateAudioEncoderOpus(t *testing.T) {
 		BitrateBps: 64000,
 	}
 
-	handle := CreateAudioEncoder(cfg)
-	if handle == 0 {
-		t.Fatal("Failed to create Opus encoder")
+	handle, err := CreateAudioEncoder(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create Opus encoder: %v", err)
 	}
 	defer AudioEncoderDestroy(handle)
 
@@ -162,9 +160,9 @@ func TestCreateAudioEncoderOpus(t *testing.T) {
 }
 
 func TestCreateAudioDecoderOpus(t *testing.T) {
-	handle := CreateAudioDecoder(48000, 2)
-	if handle == 0 {
-		t.Fatal("Failed to create Opus decoder")
+	handle, err := CreateAudioDecoder(48000, 2)
+	if err != nil {
+		t.Fatalf("Failed to create Opus decoder: %v", err)
 	}
 	defer AudioDecoderDestroy(handle)
 
@@ -208,14 +206,14 @@ func TestVideoEncoderSetBitrate(t *testing.T) {
 		PreferHW:   0,
 	}
 
-	handle := CreateVideoEncoder(CodecVP8, cfg)
-	if handle == 0 {
-		t.Fatal("Failed to create encoder")
+	handle, err := CreateVideoEncoder(CodecVP8, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(handle)
 
 	// Change bitrate
-	err := VideoEncoderSetBitrate(handle, 4_000_000)
+	err = VideoEncoderSetBitrate(handle, 4_000_000)
 	if err != nil {
 		t.Errorf("SetBitrate failed: %v", err)
 	}
@@ -230,21 +228,21 @@ func TestVideoEncoderSetFramerate(t *testing.T) {
 		PreferHW:   0,
 	}
 
-	handle := CreateVideoEncoder(CodecVP8, cfg)
-	if handle == 0 {
-		t.Fatal("Failed to create encoder")
+	handle, err := CreateVideoEncoder(CodecVP8, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(handle)
 
 	// Change framerate
-	err := VideoEncoderSetFramerate(handle, 60.0)
+	err = VideoEncoderSetFramerate(handle, 60.0)
 	if err != nil {
 		t.Errorf("SetFramerate failed: %v", err)
 	}
 }
 
 func TestVideoEncoderEncodeFrame(t *testing.T) {
-	profile := CString("42e014")
+	profile := CString("42e01f")
 	cfg := &VideoEncoderConfig{
 		Width:            320,
 		Height:           240,
@@ -255,9 +253,9 @@ func TestVideoEncoderEncodeFrame(t *testing.T) {
 		PreferHW:         0,
 	}
 
-	handle := CreateVideoEncoder(CodecH264, cfg)
-	if handle == 0 {
-		t.Fatal("Failed to create encoder")
+	handle, err := CreateVideoEncoder(CodecH264, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(handle)
 
@@ -312,9 +310,9 @@ func TestAudioEncoderEncodeFrame(t *testing.T) {
 		BitrateBps: 64000,
 	}
 
-	handle := CreateAudioEncoder(cfg)
-	if handle == 0 {
-		t.Fatal("Failed to create encoder")
+	handle, err := CreateAudioEncoder(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create encoder: %v", err)
 	}
 	defer AudioEncoderDestroy(handle)
 
@@ -357,15 +355,16 @@ func BenchmarkVideoEncoderCreate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		handle := CreateVideoEncoder(CodecVP8, cfg)
-		if handle != 0 {
-			VideoEncoderDestroy(handle)
+		handle, err := CreateVideoEncoder(CodecVP8, cfg)
+		if err != nil {
+			b.Fatalf("Failed to create encoder: %v", err)
 		}
+		VideoEncoderDestroy(handle)
 	}
 }
 
 func BenchmarkVideoEncoderEncode(b *testing.B) {
-	profile := CString("42e014")
+	profile := CString("42e01f")
 	cfg := &VideoEncoderConfig{
 		Width:       320,
 		Height:      240,
@@ -375,9 +374,9 @@ func BenchmarkVideoEncoderEncode(b *testing.B) {
 		PreferHW:    0,
 	}
 
-	handle := CreateVideoEncoder(CodecH264, cfg)
-	if handle == 0 {
-		b.Fatal("Failed to create encoder")
+	handle, err := CreateVideoEncoder(CodecH264, cfg)
+	if err != nil {
+		b.Fatalf("Failed to create encoder: %v", err)
 	}
 	defer VideoEncoderDestroy(handle)
 

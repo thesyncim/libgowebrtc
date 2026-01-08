@@ -61,9 +61,9 @@ func (e *opusEncoder) init() error {
 		BitrateBps: e.config.Bitrate,
 	}
 
-	handle := ffi.CreateAudioEncoder(ffiConfig)
-	if handle == 0 {
-		return ErrEncodeFailed
+	handle, err := ffi.CreateAudioEncoder(ffiConfig)
+	if err != nil {
+		return err
 	}
 
 	e.handle = handle

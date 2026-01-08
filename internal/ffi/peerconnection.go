@@ -208,11 +208,20 @@ func (c *ICEServerConfig) Ptr() uintptr {
 }
 
 // CreatePeerConnection creates a new PeerConnection.
-func CreatePeerConnection(config *PeerConnectionConfig) uintptr {
+func CreatePeerConnection(config *PeerConnectionConfig) (uintptr, error) {
 	if !libLoaded.Load() || shimPeerConnectionCreate == nil {
-		return 0
+		return 0, ErrLibraryNotLoaded
 	}
-	return shimPeerConnectionCreate(config.Ptr())
+	var errBuf ShimErrorBuffer
+	pc := shimPeerConnectionCreate(config.Ptr(), errBuf.Ptr())
+	if pc == 0 {
+		msg := errBuf.String()
+		if msg != "" {
+			return 0, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: msg}
+		}
+		return 0, ErrInitFailed
+	}
+	return pc, nil
 }
 
 // PeerConnectionDestroy destroys a PeerConnection.
@@ -231,14 +240,16 @@ func PeerConnectionCreateOffer(pc uintptr, sdpBuf []byte) (int, error) {
 	}
 
 	var sdpLen int32
+	var errBuf ShimErrorBuffer
 	result := shimPeerConnectionCreateOffer(
 		pc,
 		ByteSlicePtr(sdpBuf),
 		int32(len(sdpBuf)),
 		Int32Ptr(&sdpLen),
+		errBuf.Ptr(),
 	)
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		return 0, err
 	}
 
@@ -252,14 +263,16 @@ func PeerConnectionCreateAnswer(pc uintptr, sdpBuf []byte) (int, error) {
 	}
 
 	var sdpLen int32
+	var errBuf ShimErrorBuffer
 	result := shimPeerConnectionCreateAnswer(
 		pc,
 		ByteSlicePtr(sdpBuf),
 		int32(len(sdpBuf)),
 		Int32Ptr(&sdpLen),
+		errBuf.Ptr(),
 	)
 
-	if err := ShimError(result); err != nil {
+	if err := errBuf.ToError(result); err != nil {
 		return 0, err
 	}
 
@@ -273,9 +286,10 @@ func PeerConnectionSetLocalDescription(pc uintptr, sdpType int, sdp string) erro
 	}
 
 	sdpCStr := CString(sdp)
-	result := shimPeerConnectionSetLocalDescription(pc, int32(sdpType), ByteSlicePtr(sdpCStr))
+	var errBuf ShimErrorBuffer
+	result := shimPeerConnectionSetLocalDescription(pc, int32(sdpType), ByteSlicePtr(sdpCStr), errBuf.Ptr())
 	runtime.KeepAlive(sdpCStr)
-	return ShimError(result)
+	return errBuf.ToError(result)
 }
 
 // PeerConnectionSetRemoteDescription sets the remote SDP description.
@@ -285,9 +299,10 @@ func PeerConnectionSetRemoteDescription(pc uintptr, sdpType int, sdp string) err
 	}
 
 	sdpCStr := CString(sdp)
-	result := shimPeerConnectionSetRemoteDescription(pc, int32(sdpType), ByteSlicePtr(sdpCStr))
+	var errBuf ShimErrorBuffer
+	result := shimPeerConnectionSetRemoteDescription(pc, int32(sdpType), ByteSlicePtr(sdpCStr), errBuf.Ptr())
 	runtime.KeepAlive(sdpCStr)
-	return ShimError(result)
+	return errBuf.ToError(result)
 }
 
 // PeerConnectionAddICECandidate adds an ICE candidate.
@@ -298,15 +313,17 @@ func PeerConnectionAddICECandidate(pc uintptr, candidate, sdpMid string, sdpMLin
 
 	candidateCStr := CString(candidate)
 	sdpMidCStr := CString(sdpMid)
+	var errBuf ShimErrorBuffer
 	result := shimPeerConnectionAddICECandidate(
 		pc,
 		ByteSlicePtr(candidateCStr),
 		ByteSlicePtr(sdpMidCStr),
 		int32(sdpMLineIndex),
+		errBuf.Ptr(),
 	)
 	runtime.KeepAlive(candidateCStr)
 	runtime.KeepAlive(sdpMidCStr)
-	return ShimError(result)
+	return errBuf.ToError(result)
 }
 
 // PeerConnectionSignalingState returns the signaling state.
@@ -349,11 +366,13 @@ func PeerConnectionAddTrack(pc uintptr, codec CodecType, trackID, streamID strin
 
 	trackIDCStr := CString(trackID)
 	streamIDCStr := CString(streamID)
+	var errBuf ShimErrorBuffer
 	result := shimPeerConnectionAddTrack(
 		pc,
 		int32(codec),
 		ByteSlicePtr(trackIDCStr),
 		ByteSlicePtr(streamIDCStr),
+		errBuf.Ptr(),
 	)
 	runtime.KeepAlive(trackIDCStr)
 	runtime.KeepAlive(streamIDCStr)
@@ -365,8 +384,9 @@ func PeerConnectionRemoveTrack(pc uintptr, sender uintptr) error {
 	if !libLoaded.Load() || shimPeerConnectionRemoveTrack == nil {
 		return ErrLibraryNotLoaded
 	}
-	result := shimPeerConnectionRemoveTrack(pc, sender)
-	return ShimError(result)
+	var errBuf ShimErrorBuffer
+	result := shimPeerConnectionRemoveTrack(pc, sender, errBuf.Ptr())
+	return errBuf.ToError(result)
 }
 
 // PeerConnectionCreateDataChannel creates a data channel.
@@ -383,12 +403,14 @@ func PeerConnectionCreateDataChannel(pc uintptr, label string, ordered bool, max
 		orderedInt = 1
 	}
 
+	var errBuf ShimErrorBuffer
 	result := shimPeerConnectionCreateDataChannel(
 		pc,
 		ByteSlicePtr(labelCStr),
 		orderedInt,
 		int32(maxRetransmits),
 		ByteSlicePtr(protocolCStr),
+		errBuf.Ptr(),
 	)
 	runtime.KeepAlive(labelCStr)
 	runtime.KeepAlive(protocolCStr)
@@ -408,8 +430,9 @@ func RTPSenderSetBitrate(sender uintptr, bitrate uint32) error {
 	if !libLoaded.Load() || shimRTPSenderSetBitrate == nil {
 		return ErrLibraryNotLoaded
 	}
-	result := shimRTPSenderSetBitrate(sender, bitrate)
-	return ShimError(result)
+	var errBuf ShimErrorBuffer
+	result := shimRTPSenderSetBitrate(sender, bitrate, errBuf.Ptr())
+	return errBuf.ToError(result)
 }
 
 // RTPSenderDestroy destroys an RTP sender.
@@ -440,8 +463,9 @@ func DataChannelSend(dc uintptr, data []byte, isBinary bool) error {
 		isBinaryInt = 1
 	}
 
-	result := shimDataChannelSend(dc, ByteSlicePtr(data), int32(len(data)), isBinaryInt)
-	return ShimError(result)
+	var errBuf ShimErrorBuffer
+	result := shimDataChannelSend(dc, ByteSlicePtr(data), int32(len(data)), isBinaryInt, errBuf.Ptr())
+	return errBuf.ToError(result)
 }
 
 // DataChannelReadyState returns the ready state of a data channel.
@@ -657,11 +681,13 @@ func PeerConnectionAddVideoTrackFromSource(pc, source uintptr, trackID, streamID
 
 	trackIDCStr := CString(trackID)
 	streamIDCStr := CString(streamID)
+	var errBuf ShimErrorBuffer
 	result := shimPeerConnectionAddVideoTrackFromSource(
 		pc,
 		source,
 		ByteSlicePtr(trackIDCStr),
 		ByteSlicePtr(streamIDCStr),
+		errBuf.Ptr(),
 	)
 	runtime.KeepAlive(trackIDCStr)
 	runtime.KeepAlive(streamIDCStr)
@@ -707,11 +733,13 @@ func PeerConnectionAddAudioTrackFromSource(pc, source uintptr, trackID, streamID
 
 	trackIDCStr := CString(trackID)
 	streamIDCStr := CString(streamID)
+	var errBuf ShimErrorBuffer
 	result := shimPeerConnectionAddAudioTrackFromSource(
 		pc,
 		source,
 		ByteSlicePtr(trackIDCStr),
 		ByteSlicePtr(streamIDCStr),
+		errBuf.Ptr(),
 	)
 	runtime.KeepAlive(trackIDCStr)
 	runtime.KeepAlive(streamIDCStr)
@@ -827,8 +855,9 @@ func RTPSenderSetParameters(sender uintptr, params *RTPSendParameters) error {
 		return ErrLibraryNotLoaded
 	}
 
-	result := shimRTPSenderSetParameters(sender, uintptr(unsafe.Pointer(params)))
-	return ShimError(result)
+	var errBuf ShimErrorBuffer
+	result := shimRTPSenderSetParameters(sender, uintptr(unsafe.Pointer(params)), errBuf.Ptr())
+	return errBuf.ToError(result)
 }
 
 // RTPSenderGetTrack gets the track associated with a sender.
@@ -1016,9 +1045,10 @@ func RTPSenderSetLayerActive(sender uintptr, rid string, active bool) error {
 		activeInt = 1
 	}
 
-	result := shimRTPSenderSetLayerActive(sender, ByteSlicePtr(ridCStr), activeInt)
+	var errBuf ShimErrorBuffer
+	result := shimRTPSenderSetLayerActive(sender, ByteSlicePtr(ridCStr), activeInt, errBuf.Ptr())
 	runtime.KeepAlive(ridCStr)
-	return ShimError(result)
+	return errBuf.ToError(result)
 }
 
 // RTPSenderSetLayerBitrate sets the maximum bitrate for a layer.
@@ -1028,9 +1058,10 @@ func RTPSenderSetLayerBitrate(sender uintptr, rid string, maxBitrate uint32) err
 	}
 
 	ridCStr := CString(rid)
-	result := shimRTPSenderSetLayerBitrate(sender, ByteSlicePtr(ridCStr), maxBitrate)
+	var errBuf ShimErrorBuffer
+	result := shimRTPSenderSetLayerBitrate(sender, ByteSlicePtr(ridCStr), maxBitrate, errBuf.Ptr())
 	runtime.KeepAlive(ridCStr)
-	return ShimError(result)
+	return errBuf.ToError(result)
 }
 
 // RTPSenderGetActiveLayers gets the number of active layers.
@@ -1100,8 +1131,9 @@ func TransceiverSetDirection(transceiver uintptr, direction TransceiverDirection
 		return ErrLibraryNotLoaded
 	}
 
-	result := shimTransceiverSetDirection(transceiver, int32(direction))
-	return ShimError(result)
+	var errBuf ShimErrorBuffer
+	result := shimTransceiverSetDirection(transceiver, int32(direction), errBuf.Ptr())
+	return errBuf.ToError(result)
 }
 
 // TransceiverGetCurrentDirection gets the current direction as negotiated in SDP.
@@ -1118,8 +1150,9 @@ func TransceiverStop(transceiver uintptr) error {
 		return ErrLibraryNotLoaded
 	}
 
-	result := shimTransceiverStop(transceiver)
-	return ShimError(result)
+	var errBuf ShimErrorBuffer
+	result := shimTransceiverStop(transceiver, errBuf.Ptr())
+	return errBuf.ToError(result)
 }
 
 // TransceiverMid gets the mid of a transceiver.
@@ -1156,13 +1189,15 @@ func TransceiverSetCodecPreferences(transceiver uintptr, codecs []CodecCapabilit
 
 	if len(codecs) == 0 {
 		// Clear preferences (use default)
-		result := shimTransceiverSetCodecPreferences(transceiver, 0, 0)
-		return ShimError(result)
+		var errBuf ShimErrorBuffer
+		result := shimTransceiverSetCodecPreferences(transceiver, 0, 0, errBuf.Ptr())
+		return errBuf.ToError(result)
 	}
 
 	// CodecCapability already matches shim structure, pass directly
-	result := shimTransceiverSetCodecPreferences(transceiver, uintptr(unsafe.Pointer(&codecs[0])), int32(len(codecs)))
-	return ShimError(result)
+	var errBuf ShimErrorBuffer
+	result := shimTransceiverSetCodecPreferences(transceiver, uintptr(unsafe.Pointer(&codecs[0])), int32(len(codecs)), errBuf.Ptr())
+	return errBuf.ToError(result)
 }
 
 // TransceiverGetCodecPreferences gets the codec preferences for this transceiver.
@@ -1200,7 +1235,8 @@ func PeerConnectionAddTransceiver(pc uintptr, kind MediaKind, direction Transcei
 	if !libLoaded.Load() || shimPeerConnectionAddTransceiver == nil {
 		return 0
 	}
-	return shimPeerConnectionAddTransceiver(pc, int32(kind), int32(direction))
+	var errBuf ShimErrorBuffer
+	return shimPeerConnectionAddTransceiver(pc, int32(kind), int32(direction), errBuf.Ptr())
 }
 
 // PeerConnectionGetSenders gets all senders associated with a PeerConnection.
@@ -1776,9 +1812,10 @@ func RTPSenderSetScalabilityMode(sender uintptr, mode string) error {
 	}
 
 	modeCStr := CString(mode)
-	result := shimRTPSenderSetScalabilityMode(sender, ByteSlicePtr(modeCStr))
+	var errBuf ShimErrorBuffer
+	result := shimRTPSenderSetScalabilityMode(sender, ByteSlicePtr(modeCStr), errBuf.Ptr())
 	runtime.KeepAlive(modeCStr)
-	return ShimError(result)
+	return errBuf.ToError(result)
 }
 
 // RTPSenderGetScalabilityMode gets the current scalability mode for a sender.
@@ -1925,9 +1962,10 @@ func RTPSenderSetPreferredCodec(sender uintptr, mimeType string, payloadType int
 	}
 
 	cstr := CString(mimeType)
-	result := shimRTPSenderSetPreferredCodec(sender, ByteSlicePtr(cstr), int32(payloadType))
+	var errBuf ShimErrorBuffer
+	result := shimRTPSenderSetPreferredCodec(sender, ByteSlicePtr(cstr), int32(payloadType), errBuf.Ptr())
 	runtime.KeepAlive(cstr)
-	return ShimError(result)
+	return errBuf.ToError(result)
 }
 
 // ============================================================================

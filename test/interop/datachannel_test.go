@@ -14,7 +14,7 @@ import (
 // libwebrtc creates the data channel; Pion receives it.
 func TestDataChannelLibToP(t *testing.T) {
 	// Create libwebrtc PeerConnection (creates data channel)
-	libPC, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	libPC, err := pc.NewPeerConnection(defaultInteropConfig())
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc PeerConnection: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestDataChannelLibToP(t *testing.T) {
 		if pionDC.Label() != dcLabel {
 			t.Errorf("Received DC label mismatch: got %q, want %q", pionDC.Label(), dcLabel)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopShortTimeout):
 		t.Log("Data channel not received (expected without full ICE connectivity)")
 	}
 }
@@ -128,7 +128,7 @@ func TestDataChannelPionToLib(t *testing.T) {
 	defer pionPC.Close()
 
 	// Create libwebrtc PeerConnection (receives data channel)
-	libPC, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	libPC, err := pc.NewPeerConnection(defaultInteropConfig())
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc PeerConnection: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestDataChannelPionToLib(t *testing.T) {
 			t.Errorf("Received DC label mismatch: got %q, want %q", receivedLabel, dcLabel)
 		}
 		t.Log("Data channel received by libwebrtc")
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopShortTimeout):
 		t.Log("Data channel not received (expected without full ICE connectivity)")
 	}
 }
@@ -205,7 +205,7 @@ func TestDataChannelPionToLib(t *testing.T) {
 // TestDataChannelBidirectional tests bidirectional data channel messaging.
 func TestDataChannelBidirectional(t *testing.T) {
 	// Create both PeerConnections
-	libPC, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	libPC, err := pc.NewPeerConnection(defaultInteropConfig())
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc PeerConnection: %v", err)
 	}
@@ -304,14 +304,14 @@ func TestDataChannelBidirectional(t *testing.T) {
 		}
 
 		// Give time for messages to be delivered
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 
 		messagesMu.Lock()
 		t.Logf("Pion received %d messages from libwebrtc", len(pionMessages))
 		t.Logf("libwebrtc received %d messages from Pion", len(libMessages))
 		messagesMu.Unlock()
 
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopShortTimeout):
 		t.Log("Data channel did not open (expected without full ICE connectivity)")
 	}
 }
@@ -438,18 +438,18 @@ func TestDataChannelWithICE(t *testing.T) {
 			} else {
 				t.Logf("Successfully sent and received message: %q", received)
 			}
-		case <-time.After(2 * time.Second):
+		case <-time.After(interopMessageTimeout):
 			t.Log("Message not received within timeout")
 		}
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(interopShortTimeout):
 		t.Log("Data channel connection timeout (ICE may not complete in test environment)")
 	}
 }
 
 // TestMultipleDataChannels tests creating multiple data channels.
 func TestMultipleDataChannels(t *testing.T) {
-	libPC, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	libPC, err := pc.NewPeerConnection(defaultInteropConfig())
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc PeerConnection: %v", err)
 	}
@@ -511,7 +511,7 @@ func TestMultipleDataChannels(t *testing.T) {
 		labelsMu.Lock()
 		t.Logf("Pion received all %d data channels: %v", len(receivedLabels), receivedLabels)
 		labelsMu.Unlock()
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopShortTimeout):
 		labelsMu.Lock()
 		t.Logf("Received %d/%d channels (expected without ICE): %v",
 			len(receivedLabels), len(channels), receivedLabels)

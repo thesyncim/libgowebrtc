@@ -57,9 +57,9 @@ func (e *av1Encoder) init() error {
 		PreferHW:         1,
 	}
 
-	handle := ffi.CreateVideoEncoder(ffi.CodecAV1, ffiConfig)
-	if handle == 0 {
-		return ErrEncodeFailed
+	handle, err := ffi.CreateVideoEncoder(ffi.CodecAV1, ffiConfig)
+	if err != nil {
+		return err
 	}
 
 	e.handle = handle

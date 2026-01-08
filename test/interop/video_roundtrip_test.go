@@ -18,7 +18,7 @@ import (
 // libwebrtc encodes and packetizes; Pion receives RTP packets.
 func TestVideoTrackRoundtrip(t *testing.T) {
 	// Create libwebrtc PeerConnection (sender)
-	libPC, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	libPC, err := pc.NewPeerConnection(defaultInteropConfig())
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc PeerConnection: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestVideoTrackRoundtrip(t *testing.T) {
 		count := len(receivedPackets)
 		packetsMu.Unlock()
 		t.Logf("Received %d RTP packets", count)
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopShortTimeout):
 		t.Log("Track not received (expected without full ICE connectivity)")
 	}
 }
@@ -155,7 +155,7 @@ func TestPionToLibWebRTCVideo(t *testing.T) {
 	defer pionPC.Close()
 
 	// Create libwebrtc PeerConnection (receiver)
-	libPC, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	libPC, err := pc.NewPeerConnection(defaultInteropConfig())
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc PeerConnection: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestPionToLibWebRTCVideo(t *testing.T) {
 	select {
 	case <-trackReceived:
 		t.Log("Track was received by libwebrtc")
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopShortTimeout):
 		t.Log("Track not received (expected without full ICE connectivity)")
 	}
 }

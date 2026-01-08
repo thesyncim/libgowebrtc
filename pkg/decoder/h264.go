@@ -33,9 +33,9 @@ func (d *h264Decoder) init() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	handle := ffi.CreateVideoDecoder(ffi.CodecH264)
-	if handle == 0 {
-		return ErrDecodeFailed
+	handle, err := ffi.CreateVideoDecoder(ffi.CodecH264)
+	if err != nil {
+		return err
 	}
 
 	d.handle = handle

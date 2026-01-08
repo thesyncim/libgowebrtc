@@ -74,9 +74,11 @@ extern "C" {
 
 SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
     ShimCodecType codec,
-    const ShimVideoEncoderConfig* config
+    const ShimVideoEncoderConfig* config,
+    ShimErrorBuffer* error_out
 ) {
     if (!config || config->width <= 0 || config->height <= 0) {
+        shim::SetErrorMessage(error_out, "invalid encoder config", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
 
@@ -86,12 +88,14 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
     // - AV1 (libaom, if enabled)
     auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
     if (!factory) {
+        shim::SetErrorMessage(error_out, "failed to create encoder factory");
         return nullptr;
     }
 
     auto format = shim::CreateSdpVideoFormat(codec, config->h264_profile);
     auto encoder = factory->Create(shim::GetEnvironment(), format);
     if (!encoder) {
+        shim::SetErrorMessage(error_out, "encoder factory returned null (codec may not be supported)");
         return nullptr;
     }
 
@@ -134,7 +138,9 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
 
     shim_encoder->callback = std::make_unique<EncoderCallback>(shim_encoder.get());
 
-    if (shim_encoder->encoder->InitEncode(&settings, encoder_settings) != WEBRTC_VIDEO_CODEC_OK) {
+    int init_result = shim_encoder->encoder->InitEncode(&settings, encoder_settings);
+    if (init_result != WEBRTC_VIDEO_CODEC_OK) {
+        shim::SetErrorMessage(error_out, shim::VideoCodecErrorString(init_result));
         return nullptr;
     }
 
@@ -166,12 +172,15 @@ SHIM_EXPORT int shim_video_encoder_encode(
     uint8_t* dst_buffer,
     int dst_buffer_size,
     int* out_size,
-    int* out_is_keyframe
+    int* out_is_keyframe,
+    ShimErrorBuffer* error_out
 ) {
     if (!encoder || !y_plane || !u_plane || !v_plane || !dst_buffer || !out_size) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
     if (dst_buffer_size <= 0) {
+        shim::SetErrorMessage(error_out, "invalid buffer size", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -219,6 +228,7 @@ SHIM_EXPORT int shim_video_encoder_encode(
     // Encode - callback will be called synchronously and will acquire output_mutex
     int result = encoder->encoder->Encode(frame, &frame_types);
     if (result != WEBRTC_VIDEO_CODEC_OK) {
+        shim::SetErrorMessage(error_out, shim::VideoCodecErrorString(result), SHIM_ERROR_ENCODE_FAILED);
         return SHIM_ERROR_ENCODE_FAILED;
     }
 
@@ -345,13 +355,17 @@ private:
     ShimVideoDecoder* decoder_;
 };
 
-SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(ShimCodecType codec) {
+SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(
+    ShimCodecType codec,
+    ShimErrorBuffer* error_out
+) {
     // Use CreateBuiltinVideoDecoderFactory for full codec support including H264/VideoToolbox
     auto factory = webrtc::CreateBuiltinVideoDecoderFactory();
 
     auto format = shim::CreateSdpVideoFormat(codec, nullptr);
     auto decoder = factory->Create(shim::GetEnvironment(), format);
     if (!decoder) {
+        shim::SetErrorMessage(error_out, "decoder factory returned null (codec may not be supported)");
         return nullptr;
     }
 
@@ -368,6 +382,7 @@ SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(ShimCodecType codec) {
     shim_decoder->callback = std::make_unique<DecoderCallback>(shim_decoder.get());
 
     if (!shim_decoder->decoder->Configure(settings)) {
+        shim::SetErrorMessage(error_out, "decoder Configure() failed");
         return nullptr;
     }
 
@@ -390,9 +405,11 @@ SHIM_EXPORT int shim_video_decoder_decode(
     int* out_height,
     int* out_y_stride,
     int* out_u_stride,
-    int* out_v_stride
+    int* out_v_stride,
+    ShimErrorBuffer* error_out
 ) {
     if (!decoder || !data || size <= 0 || !y_dst || !u_dst || !v_dst) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -422,8 +439,10 @@ SHIM_EXPORT int shim_video_decoder_decode(
 
     if (result != WEBRTC_VIDEO_CODEC_OK) {
         if (result == WEBRTC_VIDEO_CODEC_OK_REQUEST_KEYFRAME) {
+            shim::SetErrorMessage(error_out, "keyframe requested", SHIM_ERROR_NEED_MORE_DATA);
             return SHIM_ERROR_NEED_MORE_DATA;
         }
+        shim::SetErrorMessage(error_out, shim::VideoCodecErrorString(result), SHIM_ERROR_DECODE_FAILED);
         return SHIM_ERROR_DECODE_FAILED;
     }
 

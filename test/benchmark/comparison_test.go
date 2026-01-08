@@ -214,19 +214,20 @@ func BenchmarkFFIPeerConnectionCreate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		handle := ffi.CreatePeerConnection(cfg)
-		if handle != 0 {
-			ffi.PeerConnectionDestroy(handle)
+		handle, err := ffi.CreatePeerConnection(cfg)
+		if err != nil {
+			b.Fatalf("CreatePeerConnection failed: %v", err)
 		}
+		ffi.PeerConnectionDestroy(handle)
 	}
 }
 
 // BenchmarkFFICreateOffer benchmarks raw FFI offer creation.
 func BenchmarkFFICreateOffer(b *testing.B) {
 	cfg := &ffi.PeerConnectionConfig{}
-	handle := ffi.CreatePeerConnection(cfg)
-	if handle == 0 {
-		b.Fatal("Failed to create PC")
+	handle, err := ffi.CreatePeerConnection(cfg)
+	if err != nil {
+		b.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer ffi.PeerConnectionDestroy(handle)
 
@@ -245,9 +246,9 @@ func BenchmarkFFICreateOffer(b *testing.B) {
 // BenchmarkFFIVideoPushFrame benchmarks raw FFI video frame push (hot path).
 func BenchmarkFFIVideoPushFrame(b *testing.B) {
 	cfg := &ffi.PeerConnectionConfig{}
-	handle := ffi.CreatePeerConnection(cfg)
-	if handle == 0 {
-		b.Fatal("Failed to create PC")
+	handle, err := ffi.CreatePeerConnection(cfg)
+	if err != nil {
+		b.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer ffi.PeerConnectionDestroy(handle)
 
@@ -320,9 +321,9 @@ func BenchmarkPionVideoWriteSample(b *testing.B) {
 // BenchmarkFFIAudioPushFrame benchmarks raw FFI audio frame push (hot path).
 func BenchmarkFFIAudioPushFrame(b *testing.B) {
 	cfg := &ffi.PeerConnectionConfig{}
-	handle := ffi.CreatePeerConnection(cfg)
-	if handle == 0 {
-		b.Fatal("Failed to create PC")
+	handle, err := ffi.CreatePeerConnection(cfg)
+	if err != nil {
+		b.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer ffi.PeerConnectionDestroy(handle)
 
@@ -354,9 +355,9 @@ func BenchmarkFFIAudioPushFrame(b *testing.B) {
 // BenchmarkFFIDataChannelSend benchmarks raw FFI data channel send (hot path).
 func BenchmarkFFIDataChannelSend(b *testing.B) {
 	cfg := &ffi.PeerConnectionConfig{}
-	handle := ffi.CreatePeerConnection(cfg)
-	if handle == 0 {
-		b.Fatal("Failed to create PC")
+	handle, err := ffi.CreatePeerConnection(cfg)
+	if err != nil {
+		b.Fatalf("CreatePeerConnection failed: %v", err)
 	}
 	defer ffi.PeerConnectionDestroy(handle)
 

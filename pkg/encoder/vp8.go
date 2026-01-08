@@ -57,9 +57,9 @@ func (e *vp8Encoder) init() error {
 		PreferHW:         1,
 	}
 
-	handle := ffi.CreateVideoEncoder(ffi.CodecVP8, ffiConfig)
-	if handle == 0 {
-		return ErrEncodeFailed
+	handle, err := ffi.CreateVideoEncoder(ffi.CodecVP8, ffiConfig)
+	if err != nil {
+		return err
 	}
 
 	e.handle = handle

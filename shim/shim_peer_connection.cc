@@ -120,7 +120,8 @@ static std::mutex g_pc_observers_mutex;
 extern "C" {
 
 SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
-    const ShimPeerConnectionConfig* config
+    const ShimPeerConnectionConfig* config,
+    ShimErrorBuffer* error_out
 ) {
     shim::InitializeGlobals();
 
@@ -129,13 +130,6 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
     // Create encoder/decoder factories
     auto video_encoder_factory = webrtc::CreateBuiltinVideoEncoderFactory();
     auto video_decoder_factory = webrtc::CreateBuiltinVideoDecoderFactory();
-
-    // DEBUG: Log supported encoder formats
-    fprintf(stderr, "SHIM DEBUG: Supported video encoder formats:\n");
-    for (const auto& format : video_encoder_factory->GetSupportedFormats()) {
-        fprintf(stderr, "  - %s\n", format.ToString().c_str());
-    }
-    fflush(stderr);
 
     // Create PeerConnectionFactory
     pc->factory = webrtc::CreatePeerConnectionFactory(
@@ -152,13 +146,9 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
     );
 
     if (!pc->factory) {
-        fprintf(stderr, "SHIM DEBUG: PeerConnectionFactory creation FAILED!\n");
-        fflush(stderr);
+        shim::SetErrorMessage(error_out, "PeerConnectionFactory creation failed");
         return nullptr;
     }
-
-    fprintf(stderr, "SHIM DEBUG: PeerConnectionFactory created successfully\n");
-    fflush(stderr);
 
     // Configure ICE servers
     webrtc::PeerConnectionInterface::RTCConfiguration rtc_config;
@@ -187,6 +177,7 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
 
     auto result = pc->factory->CreatePeerConnectionOrError(rtc_config, std::move(deps));
     if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result.error());
         return nullptr;
     }
 
@@ -309,9 +300,11 @@ SHIM_EXPORT int shim_peer_connection_create_offer(
     ShimPeerConnection* pc,
     char* sdp_out,
     int sdp_out_size,
-    int* out_sdp_len
+    int* out_sdp_len,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !sdp_out || !out_sdp_len) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -319,6 +312,7 @@ SHIM_EXPORT int shim_peer_connection_create_offer(
         : public webrtc::CreateSessionDescriptionObserver {
     public:
         std::string sdp;
+        std::string error_message;
         bool success = false;
         std::mutex mutex;
         std::condition_variable cv;
@@ -334,6 +328,10 @@ SHIM_EXPORT int shim_peer_connection_create_offer(
 
         void OnFailure(webrtc::RTCError error) override {
             std::lock_guard<std::mutex> lock(mutex);
+            error_message = error.message();
+            if (error_message.empty()) {
+                error_message = webrtc::ToString(error.type());
+            }
             success = false;
             done = true;
             cv.notify_one();
@@ -352,11 +350,13 @@ SHIM_EXPORT int shim_peer_connection_create_offer(
     }
 
     if (!observer->success) {
+        shim::SetErrorMessage(error_out, observer->error_message);
         return SHIM_ERROR_INIT_FAILED;
     }
 
     int len = static_cast<int>(observer->sdp.size());
     if (len >= sdp_out_size) {
+        shim::SetErrorMessage(error_out, "SDP buffer too small", SHIM_ERROR_BUFFER_TOO_SMALL);
         return SHIM_ERROR_BUFFER_TOO_SMALL;
     }
 
@@ -370,9 +370,11 @@ SHIM_EXPORT int shim_peer_connection_create_answer(
     ShimPeerConnection* pc,
     char* sdp_out,
     int sdp_out_size,
-    int* out_sdp_len
+    int* out_sdp_len,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !sdp_out || !out_sdp_len) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -380,6 +382,7 @@ SHIM_EXPORT int shim_peer_connection_create_answer(
         : public webrtc::CreateSessionDescriptionObserver {
     public:
         std::string sdp;
+        std::string error_message;
         bool success = false;
         std::mutex mutex;
         std::condition_variable cv;
@@ -395,6 +398,10 @@ SHIM_EXPORT int shim_peer_connection_create_answer(
 
         void OnFailure(webrtc::RTCError error) override {
             std::lock_guard<std::mutex> lock(mutex);
+            error_message = error.message();
+            if (error_message.empty()) {
+                error_message = webrtc::ToString(error.type());
+            }
             success = false;
             done = true;
             cv.notify_one();
@@ -413,11 +420,13 @@ SHIM_EXPORT int shim_peer_connection_create_answer(
     }
 
     if (!observer->success) {
+        shim::SetErrorMessage(error_out, observer->error_message);
         return SHIM_ERROR_INIT_FAILED;
     }
 
     int len = static_cast<int>(observer->sdp.size());
     if (len >= sdp_out_size) {
+        shim::SetErrorMessage(error_out, "SDP buffer too small", SHIM_ERROR_BUFFER_TOO_SMALL);
         return SHIM_ERROR_BUFFER_TOO_SMALL;
     }
 
@@ -430,9 +439,11 @@ SHIM_EXPORT int shim_peer_connection_create_answer(
 SHIM_EXPORT int shim_peer_connection_set_local_description(
     ShimPeerConnection* pc,
     int type,
-    const char* sdp
+    const char* sdp,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !sdp) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -441,12 +452,19 @@ SHIM_EXPORT int shim_peer_connection_set_local_description(
         case 0: sdp_type = webrtc::SdpType::kOffer; break;
         case 1: sdp_type = webrtc::SdpType::kPrAnswer; break;
         case 2: sdp_type = webrtc::SdpType::kAnswer; break;
-        default: return SHIM_ERROR_INVALID_PARAM;
+        default:
+            shim::SetErrorMessage(error_out, "invalid SDP type", SHIM_ERROR_INVALID_PARAM);
+            return SHIM_ERROR_INVALID_PARAM;
     }
 
-    webrtc::SdpParseError error;
-    auto desc = webrtc::CreateSessionDescription(sdp_type, sdp, &error);
+    webrtc::SdpParseError parse_error;
+    auto desc = webrtc::CreateSessionDescription(sdp_type, sdp, &parse_error);
     if (!desc) {
+        std::string msg = "SDP parse error";
+        if (!parse_error.description.empty()) {
+            msg += ": " + parse_error.description;
+        }
+        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -454,6 +472,7 @@ SHIM_EXPORT int shim_peer_connection_set_local_description(
         : public webrtc::SetSessionDescriptionObserver {
     public:
         bool success = false;
+        std::string error_message;
         std::mutex mutex;
         std::condition_variable cv;
         bool done = false;
@@ -467,6 +486,10 @@ SHIM_EXPORT int shim_peer_connection_set_local_description(
 
         void OnFailure(webrtc::RTCError error) override {
             std::lock_guard<std::mutex> lock(mutex);
+            error_message = error.message();
+            if (error_message.empty()) {
+                error_message = webrtc::ToString(error.type());
+            }
             success = false;
             done = true;
             cv.notify_one();
@@ -481,15 +504,21 @@ SHIM_EXPORT int shim_peer_connection_set_local_description(
         observer->cv.wait(lock, [&]() { return observer->done; });
     }
 
-    return observer->success ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!observer->success) {
+        shim::SetErrorMessage(error_out, observer->error_message);
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT int shim_peer_connection_set_remote_description(
     ShimPeerConnection* pc,
     int type,
-    const char* sdp
+    const char* sdp,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !sdp) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -498,12 +527,19 @@ SHIM_EXPORT int shim_peer_connection_set_remote_description(
         case 0: sdp_type = webrtc::SdpType::kOffer; break;
         case 1: sdp_type = webrtc::SdpType::kPrAnswer; break;
         case 2: sdp_type = webrtc::SdpType::kAnswer; break;
-        default: return SHIM_ERROR_INVALID_PARAM;
+        default:
+            shim::SetErrorMessage(error_out, "invalid SDP type", SHIM_ERROR_INVALID_PARAM);
+            return SHIM_ERROR_INVALID_PARAM;
     }
 
-    webrtc::SdpParseError error;
-    auto desc = webrtc::CreateSessionDescription(sdp_type, sdp, &error);
+    webrtc::SdpParseError parse_error;
+    auto desc = webrtc::CreateSessionDescription(sdp_type, sdp, &parse_error);
     if (!desc) {
+        std::string msg = "SDP parse error";
+        if (!parse_error.description.empty()) {
+            msg += ": " + parse_error.description;
+        }
+        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -511,6 +547,7 @@ SHIM_EXPORT int shim_peer_connection_set_remote_description(
         : public webrtc::SetSessionDescriptionObserver {
     public:
         bool success = false;
+        std::string error_message;
         std::mutex mutex;
         std::condition_variable cv;
         bool done = false;
@@ -524,6 +561,10 @@ SHIM_EXPORT int shim_peer_connection_set_remote_description(
 
         void OnFailure(webrtc::RTCError error) override {
             std::lock_guard<std::mutex> lock(mutex);
+            error_message = error.message();
+            if (error_message.empty()) {
+                error_message = webrtc::ToString(error.type());
+            }
             success = false;
             done = true;
             cv.notify_one();
@@ -538,34 +579,45 @@ SHIM_EXPORT int shim_peer_connection_set_remote_description(
         observer->cv.wait(lock, [&]() { return observer->done; });
     }
 
-    return observer->success ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!observer->success) {
+        shim::SetErrorMessage(error_out, observer->error_message);
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT int shim_peer_connection_add_ice_candidate(
     ShimPeerConnection* pc,
     const char* candidate,
     const char* sdp_mid,
-    int sdp_mline_index
+    int sdp_mline_index,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !candidate) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    webrtc::SdpParseError error;
-    // CreateIceCandidate returns a raw pointer (ownership transfer)
+    webrtc::SdpParseError parse_error;
     webrtc::IceCandidate* ice_candidate = webrtc::CreateIceCandidate(
         sdp_mid ? sdp_mid : "",
         sdp_mline_index,
         candidate,
-        &error
+        &parse_error
     );
 
     if (!ice_candidate) {
+        std::string msg = "ICE candidate parse error";
+        if (!parse_error.description.empty()) {
+            msg += ": " + parse_error.description;
+        }
+        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
     if (!pc->peer_connection->AddIceCandidate(ice_candidate)) {
         delete ice_candidate;
+        shim::SetErrorMessage(error_out, "AddIceCandidate failed");
         return SHIM_ERROR_INIT_FAILED;
     }
     delete ice_candidate;
@@ -597,9 +649,11 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_track(
     ShimPeerConnection* pc,
     ShimCodecType codec,
     const char* track_id,
-    const char* stream_id
+    const char* stream_id,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !track_id) {
+        shim::SetErrorMessage(error_out, "invalid parameter");
         return nullptr;
     }
 
@@ -609,6 +663,7 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_track(
     );
 
     if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result.error());
         return nullptr;
     }
 
@@ -620,9 +675,11 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_track(
 
 SHIM_EXPORT int shim_peer_connection_remove_track(
     ShimPeerConnection* pc,
-    ShimRTPSender* sender
+    ShimRTPSender* sender,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !sender) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -632,7 +689,11 @@ SHIM_EXPORT int shim_peer_connection_remove_track(
         webrtc::scoped_refptr<webrtc::RtpSenderInterface>(webrtc_sender)
     );
 
-    return result.ok() ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result);
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(
@@ -640,9 +701,11 @@ SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(
     const char* label,
     int ordered,
     int max_retransmits,
-    const char* protocol
+    const char* protocol,
+    ShimErrorBuffer* error_out
 ) {
     if (!pc || !pc->peer_connection || !label) {
+        shim::SetErrorMessage(error_out, "invalid parameter");
         return nullptr;
     }
 
@@ -657,11 +720,11 @@ SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(
 
     auto result = pc->peer_connection->CreateDataChannelOrError(label, &config);
     if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result.error());
         return nullptr;
     }
 
     // Store in PC's data_channels vector to maintain proper reference count
-    // (prevents leak from release() without proper cleanup)
     auto channel = result.MoveValue();
     pc->data_channels.push_back(channel);
 
@@ -678,16 +741,23 @@ SHIM_EXPORT void shim_peer_connection_close(ShimPeerConnection* pc) {
 SHIM_EXPORT ShimRTPTransceiver* shim_peer_connection_add_transceiver(
     ShimPeerConnection* pc,
     int kind,
-    int direction
+    int direction,
+    ShimErrorBuffer* error_out
 ) {
-    if (!pc || !pc->peer_connection) return nullptr;
+    if (!pc || !pc->peer_connection) {
+        shim::SetErrorMessage(error_out, "invalid parameter");
+        return nullptr;
+    }
 
     webrtc::MediaType media_type = kind == 0 ? webrtc::MediaType::AUDIO : webrtc::MediaType::VIDEO;
     webrtc::RtpTransceiverInit init;
     init.direction = static_cast<webrtc::RtpTransceiverDirection>(direction);
 
     auto result = pc->peer_connection->AddTransceiver(media_type, init);
-    if (!result.ok()) return nullptr;
+    if (!result.ok()) {
+        shim::SetErrorFromRTCError(error_out, result.error());
+        return nullptr;
+    }
 
     return reinterpret_cast<ShimRTPTransceiver*>(result.value().get());
 }

@@ -28,9 +28,11 @@ struct ShimAudioEncoder {
 extern "C" {
 
 SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
-    const ShimAudioEncoderConfig* config
+    const ShimAudioEncoderConfig* config,
+    ShimErrorBuffer* error_out
 ) {
     if (!config || config->sample_rate <= 0 || config->channels <= 0) {
+        shim::SetErrorMessage(error_out, "invalid audio encoder config", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
 
@@ -51,6 +53,7 @@ SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
     );
 
     if (!encoder) {
+        shim::SetErrorMessage(error_out, "Opus encoder creation failed");
         return nullptr;
     }
 
@@ -138,8 +141,13 @@ struct ShimAudioDecoder {
     std::mutex mutex;
 };
 
-SHIM_EXPORT ShimAudioDecoder* shim_audio_decoder_create(int sample_rate, int channels) {
+SHIM_EXPORT ShimAudioDecoder* shim_audio_decoder_create(
+    int sample_rate,
+    int channels,
+    ShimErrorBuffer* error_out
+) {
     if (sample_rate <= 0 || channels <= 0) {
+        shim::SetErrorMessage(error_out, "invalid sample rate or channels", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
 
@@ -153,6 +161,7 @@ SHIM_EXPORT ShimAudioDecoder* shim_audio_decoder_create(int sample_rate, int cha
         config
     );
     if (!decoder) {
+        shim::SetErrorMessage(error_out, "Opus decoder creation failed");
         return nullptr;
     }
 
@@ -169,9 +178,11 @@ SHIM_EXPORT int shim_audio_decoder_decode(
     const uint8_t* data,
     int size,
     uint8_t* dst_samples,
-    int* out_num_samples
+    int* out_num_samples,
+    ShimErrorBuffer* error_out
 ) {
     if (!decoder || !data || size <= 0 || !dst_samples || !out_num_samples) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -192,6 +203,9 @@ SHIM_EXPORT int shim_audio_decoder_decode(
     );
 
     if (decoded_samples < 0) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Opus decode failed with code %d", decoded_samples);
+        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_DECODE_FAILED);
         return SHIM_ERROR_DECODE_FAILED;
     }
 

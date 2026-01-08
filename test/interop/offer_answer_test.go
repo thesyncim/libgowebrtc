@@ -2,7 +2,6 @@ package interop
 
 import (
 	"testing"
-	"time"
 
 	pionwebrtc "github.com/pion/webrtc/v4"
 
@@ -28,6 +27,12 @@ func TestOfferAnswerExchange(t *testing.T) {
 	}
 	defer pp.Close()
 
+	dc, err := pp.Lib.CreateDataChannel("offer-answer", nil)
+	if err != nil {
+		t.Fatalf("Failed to create data channel: %v", err)
+	}
+	defer dc.Close()
+
 	// Perform offer/answer exchange with libwebrtc as offerer
 	if err := pp.ExchangeOfferAnswer(); err != nil {
 		t.Fatalf("Offer/answer exchange failed: %v", err)
@@ -39,11 +44,17 @@ func TestOfferAnswerExchange(t *testing.T) {
 // TestOfferAnswerExchangeManual tests offer/answer manually for detailed logging.
 func TestOfferAnswerExchangeManual(t *testing.T) {
 	// Create libwebrtc PeerConnection (offerer)
-	libPC, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	libPC, err := pc.NewPeerConnection(defaultInteropConfig())
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc PeerConnection: %v", err)
 	}
 	defer libPC.Close()
+
+	libDC, err := libPC.CreateDataChannel("offer-answer-manual", nil)
+	if err != nil {
+		t.Fatalf("Failed to create data channel: %v", err)
+	}
+	defer libDC.Close()
 
 	// Create Pion PeerConnection (answerer)
 	pionPC, err := pionwebrtc.NewPeerConnection(pionwebrtc.Configuration{})
@@ -105,13 +116,19 @@ func TestOfferAnswerWithICE(t *testing.T) {
 	}
 	defer pp.Close()
 
+	dc, err := pp.Lib.CreateDataChannel("offer-answer-ice", nil)
+	if err != nil {
+		t.Fatalf("Failed to create data channel: %v", err)
+	}
+	defer dc.Close()
+
 	// Perform offer/answer exchange
 	if err := pp.ExchangeOfferAnswer(); err != nil {
 		t.Fatalf("Offer/answer exchange failed: %v", err)
 	}
 
 	// Wait for connection (ICE exchange happens automatically via helpers)
-	if pp.WaitForConnection(10 * time.Second) {
+	if pp.WaitForConnection(interopShortTimeout) {
 		t.Log("Both peers connected successfully")
 	} else {
 		t.Log("Connection timeout (expected without network - ICE may not complete in test environment)")
@@ -125,6 +142,12 @@ func TestPionToLibWebRTCOffer(t *testing.T) {
 		t.Fatalf("Failed to create peer pair: %v", err)
 	}
 	defer pp.Close()
+
+	pionDC, err := pp.Pion.CreateDataChannel("pion-offer", nil)
+	if err != nil {
+		t.Fatalf("Failed to create Pion data channel: %v", err)
+	}
+	defer pionDC.Close()
 
 	// Perform offer/answer exchange with Pion as offerer
 	if err := pp.ExchangeOfferAnswerWithOfferer(false); err != nil {

@@ -11,6 +11,17 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
+const (
+	interopShortTimeout   = 1 * time.Second
+	interopMessageTimeout = 500 * time.Millisecond
+)
+
+func defaultInteropConfig() pc.Configuration {
+	cfg := pc.DefaultConfiguration()
+	cfg.ICEServers = nil
+	return cfg
+}
+
 // PeerPair holds a pair of connected PeerConnections for testing.
 type PeerPair struct {
 	Lib  *pc.PeerConnection

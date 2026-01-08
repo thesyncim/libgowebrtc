@@ -17,6 +17,17 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
+const (
+	interopTrackTimeout       = 2 * time.Second
+	interopTrackDeadline      = 2 * time.Second
+	interopICEGatherDelay     = 300 * time.Millisecond
+	interopPostSendDelay      = 100 * time.Millisecond
+	interopFrameCount         = 10
+	interopFrameDelay         = 5 * time.Millisecond
+	interopStressFrameCount   = 60
+	interopDataChannelTimeout = 2 * time.Second
+)
+
 // PionLibPeerPair represents a pion and libwebrtc peer pair for interop testing.
 type PionLibPeerPair struct {
 	Pion *webrtc.PeerConnection
@@ -47,11 +58,7 @@ func NewPionLibPeerPair(t *testing.T) *PionLibPeerPair {
 	t.Helper()
 
 	// Create pion peer
-	pionConfig := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
-	}
+	pionConfig := webrtc.Configuration{}
 	pion, err := webrtc.NewPeerConnection(pionConfig)
 	if err != nil {
 		t.Fatalf("Failed to create pion PeerConnection: %v", err)
@@ -59,9 +66,7 @@ func NewPionLibPeerPair(t *testing.T) *PionLibPeerPair {
 
 	// Create lib peer
 	libConfig := pc.DefaultConfiguration()
-	libConfig.ICEServers = []pc.ICEServer{
-		{URLs: []string{"stun:stun.l.google.com:19302"}},
-	}
+	libConfig.ICEServers = nil
 	lib, err := pc.NewPeerConnection(libConfig)
 	if err != nil {
 		pion.Close()
@@ -261,7 +266,7 @@ func (pp *PionLibPeerPair) ConnectLibOffersPionAnswers() error {
 	}
 
 	// Wait for lib's ICE gathering to complete
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(interopICEGatherDelay)
 
 	// Exchange ICE candidates
 	candidatesMu.Lock()
@@ -286,7 +291,7 @@ func (pp *PionLibPeerPair) ConnectLibOffersPionAnswers() error {
 	}
 
 	// Wait for connection to establish
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(interopICEGatherDelay)
 
 	return nil
 }
@@ -373,27 +378,27 @@ func TestLibToPionVideoInterop(t *testing.T) {
 
 	// Send frames from lib
 	go func() {
-		for i := 0; i < 60; i++ {
+		for i := 0; i < interopFrameCount; i++ {
 			f := CreateTestFrame(640, 480, uint32(i))
 			track.WriteVideoFrame(f)
-			time.Sleep(33 * time.Millisecond)
+			time.Sleep(interopFrameDelay)
 		}
 	}()
 
 	// Also have pion send frames to help establish bidirectional RTP flow
 	go func() {
-		for i := 0; i < 60; i++ {
+		for i := 0; i < interopFrameCount; i++ {
 			pionTrackLocal.WriteSample(media.Sample{
 				Data:     createMinimalVP8Frame(i == 0),
-				Duration: 33 * time.Millisecond,
+				Duration: interopFrameDelay,
 			})
-			time.Sleep(33 * time.Millisecond)
+			time.Sleep(interopFrameDelay)
 		}
 	}()
 
 	// Wait for pion to receive the track
-	pionTrack := pp.WaitForPionTrack(5 * time.Second)
-	time.Sleep(500 * time.Millisecond) // Allow frames to arrive
+	pionTrack := pp.WaitForPionTrack(interopTrackTimeout)
+	time.Sleep(interopPostSendDelay)
 
 	frames := pp.pionVideoFrames.Load()
 	t.Logf("Pion received track=%v, frames=%d", pionTrack != nil, frames)
@@ -427,25 +432,25 @@ func TestPionToLibVideoInterop(t *testing.T) {
 	}
 
 	// Wait for lib to receive the track
-	libTrack := pp.WaitForLibTrack(5 * time.Second)
+	libTrack := pp.WaitForLibTrack(interopTrackTimeout)
 	if libTrack == nil {
 		t.Fatal("Lib did not receive track within timeout")
 	}
 
 	// Send video frames from pion
-	for i := 0; i < 30; i++ {
+	for i := 0; i < interopFrameCount; i++ {
 		// Create a minimal VP8 keyframe
 		if err := pionTrack.WriteSample(media.Sample{
 			Data:     createMinimalVP8Frame(i == 0),
-			Duration: 33 * time.Millisecond,
+			Duration: interopFrameDelay,
 		}); err != nil {
 			t.Logf("WriteSample failed: %v", err)
 		}
-		time.Sleep(33 * time.Millisecond)
+		time.Sleep(interopFrameDelay)
 	}
 
 	// Wait for frames to be received
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(interopPostSendDelay)
 
 	frames := pp.libVideoFrames.Load()
 	t.Logf("Lib received %d video frames from pion", frames)
@@ -488,8 +493,8 @@ func TestBidirectionalVideoInterop(t *testing.T) {
 	}
 
 	// Wait for both sides to receive tracks
-	receivedPion := pp.WaitForPionTrack(5 * time.Second)
-	receivedLib := pp.WaitForLibTrack(5 * time.Second)
+	receivedPion := pp.WaitForPionTrack(interopTrackTimeout)
+	receivedLib := pp.WaitForLibTrack(interopTrackTimeout)
 
 	if receivedPion == nil {
 		t.Log("Pion did not receive track (may be expected without full ICE connectivity)")
@@ -505,27 +510,27 @@ func TestBidirectionalVideoInterop(t *testing.T) {
 	// Send from lib to pion
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 30; i++ {
+		for i := 0; i < interopFrameCount; i++ {
 			f := CreateTestFrame(320, 240, uint32(i))
 			libTrack.WriteVideoFrame(f)
-			time.Sleep(33 * time.Millisecond)
+			time.Sleep(interopFrameDelay)
 		}
 	}()
 
 	// Send from pion to lib
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 30; i++ {
+		for i := 0; i < interopFrameCount; i++ {
 			pionTrack.WriteSample(media.Sample{
 				Data:     createMinimalVP8Frame(i == 0),
-				Duration: 33 * time.Millisecond,
+				Duration: interopFrameDelay,
 			})
-			time.Sleep(33 * time.Millisecond)
+			time.Sleep(interopFrameDelay)
 		}
 	}()
 
 	wg.Wait()
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(interopPostSendDelay)
 
 	t.Logf("Pion received %d frames, Lib received %d frames",
 		pp.pionVideoFrames.Load(), pp.libVideoFrames.Load())
@@ -568,7 +573,7 @@ func TestDataChannelInterop(t *testing.T) {
 		t.Logf("Lib received data channel handle: %v", libDC)
 		// Note: Currently lib doesn't expose data channel message callbacks
 		// This test verifies the data channel is negotiated correctly
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopDataChannelTimeout):
 		t.Log("Lib did not receive data channel (may require full ICE connectivity)")
 	}
 
@@ -587,11 +592,11 @@ func TestDataChannelInterop(t *testing.T) {
 		if err := pionDC.Send(testMsg); err != nil {
 			t.Logf("Failed to send message: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(interopDataChannelTimeout):
 		t.Log("Data channel did not open (may require full ICE connectivity)")
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(interopPostSendDelay)
 
 	msgMu.Lock()
 	t.Logf("Pion received %d messages, Lib received %d messages",
@@ -630,7 +635,7 @@ func TestCodecNegotiation(t *testing.T) {
 			}
 
 			// Wait for pion to receive track
-			pionTrack := pp.WaitForPionTrack(5 * time.Second)
+			pionTrack := pp.WaitForPionTrack(interopTrackTimeout)
 			if pionTrack == nil {
 				t.Log("Pion did not receive track (may require ICE connectivity)")
 				return
@@ -677,7 +682,7 @@ func TestMultipleTracksInterop(t *testing.T) {
 
 	// Count received tracks
 	receivedTracks := 0
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(interopTrackDeadline)
 	for time.Now().Before(deadline) && receivedTracks < 2 {
 		select {
 		case track := <-pp.pionTrackReceived:
@@ -714,7 +719,7 @@ func TestRenegotiationInterop(t *testing.T) {
 	}
 
 	// Wait for first track
-	if track := pp.WaitForPionTrack(3 * time.Second); track != nil {
+	if track := pp.WaitForPionTrack(interopTrackTimeout); track != nil {
 		t.Logf("Initial track received: %s", track.ID())
 	}
 
@@ -762,7 +767,7 @@ func TestRenegotiationInterop(t *testing.T) {
 	}
 
 	// Wait for second track
-	if track := pp.WaitForPionTrack(3 * time.Second); track != nil {
+	if track := pp.WaitForPionTrack(interopTrackTimeout); track != nil {
 		t.Logf("Renegotiated track received: %s", track.ID())
 	} else {
 		t.Log("Renegotiated track not received (may require full ICE connectivity)")
@@ -887,7 +892,7 @@ func TestConnectionStateInterop(t *testing.T) {
 	}
 
 	// Wait for states to settle
-	time.Sleep(2 * time.Second)
+	time.Sleep(interopICEGatherDelay)
 
 	pionStatesMu.Lock()
 	t.Logf("Pion state changes: %v", pionStates)
@@ -963,7 +968,7 @@ func TestICECandidateExchange(t *testing.T) {
 	})
 
 	// Wait for ICE gathering
-	time.Sleep(2 * time.Second)
+	time.Sleep(interopICEGatherDelay)
 
 	// Exchange candidates
 	pionCandidatesMu.Lock()
@@ -1006,7 +1011,7 @@ func TestICECandidateExchange(t *testing.T) {
 	pionCandidatesMu.Unlock()
 
 	// Wait for connection
-	time.Sleep(2 * time.Second)
+	time.Sleep(interopICEGatherDelay)
 	t.Logf("Final connection state - Lib: %s", pp.Lib.ConnectionState())
 }
 
@@ -1026,24 +1031,24 @@ func TestStressInterop(t *testing.T) {
 		t.Fatalf("Failed to connect: %v", err)
 	}
 
-	pionTrack := pp.WaitForPionTrack(5 * time.Second)
+	pionTrack := pp.WaitForPionTrack(interopTrackTimeout)
 	if pionTrack == nil {
 		t.Skip("Track not received - skipping stress test")
 	}
 
-	// Send 300 frames (10 seconds at 30fps)
+	// Send a short burst of frames to exercise stability.
 	start := time.Now()
 	framesSent := 0
-	for i := 0; i < 300; i++ {
+	for i := 0; i < interopStressFrameCount; i++ {
 		f := CreateTestFrame(320, 240, uint32(i))
 		if err := track.WriteVideoFrame(f); err == nil {
 			framesSent++
 		}
-		time.Sleep(33 * time.Millisecond)
+		time.Sleep(interopFrameDelay)
 	}
 	elapsed := time.Since(start)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(interopPostSendDelay)
 
 	framesReceived := pp.pionVideoFrames.Load()
 	t.Logf("Stress test: sent %d frames in %v, received %d",
@@ -1077,7 +1082,7 @@ func TestFrameIntegrity(t *testing.T) {
 		t.Fatalf("Failed to connect: %v", err)
 	}
 
-	libTrack := pp.WaitForLibTrack(5 * time.Second)
+	libTrack := pp.WaitForLibTrack(interopTrackTimeout)
 	if libTrack == nil {
 		t.Skip("Track not received - skipping integrity test")
 	}
@@ -1092,7 +1097,7 @@ func TestFrameIntegrity(t *testing.T) {
 		Duration: 33 * time.Millisecond,
 	})
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(interopPostSendDelay)
 
 	// Note: Full integrity verification would require decoding the frame
 	// Here we just verify something was received

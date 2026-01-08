@@ -142,15 +142,23 @@ SHIM_EXPORT int shim_data_channel_send(
     ShimDataChannel* dc,
     const uint8_t* data,
     int size,
-    int is_binary
+    int is_binary,
+    ShimErrorBuffer* error_out
 ) {
-    if (!dc || !data) return SHIM_ERROR_INVALID_PARAM;
+    if (!dc || !data) {
+        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     auto channel = reinterpret_cast<webrtc::DataChannelInterface*>(dc);
 
     webrtc::DataBuffer db(webrtc::CopyOnWriteBuffer(data, size), is_binary != 0);
 
-    return channel->Send(db) ? SHIM_OK : SHIM_ERROR_INIT_FAILED;
+    if (!channel->Send(db)) {
+        shim::SetErrorMessage(error_out, "DataChannel send failed (queue full or not ready)");
+        return SHIM_ERROR_INIT_FAILED;
+    }
+    return SHIM_OK;
 }
 
 SHIM_EXPORT const char* shim_data_channel_label(ShimDataChannel* dc) {
