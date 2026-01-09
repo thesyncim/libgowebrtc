@@ -1,6 +1,7 @@
 package encoder
 
 import (
+	"os"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
@@ -10,10 +11,9 @@ import (
 
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
-		return
+		os.Exit(0) // Skip all tests if shim unavailable
 	}
-	defer ffi.Close()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestH264EncoderEncode(t *testing.T) {

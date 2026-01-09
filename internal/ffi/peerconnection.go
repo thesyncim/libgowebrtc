@@ -2070,3 +2070,71 @@ func RTPReceiverSetJitterBufferMinDelay(receiver uintptr, minDelayMs int) error 
 	result := shimRTPReceiverSetJitterBufferMinDelay(receiver, int32(minDelayMs))
 	return ShimError(result)
 }
+
+// ResetForTesting clears all callback registries.
+// This should only be used in tests to ensure test isolation.
+func ResetForTesting() {
+	// Video/Audio frame callbacks
+	videoCallbackMu.Lock()
+	videoCallbacks = make(map[uintptr]VideoFrameCallback)
+	videoCallbackMu.Unlock()
+
+	audioCallbackMu.Lock()
+	audioCallbacks = make(map[uintptr]AudioFrameCallback)
+	audioCallbackMu.Unlock()
+
+	// Data channel callbacks
+	dcMessageCallbackMu.Lock()
+	dcMessageCallbacks = make(map[uintptr]OnDataChannelMessageCallback)
+	dcMessageCallbackMu.Unlock()
+
+	dcOpenCallbackMu.Lock()
+	dcOpenCallbacks = make(map[uintptr]OnDataChannelStateCallback)
+	dcOpenCallbackMu.Unlock()
+
+	dcCloseCallbackMu.Lock()
+	dcCloseCallbacks = make(map[uintptr]OnDataChannelStateCallback)
+	dcCloseCallbackMu.Unlock()
+
+	// RTCP feedback callbacks
+	rtcpFeedbackCallbackMu.Lock()
+	rtcpFeedbackCallbacks = make(map[uintptr]RTCPFeedbackCallback)
+	rtcpFeedbackCallbackMu.Unlock()
+
+	// PeerConnection state callbacks
+	connectionStateCallbackMu.Lock()
+	connectionStateCallbacks = make(map[uintptr]ConnectionStateCallback)
+	connectionStateCallbackMu.Unlock()
+
+	onTrackCallbackMu.Lock()
+	onTrackCallbacks = make(map[uintptr]OnTrackCallback)
+	onTrackCallbackMu.Unlock()
+
+	onICECandidateCallbackMu.Lock()
+	onICECandidateCallbacks = make(map[uintptr]OnICECandidateCallback)
+	onICECandidateCallbackMu.Unlock()
+
+	onDataChannelCallbackMu.Lock()
+	onDataChannelCallbacks = make(map[uintptr]OnDataChannelCallback)
+	onDataChannelCallbackMu.Unlock()
+
+	signalingStateCallbackMu.Lock()
+	signalingStateCallbacks = make(map[uintptr]SignalingStateCallback)
+	signalingStateCallbackMu.Unlock()
+
+	iceConnectionStateCallbackMu.Lock()
+	iceConnectionStateCallbacks = make(map[uintptr]ICEConnectionStateCallback)
+	iceConnectionStateCallbackMu.Unlock()
+
+	iceGatheringStateCallbackMu.Lock()
+	iceGatheringStateCallbacks = make(map[uintptr]ICEGatheringStateCallback)
+	iceGatheringStateCallbackMu.Unlock()
+
+	negotiationNeededCallbackMu.Lock()
+	negotiationNeededCallbacks = make(map[uintptr]NegotiationNeededCallback)
+	negotiationNeededCallbackMu.Unlock()
+
+	bweCallbackMu.Lock()
+	bweCallbacks = make(map[uintptr]BandwidthEstimateCallback)
+	bweCallbackMu.Unlock()
+}

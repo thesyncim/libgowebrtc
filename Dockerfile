@@ -27,6 +27,8 @@ FROM ubuntu:22.04 AS libwebrtc-builder
 
 ARG SKIP_LIBWEBRTC_BUILD=0
 ARG WEBRTC_BRANCH=branch-heads/7390
+ARG TARGET_CPU=x64
+ARG ENABLE_H264=0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -39,9 +41,13 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     curl \
     wget \
+    gnupg \
+    clang \
+    lld \
     ninja-build \
     rsync \
     lsb-release \
+    software-properties-common \
     sudo \
     libglib2.0-dev \
     libasound2-dev \
@@ -59,6 +65,24 @@ RUN apt-get update && apt-get install -y \
     libegl1-mesa-dev \
     libgl1-mesa-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install a modern clang toolchain for Linux arm64 (WebRTC expects LLVM 21).
+RUN if [ "$TARGET_CPU" = "arm64" ]; then \
+        curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh && \
+        chmod +x /tmp/llvm.sh && \
+        /tmp/llvm.sh 21 && \
+        rm -f /tmp/llvm.sh; \
+    fi
+
+# Ensure clang builtins are available at the path expected by Chromium build files.
+RUN if [ "$TARGET_CPU" = "arm64" ]; then \
+        clang_lib_dir="/usr/lib/llvm-21/lib/clang/21/lib" && \
+        if [ -f "${clang_lib_dir}/linux/libclang_rt.builtins-aarch64.a" ]; then \
+            mkdir -p "${clang_lib_dir}/aarch64-unknown-linux-gnu" && \
+            ln -sf "${clang_lib_dir}/linux/libclang_rt.builtins-aarch64.a" \
+                "${clang_lib_dir}/aarch64-unknown-linux-gnu/libclang_rt.builtins.a"; \
+        fi; \
+    fi
 
 # Set up depot_tools
 RUN git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git /opt/depot_tools
@@ -93,17 +117,28 @@ RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
         echo 'is_debug = false' > ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'is_component_build = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'rtc_include_tests = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
-        echo 'proprietary_codecs = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
-        echo 'rtc_use_h264 = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
-        echo 'ffmpeg_branding = "Chrome"' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+        echo 'rtc_build_examples = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+        if [ "$ENABLE_H264" = "1" ]; then \
+            echo 'proprietary_codecs = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+            echo 'rtc_use_h264 = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+            echo 'ffmpeg_branding = "Chrome"' >> ${BUILD_DIR}/src/out/Release/args.gn; \
+        else \
+            echo 'proprietary_codecs = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+            echo 'rtc_use_h264 = false' >> ${BUILD_DIR}/src/out/Release/args.gn; \
+        fi && \
         echo 'rtc_include_dav1d_in_internal_decoder_factory = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'use_rtti = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
-        echo 'use_custom_libcxx = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+        echo 'use_custom_libcxx = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'treat_warnings_as_errors = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'target_os = "linux"' >> ${BUILD_DIR}/src/out/Release/args.gn && \
-        echo 'target_cpu = "x64"' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+        echo "target_cpu = \"${TARGET_CPU}\"" >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'is_clang = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
-        echo 'use_sysroot = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+        if [ "${TARGET_CPU}" = "arm64" ]; then \
+            echo 'clang_base_path = "/usr/lib/llvm-21"' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+            echo 'clang_version = "21"' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+            echo 'clang_use_chrome_plugins = false' >> ${BUILD_DIR}/src/out/Release/args.gn; \
+        fi && \
+        echo 'use_sysroot = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         cd ${BUILD_DIR}/src && gn gen out/Release; \
     fi
 
@@ -119,7 +154,7 @@ RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
 
 # Install libwebrtc
 RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
-        mkdir -p ${INSTALL_DIR}/{include,lib} && \
+        mkdir -p ${INSTALL_DIR}/include ${INSTALL_DIR}/lib && \
         cp ${BUILD_DIR}/src/out/Release/obj/libwebrtc.a ${INSTALL_DIR}/lib/; \
     fi
 
@@ -150,6 +185,8 @@ RUN apt-get update && apt-get install -y \
     cmake \
     pkg-config \
     curl \
+    clang \
+    lld \
     libasound2 \
     libpulse0 \
     libx11-6 \
@@ -163,7 +200,8 @@ RUN apt-get update && apt-get install -y \
 
 # Install Go
 ARG GO_VERSION=1.25.3
-RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
+ARG TARGETARCH
+RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH:-amd64}.tar.gz" | tar -C /usr/local -xzf -
 ENV PATH="/usr/local/go/bin:$PATH"
 ENV GOPATH="/go"
 ENV PATH="$GOPATH/bin:$PATH"
@@ -184,15 +222,19 @@ COPY . .
 
 # Build shim (only if libwebrtc is present)
 RUN if [ -f /opt/libwebrtc/lib/libwebrtc.a ]; then \
+        target_arch="${TARGETARCH:-amd64}" && \
         mkdir -p shim/build && \
         cd shim/build && \
         cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DLIBWEBRTC_DIR=${LIBWEBRTC_DIR} \
-            -DBUILD_SHARED_LIBS=ON && \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" && \
         cmake --build . --config Release -j$(nproc) && \
-        mkdir -p /workspace/lib/linux_amd64 && \
-        cp libwebrtc_shim.so /workspace/lib/linux_amd64/; \
+        mkdir -p /workspace/lib/linux_${target_arch} && \
+        cp libwebrtc_shim.so /workspace/lib/linux_${target_arch}/; \
     else \
         echo "WARNING: libwebrtc not found, shim will not be built"; \
         echo "Mount your pre-built libwebrtc at /opt/libwebrtc"; \

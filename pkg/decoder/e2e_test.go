@@ -1,6 +1,8 @@
 package decoder
 
 import (
+	"os"
+	"runtime"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
@@ -11,10 +13,9 @@ import (
 
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
-		return
+		os.Exit(0) // Skip all tests if shim unavailable
 	}
-	defer ffi.Close()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestH264EncodeDecode(t *testing.T) {
@@ -212,6 +213,10 @@ func TestDecoderClose(t *testing.T) {
 }
 
 func TestMultiFrameEncodeDecode(t *testing.T) {
+	// Force GC to clean up any lingering codec instances from previous tests
+	// This helps avoid resource exhaustion in the underlying libwebrtc/FFmpeg
+	runtime.GC()
+
 	enc, err := encoder.NewH264Encoder(codec.H264Config{
 		Width:   640,
 		Height:  480,

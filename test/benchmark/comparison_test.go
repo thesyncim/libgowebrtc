@@ -18,7 +18,6 @@ func TestMain(m *testing.M) {
 		// Skip if library not available
 		return
 	}
-	defer ffi.Close()
 	m.Run()
 }
 

@@ -14,8 +14,6 @@ func TestMain(m *testing.M) {
 		// Skip all integration tests if library not available
 		os.Exit(0)
 	}
-	defer Close()
-
 	os.Exit(m.Run())
 }
 
