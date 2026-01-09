@@ -15,11 +15,11 @@
         },
         "linux_amd64": {
           "file": "libwebrtc_shim_linux_amd64_basic.tar.gz",
-          "sha256": "TODO"
+          "sha256": "dab1a2f85691ebd6fc0d43699d8339d3a37102147fb27d8bcd2b67254754e2df"
         },
         "linux_arm64": {
           "file": "libwebrtc_shim_linux_arm64_basic.tar.gz",
-          "sha256": "TODO"
+          "sha256": "747b9051715c9584128a464e460b6e25eb0a71bd2ccbebcea1f761c66cdf8d34"
         }
       }
     },

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
@@ -12,6 +13,9 @@ import (
 
 // TestVideoCodecRoundtrip tests encode/decode roundtrip for all video codecs.
 func TestVideoCodecRoundtrip(t *testing.T) {
+	// Force GC to clean up any lingering codec instances from previous tests
+	runtime.GC()
+
 	if !ffi.IsLoaded() {
 		t.Skip("shim library not available")
 	}
@@ -92,17 +96,38 @@ func TestVideoCodecRoundtrip(t *testing.T) {
 			t.Logf("%s: encoded %dx%d frame to %d bytes (keyframe=%v)",
 				tc.name, width, height, result.N, result.IsKeyframe)
 
-			// Decode
+			// Decode - try multiple frames since FFmpeg may buffer
 			dstFrame := frame.NewI420Frame(width, height)
+			decodedCount := 0
+
+			// Try decoding the keyframe first
 			err = dec.DecodeInto(encBuf[:result.N], dstFrame, 0, true)
 			if err != nil {
-				t.Logf("Decode returned error (may need more data): %v", err)
+				t.Logf("First decode returned error: %v", err)
+			} else if dstFrame.Width == width && dstFrame.Height == height {
+				decodedCount++
+				t.Logf("%s: first frame decoded to %dx%d", tc.name, dstFrame.Width, dstFrame.Height)
 			} else {
-				if dstFrame.Width != width || dstFrame.Height != height {
-					t.Errorf("Decoded size = %dx%d, want %dx%d",
-						dstFrame.Width, dstFrame.Height, width, height)
+				t.Logf("%s: first frame decoded to %dx%d (buffering?)", tc.name, dstFrame.Width, dstFrame.Height)
+			}
+
+			// Encode and decode a few more frames to flush decoder
+			for i := 1; i <= 5 && decodedCount == 0; i++ {
+				srcFrame.PTS = uint32(i * 3000)
+				result, err = enc.EncodeInto(srcFrame, encBuf, false)
+				if err != nil {
+					t.Logf("Encode frame %d failed: %v", i, err)
+					continue
 				}
-				t.Logf("%s: decoded back to %dx%d", tc.name, dstFrame.Width, dstFrame.Height)
+				err = dec.DecodeInto(encBuf[:result.N], dstFrame, srcFrame.PTS, false)
+				if err == nil && dstFrame.Width == width && dstFrame.Height == height {
+					decodedCount++
+					t.Logf("%s: frame %d decoded to %dx%d", tc.name, i, dstFrame.Width, dstFrame.Height)
+				}
+			}
+
+			if decodedCount == 0 {
+				t.Errorf("%s: failed to decode any frames, last size = %dx%d", tc.name, dstFrame.Width, dstFrame.Height)
 			}
 		})
 	}

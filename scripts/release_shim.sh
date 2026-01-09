@@ -10,6 +10,7 @@
 #   RELEASE_TAG     - GitHub release tag to publish to (required)
 #   SHIM_FLAVOR     - basic (default) or h264
 #   SKIP_BUILD      - If set to 1, skip shim build and just package
+#   TARGET_PLATFORM - Override detected platform (e.g., linux_amd64)
 #
 
 set -euo pipefail
@@ -21,6 +22,7 @@ LIBWEBRTC_DIR="${LIBWEBRTC_DIR:-}"
 RELEASE_TAG="${RELEASE_TAG:-}"
 SHIM_FLAVOR="${SHIM_FLAVOR:-basic}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
+TARGET_PLATFORM="${TARGET_PLATFORM:-}"
 
 detect_platform() {
     local os
@@ -65,7 +67,11 @@ else
     echo "SKIP_BUILD=1 set; packaging only"
 fi
 
-platform="$(detect_platform)"
+if [ -n "$TARGET_PLATFORM" ]; then
+    platform="$TARGET_PLATFORM"
+else
+    platform="$(detect_platform)"
+fi
 if [ "$platform" = "unsupported" ]; then
     echo "Unsupported platform for release packaging"
     exit 1

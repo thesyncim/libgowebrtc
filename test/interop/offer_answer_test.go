@@ -1,6 +1,7 @@
 package interop
 
 import (
+	"os"
 	"testing"
 
 	pionwebrtc "github.com/pion/webrtc/v4"
@@ -12,10 +13,9 @@ import (
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
 		// Skip if shim library not available
-		return
+		os.Exit(0)
 	}
-	defer ffi.Close()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 // TestOfferAnswerExchange tests basic offer/answer exchange between

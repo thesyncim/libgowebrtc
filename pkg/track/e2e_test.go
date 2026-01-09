@@ -1,6 +1,7 @@
 package track
 
 import (
+	"os"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
@@ -11,10 +12,9 @@ import (
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
 		// Skip if library not available
-		return
+		os.Exit(0)
 	}
-	defer ffi.Close()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestVideoTrackFullPipeline(t *testing.T) {

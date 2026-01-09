@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -282,10 +283,9 @@ func (pp *LibPeerPair) WaitForConnection(timeout time.Duration) bool {
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
 		// Skip tests if library not available
-		return
+		os.Exit(0)
 	}
-	defer ffi.Close()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 // FrameCounter tracks received frames with thread-safety.
