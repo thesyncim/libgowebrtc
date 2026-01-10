@@ -229,8 +229,6 @@ func TestConcurrent_PeerConnectionOperations(t *testing.T) {
 	}
 	defer PeerConnectionDestroy(handle)
 
-	const numGoroutines = 4
-
 	var wg sync.WaitGroup
 
 	// Concurrent state queries

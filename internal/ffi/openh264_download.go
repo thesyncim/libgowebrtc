@@ -37,8 +37,6 @@ const (
 var (
 	openh264Once           sync.Once
 	openh264Err            error
-	openh264Path           string
-	openh264Handle         uintptr
 	errOpenH264Unsupported = errors.New("openh264 binary not published for this platform")
 )
 
@@ -60,14 +58,11 @@ func ensureOpenH264(required bool) error {
 
 		addLibraryDirToEnv(filepath.Dir(path))
 
-		handle, err := dlopenLibrary(path, purego.RTLD_NOW|purego.RTLD_GLOBAL)
+		_, err = dlopenLibrary(path, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 		if err != nil {
 			openh264Err = fmt.Errorf("load openh264: %w", err)
 			return
 		}
-
-		openh264Handle = handle
-		openh264Path = path
 	})
 
 	return openh264Err
