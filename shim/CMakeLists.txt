@@ -23,14 +23,29 @@ endif()
 message(STATUS "Using libwebrtc from: ${LIBWEBRTC_DIR}")
 
 # libwebrtc include directories
-set(LIBWEBRTC_INCLUDE_DIRS
-    ${LIBWEBRTC_DIR}/include
-    ${LIBWEBRTC_DIR}/include/third_party/abseil-cpp
-    ${LIBWEBRTC_DIR}/include/third_party/boringssl/src/include
-    ${LIBWEBRTC_DIR}/include/third_party/libyuv/include
-    ${LIBWEBRTC_DIR}/include/third_party/opus/src/include
-    ${LIBWEBRTC_DIR}/include/build
-)
+# Check for installed layout first, then build tree layout
+if(EXISTS ${LIBWEBRTC_DIR}/include)
+    set(LIBWEBRTC_INCLUDE_DIRS
+        ${LIBWEBRTC_DIR}/include
+        ${LIBWEBRTC_DIR}/include/third_party/abseil-cpp
+        ${LIBWEBRTC_DIR}/include/third_party/boringssl/src/include
+        ${LIBWEBRTC_DIR}/include/third_party/libyuv/include
+        ${LIBWEBRTC_DIR}/include/third_party/opus/src/include
+        ${LIBWEBRTC_DIR}/include/build
+    )
+else()
+    # WebRTC build tree layout - headers are in the source tree
+    # Assumes LIBWEBRTC_DIR points to out/Release
+    get_filename_component(WEBRTC_SRC_DIR "${LIBWEBRTC_DIR}/../.." ABSOLUTE)
+    set(LIBWEBRTC_INCLUDE_DIRS
+        ${WEBRTC_SRC_DIR}
+        ${WEBRTC_SRC_DIR}/third_party/abseil-cpp
+        ${WEBRTC_SRC_DIR}/third_party/boringssl/src/include
+        ${WEBRTC_SRC_DIR}/third_party/libyuv/include
+        ${WEBRTC_SRC_DIR}/third_party/opus/src/include
+        ${LIBWEBRTC_DIR}/gen  # Generated headers
+    )
+endif()
 
 # libwebrtc library
 if(APPLE)
@@ -58,18 +73,47 @@ if(APPLE)
         "-framework ApplicationServices"
     )
 elseif(UNIX)
-    set(LIBWEBRTC_LIBRARY ${LIBWEBRTC_DIR}/lib/libwebrtc.a)
-    # Additional codec factory libraries for Linux (same as macOS)
-    set(LIBWEBRTC_BUILTIN_ENCODER ${LIBWEBRTC_DIR}/lib/libbuiltin_video_encoder_factory.a)
-    set(LIBWEBRTC_BUILTIN_DECODER ${LIBWEBRTC_DIR}/lib/libbuiltin_video_decoder_factory.a)
-    set(LIBWEBRTC_INTERNAL_CODECS ${LIBWEBRTC_DIR}/lib/librtc_internal_video_codecs.a)
-    set(LIBWEBRTC_SIMULCAST_ADAPTER ${LIBWEBRTC_DIR}/lib/librtc_simulcast_encoder_adapter.a)
-    set(LIBWEBRTC_FALLBACK_WRAPPERS ${LIBWEBRTC_DIR}/lib/librtc_software_fallback_wrappers.a)
+    # Check for installed layout first, then build tree layout
+    if(EXISTS ${LIBWEBRTC_DIR}/lib/libwebrtc.a)
+        set(LIBWEBRTC_LIBRARY ${LIBWEBRTC_DIR}/lib/libwebrtc.a)
+        set(LIBWEBRTC_BUILTIN_ENCODER ${LIBWEBRTC_DIR}/lib/libbuiltin_video_encoder_factory.a)
+        set(LIBWEBRTC_BUILTIN_DECODER ${LIBWEBRTC_DIR}/lib/libbuiltin_video_decoder_factory.a)
+        set(LIBWEBRTC_INTERNAL_CODECS ${LIBWEBRTC_DIR}/lib/librtc_internal_video_codecs.a)
+        set(LIBWEBRTC_SIMULCAST_ADAPTER ${LIBWEBRTC_DIR}/lib/librtc_simulcast_encoder_adapter.a)
+        set(LIBWEBRTC_FALLBACK_WRAPPERS ${LIBWEBRTC_DIR}/lib/librtc_software_fallback_wrappers.a)
+    elseif(EXISTS ${LIBWEBRTC_DIR}/obj/libwebrtc.a)
+        # WebRTC build tree layout (used during Docker build)
+        # Include codec factory libraries that provide symbols not in libwebrtc.a
+        set(LIBWEBRTC_LIBRARY ${LIBWEBRTC_DIR}/obj/libwebrtc.a)
+        set(LIBWEBRTC_BUILTIN_ENCODER ${LIBWEBRTC_DIR}/obj/api/video_codecs/libbuiltin_video_encoder_factory.a)
+        set(LIBWEBRTC_BUILTIN_DECODER ${LIBWEBRTC_DIR}/obj/api/video_codecs/libbuiltin_video_decoder_factory.a)
+        # This contains InternalEncoderFactory and InternalDecoderFactory vtables
+        set(LIBWEBRTC_INTERNAL_CODECS ${LIBWEBRTC_DIR}/obj/media/librtc_internal_video_codecs.a)
+        set(LIBWEBRTC_SIMULCAST_ADAPTER ${LIBWEBRTC_DIR}/obj/media/librtc_simulcast_encoder_adapter.a)
+        set(LIBWEBRTC_FALLBACK_WRAPPERS ${LIBWEBRTC_DIR}/obj/api/video_codecs/librtc_software_fallback_wrappers.a)
+    else()
+        set(LIBWEBRTC_LIBRARY ${LIBWEBRTC_DIR}/lib/libwebrtc.a)
+    endif()
     set(PLATFORM_LIBS
         pthread
         dl
         rt
     )
+    if(ENABLE_DEVICE_CAPTURE)
+        list(APPEND PLATFORM_LIBS
+            X11
+            Xcomposite
+            Xdamage
+            Xfixes
+            Xrandr
+            Xrender
+            Xtst
+            Xext
+            gio-2.0
+            gobject-2.0
+            glib-2.0
+        )
+    endif()
 elseif(WIN32)
     set(LIBWEBRTC_LIBRARY ${LIBWEBRTC_DIR}/lib/webrtc.lib)
     set(PLATFORM_LIBS
@@ -106,6 +150,7 @@ set(SHIM_SOURCES
     shim_capture.cc
     shim_remote_sink.cc
     shim_stats.cc
+    openh264_codec.cc
 )
 
 # Platform-specific permission sources
@@ -143,6 +188,11 @@ elseif(WIN32)
     target_compile_definitions(webrtc_shim PRIVATE WEBRTC_WIN NOMINMAX)
 endif()
 
+if(UNIX AND NOT APPLE)
+    # Avoid packed dynamic relocations for compatibility with older loaders.
+    target_link_options(webrtc_shim PRIVATE "-Wl,--pack-dyn-relocs=none")
+endif()
+
 # Link libraries
 # Order matters: specific libraries first, then libwebrtc.a, then frameworks/platform libs
 # Check for codec factory libraries (available on macOS and Linux)
@@ -158,20 +208,45 @@ if(LIBWEBRTC_BUILTIN_ENCODER AND LIBWEBRTC_BUILTIN_DECODER
     if(EXISTS ${LIBWEBRTC_FALLBACK_WRAPPERS})
         list(APPEND ADDITIONAL_LIBS ${LIBWEBRTC_FALLBACK_WRAPPERS})
     endif()
-    target_link_libraries(webrtc_shim
-        PRIVATE
-            ${LIBWEBRTC_BUILTIN_ENCODER}
-            ${LIBWEBRTC_BUILTIN_DECODER}
-            ${ADDITIONAL_LIBS}
-            ${LIBWEBRTC_LIBRARY}
-            ${PLATFORM_LIBS}
-    )
+    # On Linux, use a start-group to resolve circular static dependencies without
+    # pulling in every object from the archives.
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(webrtc_shim
+            PRIVATE
+                -Wl,--start-group
+                ${LIBWEBRTC_BUILTIN_ENCODER}
+                ${LIBWEBRTC_BUILTIN_DECODER}
+                ${ADDITIONAL_LIBS}
+                ${LIBWEBRTC_LIBRARY}
+                -Wl,--end-group
+                ${PLATFORM_LIBS}
+        )
+    else()
+        target_link_libraries(webrtc_shim
+            PRIVATE
+                ${LIBWEBRTC_BUILTIN_ENCODER}
+                ${LIBWEBRTC_BUILTIN_DECODER}
+                ${ADDITIONAL_LIBS}
+                ${LIBWEBRTC_LIBRARY}
+                ${PLATFORM_LIBS}
+        )
+    endif()
 else()
-    target_link_libraries(webrtc_shim
-        PRIVATE
-            ${LIBWEBRTC_LIBRARY}
-            ${PLATFORM_LIBS}
-    )
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(webrtc_shim
+            PRIVATE
+                -Wl,--start-group
+                ${LIBWEBRTC_LIBRARY}
+                -Wl,--end-group
+                ${PLATFORM_LIBS}
+        )
+    else()
+        target_link_libraries(webrtc_shim
+            PRIVATE
+                ${LIBWEBRTC_LIBRARY}
+                ${PLATFORM_LIBS}
+        )
+    endif()
 endif()
 
 # Set output name
@@ -196,7 +271,7 @@ install(TARGETS webrtc_shim
     RUNTIME DESTINATION bin
 )
 
-install(FILES shim.h shim_common.h DESTINATION include)
+install(FILES shim.h shim_common.h openh264_types.h openh264_codec.h DESTINATION include)
 
 # Print configuration
 message(STATUS "")

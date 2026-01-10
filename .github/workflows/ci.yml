@@ -39,15 +39,21 @@ jobs:
       - name: Run unit tests (no shim required)
         run: go test -v -race ./pkg/frame/... ./pkg/codec/...
 
-  # Shim auto-download (Linux, Docker)
-  shim-autoload-linux:
-    name: Shim Auto-Download (Linux)
+  # Shim auto-download and codec tests (Linux, Docker)
+  shim-codec-tests-linux:
+    name: Shim + Codec Tests (Linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Run shim + OpenH264 auto-download test
         run: TEST_OPENH264=1 ./scripts/test_autoload_docker.sh
+
+      - name: Run H264 encode/decode tests
+        run: TEST_OPENH264=1 ./scripts/test_autoload_docker.sh ./pkg/encoder
+
+      - name: Run all codec tests (H264, VP8, VP9, AV1)
+        run: TEST_OPENH264=1 ./scripts/test_autoload_docker.sh ./test/e2e
 
   # macOS tests (uses self-hosted runner or skips shim tests)
   macos-unit:
@@ -77,12 +83,22 @@ jobs:
           rm -rf "$LIBWEBRTC_SHIM_CACHE_DIR"
           go test -v ./internal/ffi -run TestLoadLibrary -count=1
 
-      - name: Run H264 PreferHW smoke test
+      - name: Run H264 PreferHW smoke test (VideoToolbox)
         env:
           LIBWEBRTC_TEST_H264_PREFER_HW: 1
           LIBWEBRTC_OPENH264_DISABLE_DOWNLOAD: 1
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: 0
         run: go test -v ./internal/ffi -run TestH264PreferHWMac -count=1
+
+      - name: Run codec encode/decode tests
+        env:
+          LIBWEBRTC_SHIM_CACHE_DIR: ${{ runner.temp }}/libgowebrtc-shim
+        run: go test -v ./pkg/encoder/... ./pkg/decoder/... -count=1
+
+      - name: Run e2e codec tests
+        env:
+          LIBWEBRTC_SHIM_CACHE_DIR: ${{ runner.temp }}/libgowebrtc-shim
+        run: go test -v ./test/e2e/... -count=1
 
   # Build check - verify code compiles on all platforms
   build-check:

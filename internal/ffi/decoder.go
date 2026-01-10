@@ -41,7 +41,7 @@ func VideoDecoderDecodeInto(
 
 	var outW, outH, outYStride, outUStride, outVStride int32
 
-	var keyframe int32 = 0
+	var keyframe int32
 	if isKeyframe {
 		keyframe = 1
 	}

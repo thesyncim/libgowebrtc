@@ -260,12 +260,12 @@ func downloadAndInstallShim(url, expectedSHA256, destDir, libName string) error 
 	}
 
 	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(tmpFile, hasher), resp.Body); err != nil {
+	if _, copyErr := io.Copy(io.MultiWriter(tmpFile, hasher), resp.Body); copyErr != nil {
 		_ = tmpFile.Close()
-		return fmt.Errorf("download shim archive: %w", err)
+		return fmt.Errorf("download shim archive: %w", copyErr)
 	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("finalize shim archive: %w", err)
+	if closeErr := tmpFile.Close(); closeErr != nil {
+		return fmt.Errorf("finalize shim archive: %w", closeErr)
 	}
 
 	actualSHA := hex.EncodeToString(hasher.Sum(nil))
@@ -279,8 +279,8 @@ func downloadAndInstallShim(url, expectedSHA256, destDir, libName string) error 
 	}
 	defer os.RemoveAll(extractDir)
 
-	if err := extractTarGz(tmpPath, extractDir); err != nil {
-		return fmt.Errorf("extract shim archive: %w", err)
+	if extractErr := extractTarGz(tmpPath, extractDir); extractErr != nil {
+		return fmt.Errorf("extract shim archive: %w", extractErr)
 	}
 
 	foundLib, err := findFileByName(extractDir, libName)
@@ -346,9 +346,9 @@ func extractTarGz(archivePath, destDir string) error {
 			if err != nil {
 				return err
 			}
-			if _, err := io.Copy(out, tarReader); err != nil {
+			if _, copyErr := io.Copy(out, tarReader); copyErr != nil {
 				_ = out.Close()
-				return err
+				return copyErr
 			}
 			if err := out.Close(); err != nil {
 				return err
@@ -400,8 +400,8 @@ func copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
+	if mkdirErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkdirErr != nil {
+		return mkdirErr
 	}
 
 	out, err := os.Create(dst)

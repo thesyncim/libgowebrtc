@@ -2,7 +2,7 @@
 #
 # Automated libwebrtc build script for libgowebrtc
 #
-# This script builds libwebrtc from source with H264 support enabled.
+# This script builds libwebrtc from source with H264 support enabled by default.
 # It handles the complete build process including:
 # - depot_tools setup
 # - WebRTC source checkout (specific milestone branch)
@@ -19,6 +19,7 @@
 #   WEBRTC_BRANCH     - WebRTC branch to build (default: branch-heads/7390 = M141)
 #   BUILD_DIR         - Where to build (default: ~/webrtc_build)
 #   INSTALL_DIR       - Where to install (default: ~/libwebrtc)
+#   ENABLE_H264       - Enable H264 in libwebrtc (default: 1)
 #   JOBS              - Number of parallel jobs (default: auto-detect)
 #   TARGET_OS         - Target OS: mac, linux, win (default: auto-detect)
 #   TARGET_CPU        - Target CPU: arm64, x64 (default: auto-detect)
@@ -31,6 +32,7 @@ WEBRTC_BRANCH="${WEBRTC_BRANCH:-branch-heads/7390}"  # M141.7390
 BUILD_DIR="${BUILD_DIR:-$HOME/webrtc_build}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/libwebrtc}"
 DEPOT_TOOLS_DIR="${DEPOT_TOOLS_DIR:-$HOME/depot_tools}"
+ENABLE_H264="${ENABLE_H264:-1}"
 
 # Auto-detect platform
 detect_os() {
@@ -72,7 +74,7 @@ show_help() {
 libwebrtc Build Script
 ======================
 
-Builds libwebrtc from source with H264 support for use with libgowebrtc.
+Builds libwebrtc from source with H264 support enabled by default for use with libgowebrtc.
 
 Usage:
   ./build_libwebrtc.sh [OPTIONS]
@@ -88,6 +90,7 @@ Environment Variables:
   BUILD_DIR         Build directory (default: ~/webrtc_build)
   INSTALL_DIR       Install directory (default: ~/libwebrtc)
   DEPOT_TOOLS_DIR   depot_tools location (default: ~/depot_tools)
+  ENABLE_H264       Enable H264 in libwebrtc (default: 1)
   TARGET_OS         Target OS: mac, linux, win (default: auto)
   TARGET_CPU        Target CPU: arm64, x64 (default: auto)
   JOBS              Parallel jobs (default: auto)
@@ -195,6 +198,32 @@ EOF
     log_success "WebRTC source ready"
 }
 
+disable_crel_relocations() {
+    if [ "$TARGET_OS" != "linux" ]; then
+        return
+    fi
+
+    local compiler_gn="$BUILD_DIR/src/build/config/compiler/BUILD.gn"
+    if [ ! -f "$compiler_gn" ]; then
+        log_warn "CREL config not found at $compiler_gn"
+        return
+    fi
+
+    if grep -q -- '-Wa,--crel,--allow-experimental-crel' "$compiler_gn"; then
+        log_info "Disabling CREL relocations for Linux builds"
+        python3 - "$compiler_gn" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+needle = 'cflags += [ "-Wa,--crel,--allow-experimental-crel" ]'
+text = path.read_text(encoding="utf-8")
+if needle in text:
+    path.write_text(text.replace(needle, "# " + needle), encoding="utf-8")
+PY
+    fi
+}
+
 generate_build_files() {
     log_step "Generating build files..."
 
@@ -211,6 +240,10 @@ generate_build_files() {
 is_debug = false
 is_component_build = false
 rtc_include_tests = false
+EOF
+
+    if [ "$ENABLE_H264" = "1" ]; then
+        cat >> "$out_dir/args.gn" << EOF
 
 # Enable H264 support (OpenH264 encoder + FFmpeg decoder)
 # NOTE: proprietary_codecs and ffmpeg_branding MUST be set for full H264 support
@@ -218,6 +251,17 @@ rtc_include_tests = false
 proprietary_codecs = true
 rtc_use_h264 = true
 ffmpeg_branding = "Chrome"  # Required for FFmpeg H264 decoder
+EOF
+    else
+        cat >> "$out_dir/args.gn" << EOF
+
+# Disable proprietary H264 support for a "basic" build
+proprietary_codecs = false
+rtc_use_h264 = false
+EOF
+    fi
+
+    cat >> "$out_dir/args.gn" << EOF
 
 # Enable AV1 support via libaom
 rtc_include_dav1d_in_internal_decoder_factory = true
@@ -253,6 +297,8 @@ use_sysroot = false
 EOF
     fi
 
+    disable_crel_relocations
+
     log_info "Build configuration:"
     cat "$out_dir/args.gn"
     echo ""
@@ -275,6 +321,7 @@ build_libwebrtc() {
         :webrtc \
         api/video_codecs:builtin_video_decoder_factory \
         api/video_codecs:builtin_video_encoder_factory \
+        api/video_codecs:rtc_software_fallback_wrappers \
         api/audio_codecs:builtin_audio_decoder_factory \
         api/audio_codecs:builtin_audio_encoder_factory \
         modules/audio_device

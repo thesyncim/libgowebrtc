@@ -33,16 +33,28 @@ Override behavior with:
 - `LIBWEBRTC_SHIM_CACHE_DIR=/custom/cache/dir` (override cache location)
 - `LIBWEBRTC_SHIM_FLAVOR=basic` (override shim flavor; default: basic)
 
-### H.264 (Default)
+### H.264 Support
 
-H.264 is enabled in the default shim build. No special shim flavor is required.
-If you publish multiple flavors (for example, a build without H.264), set
-`LIBWEBRTC_SHIM_FLAVOR` to pick the right release.
+H.264 encoding and decoding uses **direct OpenH264 integration** - the shim calls
+OpenH264 APIs directly rather than going through libwebrtc's codec factories. This
+means:
 
-### OpenH264 Runtime Download
+- **Zero configuration required** - works out of the box
+- **No FFmpeg dependency** - OpenH264 handles both encoding AND decoding
+- **Clean licensing** - Cisco's BSD-licensed OpenH264 binaries are royalty-free
+- **Cross-platform** - works on Linux, macOS, and Windows
 
-To keep the core library MIT/BSD while enabling H.264, OpenH264 can be downloaded
-from Cisco on first use and loaded dynamically. The binary is cached under
+#### Platform Behavior
+
+| Platform | Default | With `PreferHW: true` | With `PreferHW: false` |
+|----------|---------|----------------------|----------------------|
+| **Linux** | OpenH264 | OpenH264 | OpenH264 |
+| **macOS** | VideoToolbox | VideoToolbox | OpenH264 |
+| **Windows** | OpenH264 | OpenH264 | OpenH264 |
+
+#### OpenH264 Runtime Download
+
+OpenH264 is downloaded automatically from Cisco on first use and cached under
 `~/.libgowebrtc/openh264/<version>/<platform>`.
 
 Defaults:
@@ -51,9 +63,6 @@ Defaults:
   (OpenH264) elsewhere.
 - Set `PreferHW: true` or `PreferHW: false` explicitly to override.
 
-OpenH264 is only downloaded when software H.264 is requested (Linux/Windows by
-default; macOS only when `PreferHW: false` or `LIBWEBRTC_PREFER_SOFTWARE_CODECS=1`).
-
 Environment knobs:
 
 - `LIBWEBRTC_OPENH264_PATH=/path/to/openh264` (use a local OpenH264 binary)
@@ -61,16 +70,12 @@ Environment knobs:
 - `LIBWEBRTC_OPENH264_URL=https://...` (override download URL)
 - `LIBWEBRTC_OPENH264_BASE_URL=https://...` (override base URL)
 - `LIBWEBRTC_OPENH264_VERSION=2.x.y` (override version)
-- `LIBWEBRTC_OPENH264_SOVERSION=6` (override Linux SO version)
+- `LIBWEBRTC_OPENH264_SOVERSION=7` (override Linux SO version)
 - `LIBWEBRTC_OPENH264_SHA256=...` (verify download)
 - `LIBWEBRTC_PREFER_SOFTWARE_CODECS=1` (force software codecs in PeerConnection)
 
 Note: Cisco provides OpenH264 binaries under their own terms. Downloading from
-Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license. On macOS
-arm64, Cisco may not publish binaries; set `LIBWEBRTC_OPENH264_PATH` or set
-`PreferHW: true` to use VideoToolbox. If your shim is built with OpenH264
-statically linked, the download is unused; to rely on Cisco binaries, build
-libwebrtc to load OpenH264 dynamically.
+Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 
 ### Publishing Shims (Local Builds)
 

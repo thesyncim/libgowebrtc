@@ -70,10 +70,51 @@ EOF
 DOCKERFILE=$(cat << 'DOCKERFILE_END'
 FROM golang:GO_VERSION_PLACEHOLDER-bookworm
 
-# Install minimal runtime deps for the shim
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Refresh Debian archive keyring in case the base image is stale.
+ADD https://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.3+deb12u2_all.deb /tmp/debian-archive-keyring.deb
+RUN dpkg -i /tmp/debian-archive-keyring.deb && rm -f /tmp/debian-archive-keyring.deb
+RUN if [ -f /etc/apt/sources.list ]; then \
+        sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list; \
+    fi && \
+    if [ -d /etc/apt/sources.list.d ]; then \
+        sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    fi
+
+# Install minimal runtime deps for the shim (fallback to insecure if apt metadata is broken).
+RUN set -e; \
+    APT_CACHE_DIR=/var/tmp/apt-cache; \
+    mkdir -p "$APT_CACHE_DIR/partial"; \
+    APT_OPTS="-o Dir::Cache::archives=$APT_CACHE_DIR -o Dir::Cache::archives/partial=$APT_CACHE_DIR/partial"; \
+    if ! apt-get $APT_OPTS update; then \
+        apt-get $APT_OPTS -o Acquire::AllowInsecureRepositories=true \
+            -o Acquire::AllowDowngradeToInsecureRepositories=true update; \
+    fi; \
+    if ! apt-get $APT_OPTS install -y --no-install-recommends \
+        ca-certificates \
+        libx11-6 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxext6 \
+        libxrandr2 \
+        libxrender1 \
+        libxtst6 \
+        libglib2.0-0 \
+        ; then \
+        apt-get $APT_OPTS install -y --no-install-recommends --allow-unauthenticated \
+            ca-certificates \
+            libx11-6 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxext6 \
+            libxrandr2 \
+            libxrender1 \
+            libxtst6 \
+            libglib2.0-0 \
+            ; \
+    fi; \
+    rm -rf /var/lib/apt/lists/* "$APT_CACHE_DIR"
 
 WORKDIR /workspace
 

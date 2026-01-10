@@ -46,7 +46,7 @@ func VideoEncoderEncodeInto(
 	var outSize int32
 	var outIsKeyframe int32
 
-	var forceKF int32 = 0
+	var forceKF int32
 	if forceKeyframe {
 		forceKF = 1
 	}

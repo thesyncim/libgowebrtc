@@ -28,7 +28,7 @@ FROM ubuntu:22.04 AS libwebrtc-builder
 ARG SKIP_LIBWEBRTC_BUILD=0
 ARG WEBRTC_BRANCH=branch-heads/7390
 ARG TARGET_CPU=x64
-ARG ENABLE_H264=0
+ARG ENABLE_H264=1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -111,6 +111,10 @@ RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
         cd ${BUILD_DIR}/src && gclient runhooks; \
     fi
 
+RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
+        python3 -c "from pathlib import Path; path = Path('/build/webrtc/src/build/config/compiler/BUILD.gn'); needle = 'cflags += [ \"-Wa,--crel,--allow-experimental-crel\" ]'; text = path.read_text(encoding='utf-8'); path.write_text(text.replace(needle, '# ' + needle), encoding='utf-8') if needle in text else None"; \
+    fi
+
 # Generate build configuration
 RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
         mkdir -p ${BUILD_DIR}/src/out/Release && \
@@ -128,7 +132,8 @@ RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
         fi && \
         echo 'rtc_include_dav1d_in_internal_decoder_factory = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'use_rtti = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
-        echo 'use_custom_libcxx = true' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+        echo 'use_custom_libcxx = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
+        echo 'use_clang_modules = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'treat_warnings_as_errors = false' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo 'target_os = "linux"' >> ${BUILD_DIR}/src/out/Release/args.gn && \
         echo "target_cpu = \"${TARGET_CPU}\"" >> ${BUILD_DIR}/src/out/Release/args.gn && \
@@ -148,19 +153,49 @@ RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
             :webrtc \
             api/video_codecs:builtin_video_decoder_factory \
             api/video_codecs:builtin_video_encoder_factory \
+            api/video_codecs:rtc_software_fallback_wrappers \
             api/audio_codecs:builtin_audio_decoder_factory \
-            api/audio_codecs:builtin_audio_encoder_factory; \
+            api/audio_codecs:builtin_audio_encoder_factory \
+            media:rtc_internal_video_codecs \
+            media:rtc_simulcast_encoder_adapter; \
     fi
 
-# Install libwebrtc and codec factory libraries
+# Install libwebrtc
+# Note: We only copy libwebrtc.a which is a regular archive. The codec factory
+# libraries are thin archives that can't be easily copied outside the build tree.
+# We build the shim here while the build tree is available.
 RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
         mkdir -p ${INSTALL_DIR}/include ${INSTALL_DIR}/lib && \
-        cp ${BUILD_DIR}/src/out/Release/obj/libwebrtc.a ${INSTALL_DIR}/lib/ && \
-        # Copy codec factory libraries (needed for encoder/decoder creation)
-        for lib in libbuiltin_video_encoder_factory.a libbuiltin_video_decoder_factory.a \
-                   libbuiltin_audio_encoder_factory.a libbuiltin_audio_decoder_factory.a; do \
-            find ${BUILD_DIR}/src/out/Release/obj -name "$lib" -exec cp {} ${INSTALL_DIR}/lib/ \; 2>/dev/null || true; \
-        done; \
+        cp ${BUILD_DIR}/src/out/Release/obj/libwebrtc.a ${INSTALL_DIR}/lib/; \
+    fi
+
+# Build shim while build tree is available (thin archives need source references)
+ARG TARGETARCH=amd64
+COPY shim /workspace/shim
+RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
+        apt-get update && apt-get install -y cmake && rm -rf /var/lib/apt/lists/* && \
+        if [ "${TARGET_CPU}" = "arm64" ]; then \
+            SHIM_C_COMPILER="/usr/lib/llvm-21/bin/clang"; \
+            SHIM_CXX_COMPILER="/usr/lib/llvm-21/bin/clang++"; \
+            SHIM_TOOLCHAIN_FLAGS="-rtlib=compiler-rt"; \
+        else \
+            SHIM_C_COMPILER="clang"; \
+            SHIM_CXX_COMPILER="clang++"; \
+            SHIM_TOOLCHAIN_FLAGS=""; \
+        fi && \
+        mkdir -p /workspace/shim/build && cd /workspace/shim/build && \
+        cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLIBWEBRTC_DIR=${BUILD_DIR}/src/out/Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_C_COMPILER="${SHIM_C_COMPILER}" \
+            -DCMAKE_CXX_COMPILER="${SHIM_CXX_COMPILER}" \
+            -DCMAKE_C_FLAGS="${SHIM_TOOLCHAIN_FLAGS}" \
+            -DCMAKE_CXX_FLAGS="${SHIM_TOOLCHAIN_FLAGS}" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld ${SHIM_TOOLCHAIN_FLAGS}" && \
+        cmake --build . --config Release -j$(nproc) && \
+        mkdir -p ${INSTALL_DIR}/lib/linux_${TARGETARCH} && \
+        cp libwebrtc_shim.so ${INSTALL_DIR}/lib/linux_${TARGETARCH}/; \
     fi
 
 # Copy headers
@@ -195,10 +230,16 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     libpulse0 \
     libx11-6 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
     libxext6 \
+    libxrandr2 \
     libxrender1 \
+    libxtst6 \
     libdrm2 \
     libgbm1 \
+    libglib2.0-0 \
     libegl1 \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
@@ -225,28 +266,14 @@ RUN go mod download
 # Copy source
 COPY . .
 
-# Build shim (only if libwebrtc is present)
-RUN if [ -f /opt/libwebrtc/lib/libwebrtc.a ]; then \
-        target_arch="${TARGETARCH:-amd64}" && \
-        mkdir -p shim/build && \
-        cd shim/build && \
-        cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLIBWEBRTC_DIR=${LIBWEBRTC_DIR} \
-            -DBUILD_SHARED_LIBS=ON \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" && \
-        cmake --build . --config Release -j$(nproc) && \
-        mkdir -p /workspace/lib/linux_${target_arch} && \
-        cp libwebrtc_shim.so /workspace/lib/linux_${target_arch}/; \
-    else \
-        echo "WARNING: libwebrtc not found, shim will not be built"; \
-        echo "Mount your pre-built libwebrtc at /opt/libwebrtc"; \
-    fi
+# Copy pre-built shim from builder stage (built with full build tree access)
+# The shim is built in the builder stage to access thin archives from the build tree.
+ARG TARGETARCH=amd64
+RUN mkdir -p /workspace/lib/linux_${TARGETARCH}
+COPY --from=libwebrtc-builder /opt/libwebrtc/lib/linux_${TARGETARCH}/libwebrtc_shim.so /workspace/lib/linux_${TARGETARCH}/
 
 # Set library path
-ENV LIBWEBRTC_SHIM_PATH=/workspace/lib/linux_amd64/libwebrtc_shim.so
+ENV LIBWEBRTC_SHIM_PATH=/workspace/lib/linux_${TARGETARCH}/libwebrtc_shim.so
 
 # Default command: run tests
 CMD ["go", "test", "-v", "./..."]

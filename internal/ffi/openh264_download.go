@@ -60,7 +60,7 @@ func ensureOpenH264(required bool) error {
 
 		addLibraryDirToEnv(filepath.Dir(path))
 
-		handle, err := purego.Dlopen(path, purego.RTLD_NOW|purego.RTLD_GLOBAL)
+		handle, err := dlopenLibrary(path, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 		if err != nil {
 			openh264Err = fmt.Errorf("load openh264: %w", err)
 			return
@@ -346,12 +346,12 @@ func downloadAndInstallOpenH264(spec openh264Spec, destDir string) error {
 		writer = io.MultiWriter(tmpFile, hasher)
 	}
 
-	if _, err := io.Copy(writer, resp.Body); err != nil {
+	if _, copyErr := io.Copy(writer, resp.Body); copyErr != nil {
 		_ = tmpFile.Close()
-		return fmt.Errorf("download openh264 archive: %w", err)
+		return fmt.Errorf("download openh264 archive: %w", copyErr)
 	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("finalize openh264 archive: %w", err)
+	if closeErr := tmpFile.Close(); closeErr != nil {
+		return fmt.Errorf("finalize openh264 archive: %w", closeErr)
 	}
 
 	if spec.SHA256 != "" {
@@ -409,7 +409,7 @@ func extractBzip2(srcPath, destPath string) error {
 	}
 	defer out.Close()
 
-	if _, err := io.Copy(out, reader); err != nil {
+	if _, err := io.CopyN(out, reader, 100<<20); err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
 	return out.Sync()
@@ -420,7 +420,7 @@ func addLibraryDirToEnv(dir string) {
 		return
 	}
 
-	envVar := ""
+	var envVar string
 	switch runtime.GOOS {
 	case "windows":
 		envVar = "PATH"

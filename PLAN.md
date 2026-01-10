@@ -1348,11 +1348,25 @@ func main() {
 
 ### H264 and AV1 Support (Fixed - January 2025)
 
-**H264 Encoding/Decoding (Fixed):**
-- Added `proprietary_codecs = true` to `scripts/build_libwebrtc.sh`
-- Added `rtc_use_h264 = true` (enables OpenH264 encoder + FFmpeg decoder)
-- Added `ffmpeg_branding = "Chrome"` (required for FFmpeg H264 decoder)
-- Now H264 encode/decode works exactly like browsers
+**H264 - Direct OpenH264 Integration (January 2025):**
+- The shim now calls OpenH264 APIs **directly** for H.264 encoding/decoding
+- Bypasses libwebrtc's codec factories (which require `rtc_use_h264=true` build)
+- OpenH264 is loaded dynamically via `dlsym(RTLD_DEFAULT, ...)` at runtime
+- Go downloads OpenH264 from Cisco with `RTLD_GLOBAL` so symbols are available
+- No FFmpeg dependency - OpenH264 handles both encoding AND decoding
+- Configuration matches libwebrtc exactly (Constrained Baseline, temporal layers=1, VBR)
+
+**Platform Behavior:**
+| Platform | Default | With `PreferHW: true` | With `PreferHW: false` |
+|----------|---------|----------------------|----------------------|
+| Linux | OpenH264 | OpenH264 | OpenH264 |
+| macOS | VideoToolbox | VideoToolbox | OpenH264 |
+| Windows | OpenH264 | OpenH264 | OpenH264 |
+
+**Files Added:**
+- `shim/openh264_types.h` - OpenH264 type definitions (copied from headers)
+- `shim/openh264_codec.h` - Wrapper class declarations
+- `shim/openh264_codec.cc` - Dynamic loader + encoder/decoder implementations
 
 **AV1 Encoding/Decoding (Fixed):**
 - AV1 requires `qpMax = 63` to be set in codec settings
@@ -1361,10 +1375,10 @@ func main() {
 - Uses libaom encoder (software), dav1d decoder
 
 **All 4 Video Codecs Now Work:**
-- ✅ H264 (OpenH264 encoder + FFmpeg decoder)
-- ✅ VP8 (libvpx)
-- ✅ VP9 (libvpx)
-- ✅ AV1 (libaom encoder + dav1d decoder)
+- ✅ H264 (Direct OpenH264 - both encoder AND decoder)
+- ✅ VP8 (libvpx via libwebrtc)
+- ✅ VP9 (libvpx via libwebrtc)
+- ✅ AV1 (libaom encoder + dav1d decoder via libwebrtc)
 
 ### Known Issues
 

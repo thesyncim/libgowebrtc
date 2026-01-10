@@ -25,11 +25,7 @@ SKIP_LIBWEBRTC_BUILD="${SKIP_LIBWEBRTC_BUILD:-0}"
 RELEASE_TAG="${RELEASE_TAG:-}"
 
 if [ -z "${ENABLE_H264:-}" ]; then
-    if [ "$SHIM_FLAVOR" = "h264" ]; then
-        ENABLE_H264=1
-    else
-        ENABLE_H264=0
-    fi
+    ENABLE_H264=1
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -80,6 +76,7 @@ build_arch() {
         --build-arg "SKIP_LIBWEBRTC_BUILD=${SKIP_LIBWEBRTC_BUILD}"
         --build-arg "TARGET_CPU=${target_cpu}"
         --build-arg "ENABLE_H264=${ENABLE_H264}"
+        --build-arg "TARGETARCH=${arch}"
     )
     if [ -n "${WEBRTC_BRANCH:-}" ]; then
         build_args+=(--build-arg "WEBRTC_BRANCH=${WEBRTC_BRANCH}")

@@ -26,7 +26,7 @@ func PacketizerPacketizeInto(
 
 	var outCount int32
 
-	var keyframe int32 = 0
+	var keyframe int32
 	if isKeyframe {
 		keyframe = 1
 	}

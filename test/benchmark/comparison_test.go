@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
+	pionwebrtc "github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
+
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
-
-	pionwebrtc "github.com/pion/webrtc/v4"
 )
 
 // TestMain initializes the libwebrtc library for benchmarks.

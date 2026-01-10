@@ -398,7 +398,7 @@ func PeerConnectionCreateDataChannel(pc uintptr, label string, ordered bool, max
 	labelCStr := CString(label)
 	protocolCStr := CString(protocol)
 
-	var orderedInt int32 = 0
+	var orderedInt int32
 	if ordered {
 		orderedInt = 1
 	}
@@ -458,7 +458,7 @@ func DataChannelSend(dc uintptr, data []byte, isBinary bool) error {
 		return ErrLibraryNotLoaded
 	}
 
-	var isBinaryInt int32 = 0
+	var isBinaryInt int32
 	if isBinary {
 		isBinaryInt = 1
 	}
@@ -1040,7 +1040,7 @@ func RTPSenderSetLayerActive(sender uintptr, rid string, active bool) error {
 	}
 
 	ridCStr := CString(rid)
-	var activeInt int32 = 0
+	var activeInt int32
 	if active {
 		activeInt = 1
 	}

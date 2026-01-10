@@ -252,17 +252,17 @@ func LoadLibrary() error {
 		return err
 	}
 
-	handle, err := purego.Dlopen(libPath, purego.RTLD_NOW|purego.RTLD_GLOBAL)
+	handle, err := dlopenLibrary(libPath, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 	if err != nil {
 		if downloadErr != nil {
-			return fmt.Errorf("failed to load %s: %w (auto-download failed: %v)", libPath, err, downloadErr)
+			return fmt.Errorf("failed to load %s: %w (auto-download failed: %w)", libPath, err, downloadErr)
 		}
 		return fmt.Errorf("failed to load %s: %w", libPath, err)
 	}
 
 	libHandle = handle
 	if err := registerFunctions(); err != nil {
-		purego.Dlclose(handle)
+		_ = dlcloseLibrary(handle)
 		return err
 	}
 
@@ -292,7 +292,7 @@ func Close() error {
 		return nil
 	}
 
-	if err := purego.Dlclose(libHandle); err != nil {
+	if err := dlcloseLibrary(libHandle); err != nil {
 		return err
 	}
 
@@ -370,191 +370,199 @@ func getLibraryNameFor(goos string) string {
 	}
 }
 
+func registerLibFunc(fptr any, handle uintptr, name string) {
+	sym, err := dlsymLibrary(handle, name)
+	if err != nil {
+		panic(err)
+	}
+	purego.RegisterFunc(fptr, sym)
+}
+
 func registerFunctions() error {
 	var err error
 
 	// Video Encoder
-	purego.RegisterLibFunc(&shimVideoEncoderCreate, libHandle, "shim_video_encoder_create")
-	purego.RegisterLibFunc(&shimVideoEncoderEncode, libHandle, "shim_video_encoder_encode")
-	purego.RegisterLibFunc(&shimVideoEncoderSetBitrate, libHandle, "shim_video_encoder_set_bitrate")
-	purego.RegisterLibFunc(&shimVideoEncoderSetFramerate, libHandle, "shim_video_encoder_set_framerate")
-	purego.RegisterLibFunc(&shimVideoEncoderRequestKeyframe, libHandle, "shim_video_encoder_request_keyframe")
-	purego.RegisterLibFunc(&shimVideoEncoderDestroy, libHandle, "shim_video_encoder_destroy")
+	registerLibFunc(&shimVideoEncoderCreate, libHandle, "shim_video_encoder_create")
+	registerLibFunc(&shimVideoEncoderEncode, libHandle, "shim_video_encoder_encode")
+	registerLibFunc(&shimVideoEncoderSetBitrate, libHandle, "shim_video_encoder_set_bitrate")
+	registerLibFunc(&shimVideoEncoderSetFramerate, libHandle, "shim_video_encoder_set_framerate")
+	registerLibFunc(&shimVideoEncoderRequestKeyframe, libHandle, "shim_video_encoder_request_keyframe")
+	registerLibFunc(&shimVideoEncoderDestroy, libHandle, "shim_video_encoder_destroy")
 
 	// Video Decoder
-	purego.RegisterLibFunc(&shimVideoDecoderCreate, libHandle, "shim_video_decoder_create")
-	purego.RegisterLibFunc(&shimVideoDecoderDecode, libHandle, "shim_video_decoder_decode")
-	purego.RegisterLibFunc(&shimVideoDecoderDestroy, libHandle, "shim_video_decoder_destroy")
+	registerLibFunc(&shimVideoDecoderCreate, libHandle, "shim_video_decoder_create")
+	registerLibFunc(&shimVideoDecoderDecode, libHandle, "shim_video_decoder_decode")
+	registerLibFunc(&shimVideoDecoderDestroy, libHandle, "shim_video_decoder_destroy")
 
 	// Audio Encoder
-	purego.RegisterLibFunc(&shimAudioEncoderCreate, libHandle, "shim_audio_encoder_create")
-	purego.RegisterLibFunc(&shimAudioEncoderEncode, libHandle, "shim_audio_encoder_encode")
-	purego.RegisterLibFunc(&shimAudioEncoderSetBitrate, libHandle, "shim_audio_encoder_set_bitrate")
-	purego.RegisterLibFunc(&shimAudioEncoderDestroy, libHandle, "shim_audio_encoder_destroy")
+	registerLibFunc(&shimAudioEncoderCreate, libHandle, "shim_audio_encoder_create")
+	registerLibFunc(&shimAudioEncoderEncode, libHandle, "shim_audio_encoder_encode")
+	registerLibFunc(&shimAudioEncoderSetBitrate, libHandle, "shim_audio_encoder_set_bitrate")
+	registerLibFunc(&shimAudioEncoderDestroy, libHandle, "shim_audio_encoder_destroy")
 
 	// Audio Decoder
-	purego.RegisterLibFunc(&shimAudioDecoderCreate, libHandle, "shim_audio_decoder_create")
-	purego.RegisterLibFunc(&shimAudioDecoderDecode, libHandle, "shim_audio_decoder_decode")
-	purego.RegisterLibFunc(&shimAudioDecoderDestroy, libHandle, "shim_audio_decoder_destroy")
+	registerLibFunc(&shimAudioDecoderCreate, libHandle, "shim_audio_decoder_create")
+	registerLibFunc(&shimAudioDecoderDecode, libHandle, "shim_audio_decoder_decode")
+	registerLibFunc(&shimAudioDecoderDestroy, libHandle, "shim_audio_decoder_destroy")
 
 	// Packetizer
-	purego.RegisterLibFunc(&shimPacketizerCreate, libHandle, "shim_packetizer_create")
-	purego.RegisterLibFunc(&shimPacketizerPacketize, libHandle, "shim_packetizer_packetize")
-	purego.RegisterLibFunc(&shimPacketizerSeqNum, libHandle, "shim_packetizer_sequence_number")
-	purego.RegisterLibFunc(&shimPacketizerDestroy, libHandle, "shim_packetizer_destroy")
+	registerLibFunc(&shimPacketizerCreate, libHandle, "shim_packetizer_create")
+	registerLibFunc(&shimPacketizerPacketize, libHandle, "shim_packetizer_packetize")
+	registerLibFunc(&shimPacketizerSeqNum, libHandle, "shim_packetizer_sequence_number")
+	registerLibFunc(&shimPacketizerDestroy, libHandle, "shim_packetizer_destroy")
 
 	// Depacketizer
-	purego.RegisterLibFunc(&shimDepacketizerCreate, libHandle, "shim_depacketizer_create")
-	purego.RegisterLibFunc(&shimDepacketizerPush, libHandle, "shim_depacketizer_push")
-	purego.RegisterLibFunc(&shimDepacketizerPop, libHandle, "shim_depacketizer_pop")
-	purego.RegisterLibFunc(&shimDepacketizerDestroy, libHandle, "shim_depacketizer_destroy")
+	registerLibFunc(&shimDepacketizerCreate, libHandle, "shim_depacketizer_create")
+	registerLibFunc(&shimDepacketizerPush, libHandle, "shim_depacketizer_push")
+	registerLibFunc(&shimDepacketizerPop, libHandle, "shim_depacketizer_pop")
+	registerLibFunc(&shimDepacketizerDestroy, libHandle, "shim_depacketizer_destroy")
 
 	// Memory
-	purego.RegisterLibFunc(&shimFreeBuffer, libHandle, "shim_free_buffer")
-	purego.RegisterLibFunc(&shimFreePackets, libHandle, "shim_free_packets")
+	registerLibFunc(&shimFreeBuffer, libHandle, "shim_free_buffer")
+	registerLibFunc(&shimFreePackets, libHandle, "shim_free_packets")
 
 	// Version
-	purego.RegisterLibFunc(&shimLibwebrtcVersion, libHandle, "shim_libwebrtc_version")
-	purego.RegisterLibFunc(&shimVersion, libHandle, "shim_version")
+	registerLibFunc(&shimLibwebrtcVersion, libHandle, "shim_libwebrtc_version")
+	registerLibFunc(&shimVersion, libHandle, "shim_version")
 
 	// PeerConnection
-	purego.RegisterLibFunc(&shimPeerConnectionCreate, libHandle, "shim_peer_connection_create")
-	purego.RegisterLibFunc(&shimPeerConnectionDestroy, libHandle, "shim_peer_connection_destroy")
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnICECandidate, libHandle, "shim_peer_connection_set_on_ice_candidate")
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnConnectionStateChange, libHandle, "shim_peer_connection_set_on_connection_state_change")
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnTrack, libHandle, "shim_peer_connection_set_on_track")
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnDataChannel, libHandle, "shim_peer_connection_set_on_data_channel")
-	purego.RegisterLibFunc(&shimPeerConnectionCreateOffer, libHandle, "shim_peer_connection_create_offer")
-	purego.RegisterLibFunc(&shimPeerConnectionCreateAnswer, libHandle, "shim_peer_connection_create_answer")
-	purego.RegisterLibFunc(&shimPeerConnectionSetLocalDescription, libHandle, "shim_peer_connection_set_local_description")
-	purego.RegisterLibFunc(&shimPeerConnectionSetRemoteDescription, libHandle, "shim_peer_connection_set_remote_description")
-	purego.RegisterLibFunc(&shimPeerConnectionAddICECandidate, libHandle, "shim_peer_connection_add_ice_candidate")
-	purego.RegisterLibFunc(&shimPeerConnectionSignalingState, libHandle, "shim_peer_connection_signaling_state")
-	purego.RegisterLibFunc(&shimPeerConnectionICEConnectionState, libHandle, "shim_peer_connection_ice_connection_state")
-	purego.RegisterLibFunc(&shimPeerConnectionICEGatheringState, libHandle, "shim_peer_connection_ice_gathering_state")
-	purego.RegisterLibFunc(&shimPeerConnectionConnectionState, libHandle, "shim_peer_connection_connection_state")
-	purego.RegisterLibFunc(&shimPeerConnectionAddTrack, libHandle, "shim_peer_connection_add_track")
-	purego.RegisterLibFunc(&shimPeerConnectionRemoveTrack, libHandle, "shim_peer_connection_remove_track")
-	purego.RegisterLibFunc(&shimPeerConnectionCreateDataChannel, libHandle, "shim_peer_connection_create_data_channel")
-	purego.RegisterLibFunc(&shimPeerConnectionClose, libHandle, "shim_peer_connection_close")
+	registerLibFunc(&shimPeerConnectionCreate, libHandle, "shim_peer_connection_create")
+	registerLibFunc(&shimPeerConnectionDestroy, libHandle, "shim_peer_connection_destroy")
+	registerLibFunc(&shimPeerConnectionSetOnICECandidate, libHandle, "shim_peer_connection_set_on_ice_candidate")
+	registerLibFunc(&shimPeerConnectionSetOnConnectionStateChange, libHandle, "shim_peer_connection_set_on_connection_state_change")
+	registerLibFunc(&shimPeerConnectionSetOnTrack, libHandle, "shim_peer_connection_set_on_track")
+	registerLibFunc(&shimPeerConnectionSetOnDataChannel, libHandle, "shim_peer_connection_set_on_data_channel")
+	registerLibFunc(&shimPeerConnectionCreateOffer, libHandle, "shim_peer_connection_create_offer")
+	registerLibFunc(&shimPeerConnectionCreateAnswer, libHandle, "shim_peer_connection_create_answer")
+	registerLibFunc(&shimPeerConnectionSetLocalDescription, libHandle, "shim_peer_connection_set_local_description")
+	registerLibFunc(&shimPeerConnectionSetRemoteDescription, libHandle, "shim_peer_connection_set_remote_description")
+	registerLibFunc(&shimPeerConnectionAddICECandidate, libHandle, "shim_peer_connection_add_ice_candidate")
+	registerLibFunc(&shimPeerConnectionSignalingState, libHandle, "shim_peer_connection_signaling_state")
+	registerLibFunc(&shimPeerConnectionICEConnectionState, libHandle, "shim_peer_connection_ice_connection_state")
+	registerLibFunc(&shimPeerConnectionICEGatheringState, libHandle, "shim_peer_connection_ice_gathering_state")
+	registerLibFunc(&shimPeerConnectionConnectionState, libHandle, "shim_peer_connection_connection_state")
+	registerLibFunc(&shimPeerConnectionAddTrack, libHandle, "shim_peer_connection_add_track")
+	registerLibFunc(&shimPeerConnectionRemoveTrack, libHandle, "shim_peer_connection_remove_track")
+	registerLibFunc(&shimPeerConnectionCreateDataChannel, libHandle, "shim_peer_connection_create_data_channel")
+	registerLibFunc(&shimPeerConnectionClose, libHandle, "shim_peer_connection_close")
 
 	// RTPSender
-	purego.RegisterLibFunc(&shimRTPSenderSetBitrate, libHandle, "shim_rtp_sender_set_bitrate")
-	purego.RegisterLibFunc(&shimRTPSenderReplaceTrack, libHandle, "shim_rtp_sender_replace_track")
-	purego.RegisterLibFunc(&shimRTPSenderDestroy, libHandle, "shim_rtp_sender_destroy")
+	registerLibFunc(&shimRTPSenderSetBitrate, libHandle, "shim_rtp_sender_set_bitrate")
+	registerLibFunc(&shimRTPSenderReplaceTrack, libHandle, "shim_rtp_sender_replace_track")
+	registerLibFunc(&shimRTPSenderDestroy, libHandle, "shim_rtp_sender_destroy")
 
 	// DataChannel
-	purego.RegisterLibFunc(&shimDataChannelSetOnMessage, libHandle, "shim_data_channel_set_on_message")
-	purego.RegisterLibFunc(&shimDataChannelSetOnOpen, libHandle, "shim_data_channel_set_on_open")
-	purego.RegisterLibFunc(&shimDataChannelSetOnClose, libHandle, "shim_data_channel_set_on_close")
-	purego.RegisterLibFunc(&shimDataChannelSend, libHandle, "shim_data_channel_send")
-	purego.RegisterLibFunc(&shimDataChannelLabel, libHandle, "shim_data_channel_label")
-	purego.RegisterLibFunc(&shimDataChannelReadyState, libHandle, "shim_data_channel_ready_state")
-	purego.RegisterLibFunc(&shimDataChannelClose, libHandle, "shim_data_channel_close")
-	purego.RegisterLibFunc(&shimDataChannelDestroy, libHandle, "shim_data_channel_destroy")
+	registerLibFunc(&shimDataChannelSetOnMessage, libHandle, "shim_data_channel_set_on_message")
+	registerLibFunc(&shimDataChannelSetOnOpen, libHandle, "shim_data_channel_set_on_open")
+	registerLibFunc(&shimDataChannelSetOnClose, libHandle, "shim_data_channel_set_on_close")
+	registerLibFunc(&shimDataChannelSend, libHandle, "shim_data_channel_send")
+	registerLibFunc(&shimDataChannelLabel, libHandle, "shim_data_channel_label")
+	registerLibFunc(&shimDataChannelReadyState, libHandle, "shim_data_channel_ready_state")
+	registerLibFunc(&shimDataChannelClose, libHandle, "shim_data_channel_close")
+	registerLibFunc(&shimDataChannelDestroy, libHandle, "shim_data_channel_destroy")
 
 	// Device Enumeration
-	purego.RegisterLibFunc(&shimEnumerateDevices, libHandle, "shim_enumerate_devices")
+	registerLibFunc(&shimEnumerateDevices, libHandle, "shim_enumerate_devices")
 
 	// Video Capture
-	purego.RegisterLibFunc(&shimVideoCaptureCreate, libHandle, "shim_video_capture_create")
-	purego.RegisterLibFunc(&shimVideoCaptureStart, libHandle, "shim_video_capture_start")
-	purego.RegisterLibFunc(&shimVideoCaptureStop, libHandle, "shim_video_capture_stop")
-	purego.RegisterLibFunc(&shimVideoCaptureDestroy, libHandle, "shim_video_capture_destroy")
+	registerLibFunc(&shimVideoCaptureCreate, libHandle, "shim_video_capture_create")
+	registerLibFunc(&shimVideoCaptureStart, libHandle, "shim_video_capture_start")
+	registerLibFunc(&shimVideoCaptureStop, libHandle, "shim_video_capture_stop")
+	registerLibFunc(&shimVideoCaptureDestroy, libHandle, "shim_video_capture_destroy")
 
 	// Audio Capture
-	purego.RegisterLibFunc(&shimAudioCaptureCreate, libHandle, "shim_audio_capture_create")
-	purego.RegisterLibFunc(&shimAudioCaptureStart, libHandle, "shim_audio_capture_start")
-	purego.RegisterLibFunc(&shimAudioCaptureStop, libHandle, "shim_audio_capture_stop")
-	purego.RegisterLibFunc(&shimAudioCaptureDestroy, libHandle, "shim_audio_capture_destroy")
+	registerLibFunc(&shimAudioCaptureCreate, libHandle, "shim_audio_capture_create")
+	registerLibFunc(&shimAudioCaptureStart, libHandle, "shim_audio_capture_start")
+	registerLibFunc(&shimAudioCaptureStop, libHandle, "shim_audio_capture_stop")
+	registerLibFunc(&shimAudioCaptureDestroy, libHandle, "shim_audio_capture_destroy")
 
 	// Screen Capture
-	purego.RegisterLibFunc(&shimEnumerateScreens, libHandle, "shim_enumerate_screens")
-	purego.RegisterLibFunc(&shimScreenCaptureCreate, libHandle, "shim_screen_capture_create")
-	purego.RegisterLibFunc(&shimScreenCaptureStart, libHandle, "shim_screen_capture_start")
-	purego.RegisterLibFunc(&shimScreenCaptureStop, libHandle, "shim_screen_capture_stop")
-	purego.RegisterLibFunc(&shimScreenCaptureDestroy, libHandle, "shim_screen_capture_destroy")
+	registerLibFunc(&shimEnumerateScreens, libHandle, "shim_enumerate_screens")
+	registerLibFunc(&shimScreenCaptureCreate, libHandle, "shim_screen_capture_create")
+	registerLibFunc(&shimScreenCaptureStart, libHandle, "shim_screen_capture_start")
+	registerLibFunc(&shimScreenCaptureStop, libHandle, "shim_screen_capture_stop")
+	registerLibFunc(&shimScreenCaptureDestroy, libHandle, "shim_screen_capture_destroy")
 
 	// Permission Functions
-	purego.RegisterLibFunc(&shimCheckCameraPermission, libHandle, "shim_check_camera_permission")
-	purego.RegisterLibFunc(&shimCheckMicrophonePermission, libHandle, "shim_check_microphone_permission")
-	purego.RegisterLibFunc(&shimRequestCameraPermission, libHandle, "shim_request_camera_permission")
-	purego.RegisterLibFunc(&shimRequestMicrophonePermission, libHandle, "shim_request_microphone_permission")
+	registerLibFunc(&shimCheckCameraPermission, libHandle, "shim_check_camera_permission")
+	registerLibFunc(&shimCheckMicrophonePermission, libHandle, "shim_check_microphone_permission")
+	registerLibFunc(&shimRequestCameraPermission, libHandle, "shim_request_camera_permission")
+	registerLibFunc(&shimRequestMicrophonePermission, libHandle, "shim_request_microphone_permission")
 
 	// Video Track Source
-	purego.RegisterLibFunc(&shimVideoTrackSourceCreate, libHandle, "shim_video_track_source_create")
-	purego.RegisterLibFunc(&shimVideoTrackSourcePushFrame, libHandle, "shim_video_track_source_push_frame")
-	purego.RegisterLibFunc(&shimPeerConnectionAddVideoTrackFromSource, libHandle, "shim_peer_connection_add_video_track_from_source")
-	purego.RegisterLibFunc(&shimVideoTrackSourceDestroy, libHandle, "shim_video_track_source_destroy")
+	registerLibFunc(&shimVideoTrackSourceCreate, libHandle, "shim_video_track_source_create")
+	registerLibFunc(&shimVideoTrackSourcePushFrame, libHandle, "shim_video_track_source_push_frame")
+	registerLibFunc(&shimPeerConnectionAddVideoTrackFromSource, libHandle, "shim_peer_connection_add_video_track_from_source")
+	registerLibFunc(&shimVideoTrackSourceDestroy, libHandle, "shim_video_track_source_destroy")
 
 	// Audio Track Source
-	purego.RegisterLibFunc(&shimAudioTrackSourceCreate, libHandle, "shim_audio_track_source_create")
-	purego.RegisterLibFunc(&shimAudioTrackSourcePushFrame, libHandle, "shim_audio_track_source_push_frame")
-	purego.RegisterLibFunc(&shimPeerConnectionAddAudioTrackFromSource, libHandle, "shim_peer_connection_add_audio_track_from_source")
-	purego.RegisterLibFunc(&shimAudioTrackSourceDestroy, libHandle, "shim_audio_track_source_destroy")
+	registerLibFunc(&shimAudioTrackSourceCreate, libHandle, "shim_audio_track_source_create")
+	registerLibFunc(&shimAudioTrackSourcePushFrame, libHandle, "shim_audio_track_source_push_frame")
+	registerLibFunc(&shimPeerConnectionAddAudioTrackFromSource, libHandle, "shim_peer_connection_add_audio_track_from_source")
+	registerLibFunc(&shimAudioTrackSourceDestroy, libHandle, "shim_audio_track_source_destroy")
 
 	// Remote Track Sink
-	purego.RegisterLibFunc(&shimTrackSetVideoSink, libHandle, "shim_track_set_video_sink")
-	purego.RegisterLibFunc(&shimTrackSetAudioSink, libHandle, "shim_track_set_audio_sink")
-	purego.RegisterLibFunc(&shimTrackRemoveVideoSink, libHandle, "shim_track_remove_video_sink")
-	purego.RegisterLibFunc(&shimTrackRemoveAudioSink, libHandle, "shim_track_remove_audio_sink")
-	purego.RegisterLibFunc(&shimTrackKind, libHandle, "shim_track_kind")
-	purego.RegisterLibFunc(&shimTrackID, libHandle, "shim_track_id")
+	registerLibFunc(&shimTrackSetVideoSink, libHandle, "shim_track_set_video_sink")
+	registerLibFunc(&shimTrackSetAudioSink, libHandle, "shim_track_set_audio_sink")
+	registerLibFunc(&shimTrackRemoveVideoSink, libHandle, "shim_track_remove_video_sink")
+	registerLibFunc(&shimTrackRemoveAudioSink, libHandle, "shim_track_remove_audio_sink")
+	registerLibFunc(&shimTrackKind, libHandle, "shim_track_kind")
+	registerLibFunc(&shimTrackID, libHandle, "shim_track_id")
 
 	// RTPSender Parameters
-	purego.RegisterLibFunc(&shimRTPSenderGetParameters, libHandle, "shim_rtp_sender_get_parameters")
-	purego.RegisterLibFunc(&shimRTPSenderSetParameters, libHandle, "shim_rtp_sender_set_parameters")
-	purego.RegisterLibFunc(&shimRTPSenderGetTrack, libHandle, "shim_rtp_sender_get_track")
-	purego.RegisterLibFunc(&shimRTPSenderGetStats, libHandle, "shim_rtp_sender_get_stats")
-	purego.RegisterLibFunc(&shimRTPSenderSetOnRTCPFeedback, libHandle, "shim_rtp_sender_set_on_rtcp_feedback")
-	purego.RegisterLibFunc(&shimRTPSenderSetLayerActive, libHandle, "shim_rtp_sender_set_layer_active")
-	purego.RegisterLibFunc(&shimRTPSenderSetLayerBitrate, libHandle, "shim_rtp_sender_set_layer_bitrate")
-	purego.RegisterLibFunc(&shimRTPSenderGetActiveLayers, libHandle, "shim_rtp_sender_get_active_layers")
+	registerLibFunc(&shimRTPSenderGetParameters, libHandle, "shim_rtp_sender_get_parameters")
+	registerLibFunc(&shimRTPSenderSetParameters, libHandle, "shim_rtp_sender_set_parameters")
+	registerLibFunc(&shimRTPSenderGetTrack, libHandle, "shim_rtp_sender_get_track")
+	registerLibFunc(&shimRTPSenderGetStats, libHandle, "shim_rtp_sender_get_stats")
+	registerLibFunc(&shimRTPSenderSetOnRTCPFeedback, libHandle, "shim_rtp_sender_set_on_rtcp_feedback")
+	registerLibFunc(&shimRTPSenderSetLayerActive, libHandle, "shim_rtp_sender_set_layer_active")
+	registerLibFunc(&shimRTPSenderSetLayerBitrate, libHandle, "shim_rtp_sender_set_layer_bitrate")
+	registerLibFunc(&shimRTPSenderGetActiveLayers, libHandle, "shim_rtp_sender_get_active_layers")
 
 	// RTPReceiver
-	purego.RegisterLibFunc(&shimRTPReceiverGetTrack, libHandle, "shim_rtp_receiver_get_track")
-	purego.RegisterLibFunc(&shimRTPReceiverGetStats, libHandle, "shim_rtp_receiver_get_stats")
-	purego.RegisterLibFunc(&shimRTPReceiverSetJitterBufferMinDelay, libHandle, "shim_rtp_receiver_set_jitter_buffer_min_delay")
+	registerLibFunc(&shimRTPReceiverGetTrack, libHandle, "shim_rtp_receiver_get_track")
+	registerLibFunc(&shimRTPReceiverGetStats, libHandle, "shim_rtp_receiver_get_stats")
+	registerLibFunc(&shimRTPReceiverSetJitterBufferMinDelay, libHandle, "shim_rtp_receiver_set_jitter_buffer_min_delay")
 
 	// RTPTransceiver
-	purego.RegisterLibFunc(&shimTransceiverGetDirection, libHandle, "shim_transceiver_get_direction")
-	purego.RegisterLibFunc(&shimTransceiverSetDirection, libHandle, "shim_transceiver_set_direction")
-	purego.RegisterLibFunc(&shimTransceiverGetCurrentDirection, libHandle, "shim_transceiver_get_current_direction")
-	purego.RegisterLibFunc(&shimTransceiverStop, libHandle, "shim_transceiver_stop")
-	purego.RegisterLibFunc(&shimTransceiverMid, libHandle, "shim_transceiver_mid")
-	purego.RegisterLibFunc(&shimTransceiverGetSender, libHandle, "shim_transceiver_get_sender")
-	purego.RegisterLibFunc(&shimTransceiverGetReceiver, libHandle, "shim_transceiver_get_receiver")
-	purego.RegisterLibFunc(&shimTransceiverSetCodecPreferences, libHandle, "shim_transceiver_set_codec_preferences")
-	purego.RegisterLibFunc(&shimTransceiverGetCodecPreferences, libHandle, "shim_transceiver_get_codec_preferences")
+	registerLibFunc(&shimTransceiverGetDirection, libHandle, "shim_transceiver_get_direction")
+	registerLibFunc(&shimTransceiverSetDirection, libHandle, "shim_transceiver_set_direction")
+	registerLibFunc(&shimTransceiverGetCurrentDirection, libHandle, "shim_transceiver_get_current_direction")
+	registerLibFunc(&shimTransceiverStop, libHandle, "shim_transceiver_stop")
+	registerLibFunc(&shimTransceiverMid, libHandle, "shim_transceiver_mid")
+	registerLibFunc(&shimTransceiverGetSender, libHandle, "shim_transceiver_get_sender")
+	registerLibFunc(&shimTransceiverGetReceiver, libHandle, "shim_transceiver_get_receiver")
+	registerLibFunc(&shimTransceiverSetCodecPreferences, libHandle, "shim_transceiver_set_codec_preferences")
+	registerLibFunc(&shimTransceiverGetCodecPreferences, libHandle, "shim_transceiver_get_codec_preferences")
 
 	// PeerConnection Extended
-	purego.RegisterLibFunc(&shimPeerConnectionAddTransceiver, libHandle, "shim_peer_connection_add_transceiver")
-	purego.RegisterLibFunc(&shimPeerConnectionGetSenders, libHandle, "shim_peer_connection_get_senders")
-	purego.RegisterLibFunc(&shimPeerConnectionGetReceivers, libHandle, "shim_peer_connection_get_receivers")
-	purego.RegisterLibFunc(&shimPeerConnectionGetTransceivers, libHandle, "shim_peer_connection_get_transceivers")
-	purego.RegisterLibFunc(&shimPeerConnectionRestartICE, libHandle, "shim_peer_connection_restart_ice")
-	purego.RegisterLibFunc(&shimPeerConnectionGetStats, libHandle, "shim_peer_connection_get_stats")
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnSignalingStateChange, libHandle, "shim_peer_connection_set_on_signaling_state_change")
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnICEConnectionStateChange, libHandle, "shim_peer_connection_set_on_ice_connection_state_change")
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnICEGatheringStateChange, libHandle, "shim_peer_connection_set_on_ice_gathering_state_change")
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnNegotiationNeeded, libHandle, "shim_peer_connection_set_on_negotiation_needed")
+	registerLibFunc(&shimPeerConnectionAddTransceiver, libHandle, "shim_peer_connection_add_transceiver")
+	registerLibFunc(&shimPeerConnectionGetSenders, libHandle, "shim_peer_connection_get_senders")
+	registerLibFunc(&shimPeerConnectionGetReceivers, libHandle, "shim_peer_connection_get_receivers")
+	registerLibFunc(&shimPeerConnectionGetTransceivers, libHandle, "shim_peer_connection_get_transceivers")
+	registerLibFunc(&shimPeerConnectionRestartICE, libHandle, "shim_peer_connection_restart_ice")
+	registerLibFunc(&shimPeerConnectionGetStats, libHandle, "shim_peer_connection_get_stats")
+	registerLibFunc(&shimPeerConnectionSetOnSignalingStateChange, libHandle, "shim_peer_connection_set_on_signaling_state_change")
+	registerLibFunc(&shimPeerConnectionSetOnICEConnectionStateChange, libHandle, "shim_peer_connection_set_on_ice_connection_state_change")
+	registerLibFunc(&shimPeerConnectionSetOnICEGatheringStateChange, libHandle, "shim_peer_connection_set_on_ice_gathering_state_change")
+	registerLibFunc(&shimPeerConnectionSetOnNegotiationNeeded, libHandle, "shim_peer_connection_set_on_negotiation_needed")
 
 	// RTPSender Scalability Mode
-	purego.RegisterLibFunc(&shimRTPSenderSetScalabilityMode, libHandle, "shim_rtp_sender_set_scalability_mode")
-	purego.RegisterLibFunc(&shimRTPSenderGetScalabilityMode, libHandle, "shim_rtp_sender_get_scalability_mode")
+	registerLibFunc(&shimRTPSenderSetScalabilityMode, libHandle, "shim_rtp_sender_set_scalability_mode")
+	registerLibFunc(&shimRTPSenderGetScalabilityMode, libHandle, "shim_rtp_sender_get_scalability_mode")
 
 	// Codec Capabilities
-	purego.RegisterLibFunc(&shimGetSupportedVideoCodecs, libHandle, "shim_get_supported_video_codecs")
-	purego.RegisterLibFunc(&shimGetSupportedAudioCodecs, libHandle, "shim_get_supported_audio_codecs")
-	purego.RegisterLibFunc(&shimIsCodecSupported, libHandle, "shim_is_codec_supported")
+	registerLibFunc(&shimGetSupportedVideoCodecs, libHandle, "shim_get_supported_video_codecs")
+	registerLibFunc(&shimGetSupportedAudioCodecs, libHandle, "shim_get_supported_audio_codecs")
+	registerLibFunc(&shimIsCodecSupported, libHandle, "shim_is_codec_supported")
 
 	// RTPSender Codec API
-	purego.RegisterLibFunc(&shimRTPSenderGetNegotiatedCodecs, libHandle, "shim_rtp_sender_get_negotiated_codecs")
-	purego.RegisterLibFunc(&shimRTPSenderSetPreferredCodec, libHandle, "shim_rtp_sender_set_preferred_codec")
+	registerLibFunc(&shimRTPSenderGetNegotiatedCodecs, libHandle, "shim_rtp_sender_get_negotiated_codecs")
+	registerLibFunc(&shimRTPSenderSetPreferredCodec, libHandle, "shim_rtp_sender_set_preferred_codec")
 
 	// Bandwidth Estimation
-	purego.RegisterLibFunc(&shimPeerConnectionSetOnBandwidthEstimate, libHandle, "shim_peer_connection_set_on_bandwidth_estimate")
-	purego.RegisterLibFunc(&shimPeerConnectionGetBandwidthEstimate, libHandle, "shim_peer_connection_get_bandwidth_estimate")
+	registerLibFunc(&shimPeerConnectionSetOnBandwidthEstimate, libHandle, "shim_peer_connection_set_on_bandwidth_estimate")
+	registerLibFunc(&shimPeerConnectionGetBandwidthEstimate, libHandle, "shim_peer_connection_get_bandwidth_estimate")
 
 	return err
 }

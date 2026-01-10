@@ -182,8 +182,8 @@ func IdealInt(v int) IntConstraint {
 }
 
 // RangeInt creates an IntConstraint with min and max bounds.
-func RangeInt(min, max int) IntConstraint {
-	return IntConstraint{Min: &min, Max: &max}
+func RangeInt(minVal, maxVal int) IntConstraint {
+	return IntConstraint{Min: &minVal, Max: &maxVal}
 }
 
 // ExactFloat creates a FloatConstraint that requires an exact value.
@@ -197,6 +197,6 @@ func IdealFloat(v float64) FloatConstraint {
 }
 
 // RangeFloat creates a FloatConstraint with min and max bounds.
-func RangeFloat(min, max float64) FloatConstraint {
-	return FloatConstraint{Min: &min, Max: &max}
+func RangeFloat(minVal, maxVal float64) FloatConstraint {
+	return FloatConstraint{Min: &minVal, Max: &maxVal}
 }

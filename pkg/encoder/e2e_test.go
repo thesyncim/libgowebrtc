@@ -17,50 +17,63 @@ func TestMain(m *testing.M) {
 }
 
 func TestH264EncoderEncode(t *testing.T) {
-	enc, err := NewH264Encoder(codec.H264Config{
-		Width:   640,
-		Height:  480,
-		Bitrate: 1_000_000,
-		FPS:     30,
-	})
-	if err != nil {
-		t.Fatalf("NewH264Encoder: %v", err)
-	}
-	defer enc.Close()
-
-	// Create gray test frame
-	src := frame.NewI420Frame(640, 480)
-	for i := range src.Data[0] {
-		src.Data[0][i] = 128
-	}
-	for i := range src.Data[1] {
-		src.Data[1][i] = 128
-		src.Data[2][i] = 128
+	testCases := []struct {
+		name     string
+		preferHW bool
+	}{
+		{"Software_OpenH264", false},
+		{"Hardware_VideoToolbox", true},
 	}
 
-	dst := make([]byte, enc.MaxEncodedSize())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			enc, err := NewH264Encoder(codec.H264Config{
+				Width:    640,
+				Height:   480,
+				Bitrate:  1_000_000,
+				FPS:      30,
+				PreferHW: tc.preferHW,
+			})
+			if err != nil {
+				t.Skipf("H264 encoder (%s) not available: %v", tc.name, err)
+			}
+			defer enc.Close()
 
-	// Encode first frame (should be keyframe)
-	result, err := encodeUntilOutput(t, enc, src, dst, true)
-	if err != nil {
-		t.Fatalf("EncodeInto: %v", err)
-	}
-	if result.N == 0 {
-		t.Error("Expected encoded data, got 0 bytes")
-	}
-	if !result.IsKeyframe {
-		t.Error("First frame with forceKeyframe=true should be keyframe")
-	}
-	t.Logf("Encoded keyframe: %d bytes", result.N)
+			// Create gray test frame
+			src := frame.NewI420Frame(640, 480)
+			for i := range src.Data[0] {
+				src.Data[0][i] = 128
+			}
+			for i := range src.Data[1] {
+				src.Data[1][i] = 128
+				src.Data[2][i] = 128
+			}
 
-	// Encode more frames
-	for i := 1; i < 10; i++ {
-		src.PTS = uint32(i * 33)
-		result, err := encodeUntilOutput(t, enc, src, dst, false)
-		if err != nil {
-			t.Fatalf("EncodeInto frame %d: %v", i, err)
-		}
-		t.Logf("Frame %d: %d bytes, keyframe=%v", i, result.N, result.IsKeyframe)
+			dst := make([]byte, enc.MaxEncodedSize())
+
+			// Encode first frame (should be keyframe)
+			result, err := encodeUntilOutput(t, enc, src, dst, true)
+			if err != nil {
+				t.Fatalf("EncodeInto: %v", err)
+			}
+			if result.N == 0 {
+				t.Error("Expected encoded data, got 0 bytes")
+			}
+			if !result.IsKeyframe {
+				t.Error("First frame with forceKeyframe=true should be keyframe")
+			}
+			t.Logf("Encoded keyframe: %d bytes (preferHW=%v)", result.N, tc.preferHW)
+
+			// Encode more frames
+			for i := 1; i < 10; i++ {
+				src.PTS = uint32(i * 33)
+				result, err := encodeUntilOutput(t, enc, src, dst, false)
+				if err != nil {
+					t.Fatalf("EncodeInto frame %d: %v", i, err)
+				}
+				t.Logf("Frame %d: %d bytes, keyframe=%v", i, result.N, result.IsKeyframe)
+			}
+		})
 	}
 }
 

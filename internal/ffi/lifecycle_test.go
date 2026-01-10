@@ -183,11 +183,8 @@ func TestPeerConnection_WithTracks_Destroy(t *testing.T) {
 		t.Log("audio track creation returned 0 (may be expected)")
 	}
 
-	// Create data channel
-	dc := PeerConnectionCreateDataChannel(handle, "test-dc", true, -1, "")
-	if dc != 0 {
-		// Don't need to explicitly destroy - PC destroy handles it
-	}
+	// Create data channel (PC destroy handles cleanup, so we just assign to _ to avoid unused warning)
+	_ = PeerConnectionCreateDataChannel(handle, "test-dc", true, -1, "")
 
 	// Destroy should clean up everything
 	PeerConnectionClose(handle)

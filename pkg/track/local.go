@@ -63,8 +63,8 @@ type BandwidthEstimate struct {
 // BandwidthEstimateSource is a function that returns the current BWE.
 type BandwidthEstimateSource func() *BandwidthEstimate
 
-// TrackParameters mirrors browser RTCRtpEncodingParameters for manual control.
-type TrackParameters struct {
+// Parameters mirrors browser RTCRtpEncodingParameters for manual control.
+type Parameters struct {
 	Active                bool
 	MaxBitrate            uint32
 	MaxFramerate          float64
@@ -455,7 +455,7 @@ func (t *VideoTrack) SetFramerate(fps float64) error {
 }
 
 // SetParameters allows manual control like browser RTCRtpSender.setParameters().
-func (t *VideoTrack) SetParameters(params TrackParameters) error {
+func (t *VideoTrack) SetParameters(params Parameters) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -468,13 +468,17 @@ func (t *VideoTrack) SetParameters(params TrackParameters) error {
 	if params.MaxBitrate > 0 {
 		t.adaptation.currentBitrate = params.MaxBitrate
 		if t.enc != nil {
-			t.enc.SetBitrate(params.MaxBitrate)
+			if err := t.enc.SetBitrate(params.MaxBitrate); err != nil {
+				return err
+			}
 		}
 	}
 	if params.MaxFramerate > 0 {
 		t.adaptation.currentFramerate = params.MaxFramerate
 		if t.enc != nil {
-			t.enc.SetFramerate(params.MaxFramerate)
+			if err := t.enc.SetFramerate(params.MaxFramerate); err != nil {
+				return err
+			}
 		}
 	}
 	if params.ScaleResolutionDownBy > 0 {
@@ -579,10 +583,11 @@ func (t *VideoTrack) adapt(bwe *BandwidthEstimate) {
 		targetBps = int64(t.config.MaxBitrate)
 	}
 
-	// Bitrate adaptation
+	// Bitrate adaptation (errors ignored: best-effort adaptation, encoder continues with previous settings)
 	if t.config.AutoBitrate && uint32(targetBps) != t.adaptation.currentBitrate {
-		t.adaptation.currentBitrate = uint32(targetBps)
-		t.enc.SetBitrate(uint32(targetBps))
+		if err := t.enc.SetBitrate(uint32(targetBps)); err == nil {
+			t.adaptation.currentBitrate = uint32(targetBps)
+		}
 	}
 
 	// Resolution adaptation (when bitrate too low for current resolution)
@@ -593,12 +598,13 @@ func (t *VideoTrack) adapt(bwe *BandwidthEstimate) {
 		}
 	}
 
-	// Framerate adaptation
+	// Framerate adaptation (errors ignored: best-effort adaptation, encoder continues with previous settings)
 	if t.config.AutoFramerate {
 		fps := t.calculateFramerate(targetBps)
 		if fps != t.adaptation.currentFramerate {
-			t.adaptation.currentFramerate = fps
-			t.enc.SetFramerate(fps)
+			if err := t.enc.SetFramerate(fps); err == nil {
+				t.adaptation.currentFramerate = fps
+			}
 		}
 	}
 }
@@ -658,12 +664,11 @@ func (t *VideoTrack) calculateScale(targetBps int64) float64 {
 			return minScale
 		}
 		return 2.0
-	} else {
-		if 4.0 > minScale {
-			return minScale
-		}
-		return 4.0
 	}
+	if 4.0 > minScale {
+		return minScale
+	}
+	return 4.0
 }
 
 // calculateFramerate determines the target framerate based on available bandwidth.
