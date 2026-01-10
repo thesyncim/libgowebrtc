@@ -247,6 +247,11 @@ func LoadLibrary() error {
 		}
 	}
 
+	// On Linux, preload system libraries that the shim depends on
+	if runtime.GOOS == "linux" {
+		preloadLinuxDeps()
+	}
+
 	libPath, downloadErr, err := resolveLibrary()
 	if err != nil {
 		return err
@@ -595,5 +600,20 @@ func ShimError(code int32) error {
 		return ErrRenegotiationNeeded
 	default:
 		return fmt.Errorf("unknown shim error: %d", code)
+	}
+}
+
+// preloadLinuxDeps preloads system libraries required by the shim on Linux.
+// This ensures dependencies like libgbm are available with RTLD_GLOBAL
+// before the shim is loaded.
+func preloadLinuxDeps() {
+	// Libraries that the shim may depend on for GBM/DRM support
+	libs := []string{
+		"libgbm.so.1",
+		"libdrm.so.2",
+	}
+	for _, lib := range libs {
+		// Best effort - ignore errors as these may not be needed on all systems
+		_, _ = dlopenLibrary(lib, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 	}
 }

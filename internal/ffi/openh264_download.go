@@ -409,7 +409,7 @@ func extractBzip2(srcPath, destPath string) error {
 	}
 	defer out.Close()
 
-	if _, err := io.CopyN(out, reader, 100<<20); err != nil && !errors.Is(err, io.EOF) {
+	if _, err := io.Copy(out, reader); err != nil {
 		return err
 	}
 	return out.Sync()
