@@ -78,14 +78,14 @@ func TestVideoDecoder_DecodeEncodedFrame(t *testing.T) {
 			// Encode a frame
 			srcFrame := testutil.CreateTestVideoFrame(320, 240)
 			encBuf := make([]byte, enc.MaxEncodedSize())
-			result, err := enc.EncodeInto(srcFrame, encBuf, true)
+			result, err := encodeUntilOutput(t, enc, srcFrame, encBuf, true)
 			if err != nil {
 				t.Fatalf("encode: %v", err)
 			}
 
 			// Decode it
 			dstFrame := frame.NewI420Frame(320, 240)
-			err = dec.DecodeInto(encBuf[:result.N], dstFrame, 0, true)
+			err = decodeUntilOutput(t, dec, encBuf[:result.N], dstFrame, 0, true)
 			if err != nil {
 				t.Fatalf("decode: %v", err)
 			}
@@ -125,7 +125,7 @@ func TestVideoDecoder_DecodeSequence(t *testing.T) {
 			for i := 0; i < 20; i++ {
 				srcFrame.PTS = uint32(i * 3000)
 
-				result, err := enc.EncodeInto(srcFrame, encBuf, i == 0)
+				result, err := encodeUntilOutput(t, enc, srcFrame, encBuf, i == 0)
 				if err != nil {
 					t.Fatalf("encode frame %d: %v", i, err)
 				}
@@ -252,7 +252,10 @@ func TestVideoDecoder_ConcurrentDecode(t *testing.T) {
 
 			srcFrame := testutil.CreateGrayVideoFrame(320, 240)
 			encBuf := make([]byte, enc.MaxEncodedSize())
-			result, _ := enc.EncodeInto(srcFrame, encBuf, true)
+			result, err := encodeUntilOutput(t, enc, srcFrame, encBuf, true)
+			if err != nil {
+				t.Fatalf("encode: %v", err)
+			}
 			encodedData := make([]byte, result.N)
 			copy(encodedData, encBuf[:result.N])
 			enc.Close()

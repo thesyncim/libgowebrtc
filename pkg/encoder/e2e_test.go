@@ -41,7 +41,7 @@ func TestH264EncoderEncode(t *testing.T) {
 	dst := make([]byte, enc.MaxEncodedSize())
 
 	// Encode first frame (should be keyframe)
-	result, err := enc.EncodeInto(src, dst, true)
+	result, err := encodeUntilOutput(t, enc, src, dst, true)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestH264EncoderEncode(t *testing.T) {
 	// Encode more frames
 	for i := 1; i < 10; i++ {
 		src.PTS = uint32(i * 33)
-		result, err := enc.EncodeInto(src, dst, false)
+		result, err := encodeUntilOutput(t, enc, src, dst, false)
 		if err != nil {
 			t.Fatalf("EncodeInto frame %d: %v", i, err)
 		}
@@ -87,7 +87,7 @@ func TestVP8EncoderEncode(t *testing.T) {
 
 	dst := make([]byte, enc.MaxEncodedSize())
 
-	result, err := enc.EncodeInto(src, dst, true)
+	result, err := encodeUntilOutput(t, enc, src, dst, true)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestVP9EncoderEncode(t *testing.T) {
 
 	dst := make([]byte, enc.MaxEncodedSize())
 
-	result, err := enc.EncodeInto(src, dst, true)
+	result, err := encodeUntilOutput(t, enc, src, dst, true)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}
@@ -195,10 +195,16 @@ func TestEncoderRequestKeyFrame(t *testing.T) {
 	dst := make([]byte, enc.MaxEncodedSize())
 
 	// Encode a few P-frames
-	enc.EncodeInto(src, dst, true) // First keyframe
+	_, err = encodeUntilOutput(t, enc, src, dst, true) // First keyframe
+	if err != nil {
+		t.Fatalf("EncodeInto: %v", err)
+	}
 	for i := 0; i < 5; i++ {
 		src.PTS = uint32((i + 1) * 33)
-		enc.EncodeInto(src, dst, false)
+		_, err = encodeUntilOutput(t, enc, src, dst, false)
+		if err != nil {
+			t.Fatalf("EncodeInto: %v", err)
+		}
 	}
 
 	// Request keyframe
@@ -206,7 +212,7 @@ func TestEncoderRequestKeyFrame(t *testing.T) {
 
 	// Next encode should be keyframe
 	src.PTS = uint32(6 * 33)
-	result, err := enc.EncodeInto(src, dst, false)
+	result, err := encodeUntilOutput(t, enc, src, dst, false)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}

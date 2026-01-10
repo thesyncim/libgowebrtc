@@ -59,6 +59,12 @@ if(APPLE)
     )
 elseif(UNIX)
     set(LIBWEBRTC_LIBRARY ${LIBWEBRTC_DIR}/lib/libwebrtc.a)
+    # Additional codec factory libraries for Linux (same as macOS)
+    set(LIBWEBRTC_BUILTIN_ENCODER ${LIBWEBRTC_DIR}/lib/libbuiltin_video_encoder_factory.a)
+    set(LIBWEBRTC_BUILTIN_DECODER ${LIBWEBRTC_DIR}/lib/libbuiltin_video_decoder_factory.a)
+    set(LIBWEBRTC_INTERNAL_CODECS ${LIBWEBRTC_DIR}/lib/librtc_internal_video_codecs.a)
+    set(LIBWEBRTC_SIMULCAST_ADAPTER ${LIBWEBRTC_DIR}/lib/librtc_simulcast_encoder_adapter.a)
+    set(LIBWEBRTC_FALLBACK_WRAPPERS ${LIBWEBRTC_DIR}/lib/librtc_software_fallback_wrappers.a)
     set(PLATFORM_LIBS
         pthread
         dl
@@ -138,8 +144,9 @@ elseif(WIN32)
 endif()
 
 # Link libraries
-# Order matters: specific libraries first, then libwebrtc.a, then frameworks
-if(APPLE AND LIBWEBRTC_BUILTIN_ENCODER AND LIBWEBRTC_BUILTIN_DECODER
+# Order matters: specific libraries first, then libwebrtc.a, then frameworks/platform libs
+# Check for codec factory libraries (available on macOS and Linux)
+if(LIBWEBRTC_BUILTIN_ENCODER AND LIBWEBRTC_BUILTIN_DECODER
     AND EXISTS "${LIBWEBRTC_BUILTIN_ENCODER}" AND EXISTS "${LIBWEBRTC_BUILTIN_DECODER}")
     set(ADDITIONAL_LIBS "")
     if(EXISTS ${LIBWEBRTC_INTERNAL_CODECS})

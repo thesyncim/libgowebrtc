@@ -748,33 +748,41 @@ func (t *VideoTrack) Close() error {
 func (t *VideoTrack) createEncoder() (encoder.VideoEncoder, error) {
 	switch t.codec {
 	case codec.H264:
-		return encoder.NewH264Encoder(codec.H264Config{
-			Width:   t.config.Width,
-			Height:  t.config.Height,
-			Bitrate: t.config.Bitrate,
-			FPS:     t.config.FPS,
-		})
+		cfg := codec.DefaultH264Config(t.config.Width, t.config.Height)
+		if t.config.Bitrate != 0 {
+			cfg.Bitrate = t.config.Bitrate
+		}
+		if t.config.FPS != 0 {
+			cfg.FPS = t.config.FPS
+		}
+		return encoder.NewH264Encoder(cfg)
 	case codec.VP8:
-		return encoder.NewVP8Encoder(codec.VP8Config{
-			Width:   t.config.Width,
-			Height:  t.config.Height,
-			Bitrate: t.config.Bitrate,
-			FPS:     t.config.FPS,
-		})
+		cfg := codec.DefaultVP8Config(t.config.Width, t.config.Height)
+		if t.config.Bitrate != 0 {
+			cfg.Bitrate = t.config.Bitrate
+		}
+		if t.config.FPS != 0 {
+			cfg.FPS = t.config.FPS
+		}
+		return encoder.NewVP8Encoder(cfg)
 	case codec.VP9:
-		return encoder.NewVP9Encoder(codec.VP9Config{
-			Width:   t.config.Width,
-			Height:  t.config.Height,
-			Bitrate: t.config.Bitrate,
-			FPS:     t.config.FPS,
-		})
+		cfg := codec.DefaultVP9Config(t.config.Width, t.config.Height)
+		if t.config.Bitrate != 0 {
+			cfg.Bitrate = t.config.Bitrate
+		}
+		if t.config.FPS != 0 {
+			cfg.FPS = t.config.FPS
+		}
+		return encoder.NewVP9Encoder(cfg)
 	case codec.AV1:
-		return encoder.NewAV1Encoder(codec.AV1Config{
-			Width:   t.config.Width,
-			Height:  t.config.Height,
-			Bitrate: t.config.Bitrate,
-			FPS:     t.config.FPS,
-		})
+		cfg := codec.DefaultAV1Config(t.config.Width, t.config.Height)
+		if t.config.Bitrate != 0 {
+			cfg.Bitrate = t.config.Bitrate
+		}
+		if t.config.FPS != 0 {
+			cfg.FPS = t.config.FPS
+		}
+		return encoder.NewAV1Encoder(cfg)
 	default:
 		return nil, ErrInvalidConfig
 	}

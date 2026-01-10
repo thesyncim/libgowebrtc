@@ -5,6 +5,13 @@ func CreateVideoDecoder(codec CodecType) (uintptr, error) {
 	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
 	}
+	if codec == CodecH264 {
+		if err := ensureOpenH264(true); err != nil {
+			if !shouldIgnoreOpenH264Error(err) {
+				return 0, err
+			}
+		}
+	}
 	var errBuf ShimErrorBuffer
 	decoder := shimVideoDecoderCreate(int32(codec), errBuf.Ptr())
 	if decoder == 0 {

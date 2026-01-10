@@ -31,6 +31,8 @@
 #include "api/scoped_refptr.h"
 #include "rtc_base/ref_counted_object.h"
 #include "media/base/media_channel.h"
+#include "media/engine/internal_encoder_factory.h"
+#include "media/engine/internal_decoder_factory.h"
 #include "rtc_base/time_utils.h"
 
 // Include internal structure definition
@@ -127,9 +129,14 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
 
     auto pc = std::make_unique<ShimPeerConnection>();
 
-    // Create encoder/decoder factories
-    auto video_encoder_factory = webrtc::CreateBuiltinVideoEncoderFactory();
-    auto video_decoder_factory = webrtc::CreateBuiltinVideoDecoderFactory();
+    // Create encoder/decoder factories.
+    bool use_software = shim::ShouldUseSoftwareCodecs();
+    auto video_encoder_factory = use_software
+        ? std::make_unique<webrtc::InternalEncoderFactory>()
+        : webrtc::CreateBuiltinVideoEncoderFactory();
+    auto video_decoder_factory = use_software
+        ? std::make_unique<webrtc::InternalDecoderFactory>()
+        : webrtc::CreateBuiltinVideoDecoderFactory();
 
     // Create PeerConnectionFactory
     pc->factory = webrtc::CreatePeerConnectionFactory(

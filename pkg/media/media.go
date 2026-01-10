@@ -568,7 +568,7 @@ func GetDisplayMedia(c DisplayConstraints) (*MediaStream, error) {
 		}
 		codecType := c.Video.Codec
 		if codecType == 0 {
-			codecType = codec.VP9 // VP9 is better for screen content
+			codecType = codec.H264
 		}
 		bitrate := c.Video.Bitrate
 		if bitrate == 0 {

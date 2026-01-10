@@ -41,6 +41,9 @@ webrtc::Thread* GetSignalingThread();
 webrtc::Thread* GetWorkerThread();
 webrtc::Thread* GetNetworkThread();
 
+// Software codec preference
+bool ShouldUseSoftwareCodecs();
+
 // Codec type conversions
 webrtc::VideoCodecType ToWebRTCCodecType(ShimCodecType codec);
 std::string CodecTypeToString(ShimCodecType codec);

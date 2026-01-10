@@ -523,6 +523,7 @@ func DefaultH264Config(width, height int) H264Config {
 		KeyInterval: 60, // 2 seconds at 30fps
 		Profile:     H264ProfileConstrainedBase,
 		LowDelay:    true,
+		PreferHW:    defaultPreferHWH264(),
 	}
 }
 
@@ -538,6 +539,7 @@ func DefaultVP8Config(width, height int) VP8Config {
 		Deadline:       2, // realtime
 		LowDelay:       true,
 		ErrorResilient: true,
+		PreferHW:       defaultPreferHW(),
 	}
 }
 
@@ -553,6 +555,7 @@ func DefaultVP9Config(width, height int) VP9Config {
 		Profile:     VP9Profile0,
 		Speed:       6,
 		LowDelay:    true,
+		PreferHW:    defaultPreferHW(),
 	}
 }
 
@@ -568,6 +571,7 @@ func DefaultAV1Config(width, height int) AV1Config {
 		Profile:     AV1ProfileMain,
 		Speed:       8, // AV1 is slow, use faster preset
 		LowDelay:    true,
+		PreferHW:    defaultPreferHW(),
 	}
 }
 

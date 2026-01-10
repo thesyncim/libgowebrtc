@@ -54,7 +54,7 @@ func (e *av1Encoder) init() error {
 		BitrateBps:       e.config.Bitrate,
 		Framerate:        float32(e.config.FPS),
 		KeyframeInterval: int32(e.config.KeyInterval),
-		PreferHW:         1,
+		PreferHW:         boolToInt32(e.config.PreferHW),
 	}
 
 	handle, err := ffi.CreateVideoEncoder(ffi.CodecAV1, ffiConfig)

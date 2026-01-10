@@ -118,7 +118,16 @@ func TestVideoEncoder_EncodeAfterDestroy(t *testing.T) {
 	vPlane := make([]byte, (width/2)*(height/2))
 	dst := make([]byte, width*height*2)
 
-	n, _, err := VideoEncoderEncodeInto(handle, yPlane, uPlane, vPlane, width, width/2, width/2, 0, true, dst)
+	n, _, err := encodeUntilOutput(
+		t,
+		handle,
+		yPlane, uPlane, vPlane,
+		width, width/2, width/2,
+		0,
+		true,
+		dst,
+		5,
+	)
 	if err != nil {
 		t.Fatalf("encode before destroy: %v", err)
 	}

@@ -241,6 +241,14 @@ func LoadLibrary() error {
 		return nil
 	}
 
+	if shouldPreferSoftwareCodecs() {
+		if err := ensureOpenH264(true); err != nil {
+			if !shouldIgnoreOpenH264Error(err) {
+				return err
+			}
+		}
+	}
+
 	libPath, downloadErr, err := resolveLibrary()
 	if err != nil {
 		return err

@@ -102,6 +102,9 @@ fi
 if [ -f "$REPO_ROOT/NOTICE" ]; then
     cp "$REPO_ROOT/NOTICE" "$tmp_dir/"
 fi
+if [ -f "$REPO_ROOT/shim/shim.h" ]; then
+    cp "$REPO_ROOT/shim/shim.h" "$tmp_dir/"
+fi
 
 tar -czf "$asset_path" -C "$tmp_dir" .
 

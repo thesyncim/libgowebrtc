@@ -5,17 +5,13 @@
     "basic": {
       "release_tag": "shim-v0.1.0",
       "assets": {
-        "darwin_amd64": {
-          "file": "libwebrtc_shim_darwin_amd64_basic.tar.gz",
-          "sha256": "TODO"
-        },
         "darwin_arm64": {
           "file": "libwebrtc_shim_darwin_arm64_basic.tar.gz",
           "sha256": "3f8ef12078c44e8c9516bd3af65edda31b1dce5b7aad702238c9f2f2c842c5e8"
         },
         "linux_amd64": {
           "file": "libwebrtc_shim_linux_amd64_basic.tar.gz",
-          "sha256": "dab1a2f85691ebd6fc0d43699d8339d3a37102147fb27d8bcd2b67254754e2df"
+          "sha256": "5469a88dbfe36500665e8ccec7a74d460ccfe681f7f8604e8cddfdf5c5bde601"
         },
         "linux_arm64": {
           "file": "libwebrtc_shim_linux_arm64_basic.tar.gz",
@@ -25,24 +21,7 @@
     },
     "h264": {
       "release_tag": "shim-h264-v0.0.0",
-      "assets": {
-        "darwin_amd64": {
-          "file": "libwebrtc_shim_darwin_amd64_h264.tar.gz",
-          "sha256": "TODO"
-        },
-        "darwin_arm64": {
-          "file": "libwebrtc_shim_darwin_arm64_h264.tar.gz",
-          "sha256": "TODO"
-        },
-        "linux_amd64": {
-          "file": "libwebrtc_shim_linux_amd64_h264.tar.gz",
-          "sha256": "TODO"
-        },
-        "linux_arm64": {
-          "file": "libwebrtc_shim_linux_arm64_h264.tar.gz",
-          "sha256": "TODO"
-        }
-      }
+      "assets": {}
     }
   }
 }

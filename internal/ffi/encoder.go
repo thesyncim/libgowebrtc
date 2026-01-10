@@ -5,6 +5,13 @@ func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) (uintptr, e
 	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
 	}
+	if codec == CodecH264 && config != nil && config.PreferHW == 0 {
+		if err := ensureOpenH264(true); err != nil {
+			if !shouldIgnoreOpenH264Error(err) {
+				return 0, err
+			}
+		}
+	}
 	var errBuf ShimErrorBuffer
 	encoder := shimVideoEncoderCreate(int32(codec), config.Ptr(), errBuf.Ptr())
 	if encoder == 0 {

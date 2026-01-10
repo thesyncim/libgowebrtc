@@ -152,10 +152,15 @@ RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
             api/audio_codecs:builtin_audio_encoder_factory; \
     fi
 
-# Install libwebrtc
+# Install libwebrtc and codec factory libraries
 RUN if [ "$SKIP_LIBWEBRTC_BUILD" != "1" ]; then \
         mkdir -p ${INSTALL_DIR}/include ${INSTALL_DIR}/lib && \
-        cp ${BUILD_DIR}/src/out/Release/obj/libwebrtc.a ${INSTALL_DIR}/lib/; \
+        cp ${BUILD_DIR}/src/out/Release/obj/libwebrtc.a ${INSTALL_DIR}/lib/ && \
+        # Copy codec factory libraries (needed for encoder/decoder creation)
+        for lib in libbuiltin_video_encoder_factory.a libbuiltin_video_decoder_factory.a \
+                   libbuiltin_audio_encoder_factory.a libbuiltin_audio_decoder_factory.a; do \
+            find ${BUILD_DIR}/src/out/Release/obj -name "$lib" -exec cp {} ${INSTALL_DIR}/lib/ \; 2>/dev/null || true; \
+        done; \
     fi
 
 # Copy headers
