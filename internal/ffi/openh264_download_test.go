@@ -69,16 +69,12 @@ func TestOpenH264ArchiveNames(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.goos+"_"+tc.goarch, func(t *testing.T) {
-			// We can only test the current platform's archive name directly
-			// For other platforms, we verify the expected format
-			if runtime.GOOS == tc.goos && runtime.GOARCH == tc.goarch {
-				archive, err := openh264ArchiveName("2.5.1")
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if archive != tc.expected {
-					t.Errorf("archive name mismatch: got %q, want %q", archive, tc.expected)
-				}
+			archive, err := openh264ArchiveNameFor(tc.goos, tc.goarch, "2.5.1", defaultOpenH264SOVersion)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if archive != tc.expected {
+				t.Errorf("archive name mismatch: got %q, want %q", archive, tc.expected)
 			}
 		})
 	}
@@ -96,14 +92,58 @@ func TestOpenH264LibraryNames(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.goos, func(t *testing.T) {
-			if runtime.GOOS == tc.goos {
-				libName, err := openh264LibraryName()
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if libName != tc.expected {
-					t.Errorf("library name mismatch: got %q, want %q", libName, tc.expected)
-				}
+			libName, err := openh264LibraryNameFor(tc.goos, defaultOpenH264SOVersion)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if libName != tc.expected {
+				t.Errorf("library name mismatch: got %q, want %q", libName, tc.expected)
+			}
+		})
+	}
+}
+
+func TestOpenH264PlatformKeys(t *testing.T) {
+	testCases := []struct {
+		goos     string
+		goarch   string
+		expected string
+	}{
+		{"darwin", "amd64", "darwin_amd64"},
+		{"darwin", "arm64", "darwin_arm64"},
+		{"linux", "amd64", "linux_amd64"},
+		{"linux", "386", "linux_386"},
+		{"linux", "arm", "linux_arm"},
+		{"linux", "arm64", "linux_arm64"},
+		{"windows", "amd64", "windows_amd64"},
+		{"windows", "386", "windows_386"},
+		{"windows", "arm64", "windows_arm64"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.goos+"_"+tc.goarch, func(t *testing.T) {
+			key, err := openh264PlatformKeyFor(tc.goos, tc.goarch)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if key != tc.expected {
+				t.Errorf("platform key mismatch: got %q, want %q", key, tc.expected)
+			}
+		})
+	}
+
+	unsupported := []struct {
+		goos   string
+		goarch string
+	}{
+		{"freebsd", "amd64"},
+		{"linux", "ppc64le"},
+	}
+
+	for _, tc := range unsupported {
+		t.Run(tc.goos+"_"+tc.goarch, func(t *testing.T) {
+			if _, err := openh264PlatformKeyFor(tc.goos, tc.goarch); err == nil {
+				t.Fatalf("expected error for %s/%s", tc.goos, tc.goarch)
 			}
 		})
 	}

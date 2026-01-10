@@ -21,8 +21,10 @@
 go get github.com/thesyncim/libgowebrtc
 ```
 
-By default, the runtime will auto-download the prebuilt `libwebrtc_shim` for your OS/arch
-from GitHub Releases and cache it under `~/.libgowebrtc`.
+By default, the runtime will auto-download the prebuilt `libwebrtc_shim` for supported
+OS/arch combinations (currently `darwin_arm64`, `linux_amd64`, `linux_arm64`) from
+GitHub Releases and cache it under `~/.libgowebrtc`. For other platforms, build the
+shim locally and set `LIBWEBRTC_SHIM_PATH`.
 
 Override behavior with:
 
@@ -48,6 +50,9 @@ Defaults:
 - `codec.DefaultH264Config` prefers hardware on macOS (VideoToolbox) and software
   (OpenH264) elsewhere.
 - Set `PreferHW: true` or `PreferHW: false` explicitly to override.
+
+OpenH264 is only downloaded when software H.264 is requested (Linux/Windows by
+default; macOS only when `PreferHW: false` or `LIBWEBRTC_PREFER_SOFTWARE_CODECS=1`).
 
 Environment knobs:
 

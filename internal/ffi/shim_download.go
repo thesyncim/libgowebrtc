@@ -168,23 +168,27 @@ func shimFlavor() string {
 }
 
 func shimPlatformKey() (string, error) {
-	switch runtime.GOOS {
+	return shimPlatformKeyFor(runtime.GOOS, runtime.GOARCH)
+}
+
+func shimPlatformKeyFor(goos, goarch string) (string, error) {
+	switch goos {
 	case "darwin":
-		switch runtime.GOARCH {
+		switch goarch {
 		case "arm64":
 			return "darwin_arm64", nil
 		case "amd64":
 			return "darwin_amd64", nil
 		}
 	case "linux":
-		switch runtime.GOARCH {
+		switch goarch {
 		case "arm64":
 			return "linux_arm64", nil
 		case "amd64":
 			return "linux_amd64", nil
 		}
 	}
-	return "", fmt.Errorf("unsupported platform for auto-download: %s/%s", runtime.GOOS, runtime.GOARCH)
+	return "", fmt.Errorf("unsupported platform for auto-download: %s/%s", goos, goarch)
 }
 
 func shimCacheRoot() (string, error) {

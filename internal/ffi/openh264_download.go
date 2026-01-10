@@ -82,6 +82,13 @@ func shouldPreferSoftwareCodecs() bool {
 	return value != "0" && value != "false"
 }
 
+func shouldRequireOpenH264(preferHW bool) bool {
+	if shouldPreferSoftwareCodecs() {
+		return true
+	}
+	return !preferHW
+}
+
 func resolveOpenH264() (string, error) {
 	if path := strings.TrimSpace(os.Getenv(envOpenH264Path)); path != "" {
 		if _, err := os.Stat(path); err != nil {
@@ -206,16 +213,20 @@ func openh264DownloadSpec() (openh264Spec, error) {
 }
 
 func openh264PlatformKey() (string, error) {
-	switch runtime.GOOS {
+	return openh264PlatformKeyFor(runtime.GOOS, runtime.GOARCH)
+}
+
+func openh264PlatformKeyFor(goos, goarch string) (string, error) {
+	switch goos {
 	case "darwin":
-		switch runtime.GOARCH {
+		switch goarch {
 		case "amd64":
 			return "darwin_amd64", nil
 		case "arm64":
 			return "darwin_arm64", nil
 		}
 	case "linux":
-		switch runtime.GOARCH {
+		switch goarch {
 		case "amd64":
 			return "linux_amd64", nil
 		case "386":
@@ -226,7 +237,7 @@ func openh264PlatformKey() (string, error) {
 			return "linux_arm64", nil
 		}
 	case "windows":
-		switch runtime.GOARCH {
+		switch goarch {
 		case "amd64":
 			return "windows_amd64", nil
 		case "386":
@@ -235,21 +246,24 @@ func openh264PlatformKey() (string, error) {
 			return "windows_arm64", nil
 		}
 	}
-	return "", fmt.Errorf("unsupported platform for openh264: %s/%s", runtime.GOOS, runtime.GOARCH)
+	return "", fmt.Errorf("unsupported platform for openh264: %s/%s", goos, goarch)
 }
 
 func openh264ArchiveName(version string) (string, error) {
-	switch runtime.GOOS {
+	return openh264ArchiveNameFor(runtime.GOOS, runtime.GOARCH, version, openh264SOVersion())
+}
+
+func openh264ArchiveNameFor(goos, goarch, version, soVersion string) (string, error) {
+	switch goos {
 	case "darwin":
-		switch runtime.GOARCH {
+		switch goarch {
 		case "amd64":
 			return fmt.Sprintf("libopenh264-%s-mac-x64.dylib.bz2", version), nil
 		case "arm64":
 			return fmt.Sprintf("libopenh264-%s-mac-arm64.dylib.bz2", version), nil
 		}
 	case "linux":
-		soVersion := openh264SOVersion()
-		switch runtime.GOARCH {
+		switch goarch {
 		case "amd64":
 			return fmt.Sprintf("libopenh264-%s-linux64.%s.so.bz2", version, soVersion), nil
 		case "386":
@@ -260,7 +274,7 @@ func openh264ArchiveName(version string) (string, error) {
 			return fmt.Sprintf("libopenh264-%s-linux-arm64.%s.so.bz2", version, soVersion), nil
 		}
 	case "windows":
-		switch runtime.GOARCH {
+		switch goarch {
 		case "amd64":
 			return fmt.Sprintf("openh264-%s-win64.dll.bz2", version), nil
 		case "386":
@@ -269,29 +283,23 @@ func openh264ArchiveName(version string) (string, error) {
 			return fmt.Sprintf("openh264-%s-win-arm64.dll.bz2", version), nil
 		}
 	}
-	return "", fmt.Errorf("%w: %s/%s", errOpenH264Unsupported, runtime.GOOS, runtime.GOARCH)
-}
-
-func shouldIgnoreOpenH264Error(err error) bool {
-	if err == nil {
-		return false
-	}
-	if runtime.GOOS == "darwin" {
-		return true
-	}
-	return errors.Is(err, errOpenH264Unsupported)
+	return "", fmt.Errorf("%w: %s/%s", errOpenH264Unsupported, goos, goarch)
 }
 
 func openh264LibraryName() (string, error) {
-	switch runtime.GOOS {
+	return openh264LibraryNameFor(runtime.GOOS, openh264SOVersion())
+}
+
+func openh264LibraryNameFor(goos, soVersion string) (string, error) {
+	switch goos {
 	case "darwin":
 		return "libopenh264.dylib", nil
 	case "linux":
-		return fmt.Sprintf("libopenh264.so.%s", openh264SOVersion()), nil
+		return fmt.Sprintf("libopenh264.so.%s", soVersion), nil
 	case "windows":
 		return "openh264.dll", nil
 	}
-	return "", fmt.Errorf("no openh264 library name for %s", runtime.GOOS)
+	return "", fmt.Errorf("no openh264 library name for %s", goos)
 }
 
 func openh264SOVersion() string {

@@ -243,9 +243,7 @@ func LoadLibrary() error {
 
 	if shouldPreferSoftwareCodecs() {
 		if err := ensureOpenH264(true); err != nil {
-			if !shouldIgnoreOpenH264Error(err) {
-				return err
-			}
+			return err
 		}
 	}
 
@@ -358,7 +356,11 @@ func findLocalLibrary() (string, bool) {
 }
 
 func getLibraryName() string {
-	switch runtime.GOOS {
+	return getLibraryNameFor(runtime.GOOS)
+}
+
+func getLibraryNameFor(goos string) string {
+	switch goos {
 	case "darwin":
 		return "libwebrtc_shim.dylib"
 	case "windows":

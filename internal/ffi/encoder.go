@@ -1,15 +1,19 @@
 package ffi
 
+import "runtime"
+
 // CreateVideoEncoder creates a video encoder for the specified codec.
 func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) (uintptr, error) {
 	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
 	}
-	if codec == CodecH264 && config != nil && config.PreferHW == 0 {
-		if err := ensureOpenH264(true); err != nil {
-			if !shouldIgnoreOpenH264Error(err) {
-				return 0, err
-			}
+	if codec == CodecH264 {
+		preferHW := runtime.GOOS == "darwin"
+		if config != nil {
+			preferHW = config.PreferHW != 0
+		}
+		if err := ensureOpenH264(shouldRequireOpenH264(preferHW)); err != nil {
+			return 0, err
 		}
 	}
 	var errBuf ShimErrorBuffer
