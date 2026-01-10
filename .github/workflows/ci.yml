@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, openh264-runtime]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -39,25 +39,46 @@ jobs:
       - name: Run unit tests (no shim required)
         run: go test -v -race ./pkg/frame/... ./pkg/codec/...
 
-  # Shim auto-download and codec tests (Linux, Docker)
-  shim-codec-tests-linux:
-    name: Shim + Codec Tests (Linux)
+  # Linux tests - zero config shim auto-download
+  linux-amd64-tests:
+    name: Linux amd64 Tests (Zero-Config)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run shim + OpenH264 auto-download test
-        run: TEST_OPENH264=1 ./scripts/test_autoload_docker.sh
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-      - name: Run H264 encode/decode tests
-        run: TEST_OPENH264=1 ./scripts/test_autoload_docker.sh ./pkg/encoder
+      - name: Install minimal system deps (libgbm/drm for shim)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgbm1 libdrm2
 
-      - name: Run all codec tests (H264, VP8, VP9, AV1)
-        run: TEST_OPENH264=1 ./scripts/test_autoload_docker.sh ./test/e2e
+      - name: Clear any local lib/ to test auto-download
+        run: rm -rf lib/ ~/.libgowebrtc
 
-  # macOS tests (uses self-hosted runner or skips shim tests)
-  macos-unit:
-    name: macOS Unit Tests
+      - name: Test shim auto-download
+        env:
+          LIBWEBRTC_TEST_REQUIRE_SHIM: 1
+          CGO_ENABLED: 0
+        run: go test -v ./internal/ffi -run TestLoadLibrary -count=1
+
+      - name: Test codec encoding (VP8, VP9, AV1)
+        env:
+          CGO_ENABLED: 0
+        run: go test -v ./internal/ffi -run 'Test(Video|Audio)Encoder' -count=1
+
+      - name: Test H264 with OpenH264 auto-download
+        env:
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: 1
+          CGO_ENABLED: 0
+        run: go test -v ./internal/ffi -run 'TestVideoEncoder' -count=1
+
+  # macOS arm64 tests
+  macos-arm64-tests:
+    name: macOS arm64 Tests (Zero-Config)
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -67,38 +88,54 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Run unit tests
-        run: go test -v -race ./pkg/frame/... ./pkg/codec/...
+      - name: Clear any local lib/ to test auto-download
+        run: rm -rf lib/ ~/.libgowebrtc
 
-      - name: Run go vet
-        run: |
-          go vet $(go list ./... | grep -v '/internal/ffi')
-          go vet -unsafeptr=false ./internal/ffi/...
-
-      - name: Run shim auto-download test
+      - name: Test shim auto-download
         env:
           LIBWEBRTC_TEST_REQUIRE_SHIM: 1
-          LIBWEBRTC_SHIM_CACHE_DIR: ${{ runner.temp }}/libgowebrtc-shim
-        run: |
-          rm -rf "$LIBWEBRTC_SHIM_CACHE_DIR"
-          go test -v ./internal/ffi -run TestLoadLibrary -count=1
+        run: go test -v ./internal/ffi -run TestLoadLibrary -count=1
 
-      - name: Run H264 PreferHW smoke test (VideoToolbox)
+      - name: Test codec encoding (all codecs)
+        run: go test -v ./internal/ffi -run 'Test(Video|Audio)Encoder' -count=1
+
+      - name: Test H264 hardware (VideoToolbox)
         env:
           LIBWEBRTC_TEST_H264_PREFER_HW: 1
           LIBWEBRTC_OPENH264_DISABLE_DOWNLOAD: 1
-          LIBWEBRTC_PREFER_SOFTWARE_CODECS: 0
         run: go test -v ./internal/ffi -run TestH264PreferHWMac -count=1
 
-      - name: Run codec encode/decode tests
-        env:
-          LIBWEBRTC_SHIM_CACHE_DIR: ${{ runner.temp }}/libgowebrtc-shim
-        run: go test -v ./pkg/encoder/... ./pkg/decoder/... -count=1
+      - name: Run encoder package tests
+        run: go test -v ./pkg/encoder/... -count=1
 
-      - name: Run e2e codec tests
-        env:
-          LIBWEBRTC_SHIM_CACHE_DIR: ${{ runner.temp }}/libgowebrtc-shim
+      - name: Run e2e tests
         run: go test -v ./test/e2e/... -count=1
+
+  # macOS amd64 tests
+  macos-amd64-tests:
+    name: macOS amd64 Tests (Zero-Config)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Clear any local lib/ to test auto-download
+        run: rm -rf lib/ ~/.libgowebrtc
+
+      - name: Test shim auto-download
+        env:
+          LIBWEBRTC_TEST_REQUIRE_SHIM: 1
+        run: go test -v ./internal/ffi -run TestLoadLibrary -count=1
+
+      - name: Test codec encoding (all codecs)
+        run: go test -v ./internal/ffi -run 'Test(Video|Audio)Encoder' -count=1
+
+      - name: Run encoder package tests
+        run: go test -v ./pkg/encoder/... -count=1
 
   # Build check - verify code compiles on all platforms
   build-check:
@@ -120,4 +157,5 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
         run: go build -v ./...

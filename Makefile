@@ -2,7 +2,8 @@
 # State-of-the-art dependency management and build system
 
 .PHONY: all build test test-v test-race bench clean deps deps-update deps-verify \
-        lint vet fmt shim shim-clean install help
+        lint vet fmt shim shim-clean install help \
+        test-autoload test-autoload-amd64 test-autoload-arm64 test-autoload-all
 
 # Go settings
 GO := go
@@ -147,6 +148,34 @@ test-interop:
 test-e2e:
 	@echo "==> Running end-to-end tests..."
 	$(GOTEST) -v ./pkg/encoder/e2e_test.go ./pkg/decoder/e2e_test.go ./pkg/track/e2e_test.go ./pkg/pc/e2e_test.go
+
+#-----------------------------------------------------------------------------
+# Auto-load Tests (Docker-based)
+#-----------------------------------------------------------------------------
+
+test-autoload:
+	@echo "==> Running auto-load tests in Docker..."
+	./scripts/run_autoload_tests.sh
+
+test-autoload-openh264:
+	@echo "==> Running auto-load tests with OpenH264 in Docker..."
+	TEST_OPENH264=1 ./scripts/run_autoload_tests.sh
+
+test-autoload-amd64:
+	@echo "==> Running auto-load tests on Linux AMD64..."
+	./scripts/run_autoload_tests.sh amd64
+
+test-autoload-arm64:
+	@echo "==> Running auto-load tests on Linux ARM64..."
+	./scripts/run_autoload_tests.sh arm64
+
+test-autoload-all:
+	@echo "==> Running auto-load tests on all architectures..."
+	./scripts/run_autoload_tests.sh all
+
+test-autoload-all-openh264:
+	@echo "==> Running auto-load tests with OpenH264 on all architectures..."
+	./scripts/run_autoload_tests.sh all-openh264
 
 #-----------------------------------------------------------------------------
 # Benchmarks
@@ -330,6 +359,14 @@ help:
 	@echo "  test-cover    Run tests with coverage"
 	@echo "  test-interop  Run Pion interop tests"
 	@echo "  test-e2e      Run end-to-end tests"
+	@echo ""
+	@echo "Auto-load Tests (Docker):"
+	@echo "  test-autoload              Run auto-load tests in Docker"
+	@echo "  test-autoload-openh264     Run with OpenH264 codec testing"
+	@echo "  test-autoload-amd64        Run on Linux AMD64"
+	@echo "  test-autoload-arm64        Run on Linux ARM64"
+	@echo "  test-autoload-all          Run on both architectures"
+	@echo "  test-autoload-all-openh264 Run with OpenH264 on both archs"
 	@echo ""
 	@echo "Benchmarks:"
 	@echo "  bench         Run benchmarks"

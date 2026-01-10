@@ -96,20 +96,32 @@ bool IsAvailable() {
 // Vtable helpers for calling OpenH264 interface methods
 // ============================================================================
 
-// ISVCEncoder vtable layout (C++ Itanium ABI with virtual destructor):
-// [0] = ~ISVCEncoder() (virtual destructor - deleting)
-// [1] = ~ISVCEncoder() (virtual destructor - complete)
-// [2] = Initialize(const SEncParamBase*)
-// [3] = InitializeExt(const SEncParamExt*)
-// [4] = GetDefaultParams(SEncParamExt*)
-// [5] = Uninitialize()
-// [6] = EncodeFrame(const SSourcePicture*, SFrameBSInfo*)
-// [7] = EncodeParameterSets(SFrameBSInfo*)
-// [8] = ForceIntraFrame(bool, int)
-// [9] = SetOption(ENCODER_OPTION, void*)
-// [10] = GetOption(ENCODER_OPTION, void*)
+// ISVCEncoder vtable layout (Itanium ABI - destructor at END since declared last):
+// [0] = Initialize(const SEncParamBase*)
+// [1] = InitializeExt(const SEncParamExt*)
+// [2] = GetDefaultParams(SEncParamExt*)
+// [3] = Uninitialize()
+// [4] = EncodeFrame(const SSourcePicture*, SFrameBSInfo*)
+// [5] = EncodeParameterSets(SFrameBSInfo*)
+// [6] = ForceIntraFrame(bool, int)
+// [7] = SetOption(ENCODER_OPTION, void*)
+// [8] = GetOption(ENCODER_OPTION, void*)
+// [9] = ~ISVCEncoder() (virtual destructor - deleting)
+// [10] = ~ISVCEncoder() (virtual destructor - complete)
 //
-// Note: Itanium ABI has two destructor entries (deleting + complete)
+// Note: Destructor is declared at the END of ISVCEncoder class in OpenH264,
+// so it appears at the end of the vtable, not the beginning.
+
+// Encoder vtable indices
+constexpr int kEncoderVtable_Initialize        = 0;
+constexpr int kEncoderVtable_InitializeExt     = 1;
+constexpr int kEncoderVtable_GetDefaultParams  = 2;
+constexpr int kEncoderVtable_Uninitialize      = 3;
+constexpr int kEncoderVtable_EncodeFrame       = 4;
+constexpr int kEncoderVtable_EncodeParameterSets = 5;
+constexpr int kEncoderVtable_ForceIntraFrame   = 6;
+constexpr int kEncoderVtable_SetOption         = 7;
+constexpr int kEncoderVtable_GetOption         = 8;
 
 template<typename Ret, typename... Args>
 static Ret CallEncoderMethod(void* encoder, int vtable_index, Args... args) {
@@ -118,14 +130,25 @@ static Ret CallEncoderMethod(void* encoder, int vtable_index, Args... args) {
     return method(encoder, args...);
 }
 
-// ISVCDecoder vtable layout (C++ Itanium ABI with virtual destructor):
-// [0] = ~ISVCDecoder() (virtual destructor - deleting)
-// [1] = ~ISVCDecoder() (virtual destructor - complete)
-// [2] = Initialize(const SDecodingParam*)
-// [3] = Uninitialize()
-// [4] = DecodeFrame(const unsigned char*, int, unsigned char**, SBufferInfo*)
-// [5] = DecodeFrameNoDelay(const unsigned char*, int, unsigned char**, SBufferInfo*)
-// ...
+// ISVCDecoder vtable layout (Itanium ABI - destructor at END since declared last):
+// [0] = Initialize(const SDecodingParam*)
+// [1] = Uninitialize()
+// [2] = DecodeFrame2(const unsigned char*, int, unsigned char**, SBufferInfo*)
+// [3] = DecodeFrameNoDelay(const unsigned char*, int, unsigned char**, SBufferInfo*)
+// [4] = DecodeParser(const unsigned char*, int, SParserBsInfo*)
+// [5] = GetOption(DECODER_OPTION, void*)
+// [6] = SetOption(DECODER_OPTION, void*)
+// [7] = ~ISVCDecoder() (virtual destructor - deleting)
+// [8] = ~ISVCDecoder() (virtual destructor - complete)
+
+// Decoder vtable indices
+constexpr int kDecoderVtable_Initialize        = 0;
+constexpr int kDecoderVtable_Uninitialize      = 1;
+constexpr int kDecoderVtable_DecodeFrame2      = 2;
+constexpr int kDecoderVtable_DecodeFrameNoDelay = 3;
+constexpr int kDecoderVtable_DecodeParser      = 4;
+constexpr int kDecoderVtable_GetOption         = 5;
+constexpr int kDecoderVtable_SetOption         = 6;
 
 template<typename Ret, typename... Args>
 static Ret CallDecoderMethod(void* decoder, int vtable_index, Args... args) {
@@ -146,8 +169,7 @@ OpenH264Encoder::~OpenH264Encoder() {
 
 void OpenH264Encoder::Release() {
     if (encoder_ && g_destroy_encoder) {
-        // Call Uninitialize() first (vtable index 5)
-        CallEncoderMethod<int>(encoder_, 5);
+        CallEncoderMethod<int>(encoder_, kEncoderVtable_Uninitialize);
         g_destroy_encoder(encoder_);
         encoder_ = nullptr;
     }
@@ -168,10 +190,10 @@ int OpenH264Encoder::Initialize(const ShimVideoEncoderConfig* config, ShimErrorB
         return SetErrorMessage(error_out, "WelsCreateSVCEncoder failed", SHIM_ERROR_INIT_FAILED);
     }
 
-    // Get default params (vtable index 4)
+    // Get default params
     SEncParamExt param;
     memset(&param, 0, sizeof(param));
-    ret = CallEncoderMethod<int, SEncParamExt*>(encoder_, 4, &param);
+    ret = CallEncoderMethod<int, SEncParamExt*>(encoder_, kEncoderVtable_GetDefaultParams, &param);
     if (ret != 0) {
         Release();
         return SetErrorMessage(error_out, "GetDefaultParams failed", SHIM_ERROR_INIT_FAILED);
@@ -220,16 +242,16 @@ int OpenH264Encoder::Initialize(const ShimVideoEncoderConfig* config, ShimErrorB
     param.bEnableFrameCroppingFlag = true;
     param.bEnableSceneChangeDetect = false;
 
-    // Initialize with extended params (vtable index 3)
-    ret = CallEncoderMethod<int, SEncParamExt*>(encoder_, 3, &param);
+    // Initialize with extended params
+    ret = CallEncoderMethod<int, SEncParamExt*>(encoder_, kEncoderVtable_InitializeExt, &param);
     if (ret != 0) {
         Release();
         return SetErrorMessage(error_out, "InitializeExt failed: " + std::to_string(ret), SHIM_ERROR_INIT_FAILED);
     }
 
-    // Set video format to I420 (vtable index 9 = SetOption)
+    // Set video format to I420
     int videoFormat = videoFormatI420;
-    CallEncoderMethod<int, ENCODER_OPTION, void*>(encoder_, 9, ENCODER_OPTION_DATAFORMAT, &videoFormat);
+    CallEncoderMethod<int, ENCODER_OPTION, void*>(encoder_, kEncoderVtable_SetOption, ENCODER_OPTION_DATAFORMAT, &videoFormat);
 
     width_ = config->width;
     height_ = config->height;
@@ -258,9 +280,8 @@ int OpenH264Encoder::Encode(
 
     // Force keyframe if requested
     if (force_keyframe || force_keyframe_.exchange(false)) {
-        // ForceIntraFrame(bool bIDR, int iLayerID) - vtable index 8
-        // iLayerID = -1 means all layers
-        CallEncoderMethod<int, bool, int>(encoder_, 8, true, -1);
+        // ForceIntraFrame(bool bIDR, int iLayerID) - iLayerID = -1 means all layers
+        CallEncoderMethod<int, bool, int>(encoder_, kEncoderVtable_ForceIntraFrame, true, -1);
     }
 
     // Set up source picture
@@ -281,8 +302,8 @@ int OpenH264Encoder::Encode(
     SFrameBSInfo info;
     memset(&info, 0, sizeof(info));
 
-    // Encode (vtable index 6)
-    int ret = CallEncoderMethod<int, const SSourcePicture*, SFrameBSInfo*>(encoder_, 6, &src, &info);
+    // Encode
+    int ret = CallEncoderMethod<int, const SSourcePicture*, SFrameBSInfo*>(encoder_, kEncoderVtable_EncodeFrame, &src, &info);
     if (ret != 0) {
         return SetErrorMessage(error_out, "EncodeFrame failed: " + std::to_string(ret), SHIM_ERROR_ENCODE_FAILED);
     }
@@ -338,9 +359,8 @@ int OpenH264Encoder::SetBitrate(uint32_t bitrate_bps) {
     memset(&bitrate_info, 0, sizeof(bitrate_info));
     bitrate_info.iBitrate = bitrate_bps;
 
-    // SetOption (vtable index 9)
-    CallEncoderMethod<int, ENCODER_OPTION, void*>(encoder_, 9, ENCODER_OPTION_BITRATE, &bitrate_info);
-    CallEncoderMethod<int, ENCODER_OPTION, void*>(encoder_, 9, ENCODER_OPTION_MAX_BITRATE, &bitrate_info);
+    CallEncoderMethod<int, ENCODER_OPTION, void*>(encoder_, kEncoderVtable_SetOption, ENCODER_OPTION_BITRATE, &bitrate_info);
+    CallEncoderMethod<int, ENCODER_OPTION, void*>(encoder_, kEncoderVtable_SetOption, ENCODER_OPTION_MAX_BITRATE, &bitrate_info);
 
     return SHIM_OK;
 }
@@ -354,8 +374,7 @@ int OpenH264Encoder::SetFramerate(float framerate) {
 
     framerate_ = framerate;
 
-    // SetOption (vtable index 9)
-    CallEncoderMethod<int, ENCODER_OPTION, void*>(encoder_, 9, ENCODER_OPTION_FRAME_RATE, &framerate);
+    CallEncoderMethod<int, ENCODER_OPTION, void*>(encoder_, kEncoderVtable_SetOption, ENCODER_OPTION_FRAME_RATE, &framerate);
 
     return SHIM_OK;
 }
@@ -376,8 +395,7 @@ OpenH264Decoder::~OpenH264Decoder() {
 
 void OpenH264Decoder::Release() {
     if (decoder_ && g_destroy_decoder) {
-        // Call Uninitialize() first (vtable index 3)
-        CallDecoderMethod<long>(decoder_, 3);
+        CallDecoderMethod<long>(decoder_, kDecoderVtable_Uninitialize);
         g_destroy_decoder(decoder_);
         decoder_ = nullptr;
     }
@@ -401,8 +419,8 @@ int OpenH264Decoder::Initialize(ShimErrorBuffer* error_out) {
     param.eEcActiveIdc = ERROR_CON_SLICE_COPY;  // Error concealment
     param.sVideoProperty.eVideoFormat = videoFormatI420;
 
-    // Initialize (vtable index 2)
-    ret = CallDecoderMethod<long, const SDecodingParam*>(decoder_, 2, &param);
+    // Initialize
+    ret = CallDecoderMethod<long, const SDecodingParam*>(decoder_, kDecoderVtable_Initialize, &param);
     if (ret != 0) {
         Release();
         return SetErrorMessage(error_out, "Decoder Initialize failed: " + std::to_string(ret), SHIM_ERROR_INIT_FAILED);
@@ -433,9 +451,9 @@ int OpenH264Decoder::Decode(
     SBufferInfo buf_info;
     memset(&buf_info, 0, sizeof(buf_info));
 
-    // DecodeFrameNoDelay (vtable index 5) - lower latency than DecodeFrame
+    // DecodeFrameNoDelay - lower latency than DecodeFrame
     int ret = CallDecoderMethod<int, const unsigned char*, int, unsigned char**, SBufferInfo*>(
-        decoder_, 5, data, size, yuv_data, &buf_info);
+        decoder_, kDecoderVtable_DecodeFrameNoDelay, data, size, yuv_data, &buf_info);
 
     if (ret != 0) {
         return SetErrorMessage(error_out, "DecodeFrameNoDelay failed: " + std::to_string(ret), SHIM_ERROR_DECODE_FAILED);
