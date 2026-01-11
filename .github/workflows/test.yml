@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 env:
-  GO_VERSION: '1.23'
+  GO_VERSION: '1.25.x'
+  GO_VERSION_FULL: '1.25.0'  # Full version for direct downloads (Rosetta job)
   SHIM_VERSION: 'shim-v0.3.0'
 
 jobs:
@@ -101,7 +102,7 @@ jobs:
       - name: Setup Go (x86_64 via Rosetta)
         run: |
           # Download and install Go for amd64
-          curl -fsSL "https://go.dev/dl/go${{ env.GO_VERSION }}.darwin-amd64.tar.gz" -o go.tar.gz
+          curl -fsSL "https://go.dev/dl/go${{ env.GO_VERSION_FULL }}.darwin-amd64.tar.gz" -o go.tar.gz
           sudo rm -rf /usr/local/go-amd64
           sudo mkdir -p /usr/local/go-amd64
           sudo tar -C /usr/local/go-amd64 -xzf go.tar.gz --strip-components=1
