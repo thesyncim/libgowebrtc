@@ -137,8 +137,8 @@ func TestSVCPresets(t *testing.T) {
 }
 
 func TestDefaultConfigs(t *testing.T) {
-	t.Run("DefaultH264Config", func(t *testing.T) {
-		cfg := DefaultH264Config(1280, 720)
+	t.Run("DefaultVideoEncoderConfig_H264", func(t *testing.T) {
+		cfg := DefaultVideoEncoderConfig(H264, 1280, 720)
 		if cfg.Width != 1280 {
 			t.Errorf("Width = %v, want 1280", cfg.Width)
 		}
@@ -159,8 +159,8 @@ func TestDefaultConfigs(t *testing.T) {
 		}
 	})
 
-	t.Run("DefaultVP9Config", func(t *testing.T) {
-		cfg := DefaultVP9Config(1920, 1080)
+	t.Run("DefaultVideoEncoderConfig_VP9", func(t *testing.T) {
+		cfg := DefaultVideoEncoderConfig(VP9, 1920, 1080)
 		if cfg.Width != 1920 {
 			t.Errorf("Width = %v, want 1920", cfg.Width)
 		}
@@ -175,8 +175,8 @@ func TestDefaultConfigs(t *testing.T) {
 		}
 	})
 
-	t.Run("DefaultAV1Config", func(t *testing.T) {
-		cfg := DefaultAV1Config(1920, 1080)
+	t.Run("DefaultVideoEncoderConfig_AV1", func(t *testing.T) {
+		cfg := DefaultVideoEncoderConfig(AV1, 1920, 1080)
 		if cfg.Width != 1920 || cfg.Height != 1080 {
 			t.Errorf("Resolution = %dx%d, want 1920x1080", cfg.Width, cfg.Height)
 		}
