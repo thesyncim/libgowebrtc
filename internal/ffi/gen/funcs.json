@@ -890,6 +890,15 @@
       "category": "RTPReceiver"
     },
     {
+      "go_name": "shimRTPReceiverRequestKeyframe",
+      "c_name": "shim_rtp_receiver_request_keyframe",
+      "params": [
+        {"name": "receiver", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPReceiver"
+    },
+    {
       "go_name": "shimRTPReceiverSetJitterBufferMinDelay",
       "c_name": "shim_rtp_receiver_set_jitter_buffer_min_delay",
       "params": [

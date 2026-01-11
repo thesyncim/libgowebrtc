@@ -98,6 +98,7 @@ var (
 	// RTPReceiver
 	shimRTPReceiverGetTrack                func(receiver uintptr) uintptr
 	shimRTPReceiverGetStats                func(receiver uintptr, outStats uintptr) int32
+	shimRTPReceiverRequestKeyframe         func(receiver uintptr) int32
 	shimRTPReceiverSetJitterBufferMinDelay func(receiver uintptr, minDelayMs int32) int32
 
 	// RTPTransceiver

@@ -72,4 +72,14 @@ SHIM_EXPORT int shim_rtp_receiver_get_stats(ShimRTPReceiver* receiver, ShimRTCSt
     return SHIM_OK;
 }
 
+/* ============================================================================
+ * RTCP Feedback
+ * ========================================================================== */
+
+SHIM_EXPORT int shim_rtp_receiver_request_keyframe(ShimRTPReceiver* receiver) {
+    if (!receiver) return SHIM_ERROR_INVALID_PARAM;
+    // libwebrtc does not expose a direct keyframe request on RtpReceiverInterface.
+    return SHIM_ERROR_NOT_SUPPORTED;
+}
+
 }  // extern "C"

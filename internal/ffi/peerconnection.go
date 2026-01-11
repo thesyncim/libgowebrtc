@@ -1108,6 +1108,15 @@ func RTPReceiverGetStats(receiver uintptr) (*RTCStats, error) {
 	return &stats, nil
 }
 
+// RTPReceiverRequestKeyframe requests a keyframe (PLI) from the sender.
+func RTPReceiverRequestKeyframe(receiver uintptr) error {
+	if !libLoaded.Load() || shimRTPReceiverRequestKeyframe == nil {
+		return ErrLibraryNotLoaded
+	}
+	result := shimRTPReceiverRequestKeyframe(receiver)
+	return ShimError(result)
+}
+
 // ============================================================================
 // RTPTransceiver API
 // ============================================================================

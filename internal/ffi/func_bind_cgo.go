@@ -90,6 +90,7 @@ static void* fn_shim_rtp_sender_set_layer_bitrate;
 static void* fn_shim_rtp_sender_get_active_layers;
 static void* fn_shim_rtp_receiver_get_track;
 static void* fn_shim_rtp_receiver_get_stats;
+static void* fn_shim_rtp_receiver_request_keyframe;
 static void* fn_shim_rtp_receiver_set_jitter_buffer_min_delay;
 static void* fn_shim_transceiver_get_direction;
 static void* fn_shim_transceiver_set_direction;
@@ -221,6 +222,7 @@ void set_fn_shim_rtp_sender_set_layer_bitrate(void* fn) { fn_shim_rtp_sender_set
 void set_fn_shim_rtp_sender_get_active_layers(void* fn) { fn_shim_rtp_sender_get_active_layers = fn; }
 void set_fn_shim_rtp_receiver_get_track(void* fn) { fn_shim_rtp_receiver_get_track = fn; }
 void set_fn_shim_rtp_receiver_get_stats(void* fn) { fn_shim_rtp_receiver_get_stats = fn; }
+void set_fn_shim_rtp_receiver_request_keyframe(void* fn) { fn_shim_rtp_receiver_request_keyframe = fn; }
 void set_fn_shim_rtp_receiver_set_jitter_buffer_min_delay(void* fn) { fn_shim_rtp_receiver_set_jitter_buffer_min_delay = fn; }
 void set_fn_shim_transceiver_get_direction(void* fn) { fn_shim_transceiver_get_direction = fn; }
 void set_fn_shim_transceiver_set_direction(void* fn) { fn_shim_transceiver_set_direction = fn; }
@@ -598,6 +600,10 @@ int32_t call_shim_rtp_receiver_get_stats(uintptr_t receiver, uintptr_t outStats)
     typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
     return ((fn_t)fn_shim_rtp_receiver_get_stats)(receiver, outStats);
 }
+int32_t call_shim_rtp_receiver_request_keyframe(uintptr_t receiver) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_receiver_request_keyframe)(receiver);
+}
 int32_t call_shim_rtp_receiver_set_jitter_buffer_min_delay(uintptr_t receiver, int32_t minDelayMs) {
     typedef int32_t (*fn_t)(uintptr_t, int32_t);
     return ((fn_t)fn_shim_rtp_receiver_set_jitter_buffer_min_delay)(receiver, minDelayMs);
@@ -884,6 +890,7 @@ func registerFunctions() error {
 	// RTPReceiver
 	C.set_fn_shim_rtp_receiver_get_track(unsafe.Pointer(mustDlsym(libHandle, "shim_rtp_receiver_get_track")))
 	C.set_fn_shim_rtp_receiver_get_stats(unsafe.Pointer(mustDlsym(libHandle, "shim_rtp_receiver_get_stats")))
+	C.set_fn_shim_rtp_receiver_request_keyframe(unsafe.Pointer(mustDlsym(libHandle, "shim_rtp_receiver_request_keyframe")))
 	C.set_fn_shim_rtp_receiver_set_jitter_buffer_min_delay(unsafe.Pointer(mustDlsym(libHandle, "shim_rtp_receiver_set_jitter_buffer_min_delay")))
 
 	// RTPTransceiver
@@ -1201,6 +1208,9 @@ func registerFunctions() error {
 	}
 	shimRTPReceiverGetStats = func(receiver uintptr, outStats uintptr) int32 {
 		return int32(C.call_shim_rtp_receiver_get_stats(C.uintptr_t(receiver), C.uintptr_t(outStats)))
+	}
+	shimRTPReceiverRequestKeyframe = func(receiver uintptr) int32 {
+		return int32(C.call_shim_rtp_receiver_request_keyframe(C.uintptr_t(receiver)))
 	}
 	shimRTPReceiverSetJitterBufferMinDelay = func(receiver uintptr, minDelayMs int32) int32 {
 		return int32(C.call_shim_rtp_receiver_set_jitter_buffer_min_delay(C.uintptr_t(receiver), C.int32_t(minDelayMs)))
