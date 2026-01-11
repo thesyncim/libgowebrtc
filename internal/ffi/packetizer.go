@@ -1,5 +1,10 @@
 package ffi
 
+import (
+	"runtime"
+	"unsafe"
+)
+
 // CreatePacketizer creates an RTP packetizer.
 func CreatePacketizer(config *PacketizerConfig) uintptr {
 	if !libLoaded.Load() {
@@ -24,31 +29,34 @@ func PacketizerPacketizeInto(
 		return 0, ErrLibraryNotLoaded
 	}
 
-	var outCount int32
-
 	var keyframe int32
 	if isKeyframe {
 		keyframe = 1
 	}
 
-	result := shimPacketizerPacketize(
-		packetizer,
-		ByteSlicePtr(data),
-		int32(len(data)),
-		timestamp,
-		keyframe,
-		ByteSlicePtr(dst),
-		Int32SlicePtr(offsets),
-		Int32SlicePtr(sizes),
-		int32(maxPackets),
-		Int32Ptr(&outCount),
-	)
+	params := shimPacketizerPacketizeParams{
+		Packetizer: packetizer,
+		Data:       ByteSlicePtr(data),
+		Size:       int32(len(data)),
+		Timestamp:  timestamp,
+		IsKeyframe: keyframe,
+		DstBuffer:  ByteSlicePtr(dst),
+		DstOffsets: Int32SlicePtr(offsets),
+		DstSizes:   Int32SlicePtr(sizes),
+		MaxPackets: int32(maxPackets),
+	}
+	result := shimPacketizerPacketize(uintptr(unsafe.Pointer(&params)))
+	runtime.KeepAlive(data)
+	runtime.KeepAlive(dst)
+	runtime.KeepAlive(offsets)
+	runtime.KeepAlive(sizes)
+	runtime.KeepAlive(&params)
 
 	if err := ShimError(result); err != nil {
 		return 0, err
 	}
 
-	return int(outCount), nil
+	return int(params.OutCount), nil
 }
 
 // PacketizerSequenceNumber returns the current sequence number.
@@ -81,7 +89,14 @@ func DepacketizerPush(depacketizer uintptr, packet []byte) error {
 		return ErrLibraryNotLoaded
 	}
 
-	result := shimDepacketizerPush(depacketizer, ByteSlicePtr(packet), int32(len(packet)))
+	params := shimDepacketizerPushParams{
+		Depacketizer: depacketizer,
+		Data:         ByteSlicePtr(packet),
+		Size:         int32(len(packet)),
+	}
+	result := shimDepacketizerPush(uintptr(unsafe.Pointer(&params)))
+	runtime.KeepAlive(packet)
+	runtime.KeepAlive(&params)
 	return ShimError(result)
 }
 
@@ -91,23 +106,19 @@ func DepacketizerPopInto(depacketizer uintptr, dst []byte) (size int, timestamp 
 		return 0, 0, false, ErrLibraryNotLoaded
 	}
 
-	var outSize int32
-	var outTimestamp uint32
-	var outIsKeyframe int32
-
-	result := shimDepacketizerPop(
-		depacketizer,
-		ByteSlicePtr(dst),
-		Int32Ptr(&outSize),
-		Uint32Ptr(&outTimestamp),
-		Int32Ptr(&outIsKeyframe),
-	)
+	params := shimDepacketizerPopParams{
+		Depacketizer: depacketizer,
+		DstBuffer:    ByteSlicePtr(dst),
+	}
+	result := shimDepacketizerPop(uintptr(unsafe.Pointer(&params)))
+	runtime.KeepAlive(dst)
+	runtime.KeepAlive(&params)
 
 	if err := ShimError(result); err != nil {
 		return 0, 0, false, err
 	}
 
-	return int(outSize), outTimestamp, outIsKeyframe != 0, nil
+	return int(params.OutSize), params.OutTimestamp, params.OutIsKeyframe != 0, nil
 }
 
 // DepacketizerDestroy destroys a depacketizer.

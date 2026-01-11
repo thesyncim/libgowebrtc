@@ -28,13 +28,15 @@ struct ShimAudioEncoder {
 extern "C" {
 
 SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
-    const ShimAudioEncoderConfig* config,
-    ShimErrorBuffer* error_out
+    ShimAudioEncoderCreateParams* params
 ) {
-    if (!config || config->sample_rate <= 0 || config->channels <= 0) {
-        shim::SetErrorMessage(error_out, "invalid audio encoder config", SHIM_ERROR_INVALID_PARAM);
+    if (!params || !params->config || params->config->sample_rate <= 0 || params->config->channels <= 0) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid audio encoder config", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
+
+    const auto* config = params->config;
+    ShimErrorBuffer* error_out = params->error_out;
 
     webrtc::AudioEncoderOpusConfig opus_config;
     opus_config.frame_size_ms = 20;  // 20ms matches browser WebRTC default
@@ -68,20 +70,23 @@ SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
 
 SHIM_EXPORT int shim_audio_encoder_encode(
     ShimAudioEncoder* encoder,
-    const uint8_t* samples,
-    int num_samples,
-    uint8_t* dst_buffer,
-    int* out_size
+    ShimAudioEncoderEncodeParams* params
 ) {
-    if (!encoder || !samples || num_samples <= 0 || !dst_buffer || !out_size) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    params->out_size = 0;
+
+    if (!encoder || !params->samples || params->num_samples <= 0 || !params->dst_buffer) {
         return SHIM_ERROR_INVALID_PARAM;
     }
 
     std::lock_guard<std::mutex> lock(encoder->mutex);
 
     // Convert bytes to int16 samples
-    const int16_t* pcm = reinterpret_cast<const int16_t*>(samples);
-    int samples_per_channel = num_samples;
+    const int16_t* pcm = reinterpret_cast<const int16_t*>(params->samples);
+    int samples_per_channel = params->num_samples;
 
     // WebRTC AudioEncoder::Encode() requires exactly 10ms chunks (SampleRateHz / 100)
     // We split larger frames (e.g., 20ms) into 10ms chunks for browser-like behavior
@@ -101,7 +106,7 @@ SHIM_EXPORT int shim_audio_encoder_encode(
         );
 
         if (!encoded_buffer.empty()) {
-            memcpy(dst_buffer + total_encoded, encoded_buffer.data(), encoded_buffer.size());
+            memcpy(params->dst_buffer + total_encoded, encoded_buffer.data(), encoded_buffer.size());
             total_encoded += static_cast<int>(encoded_buffer.size());
         }
 
@@ -109,17 +114,19 @@ SHIM_EXPORT int shim_audio_encoder_encode(
         remaining -= chunk_size;
     }
 
-    *out_size = total_encoded;
+    params->out_size = total_encoded;
     return SHIM_OK;
 }
 
 SHIM_EXPORT int shim_audio_encoder_set_bitrate(
-    ShimAudioEncoder* encoder,
-    uint32_t bitrate_bps
+    ShimAudioEncoderSetBitrateParams* params
 ) {
-    if (!encoder) {
-        return SHIM_ERROR_INVALID_PARAM;
+    if (!params || !params->encoder) {
+        return shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
     }
+
+    auto encoder = params->encoder;
+    uint32_t bitrate_bps = params->bitrate_bps;
 
     std::lock_guard<std::mutex> lock(encoder->mutex);
     encoder->encoder->OnReceivedTargetAudioBitrate(bitrate_bps);
@@ -142,14 +149,16 @@ struct ShimAudioDecoder {
 };
 
 SHIM_EXPORT ShimAudioDecoder* shim_audio_decoder_create(
-    int sample_rate,
-    int channels,
-    ShimErrorBuffer* error_out
+    ShimAudioDecoderCreateParams* params
 ) {
-    if (sample_rate <= 0 || channels <= 0) {
-        shim::SetErrorMessage(error_out, "invalid sample rate or channels", SHIM_ERROR_INVALID_PARAM);
+    if (!params || params->sample_rate <= 0 || params->channels <= 0) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid sample rate or channels", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
+
+    int sample_rate = params->sample_rate;
+    int channels = params->channels;
+    ShimErrorBuffer* error_out = params->error_out;
 
     webrtc::AudioDecoderOpus::Config config;
     config.sample_rate_hz = sample_rate;
@@ -175,14 +184,16 @@ SHIM_EXPORT ShimAudioDecoder* shim_audio_decoder_create(
 
 SHIM_EXPORT int shim_audio_decoder_decode(
     ShimAudioDecoder* decoder,
-    const uint8_t* data,
-    int size,
-    uint8_t* dst_samples,
-    int* out_num_samples,
-    ShimErrorBuffer* error_out
+    ShimAudioDecoderDecodeParams* params
 ) {
-    if (!decoder || !data || size <= 0 || !dst_samples || !out_num_samples) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+    if (!params) {
+        return shim::SetErrorMessage(nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+    }
+
+    params->out_num_samples = 0;
+
+    if (!decoder || !params->data || params->size <= 0 || !params->dst_samples) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -194,8 +205,8 @@ SHIM_EXPORT int shim_audio_decoder_decode(
 
     webrtc::AudioDecoder::SpeechType speech_type;
     int decoded_samples = decoder->decoder->Decode(
-        data,
-        size,
+        params->data,
+        params->size,
         decoder->sample_rate,
         sizeof(pcm_buffer),
         pcm_buffer,
@@ -205,14 +216,14 @@ SHIM_EXPORT int shim_audio_decoder_decode(
     if (decoded_samples < 0) {
         char msg[64];
         snprintf(msg, sizeof(msg), "Opus decode failed with code %d", decoded_samples);
-        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_DECODE_FAILED);
+        shim::SetErrorMessage(params->error_out, msg, SHIM_ERROR_DECODE_FAILED);
         return SHIM_ERROR_DECODE_FAILED;
     }
 
     // Copy decoded samples as bytes
     int total_samples = decoded_samples * decoder->channels;
-    memcpy(dst_samples, pcm_buffer, total_samples * sizeof(int16_t));
-    *out_num_samples = total_samples;
+    memcpy(params->dst_samples, pcm_buffer, total_samples * sizeof(int16_t));
+    params->out_num_samples = total_samples;
 
     return SHIM_OK;
 }
@@ -225,12 +236,13 @@ SHIM_EXPORT void shim_audio_decoder_destroy(ShimAudioDecoder* decoder) {
  * Codec Capability API
  * ========================================================================== */
 
-SHIM_EXPORT int shim_get_supported_audio_codecs(
-    ShimCodecCapability* codecs,
-    int max_codecs,
-    int* out_count
-) {
-    if (!codecs || !out_count || max_codecs <= 0) {
+SHIM_EXPORT int shim_get_supported_audio_codecs(ShimGetSupportedAudioCodecsParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    params->out_count = 0;
+    if (!params->codecs || params->max_codecs <= 0) {
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -247,17 +259,17 @@ SHIM_EXPORT int shim_get_supported_audio_codecs(
     };
 
     int count = 0;
-    for (size_t i = 0; i < sizeof(audio_codecs) / sizeof(audio_codecs[0]) && count < max_codecs; i++) {
-        strncpy(codecs[count].mime_type, audio_codecs[i].mime_type, sizeof(codecs[count].mime_type) - 1);
-        codecs[count].mime_type[sizeof(codecs[count].mime_type) - 1] = '\0';
-        codecs[count].clock_rate = audio_codecs[i].clock_rate;
-        codecs[count].channels = audio_codecs[i].channels;
-        codecs[count].sdp_fmtp_line[0] = '\0';
-        codecs[count].payload_type = audio_codecs[i].payload_type;
+    for (size_t i = 0; i < sizeof(audio_codecs) / sizeof(audio_codecs[0]) && count < params->max_codecs; i++) {
+        strncpy(params->codecs[count].mime_type, audio_codecs[i].mime_type, sizeof(params->codecs[count].mime_type) - 1);
+        params->codecs[count].mime_type[sizeof(params->codecs[count].mime_type) - 1] = '\0';
+        params->codecs[count].clock_rate = audio_codecs[i].clock_rate;
+        params->codecs[count].channels = audio_codecs[i].channels;
+        params->codecs[count].sdp_fmtp_line[0] = '\0';
+        params->codecs[count].payload_type = audio_codecs[i].payload_type;
         count++;
     }
 
-    *out_count = count;
+    params->out_count = count;
     return SHIM_OK;
 }
 

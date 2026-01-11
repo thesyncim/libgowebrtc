@@ -24,22 +24,19 @@ extern "C" {
  * Jitter Buffer Control (Limited)
  * ========================================================================== */
 
-SHIM_EXPORT int shim_rtp_receiver_set_jitter_buffer_min_delay(
-    ShimRTPReceiver* receiver,
-    int min_delay_ms
-) {
-    if (!receiver) {
+SHIM_EXPORT int shim_rtp_receiver_set_jitter_buffer_min_delay(ShimRTPReceiverSetJitterBufferMinDelayParams* params) {
+    if (!params || !params->receiver) {
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    auto webrtc_receiver = reinterpret_cast<webrtc::RtpReceiverInterface*>(receiver);
+    auto webrtc_receiver = reinterpret_cast<webrtc::RtpReceiverInterface*>(params->receiver);
 
-    if (min_delay_ms <= 0) {
+    if (params->min_delay_ms <= 0) {
         // Clear minimum delay - let libwebrtc's adaptive algorithm decide
         webrtc_receiver->SetJitterBufferMinimumDelay(std::nullopt);
     } else {
         // Set minimum delay floor (libwebrtc uses seconds as double)
-        double delay_seconds = static_cast<double>(min_delay_ms) / 1000.0;
+        double delay_seconds = static_cast<double>(params->min_delay_ms) / 1000.0;
         webrtc_receiver->SetJitterBufferMinimumDelay(delay_seconds);
     }
 
@@ -64,12 +61,24 @@ SHIM_EXPORT void* shim_rtp_receiver_get_track(ShimRTPReceiver* receiver) {
  * PeerConnection::GetStats() which provides RTCInboundRtpStreamStats.
  * ========================================================================== */
 
-SHIM_EXPORT int shim_rtp_receiver_get_stats(ShimRTPReceiver* receiver, ShimRTCStats* out_stats) {
-    if (!receiver || !out_stats) return SHIM_ERROR_INVALID_PARAM;
-    memset(out_stats, 0, sizeof(ShimRTCStats));
+SHIM_EXPORT int shim_rtp_receiver_get_stats(ShimRTPReceiverGetStatsParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    if (!params->receiver) {
+        memset(&params->out_stats, 0, sizeof(ShimRTCStats));
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    memset(&params->out_stats, 0, sizeof(ShimRTCStats));
     // Stats come from PeerConnection::GetStats(), not directly from receiver
     // This function exists for API consistency but returns empty stats
     return SHIM_OK;
 }
+
+/* ============================================================================
+ * RTCP Feedback
+ * ========================================================================== */
 
 }  // extern "C"

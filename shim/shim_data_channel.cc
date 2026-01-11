@@ -102,60 +102,51 @@ static ShimDataChannelWrapper* GetOrCreateWrapper(ShimDataChannel* dc) {
 
 extern "C" {
 
-SHIM_EXPORT void shim_data_channel_set_on_message(
-    ShimDataChannel* dc,
-    ShimOnDataChannelMessage callback,
-    void* ctx
-) {
-    auto* wrapper = GetOrCreateWrapper(dc);
+SHIM_EXPORT void shim_data_channel_set_on_message(ShimDataChannelSetOnMessageParams* params) {
+    if (!params) {
+        return;
+    }
+    auto* wrapper = GetOrCreateWrapper(params->dc);
     if (wrapper) {
-        wrapper->on_message = callback;
-        wrapper->on_message_ctx = ctx;
+        wrapper->on_message = params->callback;
+        wrapper->on_message_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_data_channel_set_on_open(
-    ShimDataChannel* dc,
-    ShimOnDataChannelOpen callback,
-    void* ctx
-) {
-    auto* wrapper = GetOrCreateWrapper(dc);
+SHIM_EXPORT void shim_data_channel_set_on_open(ShimDataChannelSetOnOpenParams* params) {
+    if (!params) {
+        return;
+    }
+    auto* wrapper = GetOrCreateWrapper(params->dc);
     if (wrapper) {
-        wrapper->on_open = callback;
-        wrapper->on_open_ctx = ctx;
+        wrapper->on_open = params->callback;
+        wrapper->on_open_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_data_channel_set_on_close(
-    ShimDataChannel* dc,
-    ShimOnDataChannelClose callback,
-    void* ctx
-) {
-    auto* wrapper = GetOrCreateWrapper(dc);
+SHIM_EXPORT void shim_data_channel_set_on_close(ShimDataChannelSetOnCloseParams* params) {
+    if (!params) {
+        return;
+    }
+    auto* wrapper = GetOrCreateWrapper(params->dc);
     if (wrapper) {
-        wrapper->on_close = callback;
-        wrapper->on_close_ctx = ctx;
+        wrapper->on_close = params->callback;
+        wrapper->on_close_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT int shim_data_channel_send(
-    ShimDataChannel* dc,
-    const uint8_t* data,
-    int size,
-    int is_binary,
-    ShimErrorBuffer* error_out
-) {
-    if (!dc || !data) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_data_channel_send(ShimDataChannelSendParams* params) {
+    if (!params || !params->dc || !params->data) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    auto channel = reinterpret_cast<webrtc::DataChannelInterface*>(dc);
+    auto channel = reinterpret_cast<webrtc::DataChannelInterface*>(params->dc);
 
-    webrtc::DataBuffer db(webrtc::CopyOnWriteBuffer(data, size), is_binary != 0);
+    webrtc::DataBuffer db(webrtc::CopyOnWriteBuffer(params->data, params->size), params->is_binary != 0);
 
     if (!channel->Send(db)) {
-        shim::SetErrorMessage(error_out, "DataChannel send failed (queue full or not ready)");
+        shim::SetErrorMessage(params->error_out, "DataChannel send failed (queue full or not ready)");
         return SHIM_ERROR_INIT_FAILED;
     }
     return SHIM_OK;

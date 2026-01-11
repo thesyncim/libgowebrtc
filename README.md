@@ -356,12 +356,7 @@ libgowebrtc/
 | Method | Description |
 |--------|-------------|
 | `GetStats()` | Receiver statistics |
-| `RequestKeyframe()` | Send PLI |
-| `SetJitterBufferTarget()` | Set target buffer delay |
-| `SetJitterBufferBounds()` | Set min/max delay bounds |
-| `GetJitterBufferStats()` | Get buffer statistics |
-| `OnJitterBufferStats()` | Periodic stats callback |
-| `SetAdaptiveJitterBuffer()` | Enable/disable adaptive mode |
+| `SetJitterBufferMinDelay()` | Set minimum jitter buffer delay |
 </details>
 
 <details>
@@ -569,6 +564,29 @@ bazel build //shim:webrtc_shim --config=darwin_arm64
 
 # Output: bazel-bin/shim/libwebrtc_shim.{dylib,so}
 ```
+
+### FFI Generation (when shim.h changes)
+
+If you add or modify any `SHIM_EXPORT` or `typedef struct { ... }` in `shim/shim.h`:
+
+```bash
+# 1) Update function signatures in internal/ffi/gen/funcs.json
+#    (params are passed as a single uintptr to the params struct)
+
+# 2) Ensure matching Go structs exist in internal/ffi/ for every C struct
+#    (layout tests are generated from these)
+
+# 3) Regenerate bindings, layout tests, and types.json
+go generate ./internal/ffi
+
+# 4) Rebuild the shim for your platform
+./scripts/build.sh
+```
+
+Notes:
+- `internal/ffi/gen/types.json` is generated from `shim/shim.h` and Go structs; do not edit by hand.
+- When you break the shim ABI, bump `kShimVersion` in `shim/shim_common.cc` and `ExpectedShimVersion` in `internal/ffi/lib.go`.
+- For CGO layout tests, ensure `CGO_ENABLED=1` and run: `go test -tags ffigo_cgo ./internal/ffi -run TestShimStructLayoutCgo`.
 
 ## Troubleshooting
 

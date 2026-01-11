@@ -2,8 +2,6 @@
 // It supports both purego (default) and CGO backends via build tags.
 package ffi
 
-//go:generate go run ./gen
-
 import (
 	"errors"
 	"fmt"
@@ -155,7 +153,7 @@ const ExpectedLibWebRTCVersion = "M141"
 
 // ExpectedShimVersion is the shim API version this Go code expects.
 // Must match kShimVersion in shim/shim_common.cc.
-const ExpectedShimVersion = "0.1.0"
+const ExpectedShimVersion = "0.2.0"
 
 // ErrVersionMismatch is returned when the shim version doesn't match.
 var ErrVersionMismatch = errors.New("shim version mismatch")

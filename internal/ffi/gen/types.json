@@ -1,0 +1,2185 @@
+{
+  "generated_from": "shim/shim.h",
+  "structs": [
+    {
+      "c_name": "ShimAudioCaptureCreateParams",
+      "go_name": "shimAudioCaptureCreateParams",
+      "fields": [
+        {
+          "c_name": "device_id",
+          "go_name": "DeviceID"
+        },
+        {
+          "c_name": "sample_rate",
+          "go_name": "SampleRate"
+        },
+        {
+          "c_name": "channels",
+          "go_name": "Channels"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioCaptureStartParams",
+      "go_name": "shimAudioCaptureStartParams",
+      "fields": [
+        {
+          "c_name": "cap",
+          "go_name": "Cap"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioDecoderCreateParams",
+      "go_name": "shimAudioDecoderCreateParams",
+      "fields": [
+        {
+          "c_name": "sample_rate",
+          "go_name": "SampleRate"
+        },
+        {
+          "c_name": "channels",
+          "go_name": "Channels"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioDecoderDecodeParams",
+      "go_name": "shimAudioDecoderDecodeParams",
+      "fields": [
+        {
+          "c_name": "data",
+          "go_name": "Data"
+        },
+        {
+          "c_name": "size",
+          "go_name": "Size"
+        },
+        {
+          "c_name": "dst_samples",
+          "go_name": "DstSamples"
+        },
+        {
+          "c_name": "out_num_samples",
+          "go_name": "OutNumSamples"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioEncoderConfig",
+      "go_name": "AudioEncoderConfig",
+      "fields": [
+        {
+          "c_name": "sample_rate",
+          "go_name": "SampleRate"
+        },
+        {
+          "c_name": "channels",
+          "go_name": "Channels"
+        },
+        {
+          "c_name": "bitrate_bps",
+          "go_name": "BitrateBps"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioEncoderCreateParams",
+      "go_name": "shimAudioEncoderCreateParams",
+      "fields": [
+        {
+          "c_name": "config",
+          "go_name": "Config"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioEncoderEncodeParams",
+      "go_name": "shimAudioEncoderEncodeParams",
+      "fields": [
+        {
+          "c_name": "samples",
+          "go_name": "Samples"
+        },
+        {
+          "c_name": "num_samples",
+          "go_name": "NumSamples"
+        },
+        {
+          "c_name": "dst_buffer",
+          "go_name": "DstBuffer"
+        },
+        {
+          "c_name": "out_size",
+          "go_name": "OutSize"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioEncoderSetBitrateParams",
+      "go_name": "shimAudioEncoderSetBitrateParams",
+      "fields": [
+        {
+          "c_name": "encoder",
+          "go_name": "Encoder"
+        },
+        {
+          "c_name": "bitrate_bps",
+          "go_name": "BitrateBps"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioTrackSourceCreateParams",
+      "go_name": "shimAudioTrackSourceCreateParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "sample_rate",
+          "go_name": "SampleRate"
+        },
+        {
+          "c_name": "channels",
+          "go_name": "Channels"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimAudioTrackSourcePushFrameParams",
+      "go_name": "shimAudioTrackSourcePushFrameParams",
+      "fields": [
+        {
+          "c_name": "source",
+          "go_name": "Source"
+        },
+        {
+          "c_name": "samples",
+          "go_name": "Samples"
+        },
+        {
+          "c_name": "num_samples",
+          "go_name": "NumSamples"
+        },
+        {
+          "c_name": "timestamp_us",
+          "go_name": "TimestampUs"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimBandwidthEstimate",
+      "go_name": "BandwidthEstimate",
+      "fields": [
+        {
+          "c_name": "timestamp_us",
+          "go_name": "TimestampUs"
+        },
+        {
+          "c_name": "target_bitrate_bps",
+          "go_name": "TargetBitrateBps"
+        },
+        {
+          "c_name": "available_send_bps",
+          "go_name": "AvailableSendBps"
+        },
+        {
+          "c_name": "available_recv_bps",
+          "go_name": "AvailableRecvBps"
+        },
+        {
+          "c_name": "pacing_rate_bps",
+          "go_name": "PacingRateBps"
+        },
+        {
+          "c_name": "congestion_window",
+          "go_name": "CongestionWindow"
+        },
+        {
+          "c_name": "loss_rate",
+          "go_name": "LossRate"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimCodecCapability",
+      "go_name": "CodecCapability",
+      "fields": [
+        {
+          "c_name": "mime_type",
+          "go_name": "MimeType"
+        },
+        {
+          "c_name": "clock_rate",
+          "go_name": "ClockRate"
+        },
+        {
+          "c_name": "channels",
+          "go_name": "Channels"
+        },
+        {
+          "c_name": "sdp_fmtp_line",
+          "go_name": "SDPFmtpLine"
+        },
+        {
+          "c_name": "payload_type",
+          "go_name": "PayloadType"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimDataChannelSendParams",
+      "go_name": "shimDataChannelSendParams",
+      "fields": [
+        {
+          "c_name": "dc",
+          "go_name": "DC"
+        },
+        {
+          "c_name": "data",
+          "go_name": "Data"
+        },
+        {
+          "c_name": "size",
+          "go_name": "Size"
+        },
+        {
+          "c_name": "is_binary",
+          "go_name": "IsBinary"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimDataChannelSetOnCloseParams",
+      "go_name": "shimDataChannelSetOnCloseParams",
+      "fields": [
+        {
+          "c_name": "dc",
+          "go_name": "DC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimDataChannelSetOnMessageParams",
+      "go_name": "shimDataChannelSetOnMessageParams",
+      "fields": [
+        {
+          "c_name": "dc",
+          "go_name": "DC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimDataChannelSetOnOpenParams",
+      "go_name": "shimDataChannelSetOnOpenParams",
+      "fields": [
+        {
+          "c_name": "dc",
+          "go_name": "DC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimDepacketizerPopParams",
+      "go_name": "shimDepacketizerPopParams",
+      "fields": [
+        {
+          "c_name": "depacketizer",
+          "go_name": "Depacketizer"
+        },
+        {
+          "c_name": "dst_buffer",
+          "go_name": "DstBuffer"
+        },
+        {
+          "c_name": "out_size",
+          "go_name": "OutSize"
+        },
+        {
+          "c_name": "out_timestamp",
+          "go_name": "OutTimestamp"
+        },
+        {
+          "c_name": "out_is_keyframe",
+          "go_name": "OutIsKeyframe"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimDepacketizerPushParams",
+      "go_name": "shimDepacketizerPushParams",
+      "fields": [
+        {
+          "c_name": "depacketizer",
+          "go_name": "Depacketizer"
+        },
+        {
+          "c_name": "data",
+          "go_name": "Data"
+        },
+        {
+          "c_name": "size",
+          "go_name": "Size"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimDeviceInfo",
+      "go_name": "shimDeviceInfo",
+      "fields": [
+        {
+          "c_name": "device_id",
+          "go_name": "deviceID"
+        },
+        {
+          "c_name": "label",
+          "go_name": "label"
+        },
+        {
+          "c_name": "kind",
+          "go_name": "kind"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimEnumerateDevicesParams",
+      "go_name": "shimEnumerateDevicesParams",
+      "fields": [
+        {
+          "c_name": "devices",
+          "go_name": "Devices"
+        },
+        {
+          "c_name": "max_devices",
+          "go_name": "MaxDevices"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimEnumerateScreensParams",
+      "go_name": "shimEnumerateScreensParams",
+      "fields": [
+        {
+          "c_name": "screens",
+          "go_name": "Screens"
+        },
+        {
+          "c_name": "max_screens",
+          "go_name": "MaxScreens"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimErrorBuffer",
+      "go_name": "ShimErrorBuffer",
+      "fields": [
+        {
+          "c_name": "message",
+          "go_name": "Message"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimGetSupportedAudioCodecsParams",
+      "go_name": "shimGetSupportedAudioCodecsParams",
+      "fields": [
+        {
+          "c_name": "codecs",
+          "go_name": "Codecs"
+        },
+        {
+          "c_name": "max_codecs",
+          "go_name": "MaxCodecs"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimGetSupportedVideoCodecsParams",
+      "go_name": "shimGetSupportedVideoCodecsParams",
+      "fields": [
+        {
+          "c_name": "codecs",
+          "go_name": "Codecs"
+        },
+        {
+          "c_name": "max_codecs",
+          "go_name": "MaxCodecs"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimICECandidate",
+      "go_name": "shimICECandidate",
+      "fields": [
+        {
+          "c_name": "candidate",
+          "go_name": "Candidate"
+        },
+        {
+          "c_name": "sdp_mid",
+          "go_name": "SDPMid"
+        },
+        {
+          "c_name": "sdp_mline_index",
+          "go_name": "SDPMLineIndex"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimICEServer",
+      "go_name": "ICEServerConfig",
+      "fields": [
+        {
+          "c_name": "urls",
+          "go_name": "URLs"
+        },
+        {
+          "c_name": "url_count",
+          "go_name": "URLCount"
+        },
+        {
+          "c_name": "username",
+          "go_name": "Username"
+        },
+        {
+          "c_name": "credential",
+          "go_name": "Credential"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPacketizerConfig",
+      "go_name": "PacketizerConfig",
+      "fields": [
+        {
+          "c_name": "codec",
+          "go_name": "Codec"
+        },
+        {
+          "c_name": "ssrc",
+          "go_name": "SSRC"
+        },
+        {
+          "c_name": "payload_type",
+          "go_name": "PayloadType"
+        },
+        {
+          "c_name": "mtu",
+          "go_name": "MTU"
+        },
+        {
+          "c_name": "clock_rate",
+          "go_name": "ClockRate"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPacketizerPacketizeParams",
+      "go_name": "shimPacketizerPacketizeParams",
+      "fields": [
+        {
+          "c_name": "packetizer",
+          "go_name": "Packetizer"
+        },
+        {
+          "c_name": "data",
+          "go_name": "Data"
+        },
+        {
+          "c_name": "size",
+          "go_name": "Size"
+        },
+        {
+          "c_name": "timestamp",
+          "go_name": "Timestamp"
+        },
+        {
+          "c_name": "is_keyframe",
+          "go_name": "IsKeyframe"
+        },
+        {
+          "c_name": "dst_buffer",
+          "go_name": "DstBuffer"
+        },
+        {
+          "c_name": "dst_offsets",
+          "go_name": "DstOffsets"
+        },
+        {
+          "c_name": "dst_sizes",
+          "go_name": "DstSizes"
+        },
+        {
+          "c_name": "max_packets",
+          "go_name": "MaxPackets"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionAddAudioTrackFromSourceParams",
+      "go_name": "shimPeerConnectionAddAudioTrackFromSourceParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "source",
+          "go_name": "Source"
+        },
+        {
+          "c_name": "track_id",
+          "go_name": "TrackID"
+        },
+        {
+          "c_name": "stream_id",
+          "go_name": "StreamID"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionAddICECandidateParams",
+      "go_name": "shimPeerConnectionAddICECandidateParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "candidate",
+          "go_name": "Candidate"
+        },
+        {
+          "c_name": "sdp_mid",
+          "go_name": "SDPMid"
+        },
+        {
+          "c_name": "sdp_mline_index",
+          "go_name": "SDPMLineIndex"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionAddTrackParams",
+      "go_name": "shimPeerConnectionAddTrackParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "codec",
+          "go_name": "Codec"
+        },
+        {
+          "c_name": "track_id",
+          "go_name": "TrackID"
+        },
+        {
+          "c_name": "stream_id",
+          "go_name": "StreamID"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionAddTransceiverParams",
+      "go_name": "shimPeerConnectionAddTransceiverParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "kind",
+          "go_name": "Kind"
+        },
+        {
+          "c_name": "direction",
+          "go_name": "Direction"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionAddVideoTrackFromSourceParams",
+      "go_name": "shimPeerConnectionAddVideoTrackFromSourceParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "source",
+          "go_name": "Source"
+        },
+        {
+          "c_name": "track_id",
+          "go_name": "TrackID"
+        },
+        {
+          "c_name": "stream_id",
+          "go_name": "StreamID"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionConfig",
+      "go_name": "PeerConnectionConfig",
+      "fields": [
+        {
+          "c_name": "ice_servers",
+          "go_name": "ICEServers"
+        },
+        {
+          "c_name": "ice_server_count",
+          "go_name": "ICEServerCount"
+        },
+        {
+          "c_name": "ice_candidate_pool_size",
+          "go_name": "ICECandidatePoolSize"
+        },
+        {
+          "c_name": "bundle_policy",
+          "go_name": "BundlePolicy"
+        },
+        {
+          "c_name": "rtcp_mux_policy",
+          "go_name": "RTCPMuxPolicy"
+        },
+        {
+          "c_name": "sdp_semantics",
+          "go_name": "SDPSemantics"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionCreateAnswerParams",
+      "go_name": "shimPeerConnectionCreateAnswerParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "sdp_out",
+          "go_name": "SDPOut"
+        },
+        {
+          "c_name": "sdp_out_size",
+          "go_name": "SDPOutSize"
+        },
+        {
+          "c_name": "out_sdp_len",
+          "go_name": "OutSDPLen"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionCreateDataChannelParams",
+      "go_name": "shimPeerConnectionCreateDataChannelParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "label",
+          "go_name": "Label"
+        },
+        {
+          "c_name": "ordered",
+          "go_name": "Ordered"
+        },
+        {
+          "c_name": "max_retransmits",
+          "go_name": "MaxRetransmits"
+        },
+        {
+          "c_name": "protocol",
+          "go_name": "Protocol"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionCreateOfferParams",
+      "go_name": "shimPeerConnectionCreateOfferParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "sdp_out",
+          "go_name": "SDPOut"
+        },
+        {
+          "c_name": "sdp_out_size",
+          "go_name": "SDPOutSize"
+        },
+        {
+          "c_name": "out_sdp_len",
+          "go_name": "OutSDPLen"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionCreateParams",
+      "go_name": "shimPeerConnectionCreateParams",
+      "fields": [
+        {
+          "c_name": "config",
+          "go_name": "Config"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionGetBandwidthEstimateParams",
+      "go_name": "shimPeerConnectionGetBandwidthEstimateParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "out_estimate",
+          "go_name": "OutEstimate"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionGetReceiversParams",
+      "go_name": "shimPeerConnectionGetReceiversParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "receivers",
+          "go_name": "Receivers"
+        },
+        {
+          "c_name": "max_receivers",
+          "go_name": "MaxReceivers"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionGetSendersParams",
+      "go_name": "shimPeerConnectionGetSendersParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "senders",
+          "go_name": "Senders"
+        },
+        {
+          "c_name": "max_senders",
+          "go_name": "MaxSenders"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionGetStatsParams",
+      "go_name": "shimPeerConnectionGetStatsParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "out_stats",
+          "go_name": "OutStats"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionGetTransceiversParams",
+      "go_name": "shimPeerConnectionGetTransceiversParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "transceivers",
+          "go_name": "Transceivers"
+        },
+        {
+          "c_name": "max_transceivers",
+          "go_name": "MaxTransceivers"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionRemoveTrackParams",
+      "go_name": "shimPeerConnectionRemoveTrackParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetLocalDescriptionParams",
+      "go_name": "shimPeerConnectionSetLocalDescriptionParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "type",
+          "go_name": "Type"
+        },
+        {
+          "c_name": "sdp",
+          "go_name": "SDP"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnBandwidthEstimateParams",
+      "go_name": "shimPeerConnectionSetOnBandwidthEstimateParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnConnectionStateChangeParams",
+      "go_name": "shimPeerConnectionSetOnConnectionStateChangeParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnDataChannelParams",
+      "go_name": "shimPeerConnectionSetOnDataChannelParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnICECandidateParams",
+      "go_name": "shimPeerConnectionSetOnICECandidateParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnICEConnectionStateChangeParams",
+      "go_name": "shimPeerConnectionSetOnICEConnectionStateChangeParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnICEGatheringStateChangeParams",
+      "go_name": "shimPeerConnectionSetOnICEGatheringStateChangeParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnNegotiationNeededParams",
+      "go_name": "shimPeerConnectionSetOnNegotiationNeededParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnSignalingStateChangeParams",
+      "go_name": "shimPeerConnectionSetOnSignalingStateChangeParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetOnTrackParams",
+      "go_name": "shimPeerConnectionSetOnTrackParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionSetRemoteDescriptionParams",
+      "go_name": "shimPeerConnectionSetRemoteDescriptionParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "type",
+          "go_name": "Type"
+        },
+        {
+          "c_name": "sdp",
+          "go_name": "SDP"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTCStats",
+      "go_name": "RTCStats",
+      "fields": [
+        {
+          "c_name": "timestamp_us",
+          "go_name": "TimestampUs"
+        },
+        {
+          "c_name": "bytes_sent",
+          "go_name": "BytesSent"
+        },
+        {
+          "c_name": "bytes_received",
+          "go_name": "BytesReceived"
+        },
+        {
+          "c_name": "packets_sent",
+          "go_name": "PacketsSent"
+        },
+        {
+          "c_name": "packets_received",
+          "go_name": "PacketsReceived"
+        },
+        {
+          "c_name": "packets_lost",
+          "go_name": "PacketsLost"
+        },
+        {
+          "c_name": "round_trip_time_ms",
+          "go_name": "RoundTripTimeMs"
+        },
+        {
+          "c_name": "jitter_ms",
+          "go_name": "JitterMs"
+        },
+        {
+          "c_name": "available_outgoing_bitrate",
+          "go_name": "AvailableOutgoingBitrate"
+        },
+        {
+          "c_name": "available_incoming_bitrate",
+          "go_name": "AvailableIncomingBitrate"
+        },
+        {
+          "c_name": "current_rtt_ms",
+          "go_name": "CurrentRTTMs"
+        },
+        {
+          "c_name": "total_rtt_ms",
+          "go_name": "TotalRTTMs"
+        },
+        {
+          "c_name": "responses_received",
+          "go_name": "ResponsesReceived"
+        },
+        {
+          "c_name": "frames_encoded",
+          "go_name": "FramesEncoded"
+        },
+        {
+          "c_name": "frames_decoded",
+          "go_name": "FramesDecoded"
+        },
+        {
+          "c_name": "frames_dropped",
+          "go_name": "FramesDropped"
+        },
+        {
+          "c_name": "key_frames_encoded",
+          "go_name": "KeyFramesEncoded"
+        },
+        {
+          "c_name": "key_frames_decoded",
+          "go_name": "KeyFramesDecoded"
+        },
+        {
+          "c_name": "nack_count",
+          "go_name": "NACKCount"
+        },
+        {
+          "c_name": "pli_count",
+          "go_name": "PLICount"
+        },
+        {
+          "c_name": "fir_count",
+          "go_name": "FIRCount"
+        },
+        {
+          "c_name": "qp_sum",
+          "go_name": "QPSum"
+        },
+        {
+          "c_name": "audio_level",
+          "go_name": "AudioLevel"
+        },
+        {
+          "c_name": "total_audio_energy",
+          "go_name": "TotalAudioEnergy"
+        },
+        {
+          "c_name": "concealment_events",
+          "go_name": "ConcealmentEvents"
+        },
+        {
+          "c_name": "data_channels_opened",
+          "go_name": "DataChannelsOpened"
+        },
+        {
+          "c_name": "data_channels_closed",
+          "go_name": "DataChannelsClosed"
+        },
+        {
+          "c_name": "messages_sent",
+          "go_name": "MessagesSent"
+        },
+        {
+          "c_name": "messages_received",
+          "go_name": "MessagesReceived"
+        },
+        {
+          "c_name": "bytes_sent_data_channel",
+          "go_name": "BytesSentDataChannel"
+        },
+        {
+          "c_name": "bytes_received_data_channel",
+          "go_name": "BytesReceivedDataChannel"
+        },
+        {
+          "c_name": "quality_limitation_reason",
+          "go_name": "QualityLimitationReason"
+        },
+        {
+          "c_name": "quality_limitation_duration_ms",
+          "go_name": "QualityLimitationDurationMs"
+        },
+        {
+          "c_name": "remote_packets_lost",
+          "go_name": "RemotePacketsLost"
+        },
+        {
+          "c_name": "remote_jitter_ms",
+          "go_name": "RemoteJitterMs"
+        },
+        {
+          "c_name": "remote_round_trip_time_ms",
+          "go_name": "RemoteRoundTripTimeMs"
+        },
+        {
+          "c_name": "jitter_buffer_delay_ms",
+          "go_name": "JitterBufferDelayMs"
+        },
+        {
+          "c_name": "jitter_buffer_target_delay_ms",
+          "go_name": "JitterBufferTargetDelayMs"
+        },
+        {
+          "c_name": "jitter_buffer_minimum_delay_ms",
+          "go_name": "JitterBufferMinimumDelayMs"
+        },
+        {
+          "c_name": "jitter_buffer_emitted_count",
+          "go_name": "JitterBufferEmittedCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPEncodingParameters",
+      "go_name": "RTPEncodingParameters",
+      "fields": [
+        {
+          "c_name": "rid",
+          "go_name": "RID"
+        },
+        {
+          "c_name": "max_bitrate_bps",
+          "go_name": "MaxBitrateBps"
+        },
+        {
+          "c_name": "min_bitrate_bps",
+          "go_name": "MinBitrateBps"
+        },
+        {
+          "c_name": "max_framerate",
+          "go_name": "MaxFramerate"
+        },
+        {
+          "c_name": "scale_resolution_down_by",
+          "go_name": "ScaleResolutionDownBy"
+        },
+        {
+          "c_name": "active",
+          "go_name": "Active"
+        },
+        {
+          "c_name": "scalability_mode",
+          "go_name": "ScalabilityMode"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPReceiverGetStatsParams",
+      "go_name": "shimRTPReceiverGetStatsParams",
+      "fields": [
+        {
+          "c_name": "receiver",
+          "go_name": "Receiver"
+        },
+        {
+          "c_name": "out_stats",
+          "go_name": "OutStats"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPReceiverSetJitterBufferMinDelayParams",
+      "go_name": "shimRTPReceiverSetJitterBufferMinDelayParams",
+      "fields": [
+        {
+          "c_name": "receiver",
+          "go_name": "Receiver"
+        },
+        {
+          "c_name": "min_delay_ms",
+          "go_name": "MinDelayMs"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSendParameters",
+      "go_name": "RTPSendParameters",
+      "fields": [
+        {
+          "c_name": "encodings",
+          "go_name": "Encodings"
+        },
+        {
+          "c_name": "encoding_count",
+          "go_name": "EncodingCount"
+        },
+        {
+          "c_name": "transaction_id",
+          "go_name": "TransactionID"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderGetActiveLayersParams",
+      "go_name": "shimRTPSenderGetActiveLayersParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "out_spatial",
+          "go_name": "OutSpatial"
+        },
+        {
+          "c_name": "out_temporal",
+          "go_name": "OutTemporal"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderGetNegotiatedCodecsParams",
+      "go_name": "shimRTPSenderGetNegotiatedCodecsParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "codecs",
+          "go_name": "Codecs"
+        },
+        {
+          "c_name": "max_codecs",
+          "go_name": "MaxCodecs"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderGetParametersParams",
+      "go_name": "shimRTPSenderGetParametersParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "encodings",
+          "go_name": "Encodings"
+        },
+        {
+          "c_name": "max_encodings",
+          "go_name": "MaxEncodings"
+        },
+        {
+          "c_name": "out_params",
+          "go_name": "OutParams"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderGetScalabilityModeParams",
+      "go_name": "shimRTPSenderGetScalabilityModeParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "mode_out",
+          "go_name": "ModeOut"
+        },
+        {
+          "c_name": "mode_out_size",
+          "go_name": "ModeOutSize"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderGetStatsParams",
+      "go_name": "shimRTPSenderGetStatsParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "out_stats",
+          "go_name": "OutStats"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderReplaceTrackParams",
+      "go_name": "shimRTPSenderReplaceTrackParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "track",
+          "go_name": "Track"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderSetBitrateParams",
+      "go_name": "shimRTPSenderSetBitrateParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "bitrate",
+          "go_name": "Bitrate"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderSetLayerActiveParams",
+      "go_name": "shimRTPSenderSetLayerActiveParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "rid",
+          "go_name": "RID"
+        },
+        {
+          "c_name": "active",
+          "go_name": "Active"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderSetLayerBitrateParams",
+      "go_name": "shimRTPSenderSetLayerBitrateParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "rid",
+          "go_name": "RID"
+        },
+        {
+          "c_name": "max_bitrate_bps",
+          "go_name": "MaxBitrateBps"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderSetOnRTCPFeedbackParams",
+      "go_name": "shimRTPSenderSetOnRTCPFeedbackParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderSetParametersParams",
+      "go_name": "shimRTPSenderSetParametersParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "params",
+          "go_name": "Params"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderSetPreferredCodecParams",
+      "go_name": "shimRTPSenderSetPreferredCodecParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "mime_type",
+          "go_name": "MimeType"
+        },
+        {
+          "c_name": "payload_type",
+          "go_name": "PayloadType"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimRTPSenderSetScalabilityModeParams",
+      "go_name": "shimRTPSenderSetScalabilityModeParams",
+      "fields": [
+        {
+          "c_name": "sender",
+          "go_name": "Sender"
+        },
+        {
+          "c_name": "scalability_mode",
+          "go_name": "ScalabilityMode"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimScreenCaptureCreateParams",
+      "go_name": "shimScreenCaptureCreateParams",
+      "fields": [
+        {
+          "c_name": "screen_or_window_id",
+          "go_name": "ScreenOrWindowID"
+        },
+        {
+          "c_name": "is_window",
+          "go_name": "IsWindow"
+        },
+        {
+          "c_name": "fps",
+          "go_name": "FPS"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimScreenCaptureStartParams",
+      "go_name": "shimScreenCaptureStartParams",
+      "fields": [
+        {
+          "c_name": "cap",
+          "go_name": "Cap"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimScreenInfo",
+      "go_name": "shimScreenInfo",
+      "fields": [
+        {
+          "c_name": "id",
+          "go_name": "id"
+        },
+        {
+          "c_name": "title",
+          "go_name": "title"
+        },
+        {
+          "c_name": "is_window",
+          "go_name": "isWindow"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimSessionDescription",
+      "go_name": "shimSessionDescription",
+      "fields": [
+        {
+          "c_name": "type",
+          "go_name": "Type"
+        },
+        {
+          "c_name": "sdp",
+          "go_name": "SDP"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimTrackSetAudioSinkParams",
+      "go_name": "shimTrackSetAudioSinkParams",
+      "fields": [
+        {
+          "c_name": "track",
+          "go_name": "Track"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimTrackSetVideoSinkParams",
+      "go_name": "shimTrackSetVideoSinkParams",
+      "fields": [
+        {
+          "c_name": "track",
+          "go_name": "Track"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimTransceiverGetCodecPreferencesParams",
+      "go_name": "shimTransceiverGetCodecPreferencesParams",
+      "fields": [
+        {
+          "c_name": "transceiver",
+          "go_name": "Transceiver"
+        },
+        {
+          "c_name": "codecs",
+          "go_name": "Codecs"
+        },
+        {
+          "c_name": "max_codecs",
+          "go_name": "MaxCodecs"
+        },
+        {
+          "c_name": "out_count",
+          "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimTransceiverSetCodecPreferencesParams",
+      "go_name": "shimTransceiverSetCodecPreferencesParams",
+      "fields": [
+        {
+          "c_name": "transceiver",
+          "go_name": "Transceiver"
+        },
+        {
+          "c_name": "codecs",
+          "go_name": "Codecs"
+        },
+        {
+          "c_name": "count",
+          "go_name": "Count"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimTransceiverSetDirectionParams",
+      "go_name": "shimTransceiverSetDirectionParams",
+      "fields": [
+        {
+          "c_name": "transceiver",
+          "go_name": "Transceiver"
+        },
+        {
+          "c_name": "direction",
+          "go_name": "Direction"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimTransceiverStopParams",
+      "go_name": "shimTransceiverStopParams",
+      "fields": [
+        {
+          "c_name": "transceiver",
+          "go_name": "Transceiver"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoCaptureCreateParams",
+      "go_name": "shimVideoCaptureCreateParams",
+      "fields": [
+        {
+          "c_name": "device_id",
+          "go_name": "DeviceID"
+        },
+        {
+          "c_name": "width",
+          "go_name": "Width"
+        },
+        {
+          "c_name": "height",
+          "go_name": "Height"
+        },
+        {
+          "c_name": "fps",
+          "go_name": "FPS"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoCaptureStartParams",
+      "go_name": "shimVideoCaptureStartParams",
+      "fields": [
+        {
+          "c_name": "cap",
+          "go_name": "Cap"
+        },
+        {
+          "c_name": "callback",
+          "go_name": "Callback"
+        },
+        {
+          "c_name": "ctx",
+          "go_name": "Ctx"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoDecoderCreateParams",
+      "go_name": "shimVideoDecoderCreateParams",
+      "fields": [
+        {
+          "c_name": "codec",
+          "go_name": "Codec"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoDecoderDecodeParams",
+      "go_name": "shimVideoDecoderDecodeParams",
+      "fields": [
+        {
+          "c_name": "data",
+          "go_name": "Data"
+        },
+        {
+          "c_name": "size",
+          "go_name": "Size"
+        },
+        {
+          "c_name": "timestamp",
+          "go_name": "Timestamp"
+        },
+        {
+          "c_name": "is_keyframe",
+          "go_name": "IsKeyframe"
+        },
+        {
+          "c_name": "y_dst",
+          "go_name": "YDst"
+        },
+        {
+          "c_name": "u_dst",
+          "go_name": "UDst"
+        },
+        {
+          "c_name": "v_dst",
+          "go_name": "VDst"
+        },
+        {
+          "c_name": "out_width",
+          "go_name": "OutWidth"
+        },
+        {
+          "c_name": "out_height",
+          "go_name": "OutHeight"
+        },
+        {
+          "c_name": "out_y_stride",
+          "go_name": "OutYStride"
+        },
+        {
+          "c_name": "out_u_stride",
+          "go_name": "OutUStride"
+        },
+        {
+          "c_name": "out_v_stride",
+          "go_name": "OutVStride"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoEncoderConfig",
+      "go_name": "VideoEncoderConfig",
+      "fields": [
+        {
+          "c_name": "width",
+          "go_name": "Width"
+        },
+        {
+          "c_name": "height",
+          "go_name": "Height"
+        },
+        {
+          "c_name": "bitrate_bps",
+          "go_name": "BitrateBps"
+        },
+        {
+          "c_name": "framerate",
+          "go_name": "Framerate"
+        },
+        {
+          "c_name": "keyframe_interval",
+          "go_name": "KeyframeInterval"
+        },
+        {
+          "c_name": "h264_profile",
+          "go_name": "H264Profile"
+        },
+        {
+          "c_name": "vp9_profile",
+          "go_name": "VP9Profile"
+        },
+        {
+          "c_name": "prefer_hw",
+          "go_name": "PreferHW"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoEncoderCreateParams",
+      "go_name": "shimVideoEncoderCreateParams",
+      "fields": [
+        {
+          "c_name": "codec",
+          "go_name": "Codec"
+        },
+        {
+          "c_name": "config",
+          "go_name": "Config"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoEncoderEncodeParams",
+      "go_name": "shimVideoEncoderEncodeParams",
+      "fields": [
+        {
+          "c_name": "y_plane",
+          "go_name": "YPlane"
+        },
+        {
+          "c_name": "u_plane",
+          "go_name": "UPlane"
+        },
+        {
+          "c_name": "v_plane",
+          "go_name": "VPlane"
+        },
+        {
+          "c_name": "y_stride",
+          "go_name": "YStride"
+        },
+        {
+          "c_name": "u_stride",
+          "go_name": "UStride"
+        },
+        {
+          "c_name": "v_stride",
+          "go_name": "VStride"
+        },
+        {
+          "c_name": "timestamp",
+          "go_name": "Timestamp"
+        },
+        {
+          "c_name": "force_keyframe",
+          "go_name": "ForceKeyframe"
+        },
+        {
+          "c_name": "dst_buffer",
+          "go_name": "DstBuffer"
+        },
+        {
+          "c_name": "dst_buffer_size",
+          "go_name": "DstBufferSize"
+        },
+        {
+          "c_name": "out_size",
+          "go_name": "OutSize"
+        },
+        {
+          "c_name": "out_is_keyframe",
+          "go_name": "OutIsKeyframe"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoEncoderSetBitrateParams",
+      "go_name": "shimVideoEncoderSetBitrateParams",
+      "fields": [
+        {
+          "c_name": "encoder",
+          "go_name": "Encoder"
+        },
+        {
+          "c_name": "bitrate_bps",
+          "go_name": "BitrateBps"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoEncoderSetFramerateParams",
+      "go_name": "shimVideoEncoderSetFramerateParams",
+      "fields": [
+        {
+          "c_name": "encoder",
+          "go_name": "Encoder"
+        },
+        {
+          "c_name": "framerate",
+          "go_name": "Framerate"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoTrackSourceCreateParams",
+      "go_name": "shimVideoTrackSourceCreateParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "width",
+          "go_name": "Width"
+        },
+        {
+          "c_name": "height",
+          "go_name": "Height"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimVideoTrackSourcePushFrameParams",
+      "go_name": "shimVideoTrackSourcePushFrameParams",
+      "fields": [
+        {
+          "c_name": "source",
+          "go_name": "Source"
+        },
+        {
+          "c_name": "y_plane",
+          "go_name": "YPlane"
+        },
+        {
+          "c_name": "u_plane",
+          "go_name": "UPlane"
+        },
+        {
+          "c_name": "v_plane",
+          "go_name": "VPlane"
+        },
+        {
+          "c_name": "y_stride",
+          "go_name": "YStride"
+        },
+        {
+          "c_name": "u_stride",
+          "go_name": "UStride"
+        },
+        {
+          "c_name": "v_stride",
+          "go_name": "VStride"
+        },
+        {
+          "c_name": "timestamp_us",
+          "go_name": "TimestampUs"
+        }
+      ]
+    }
+  ]
+}
