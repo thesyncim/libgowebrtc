@@ -45,7 +45,12 @@ func decodeUntilOutput(t testing.TB, dec decoder.VideoDecoder, encoded []byte, d
 	for i := 0; i < decodeRetryAttempts; i++ {
 		err := dec.DecodeInto(encoded, dst, timestamp, isKeyframe)
 		if err == nil {
-			return nil
+			// Verify actual output was produced (not just no error)
+			if dst.Width > 0 && dst.Height > 0 {
+				return nil
+			}
+			// Decoder returned success but no output - treat as need more data
+			continue
 		}
 		if errors.Is(err, decoder.ErrNeedMoreData) {
 			continue
