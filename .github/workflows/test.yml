@@ -90,15 +90,36 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          # Install libc++ runtime - try multiple package names for compatibility
-          # Ubuntu 24.04 uses versioned packages (libc++-18, libc++abi-18)
-          sudo apt-get install -y libc++1 libc++abi1 || \
-          sudo apt-get install -y libc++-18-dev libc++abi-18-dev || \
-          sudo apt-get install -y libc++-dev libc++abi-dev || true
+          # Install LLVM libc++ runtime - the shim is built with clang's libc++
+          # which uses a different ABI than libstdc++. We need the runtime library.
+          # Try versioned packages first (Ubuntu 22.04/24.04), then fall back to unversioned
+          if ! sudo apt-get install -y libc++1 libc++abi1 2>/dev/null; then
+            echo "libc++1 not available, trying versioned packages..."
+            # Find available libc++ version
+            LIBC_VERSION=$(apt-cache search '^libc\+\+-[0-9]+-dev$' | head -1 | grep -oP 'libc\+\+-\K[0-9]+' || echo "")
+            if [ -n "$LIBC_VERSION" ]; then
+              echo "Installing libc++ version $LIBC_VERSION..."
+              sudo apt-get install -y "libc++-${LIBC_VERSION}-dev" "libc++abi-${LIBC_VERSION}-dev" || true
+            else
+              echo "No versioned libc++ found, trying generic..."
+              sudo apt-get install -y libc++-dev libc++abi-dev || true
+            fi
+          fi
+          # Update library cache
+          sudo ldconfig
           # Verify libc++ is available
+          echo "=== Checking libc++ availability ==="
           ldconfig -p | grep -i libc++ || echo "Warning: libc++ not found in ldconfig"
           # Show what version was installed
           dpkg -l | grep -i libc++ || true
+          # Check if the symbol is available
+          echo "=== Checking for ostringstream symbol ==="
+          for lib in /usr/lib/*/libc++.so* /usr/lib/libc++.so*; do
+            if [ -f "$lib" ]; then
+              echo "Checking $lib..."
+              nm -D "$lib" 2>/dev/null | grep -i ostringstream | head -5 || true
+            fi
+          done
 
       - name: Download pre-built shim (Unix)
         if: runner.os != 'Windows' && steps.shim_changes.outputs.shim != 'true'
@@ -137,6 +158,8 @@ jobs:
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+          # Add libc++ paths for Linux - the shim is built with LLVM's libc++
+          LD_LIBRARY_PATH: ${{ runner.os == 'Linux' && '/usr/lib/llvm-18/lib:/usr/lib/llvm-17/lib:/usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu' || '' }}
 
       - name: Run tests (CGO variant)
         if: runner.os != 'Windows'  # CGO tests need extra setup on Windows
@@ -149,6 +172,8 @@ jobs:
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+          # Add libc++ paths for Linux - the shim is built with LLVM's libc++
+          LD_LIBRARY_PATH: /usr/lib/llvm-18/lib:/usr/lib/llvm-17/lib:/usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu
 
       - name: Run benchmarks (comparison)
         if: runner.os != 'Windows'
@@ -161,6 +186,7 @@ jobs:
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+          LD_LIBRARY_PATH: /usr/lib/llvm-18/lib:/usr/lib/llvm-17/lib:/usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu
 
   # darwin_amd64 via Rosetta emulation on ARM64 runner
   test-darwin-amd64-rosetta:
