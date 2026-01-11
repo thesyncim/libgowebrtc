@@ -12,7 +12,7 @@
 - **Pion-compatible** - implements `webrtc.TrackLocal` for seamless integration
 - **Browser-like API** - `GetUserMedia()`, `GetDisplayMedia()`, `PeerConnection`
 - **SVC/Simulcast** support with Chrome/Firefox-compatible presets
-- **purego FFI** - no CGO required, just a pre-built shim library
+- **purego FFI** - no CGO required by default, optional CGO mode for 5x faster FFI
 - **Device capture** - camera, microphone, screen/window capture
 
 ## Installation
@@ -32,6 +32,25 @@ Override behavior with:
 - `LIBWEBRTC_SHIM_DISABLE_DOWNLOAD=1` (disable auto-download)
 - `LIBWEBRTC_SHIM_CACHE_DIR=/custom/cache/dir` (override cache location)
 - `LIBWEBRTC_SHIM_FLAVOR=basic` (override shim flavor; default: basic)
+
+### FFI Variants
+
+By default, libgowebrtc uses **purego** for FFI calls, requiring no CGO. For performance-critical applications, an optional CGO mode provides ~5x faster FFI calls:
+
+```bash
+# Default (purego) - no CGO required
+go build ./...
+
+# CGO mode - faster FFI, requires C compiler
+go build -tags ffigo_cgo ./...
+```
+
+| Mode | FFI Overhead | Requirements |
+|------|--------------|--------------|
+| purego (default) | ~200 ns/call | None (pure Go) |
+| CGO (`-tags ffigo_cgo`) | ~44 ns/call | C compiler |
+
+Both modes use the same pre-built shim library - no recompilation needed.
 
 ### H.264 Support
 
@@ -213,7 +232,7 @@ libgowebrtc/
 │   ├── track/          # Pion-compatible TrackLocal
 │   ├── pc/             # PeerConnection (libwebrtc-backed)
 │   └── media/          # Browser-like API (GetUserMedia, etc.)
-├── internal/ffi/       # purego FFI bindings
+├── internal/ffi/       # FFI bindings (purego default, CGO optional)
 ├── shim/               # C++ shim library
 ├── test/
 │   ├── e2e/            # End-to-end tests
@@ -372,6 +391,9 @@ go test ./...
 
 # With shim library (real encoding/decoding)
 LIBWEBRTC_SHIM_PATH=./lib/darwin_arm64/libwebrtc_shim.dylib go test ./...
+
+# Test with CGO FFI variant
+go test -tags ffigo_cgo ./...
 
 # Verbose
 go test -v ./...
