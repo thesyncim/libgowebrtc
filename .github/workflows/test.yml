@@ -90,7 +90,15 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libc++1 libc++abi1
+          # Install libc++ runtime - try multiple package names for compatibility
+          # Ubuntu 24.04 uses versioned packages (libc++-18, libc++abi-18)
+          sudo apt-get install -y libc++1 libc++abi1 || \
+          sudo apt-get install -y libc++-18-dev libc++abi-18-dev || \
+          sudo apt-get install -y libc++-dev libc++abi-dev || true
+          # Verify libc++ is available
+          ldconfig -p | grep -i libc++ || echo "Warning: libc++ not found in ldconfig"
+          # Show what version was installed
+          dpkg -l | grep -i libc++ || true
 
       - name: Download pre-built shim (Unix)
         if: runner.os != 'Windows' && steps.shim_changes.outputs.shim != 'true'
@@ -100,6 +108,13 @@ jobs:
             "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
             | tar -xz -C lib/${{ matrix.platform }}
           ls -la lib/${{ matrix.platform }}/
+          # Debug: check library dependencies on Linux
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            echo "=== Checking shim dependencies ==="
+            ldd lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }} || true
+            echo "=== Checking for undefined symbols ==="
+            nm -u lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }} | head -50 || true
+          fi
 
       - name: Download pre-built shim (Windows)
         if: runner.os == 'Windows' && steps.shim_changes.outputs.shim != 'true'
