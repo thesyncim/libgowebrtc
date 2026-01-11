@@ -1135,268 +1135,69 @@ func main() {
 
 ---
 
-## Recent Session Changes (Phase 11 - Device Capture)
+## Development History (Condensed)
 
-### Completed
+<details>
+<summary><strong>Phase 11: Device Capture (Complete)</strong></summary>
 
-**1. Shim Device Capture API (`shim/shim.h`, `shim/shim.cc`)**
-- Added ShimDeviceInfo struct for device enumeration
-- Added ShimVideoCapture with callback-based frame delivery
-- Added ShimAudioCapture with callback-based sample delivery
-- Added ShimScreenCapture for screen/window capture
-- Added ShimScreenInfo for screen enumeration
-- All implementations include thread-safe state management
+**Key Outcomes:**
+- Full device enumeration (camera, microphone, screens)
+- Callback-based frame delivery with thread-safe lifecycle
+- Browser-compatible `GetUserMedia`/`GetDisplayMedia` API
+- Type-safe interfaces (no `interface{}` in public API)
 
-**2. FFI Device Bindings (`internal/ffi/device.go`)**
-- CapturedVideoFrame struct for I420 video frames
-- CapturedAudioFrame struct for S16LE audio samples
-- VideoCaptureCallback and AudioCaptureCallback types
-- Full purego callback bridge implementation with global registry
-- Thread-safe capture lifecycle (Start/Stop/Close/IsRunning)
-- Comprehensive unit tests with concurrency testing
+**Design Decisions:**
+- Registry pattern for C→Go callback dispatch
+- Zero-copy frame delivery wrapping C memory
+- Conditional compilation for device capture (`SHIM_ENABLE_DEVICE_CAPTURE`)
 
-**3. pkg/media API Improvements**
-- MediaDeviceInfo and MediaDeviceKind types (browser-compatible)
-- EnumerateDevices() function
-- EnumerateScreens() function (extension API)
-- DisplayConstraints and DisplayVideoConstraints types
-- Updated GetDisplayMedia() to support typed constraints
-- **Removed all interface{} from public API**:
-  - VideoStreamTrack interface with typed methods
-  - AudioStreamTrack interface with typed methods
-  - Type-safe GetConstraints(), ApplyConstraints(), GetSettings()
+</details>
 
-### SVC/Simulcast Support (Already Complete)
-- SVCMode enum: L1-L3, T1-T3, K-SVC, S2/S3 simulcast
-- SVCConfig with per-layer configuration
-- Browser presets: Chrome, Firefox, SFU, ScreenShare, LowLatency
-- Full integration in VideoConstraints and encoder configs
+<details>
+<summary><strong>Phase 11-13: WebRTC API Completion (35 tasks complete)</strong></summary>
 
-### API Design Principles Applied
-1. **Type-safe interfaces** - No interface{} in public API
-2. **Zero-copy frame delivery** - CapturedVideoFrame wraps C memory directly
-3. **Thread-safe callbacks** - Registry pattern for C→Go callback dispatch
-4. **Browser-compatible naming** - Matches navigator.mediaDevices API
-5. **Comprehensive testing** - Lifecycle, concurrency, edge cases
+**APIs Added:**
+- GetStats, SetParameters/GetParameters
+- Transceiver control (direction, stop, mid)
+- ICE restart, connection state callbacks
+- RTCP feedback (PLI/FIR/NACK), simulcast layer control
+- SCTP/DataChannel stats, quality limitation tracking
+- Codec capabilities, bandwidth estimation hooks
 
-### Code Quality Session Changes
+</details>
 
-**1. Shim.cc TODOs Fixed**
-- Implemented DataChannelObserver with full callback support
-- Added device capture with conditional compilation (`SHIM_ENABLE_DEVICE_CAPTURE`)
-- Full libwebrtc API integration:
-  - VideoCaptureModule for camera capture
-  - AudioDeviceModule for microphone capture
-  - DesktopCapturer for screen/window capture
-- CMakeLists.txt updated with device capture option
+<details>
+<summary><strong>January 2025: Critical Fixes</strong></summary>
 
-**2. golangci-lint Configuration**
-- Added `.golangci.yml` with comprehensive settings
-- Enabled linters: errcheck, govet, staticcheck, gosimple, unused, revive, gosec, etc.
-- Reasonable exclusions for:
-  - Test files (errcheck, govet, funlen, etc.)
-  - SVC mode naming (L1T2_KEY is industry standard)
-  - FFI layer (unparam, gocritic for special requirements)
-  - Browser-compatible type naming (MediaDeviceKind stutter intentional)
+**purego Callback Type Mismatch (CRITICAL):**
+- Changed callback parameters from `int` to `int32` for arm64 compatibility
+- Fixed garbage data in video/audio callbacks
 
-**3. All Linter Issues Resolved**
-- Fixed errorlint issues (use errors.Is instead of ==)
-- Removed unused struct fields
-- Fixed variable shadowing (cap → capture)
-- Formatted all Go files
-- Preallocated slices where appropriate
-- Fixed nil pointer dereference patterns in tests
+**H264/AV1 Codec Support:**
+- H264: Direct OpenH264 integration (bypasses libwebrtc factories)
+- AV1: Requires `qpMax=63` and `SetScalabilityMode(kL1T1)`
+- All 4 video codecs working: H264, VP8, VP9, AV1
 
-### Next Steps
+**Build Fixes:**
+- `use_custom_libcxx = false` for ABI compatibility
+- Separate codec factory archives (thin archives don't copy correctly)
+- macOS frameworks: ScreenCaptureKit, AppKit, ApplicationServices
 
-**Completed:**
-- ✅ Cleaned up trivial tests across codebase
-- ✅ Wired device capture into GetUserMedia/GetDisplayMedia
-- ✅ Created comprehensive README.md
+</details>
 
-**Top 20 Tasks (First Batch):**
+<details>
+<summary><strong>Test Coverage Summary</strong></summary>
 
-| # | Task | Status | Notes |
-|---|------|--------|-------|
-| 1 | Create README.md | ✅ Done | Full project documentation |
-| 2 | Update PLAN.md | ✅ Done | This update |
-| 3 | Add GetStats to shim.h | ✅ Done | Connection monitoring |
-| 4 | Add SetParameters/GetParameters to shim.h | ✅ Done | Bitrate adaptation |
-| 5 | Add Transceiver functions to shim.h | ✅ Done | Direction control |
-| 6 | Add AddTransceiver to shim.h | ✅ Done | Media direction |
-| 7 | Add FFI bindings for new shim functions | ✅ Done | purego bindings |
-| 8 | Wire up pkg/pc GetStats | ✅ Done | Go API layer |
-| 9 | Wire up pkg/pc SetParameters/GetParameters | ✅ Done | Go API layer |
-| 10 | Wire up pkg/pc Transceiver methods | ✅ Done | Go API layer |
-| 11 | Add GetSenders/GetReceivers/GetTransceivers to shim | ✅ Done | Accessor functions |
-| 12 | Add ICE restart to shim | ✅ Done | ICE renegotiation |
-| 13 | Add connection state callback to shim | ✅ Done | C++ impl complete |
-| 14 | Wire up GetSenders/GetReceivers/GetTransceivers in pkg/pc | ✅ Done | Go API layer |
-| 15 | Wire up ICE restart in pkg/pc | ✅ Done | Go API layer |
-| 16 | Wire up connection state callbacks in pkg/pc | ✅ Done | Full event support |
-| 17 | Add RTCP feedback handling to shim | ✅ Done | PLI/FIR/NACK |
-| 18 | Add simulcast layer control to shim | ✅ Done | Layer on/off |
-| 19 | Wire up RTCP feedback in pkg/pc | ✅ Done | Go API layer |
-| 20 | Wire up simulcast layer control in pkg/pc | ✅ Done | Go API layer |
+**E2E Tests:** 19 tests passing
+- Codec roundtrips (H264, VP8, VP9, AV1, Opus)
+- Track creation/writing, offer/answer, frame reception
+- Device enumeration, concurrent frame writes
 
-**Second Batch - Callbacks & Runtime Control:**
+**Pion Interop Tests:** 11 tests passing
+- Bidirectional video, data channels, codec negotiation
+- Connection state callbacks, ICE exchange, renegotiation
 
-| # | Task | Status | Notes |
-|---|------|--------|-------|
-| 21 | Add OnSignalingStateChange callback | ✅ Done | Signaling state events |
-| 22 | Add OnICEConnectionStateChange callback | ✅ Done | ICE state events |
-| 23 | Add OnICEGatheringStateChange callback | ✅ Done | ICE gathering events |
-| 24 | Add OnNegotiationNeeded callback | ✅ Done | Renegotiation trigger |
-| 25 | Add runtime scalability mode API | ✅ Done | SetScalabilityMode/GetScalabilityMode |
-| 26 | Wire all callbacks in pkg/pc | ✅ Done | Full NewPeerConnection callback setup |
-| 27 | C++ shim implementations | ✅ Done | All callback setters + scalability mode |
-| 28 | Add SCTP transport stats | ✅ Done | DataChannel statistics |
-| 29 | Add codec capability queries | ✅ Done | Supported codecs/profiles |
-| 30 | Add bandwidth estimation hooks | ✅ Done | BWE callbacks |
-
-**Third Batch - Statistics & Codec APIs:**
-
-| # | Task | Status | Notes |
-|---|------|--------|-------|
-| 31 | Add quality limitation reason to stats | ✅ Done | CPU/bandwidth/other limitation |
-| 32 | Add remote RTP stats | ✅ Done | Remote jitter/RTT/packet loss |
-| 33 | Add DataChannel message stats | ✅ Done | Messages sent/received |
-| 34 | Codec capability C++ impl | ✅ Done | Video/audio codec enumeration |
-| 35 | BWE callback implementation | ✅ Done | Bandwidth estimate polling |
-
-**Summary:** 35/35 tasks complete. All WebRTC APIs implemented.
-
-**New Features Added (Latest Session):**
-- **SCTP/DataChannel Stats** - `DataChannelsOpened`, `DataChannelsClosed`, `MessagesSent`, `MessagesReceived`, `BytesSentDataChannel`, `BytesReceivedDataChannel`
-- **Quality Limitation** - `QualityLimitationReason` (none/cpu/bandwidth/other), `QualityLimitationDurationMs`
-- **Remote RTP Stats** - `RemotePacketsLost`, `RemoteJitterMs`, `RemoteRoundTripTimeMs`
-- **Codec Capabilities** - `GetSupportedVideoCodecs()`, `GetSupportedAudioCodecs()`, `IsCodecSupported()`
-- **Bandwidth Estimation** - `GetBandwidthEstimate()`, `SetOnBandwidthEstimate()` callback
-
-**Priority:**
-1. Build shim with actual libwebrtc for darwin/linux platforms
-2. Test device capture on macOS/Linux
-
-**Completed This Session:**
-- Browser example (`examples/camera_to_browser/`) with:
-  - WebSocket signaling for offer/answer/ICE
-  - Animated test pattern video generator
-  - DataChannel bidirectional messaging
-  - Real-time connection statistics
-  - Modern responsive browser UI
-
----
-
-## libwebrtc Build & Pion Interop Session (January 2025)
-
-### Fixed Issues
-
-**1. purego Callback Type Mismatch (CRITICAL FIX)**
-- **Problem:** Video and audio callbacks received garbage data, causing panics
-- **Root cause:** C uses `int` (32-bit) for width/height/strides, but Go's purego callback was using `int` (64-bit on arm64)
-- **Fix:** Changed callback parameter types from `int` to `int32` in `internal/ffi/peerconnection.go`:
-  ```go
-  // Before (broken):
-  func(ctx uintptr, width, height int, yPlane, uPlane, vPlane uintptr, ...)
-
-  // After (fixed):
-  func(ctx uintptr, width, height int32, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int32, timestampUs int64)
-  ```
-- This fix applies to both video and audio callbacks
-
-**2. libwebrtc Build Configuration**
-- Added `use_custom_libcxx = false` to use system libc++ for ABI compatibility
-- Added creation of separate codec factory archives (thin archives don't copy correctly):
-  - `libbuiltin_video_encoder_factory.a`
-  - `libbuiltin_video_decoder_factory.a`
-  - `librtc_internal_video_codecs.a`
-  - `librtc_simulcast_encoder_adapter.a`
-  - `librtc_software_fallback_wrappers.a`
-- Fixed missing macOS frameworks: ScreenCaptureKit, AppKit, ApplicationServices
-- Fixed AudioDeviceModule API change: `AudioDeviceModule::Create` → `CreateAudioDeviceModule`
-
-### Test Status
-
-**E2E Tests (all pass):**
-- ✅ TestEnumerateDevices
-- ✅ TestEnumerateScreens
-- ✅ TestVideoCodecRoundtrip (H264, VP8, VP9, AV1 - all pass!)
-- ✅ TestOpusRoundtrip
-- ✅ TestEncoderBitrateControl
-- ✅ TestEncoderFramerateControl
-- ✅ TestKeyframeRequest
-- ✅ TestVideoTrackCreation
-- ✅ TestAudioTrackCreation
-- ✅ TestVideoFrameWrite
-- ✅ TestAudioFrameWrite
-- ✅ TestOfferAnswerWithTracks
-- ✅ TestTrackReception (1 video frame received)
-- ✅ TestVideoFrameReceiving
-- ✅ TestVideoAndAudioTrackReception
-- ✅ TestMultipleCodecs
-- ✅ TestTrackDisable
-- ✅ TestPeerConnectionLifecycle
-- ✅ TestConcurrentFrameWrites
-
-**Pion Interop Tests (new):**
-- ✅ TestPionToLibVideoInterop - Lib receives track from pion
-- ✅ TestBidirectionalVideoInterop - Bidirectional media flow works
-- ✅ TestDataChannelInterop - Data channel negotiation works
-- ✅ TestCodecNegotiation - VP8/VP9 codec negotiation works
-- ✅ TestMultipleTracksInterop - Multiple tracks can be added
-- ✅ TestRenegotiationInterop - Track addition after initial connection
-- ✅ TestConnectionStateInterop - Connection state callbacks work (connecting → connected)
-- ✅ TestICECandidateExchange - ICE candidates exchange correctly
-- ✅ TestFrameIntegrity - Frame transmission works
-- ✅ TestLibToPionVideoInterop - Lib sends video to pion (fixed: proper ICE gathering)
-- ✅ TestSDPParsing - Bidirectional SDP parsing (fixed: set local desc before remote)
-
-### H264 and AV1 Support (Fixed - January 2025)
-
-**H264 - Direct OpenH264 Integration (January 2025):**
-- The shim now calls OpenH264 APIs **directly** for H.264 encoding/decoding
-- Bypasses libwebrtc's codec factories (which require `rtc_use_h264=true` build)
-- OpenH264 is loaded dynamically via `dlsym(RTLD_DEFAULT, ...)` at runtime
-- Go downloads OpenH264 from Cisco with `RTLD_GLOBAL` so symbols are available
-- No FFmpeg dependency - OpenH264 handles both encoding AND decoding
-- Configuration matches libwebrtc exactly (Constrained Baseline, temporal layers=1, VBR)
-
-**Platform Behavior:**
-| Platform | Default | With `PreferHW: true` | With `PreferHW: false` |
-|----------|---------|----------------------|----------------------|
-| Linux | OpenH264 | OpenH264 | OpenH264 |
-| macOS | VideoToolbox | VideoToolbox | OpenH264 |
-| Windows | OpenH264 | OpenH264 | OpenH264 |
-
-**Files Added:**
-- `shim/openh264_types.h` - OpenH264 type definitions (copied from headers)
-- `shim/openh264_codec.h` - Wrapper class declarations
-- `shim/openh264_codec.cc` - Dynamic loader + encoder/decoder implementations
-
-**AV1 Encoding/Decoding (Fixed):**
-- AV1 requires `qpMax = 63` to be set in codec settings
-- AV1 requires `SetScalabilityMode(kL1T1)` for single-layer encoding
-- Added `rtc_include_dav1d_in_internal_decoder_factory = true` for AV1 decoder
-- Uses libaom encoder (software), dav1d decoder
-
-**All 4 Video Codecs Now Work:**
-- ✅ H264 (Direct OpenH264 - both encoder AND decoder)
-- ✅ VP8 (libvpx via libwebrtc)
-- ✅ VP9 (libvpx via libwebrtc)
-- ✅ AV1 (libaom encoder + dav1d decoder via libwebrtc)
-
-### Known Issues
-
-1. **Frame reception in stress tests** - Some frames not received due to ICE connectivity timing
-   - Expected behavior in loopback without full ICE establishment
-
-### Files Modified
-
-- `internal/ffi/peerconnection.go` - Fixed callback types (int → int32)
-- `scripts/build_libwebrtc.sh` - Updated library installation
-- `shim/CMakeLists.txt` - Added codec factory libraries and frameworks
-- `shim/shim_capture.cc` - Fixed AudioDeviceModule API
-- `test/e2e/pion_interop_test.go` - New comprehensive pion interop test suite
+</details>
 
 ---
 
@@ -1518,82 +1319,28 @@ LIBWEBRTC_SHIM_PATH=$PWD/lib/darwin_arm64/libwebrtc_shim.dylib go test ./test/e2
 
 ---
 
-## Security Audit - Memory Safety Fixes (January 2025)
+## Security Audit - Memory Safety (January 2025)
+
+<details>
+<summary><strong>Status: Phase 1 Complete, Phases 2-5 Pending</strong></summary>
 
 ### Summary
 Comprehensive audit revealed 29 issues: **8 CRITICAL**, **11 HIGH**, **10 MEDIUM**
 
-### Critical Issues (Status: In Progress)
+**Phase 1 (Complete):** Critical memory safety
+- ✅ CStringPtr use-after-free fixed
+- ✅ Encoder/decoder callback memory leak fixed
+- ✅ DataChannel reference counting fixed
 
-| # | Issue | File | Status |
-|---|-------|------|--------|
-| 1 | Encoder/Decoder callback memory leak | shim_video_codec.cc:137,363 | ✅ Fixed |
-| 2 | DataChannel reference count leak | shim_peer_connection.cc:50 | ✅ Fixed |
-| 3 | CStringPtr use-after-free | internal/ffi/types.go:154 | ✅ Fixed |
-| 4 | Callbacks not unregistered on Close | pkg/pc/peerconnection.go:1540 | ⏳ |
-| 5 | Missing Unregister*Callback functions | internal/ffi/peerconnection.go | ⏳ |
-| 6 | Close() race with running callbacks | pkg/pc/peerconnection.go:1540 | ⏳ |
-| 7 | Panic in callbacks unwinding through C | internal/ffi/peerconnection.go | ⏳ |
-| 8 | Device capture zero-copy to C memory | internal/ffi/device.go:239 | ⏳ |
+**Remaining Phases:**
+- Phase 2: Callback lifecycle (unregister functions, panic recovery)
+- Phase 3: Memory pinning (KeepAlive, bounds validation)
+- Phase 4: Thread safety (mutex fixes, capture synchronization)
+- Phase 5: Documentation (handle ownership, null checks)
 
-### High Severity Issues (Status: Pending)
+See issue tracker for detailed status.
 
-| # | Issue | File | Status |
-|---|-------|------|--------|
-| 1 | SetLocalDescription potential UAF | shim_peer_connection.cc:469 | ⏳ |
-| 2 | GetOrCreateWrapper dangling pointer | shim_data_channel.cc:83 | ⏳ |
-| 3 | Screen capture race condition | shim_capture.cc:716 | ⏳ |
-| 4 | PushFrame thread safety | shim_track_source.cc:95 | ⏳ |
-| 5 | Dangling sender pointer | shim_peer_connection.cc:608 | ⏳ |
-| 6 | Missing KeepAlive for CString | internal/ffi/peerconnection.go:267+ | ⏳ |
-| 7 | Missing bounds validation | internal/ffi/device.go:233 | ⏳ |
-| 8 | Slices passed to C unpinned | pkg/pc/peerconnection.go:855 | ⏳ |
-| 9 | RTPSender RTCP callback leak | pkg/pc/peerconnection.go:388 | ⏳ |
-| 10 | Unclear handle ownership | Multiple | ⏳ |
-| 11 | Data race on callbackInitMu | internal/ffi/peerconnection.go:27 | ⏳ |
-
-### Medium Severity Issues (Status: Pending)
-
-| # | Issue | File |
-|---|-------|------|
-| 1 | Missing encoder null check | shim_video_codec.cc:176 |
-| 2 | Encoder output race condition | shim_video_codec.cc:220 |
-| 3 | AudioDeviceModule cleanup leak | shim_capture.cc:316 |
-| 4 | Thread-local buffer lifetime | shim_data_channel.cc:156 |
-| 5 | DataChannel reference leak | shim_peer_connection.cc:655 |
-| 6 | Integer overflow in size calc | internal/ffi/peerconnection.go:65 |
-| 7 | BandwidthEstimate pointer lifetime | internal/ffi/peerconnection.go:1590 |
-| 8 | Device registry race | internal/ffi/device.go:255 |
-| 9 | Stale transceiver handles | pkg/pc/peerconnection.go:1444 |
-| 10 | DataChannel callbacks not wired | pkg/pc/peerconnection.go:930 |
-
-### Implementation Phases
-
-**Phase 1: Critical Memory Safety**
-- [x] Fix CStringPtr use-after-free (types.go - removed unsafe CStringPtr function)
-- [x] Add callback ownership to encoder/decoder (shim_video_codec.cc - store callback in struct, unregister before destroy)
-- [x] Fix DataChannel reference counting (shim_peer_connection.cc - store in PC's data_channels vector, use .get() not .release(); shim_data_channel.cc - wrapper uses raw pointer to avoid double ref count)
-
-**Phase 2: Callback Lifecycle**
-- [ ] Add Unregister*Callback functions
-- [ ] Add callback cleanup in Close()
-- [ ] Add closed check in callbacks
-- [ ] Add panic recovery
-
-**Phase 3: Memory Pinning**
-- [ ] Add runtime.KeepAlive() for CString
-- [ ] Copy device capture data
-- [ ] Add bounds validation
-
-**Phase 4: Thread Safety**
-- [ ] Fix callback init mutex
-- [ ] Add screen capture synchronization
-- [ ] Document thread requirements
-
-**Phase 5: Documentation & Cleanup**
-- [ ] Document handle ownership
-- [ ] Wire DataChannel callbacks
-- [ ] Add null/overflow checks
+</details>
 
 ---
 
