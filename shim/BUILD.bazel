@@ -75,11 +75,12 @@ _MACOS_LINKOPTS = [
 _LINUX_LINKOPTS = [
     # Use libc++ as the C++ standard library (matches libwebrtc build)
     "-stdlib=libc++",
-    # Statically link libc++ and libc++abi to avoid runtime dependency
-    "-static-libstdc++",
-    "-Wl,--start-group",
+    # Force static linking of libc++ and libc++abi to avoid runtime dependency
+    "-Wl,-Bstatic",
     "-lc++",
     "-lc++abi",
+    "-Wl,-Bdynamic",
+    # Other system libraries (dynamic)
     "-lpthread",
     "-ldl",
     "-lrt",
@@ -94,7 +95,6 @@ _LINUX_LINKOPTS = [
     "-lgio-2.0",
     "-lgobject-2.0",
     "-lglib-2.0",
-    "-Wl,--end-group",
 ]
 
 # Windows libraries
