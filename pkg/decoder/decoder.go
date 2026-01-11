@@ -105,26 +105,11 @@ func newVideoDecoder(codecType codec.Type) (*videoDecoder, error) {
 	return dec, nil
 }
 
-func codecTypeToFFI(t codec.Type) ffi.CodecType {
-	switch t {
-	case codec.H264:
-		return ffi.CodecH264
-	case codec.VP8:
-		return ffi.CodecVP8
-	case codec.VP9:
-		return ffi.CodecVP9
-	case codec.AV1:
-		return ffi.CodecAV1
-	default:
-		return ffi.CodecH264
-	}
-}
-
 func (d *videoDecoder) init() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	handle, err := ffi.CreateVideoDecoder(codecTypeToFFI(d.codecType))
+	handle, err := ffi.CreateVideoDecoder(ffi.CodecTypeToFFI(d.codecType))
 	if err != nil {
 		return err
 	}
@@ -190,20 +175,3 @@ func (d *videoDecoder) Close() error {
 	return nil
 }
 
-// NewVP8Decoder creates a new VP8 decoder.
-// Deprecated: Use NewVideoDecoder(codec.VP8) instead.
-func NewVP8Decoder() (VideoDecoder, error) {
-	return newVideoDecoder(codec.VP8)
-}
-
-// NewVP9Decoder creates a new VP9 decoder.
-// Deprecated: Use NewVideoDecoder(codec.VP9) instead.
-func NewVP9Decoder() (VideoDecoder, error) {
-	return newVideoDecoder(codec.VP9)
-}
-
-// NewAV1Decoder creates a new AV1 decoder.
-// Deprecated: Use NewVideoDecoder(codec.AV1) instead.
-func NewAV1Decoder() (VideoDecoder, error) {
-	return newVideoDecoder(codec.AV1)
-}

@@ -368,15 +368,6 @@ func (c VideoEncoderConfig) FPSOrDefault() float64 {
 	return c.FPS
 }
 
-// Type aliases for backward compatibility.
-// Deprecated: Use VideoEncoderConfig directly.
-type (
-	H264Config = VideoEncoderConfig
-	VP8Config  = VideoEncoderConfig
-	VP9Config  = VideoEncoderConfig
-	AV1Config  = VideoEncoderConfig
-)
-
 // DefaultVideoEncoderConfig returns sensible defaults for any video codec.
 func DefaultVideoEncoderConfig(codec Type, width, height int) VideoEncoderConfig {
 	cfg := VideoEncoderConfig{
@@ -410,29 +401,6 @@ func DefaultVideoEncoderConfig(codec Type, width, height int) VideoEncoderConfig
 	return cfg
 }
 
-// DefaultH264Config returns sensible defaults for H.264.
-// Deprecated: Use DefaultVideoEncoderConfig(H264, width, height) instead.
-func DefaultH264Config(width, height int) VideoEncoderConfig {
-	return DefaultVideoEncoderConfig(H264, width, height)
-}
-
-// DefaultVP8Config returns sensible defaults for VP8.
-// Deprecated: Use DefaultVideoEncoderConfig(VP8, width, height) instead.
-func DefaultVP8Config(width, height int) VideoEncoderConfig {
-	return DefaultVideoEncoderConfig(VP8, width, height)
-}
-
-// DefaultVP9Config returns sensible defaults for VP9.
-// Deprecated: Use DefaultVideoEncoderConfig(VP9, width, height) instead.
-func DefaultVP9Config(width, height int) VideoEncoderConfig {
-	return DefaultVideoEncoderConfig(VP9, width, height)
-}
-
-// DefaultAV1Config returns sensible defaults for AV1.
-// Deprecated: Use DefaultVideoEncoderConfig(AV1, width, height) instead.
-func DefaultAV1Config(width, height int) VideoEncoderConfig {
-	return DefaultVideoEncoderConfig(AV1, width, height)
-}
 
 // OpusApplication specifies the Opus encoder application type.
 type OpusApplication int

@@ -411,26 +411,9 @@ func (s *Session) sendMessage(msg SignalingMessage) {
 }
 
 func createEncoder(codecType codec.Type, w, h, bitrate int) (encoder.VideoEncoder, error) {
-	switch codecType {
-	case codec.H264:
-		return encoder.NewH264Encoder(codec.H264Config{
-			Width: w, Height: h, Bitrate: uint32(bitrate), FPS: float64(*fps),
-		})
-	case codec.VP8:
-		return encoder.NewVP8Encoder(codec.VP8Config{
-			Width: w, Height: h, Bitrate: uint32(bitrate), FPS: float64(*fps),
-		})
-	case codec.VP9:
-		return encoder.NewVP9Encoder(codec.VP9Config{
-			Width: w, Height: h, Bitrate: uint32(bitrate), FPS: float64(*fps),
-		})
-	case codec.AV1:
-		return encoder.NewAV1Encoder(codec.AV1Config{
-			Width: w, Height: h, Bitrate: uint32(bitrate), FPS: float64(*fps),
-		})
-	default:
-		return nil, fmt.Errorf("unsupported codec: %v", codecType)
-	}
+	return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec: codecType, Width: w, Height: h, Bitrate: uint32(bitrate), FPS: float64(*fps),
+	})
 }
 
 func parseCodec(name string) codec.Type {

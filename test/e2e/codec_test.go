@@ -23,25 +23,13 @@ func TestVideoCodecRoundtrip(t *testing.T) {
 	codecs := []struct {
 		name   string
 		codec  codec.Type
-		config func(w, h int) interface{}
+		config codec.VideoEncoderConfig
 	}{
-		{"H264_SW", codec.H264, func(w, h int) interface{} {
-			// Explicitly use software (OpenH264)
-			return codec.H264Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30, PreferHW: false}
-		}},
-		{"H264_HW", codec.H264, func(w, h int) interface{} {
-			// Explicitly prefer hardware (VideoToolbox on macOS)
-			return codec.H264Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30, PreferHW: true}
-		}},
-		{"VP8", codec.VP8, func(w, h int) interface{} {
-			return codec.VP8Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30}
-		}},
-		{"VP9", codec.VP9, func(w, h int) interface{} {
-			return codec.VP9Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30}
-		}},
-		{"AV1", codec.AV1, func(w, h int) interface{} {
-			return codec.AV1Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30}
-		}},
+		{"H264_SW", codec.H264, codec.VideoEncoderConfig{Codec: codec.H264, Width: 320, Height: 240, Bitrate: 1_000_000, FPS: 30, PreferHW: false}},
+		{"H264_HW", codec.H264, codec.VideoEncoderConfig{Codec: codec.H264, Width: 320, Height: 240, Bitrate: 1_000_000, FPS: 30, PreferHW: true}},
+		{"VP8", codec.VP8, codec.VideoEncoderConfig{Codec: codec.VP8, Width: 320, Height: 240, Bitrate: 1_000_000, FPS: 30}},
+		{"VP9", codec.VP9, codec.VideoEncoderConfig{Codec: codec.VP9, Width: 320, Height: 240, Bitrate: 1_000_000, FPS: 30}},
+		{"AV1", codec.AV1, codec.VideoEncoderConfig{Codec: codec.AV1, Width: 320, Height: 240, Bitrate: 1_000_000, FPS: 30}},
 	}
 
 	width, height := 320, 240
@@ -49,19 +37,7 @@ func TestVideoCodecRoundtrip(t *testing.T) {
 	for _, tc := range codecs {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create encoder
-			var enc encoder.VideoEncoder
-			var err error
-
-			switch tc.codec {
-			case codec.H264:
-				enc, err = encoder.NewH264Encoder(tc.config(width, height).(codec.H264Config))
-			case codec.VP8:
-				enc, err = encoder.NewVP8Encoder(tc.config(width, height).(codec.VP8Config))
-			case codec.VP9:
-				enc, err = encoder.NewVP9Encoder(tc.config(width, height).(codec.VP9Config))
-			case codec.AV1:
-				enc, err = encoder.NewAV1Encoder(tc.config(width, height).(codec.AV1Config))
-			}
+			enc, err := encoder.NewVideoEncoder(tc.config)
 
 			if err != nil {
 				// H264 may not be available on all platforms (needs VideoToolbox on macOS)
@@ -201,7 +177,8 @@ func TestEncoderBitrateControl(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	enc, err := encoder.NewVP8Encoder(codec.VP8Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP8,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -232,7 +209,8 @@ func TestEncoderFramerateControl(t *testing.T) {
 	}
 
 	// Use VP8 since H264 may not be available on all platforms
-	enc, err := encoder.NewVP8Encoder(codec.VP8Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP8,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -262,7 +240,8 @@ func TestKeyframeRequest(t *testing.T) {
 		t.Skip("shim library not available")
 	}
 
-	enc, err := encoder.NewVP8Encoder(codec.VP8Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP8,
 		Width:   320,
 		Height:  240,
 		Bitrate: 500_000,
@@ -349,7 +328,8 @@ func BenchmarkH264Encode(b *testing.B) {
 
 	for _, backend := range backends {
 		b.Run(backend.name, func(b *testing.B) {
-			enc, err := encoder.NewH264Encoder(codec.H264Config{
+			enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+				Codec:    codec.H264,
 				Width:    1280,
 				Height:   720,
 				Bitrate:  2_000_000,
@@ -380,7 +360,8 @@ func BenchmarkVP8Encode(b *testing.B) {
 		b.Skip("shim library not available")
 	}
 
-	enc, _ := encoder.NewVP8Encoder(codec.VP8Config{
+	enc, _ := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP8,
 		Width:   1280,
 		Height:  720,
 		Bitrate: 2_000_000,
@@ -405,7 +386,8 @@ func BenchmarkVP9Encode(b *testing.B) {
 		b.Skip("shim library not available")
 	}
 
-	enc, err := encoder.NewVP9Encoder(codec.VP9Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP9,
 		Width:   1280,
 		Height:  720,
 		Bitrate: 2_000_000,
@@ -433,7 +415,8 @@ func BenchmarkAV1Encode(b *testing.B) {
 		b.Skip("shim library not available")
 	}
 
-	enc, err := encoder.NewAV1Encoder(codec.AV1Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.AV1,
 		Width:   1280,
 		Height:  720,
 		Bitrate: 2_000_000,
@@ -493,28 +476,28 @@ func BenchmarkAllVideoCodecs(b *testing.B) {
 		newEnc func() (encoder.VideoEncoder, error)
 	}{
 		{"H264_OpenH264", func() (encoder.VideoEncoder, error) {
-			return encoder.NewH264Encoder(codec.H264Config{
-				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30, PreferHW: false,
+			return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+				Codec: codec.H264, Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30, PreferHW: false,
 			})
 		}},
 		{"H264_VideoToolbox", func() (encoder.VideoEncoder, error) {
-			return encoder.NewH264Encoder(codec.H264Config{
-				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30, PreferHW: true,
+			return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+				Codec: codec.H264, Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30, PreferHW: true,
 			})
 		}},
 		{"VP8", func() (encoder.VideoEncoder, error) {
-			return encoder.NewVP8Encoder(codec.VP8Config{
-				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
+			return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+				Codec: codec.VP8, Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
 			})
 		}},
 		{"VP9", func() (encoder.VideoEncoder, error) {
-			return encoder.NewVP9Encoder(codec.VP9Config{
-				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
+			return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+				Codec: codec.VP9, Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
 			})
 		}},
 		{"AV1", func() (encoder.VideoEncoder, error) {
-			return encoder.NewAV1Encoder(codec.AV1Config{
-				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
+			return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+				Codec: codec.AV1, Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
 			})
 		}},
 	}

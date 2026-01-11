@@ -27,7 +27,8 @@ func TestH264EncoderEncode(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			enc, err := NewH264Encoder(codec.H264Config{
+			enc, err := NewVideoEncoder(codec.VideoEncoderConfig{
+				Codec:    codec.H264,
 				Width:    640,
 				Height:   480,
 				Bitrate:  1_000_000,
@@ -78,7 +79,8 @@ func TestH264EncoderEncode(t *testing.T) {
 }
 
 func TestVP8EncoderEncode(t *testing.T) {
-	enc, err := NewVP8Encoder(codec.VP8Config{
+	enc, err := NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP8,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -111,7 +113,8 @@ func TestVP8EncoderEncode(t *testing.T) {
 }
 
 func TestVP9EncoderEncode(t *testing.T) {
-	enc, err := NewVP9Encoder(codec.VP9Config{
+	enc, err := NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP9,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -144,7 +147,8 @@ func TestVP9EncoderEncode(t *testing.T) {
 }
 
 func TestEncoderSetBitrate(t *testing.T) {
-	enc, err := NewH264Encoder(codec.H264Config{
+	enc, err := NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.H264,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -165,7 +169,8 @@ func TestEncoderSetBitrate(t *testing.T) {
 }
 
 func TestEncoderSetFramerate(t *testing.T) {
-	enc, err := NewH264Encoder(codec.H264Config{
+	enc, err := NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.H264,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -185,7 +190,8 @@ func TestEncoderSetFramerate(t *testing.T) {
 }
 
 func TestEncoderRequestKeyFrame(t *testing.T) {
-	enc, err := NewH264Encoder(codec.H264Config{
+	enc, err := NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.H264,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -235,7 +241,8 @@ func TestEncoderRequestKeyFrame(t *testing.T) {
 }
 
 func TestEncoderClose(t *testing.T) {
-	enc, err := NewH264Encoder(codec.H264Config{
+	enc, err := NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.H264,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -286,7 +293,8 @@ func TestOpusEncoderEncode(t *testing.T) {
 }
 
 func BenchmarkH264Encode(b *testing.B) {
-	enc, err := NewH264Encoder(codec.H264Config{
+	enc, err := NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.H264,
 		Width:   1280,
 		Height:  720,
 		Bitrate: 2_000_000,

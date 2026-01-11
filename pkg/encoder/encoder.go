@@ -241,7 +241,7 @@ func (e *videoEncoder) init(cfg codec.VideoEncoderConfig) error {
 		ffiConfig.VP9Profile = int32(cfg.VP9Profile)
 	}
 
-	ffiCodec := codecTypeToFFI(cfg.Codec)
+	ffiCodec := ffi.CodecTypeToFFI(cfg.Codec)
 	handle, err := ffi.CreateVideoEncoder(ffiCodec, ffiConfig)
 	if err != nil {
 		return fmt.Errorf("create %s encoder: %w", cfg.Codec, err)
@@ -249,21 +249,6 @@ func (e *videoEncoder) init(cfg codec.VideoEncoderConfig) error {
 
 	e.handle = handle
 	return nil
-}
-
-func codecTypeToFFI(t codec.Type) ffi.CodecType {
-	switch t {
-	case codec.H264:
-		return ffi.CodecH264
-	case codec.VP8:
-		return ffi.CodecVP8
-	case codec.VP9:
-		return ffi.CodecVP9
-	case codec.AV1:
-		return ffi.CodecAV1
-	default:
-		return ffi.CodecH264
-	}
 }
 
 func (e *videoEncoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyframe bool) (EncodeResult, error) {
@@ -358,30 +343,3 @@ func boolToInt32(b bool) int32 {
 	return 0
 }
 
-// NewH264Encoder creates a new H.264 encoder.
-// Deprecated: Use NewVideoEncoder with codec.DefaultVideoEncoderConfig(codec.H264, w, h).
-func NewH264Encoder(cfg codec.VideoEncoderConfig) (VideoEncoder, error) {
-	cfg.Codec = codec.H264
-	return NewVideoEncoder(cfg)
-}
-
-// NewVP8Encoder creates a new VP8 encoder.
-// Deprecated: Use NewVideoEncoder with codec.DefaultVideoEncoderConfig(codec.VP8, w, h).
-func NewVP8Encoder(cfg codec.VideoEncoderConfig) (VideoEncoder, error) {
-	cfg.Codec = codec.VP8
-	return NewVideoEncoder(cfg)
-}
-
-// NewVP9Encoder creates a new VP9 encoder.
-// Deprecated: Use NewVideoEncoder with codec.DefaultVideoEncoderConfig(codec.VP9, w, h).
-func NewVP9Encoder(cfg codec.VideoEncoderConfig) (VideoEncoder, error) {
-	cfg.Codec = codec.VP9
-	return NewVideoEncoder(cfg)
-}
-
-// NewAV1Encoder creates a new AV1 encoder.
-// Deprecated: Use NewVideoEncoder with codec.DefaultVideoEncoderConfig(codec.AV1, w, h).
-func NewAV1Encoder(cfg codec.VideoEncoderConfig) (VideoEncoder, error) {
-	cfg.Codec = codec.AV1
-	return NewVideoEncoder(cfg)
-}
