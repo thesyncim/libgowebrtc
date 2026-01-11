@@ -386,7 +386,7 @@ func TestVideoTrackSetParameters(t *testing.T) {
 	defer track.Close()
 
 	// Test SetParameters
-	err = track.SetParameters(TrackParameters{
+	err = track.SetParameters(Parameters{
 		Active:                true,
 		MaxBitrate:            1_000_000,
 		MaxFramerate:          15,
@@ -408,7 +408,7 @@ func TestVideoTrackSetParameters(t *testing.T) {
 	}
 
 	// Test pausing track
-	err = track.SetParameters(TrackParameters{
+	err = track.SetParameters(Parameters{
 		Active: false,
 	})
 	if err != nil {
@@ -419,7 +419,7 @@ func TestVideoTrackSetParameters(t *testing.T) {
 	}
 
 	// Test resuming track
-	err = track.SetParameters(TrackParameters{
+	err = track.SetParameters(Parameters{
 		Active: true,
 	})
 	if err != nil {

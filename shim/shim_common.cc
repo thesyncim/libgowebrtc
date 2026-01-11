@@ -7,6 +7,9 @@
 
 #include "shim_common.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <mutex>
 
 namespace shim {
@@ -26,6 +29,19 @@ std::unique_ptr<webrtc::Thread> g_network_thread;
 // Global Environment for M141+ API
 std::once_flag g_env_flag;
 std::unique_ptr<webrtc::Environment> g_environment;
+
+bool IsTruthyEnv(const char* value) {
+    if (!value) {
+        return false;
+    }
+    std::string lowered(value);
+    if (lowered.empty()) {
+        return false;
+    }
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return lowered != "0" && lowered != "false";
+}
 
 }  // namespace
 
@@ -67,6 +83,10 @@ webrtc::Thread* GetWorkerThread() {
 webrtc::Thread* GetNetworkThread() {
     InitializeGlobals();
     return g_network_thread.get();
+}
+
+bool ShouldUseSoftwareCodecs() {
+    return IsTruthyEnv(std::getenv("LIBWEBRTC_PREFER_SOFTWARE_CODECS"));
 }
 
 webrtc::VideoCodecType ToWebRTCCodecType(ShimCodecType codec) {

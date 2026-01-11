@@ -1,9 +1,11 @@
 package encoder
 
 import (
+	"errors"
 	"sync"
 	"testing"
 
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/decoder"
@@ -78,7 +80,7 @@ func TestVideoEncoder_RoundTrip(t *testing.T) {
 			srcFrame := testutil.CreateTestVideoFrame(320, 240)
 			encBuf := make([]byte, enc.MaxEncodedSize())
 
-			result, err := enc.EncodeInto(srcFrame, encBuf, true)
+			result, err := encodeUntilOutput(t, enc, srcFrame, encBuf, true)
 			if err != nil {
 				t.Fatalf("EncodeInto: %v", err)
 			}
@@ -90,7 +92,7 @@ func TestVideoEncoder_RoundTrip(t *testing.T) {
 			}
 
 			dstFrame := frame.NewI420Frame(320, 240)
-			err = dec.DecodeInto(encBuf[:result.N], dstFrame, 0, true)
+			err = decodeUntilOutput(t, dec, encBuf[:result.N], dstFrame, 0, true)
 			if err != nil {
 				t.Fatalf("DecodeInto: %v", err)
 			}
@@ -126,7 +128,7 @@ func TestVideoEncoder_MultiFrameSequence(t *testing.T) {
 			for i := 0; i < 20; i++ {
 				srcFrame.PTS = uint32(i * 3000)
 
-				result, err := enc.EncodeInto(srcFrame, encBuf, i == 0)
+				result, err := encodeUntilOutput(t, enc, srcFrame, encBuf, i == 0)
 				if err != nil {
 					t.Fatalf("frame %d: EncodeInto: %v", i, err)
 				}
@@ -256,7 +258,10 @@ func TestVideoEncoder_RequestKeyFrame(t *testing.T) {
 			encBuf := make([]byte, enc.MaxEncodedSize())
 
 			// First frame (keyframe)
-			result, _ := enc.EncodeInto(srcFrame, encBuf, true)
+			result, err := encodeUntilOutput(t, enc, srcFrame, encBuf, true)
+			if err != nil {
+				t.Fatalf("EncodeInto: %v", err)
+			}
 			if !result.IsKeyframe {
 				t.Error("first frame should be keyframe")
 			}
@@ -264,7 +269,10 @@ func TestVideoEncoder_RequestKeyFrame(t *testing.T) {
 			// A few P-frames
 			for i := 0; i < 5; i++ {
 				srcFrame.PTS = uint32((i + 1) * 3000)
-				enc.EncodeInto(srcFrame, encBuf, false)
+				_, err := enc.EncodeInto(srcFrame, encBuf, false)
+				if err != nil && !errors.Is(err, ffi.ErrNeedMoreData) {
+					t.Fatalf("EncodeInto: %v", err)
+				}
 			}
 
 			// Request keyframe
@@ -272,7 +280,7 @@ func TestVideoEncoder_RequestKeyFrame(t *testing.T) {
 
 			// Next frame should be keyframe
 			srcFrame.PTS = 6 * 3000
-			result, err = enc.EncodeInto(srcFrame, encBuf, false)
+			result, err = encodeUntilOutput(t, enc, srcFrame, encBuf, false)
 			if err != nil {
 				t.Fatalf("EncodeInto: %v", err)
 			}
@@ -310,7 +318,7 @@ func TestVideoEncoder_ConcurrentEncode(t *testing.T) {
 					for i := 0; i < framesPerGoroutine; i++ {
 						srcFrame.PTS = uint32(id*1000 + i*100)
 						_, err := enc.EncodeInto(srcFrame, encBuf, i == 0)
-						if err != nil {
+						if err != nil && !errors.Is(err, ffi.ErrNeedMoreData) {
 							errCh <- err
 						}
 					}
@@ -346,7 +354,7 @@ func TestVideoEncoder_MultipleInstances(t *testing.T) {
 			srcFrame := testutil.CreateGrayVideoFrame(320, 240)
 			for i, enc := range encoders {
 				encBuf := make([]byte, enc.MaxEncodedSize())
-				result, err := enc.EncodeInto(srcFrame, encBuf, true)
+				result, err := encodeUntilOutput(t, enc, srcFrame, encBuf, true)
 				if err != nil {
 					t.Errorf("encoder %d: EncodeInto: %v", i, err)
 				}

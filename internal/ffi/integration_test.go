@@ -1,6 +1,7 @@
 package ffi
 
 import (
+	"fmt"
 	"os"
 	"testing"
 )
@@ -11,6 +12,10 @@ import (
 func TestMain(m *testing.M) {
 	// Attempt to load library
 	if err := LoadLibrary(); err != nil {
+		if os.Getenv("LIBWEBRTC_TEST_REQUIRE_SHIM") != "" {
+			fmt.Fprintf(os.Stderr, "shim library required: %v\n", err)
+			os.Exit(1)
+		}
 		// Skip all integration tests if library not available
 		os.Exit(0)
 	}
@@ -279,13 +284,15 @@ func TestVideoEncoderEncodeFrame(t *testing.T) {
 	dst := make([]byte, width*height*3/2)
 
 	// Encode frame
-	n, isKeyframe, err := VideoEncoderEncodeInto(
+	n, isKeyframe, err := encodeUntilOutput(
+		t,
 		handle,
 		yPlane, uPlane, vPlane,
 		width, width/2, width/2,
 		0,    // timestamp
 		true, // force keyframe
 		dst,
+		5,
 	)
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)

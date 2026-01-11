@@ -70,7 +70,7 @@ func (e *h264Encoder) init() error {
 		Framerate:        float32(e.config.FPS),
 		KeyframeInterval: int32(e.config.KeyInterval),
 		H264Profile:      &profileBytes[0],
-		PreferHW:         1,
+		PreferHW:         boolToInt32(e.config.PreferHW),
 	}
 
 	handle, err := ffi.CreateVideoEncoder(ffi.CodecH264, ffiConfig)

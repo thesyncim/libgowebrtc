@@ -50,7 +50,7 @@ func TestH264EncodeDecode(t *testing.T) {
 
 	// Encode
 	encodedBuf := make([]byte, enc.MaxEncodedSize())
-	result, err := enc.EncodeInto(src, encodedBuf, true)
+	result, err := encodeUntilOutput(t, enc, src, encodedBuf, true)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestH264EncodeDecode(t *testing.T) {
 
 	// Decode
 	dst := frame.NewI420Frame(640, 480)
-	err = dec.DecodeInto(encoded, dst, 0, true)
+	err = decodeUntilOutput(t, dec, encoded, dst, 0, true)
 	if err != nil {
 		// Some decoders need multiple frames
 		t.Logf("DecodeInto: %v (may need more data)", err)
@@ -96,7 +96,7 @@ func TestVP8EncodeDecode(t *testing.T) {
 	}
 
 	encodedBuf := make([]byte, enc.MaxEncodedSize())
-	result, err := enc.EncodeInto(src, encodedBuf, true)
+	result, err := encodeUntilOutput(t, enc, src, encodedBuf, true)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestVP8EncodeDecode(t *testing.T) {
 	t.Logf("VP8 encoded: %d bytes", result.N)
 
 	dst := frame.NewI420Frame(640, 480)
-	err = dec.DecodeInto(encoded, dst, 0, true)
+	err = decodeUntilOutput(t, dec, encoded, dst, 0, true)
 	if err != nil {
 		t.Logf("DecodeInto: %v (may need more data)", err)
 	} else {
@@ -140,7 +140,7 @@ func TestVP9EncodeDecode(t *testing.T) {
 	}
 
 	encodedBuf := make([]byte, enc.MaxEncodedSize())
-	result, err := enc.EncodeInto(src, encodedBuf, true)
+	result, err := encodeUntilOutput(t, enc, src, encodedBuf, true)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestVP9EncodeDecode(t *testing.T) {
 	t.Logf("VP9 encoded: %d bytes", result.N)
 
 	dst := frame.NewI420Frame(640, 480)
-	err = dec.DecodeInto(encoded, dst, 0, true)
+	err = decodeUntilOutput(t, dec, encoded, dst, 0, true)
 	if err != nil {
 		t.Logf("DecodeInto: %v (may need more data)", err)
 	} else {
@@ -251,7 +251,7 @@ func TestMultiFrameEncodeDecode(t *testing.T) {
 		src.PTS = uint32(i * 33)
 		forceKeyframe := i == 0
 
-		result, err := enc.EncodeInto(src, encodedBuf, forceKeyframe)
+		result, err := encodeUntilOutput(t, enc, src, encodedBuf, forceKeyframe)
 		if err != nil {
 			t.Fatalf("EncodeInto frame %d: %v", i, err)
 		}

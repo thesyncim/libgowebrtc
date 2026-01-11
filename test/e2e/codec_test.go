@@ -25,8 +25,13 @@ func TestVideoCodecRoundtrip(t *testing.T) {
 		codec  codec.Type
 		config func(w, h int) interface{}
 	}{
-		{"H264", codec.H264, func(w, h int) interface{} {
-			return codec.H264Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30}
+		{"H264_SW", codec.H264, func(w, h int) interface{} {
+			// Explicitly use software (OpenH264)
+			return codec.H264Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30, PreferHW: false}
+		}},
+		{"H264_HW", codec.H264, func(w, h int) interface{} {
+			// Explicitly prefer hardware (VideoToolbox on macOS)
+			return codec.H264Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30, PreferHW: true}
 		}},
 		{"VP8", codec.VP8, func(w, h int) interface{} {
 			return codec.VP8Config{Width: w, Height: h, Bitrate: 1_000_000, FPS: 30}
@@ -328,28 +333,44 @@ func fillAudioTestPattern(f *frame.AudioFrame) {
 	}
 }
 
-// BenchmarkH264Encode benchmarks H264 encoding performance.
+// BenchmarkH264Encode benchmarks H264 encoding performance with both backends.
 func BenchmarkH264Encode(b *testing.B) {
 	if !ffi.IsLoaded() {
 		b.Skip("shim library not available")
 	}
 
-	enc, _ := encoder.NewH264Encoder(codec.H264Config{
-		Width:   1280,
-		Height:  720,
-		Bitrate: 2_000_000,
-		FPS:     30,
-	})
-	defer enc.Close()
+	backends := []struct {
+		name     string
+		preferHW bool
+	}{
+		{"OpenH264", false},
+		{"VideoToolbox", true},
+	}
 
-	srcFrame := frame.NewI420Frame(1280, 720)
-	fillTestPattern(srcFrame)
-	encBuf := make([]byte, enc.MaxEncodedSize())
+	for _, backend := range backends {
+		b.Run(backend.name, func(b *testing.B) {
+			enc, err := encoder.NewH264Encoder(codec.H264Config{
+				Width:    1280,
+				Height:   720,
+				Bitrate:  2_000_000,
+				FPS:      30,
+				PreferHW: backend.preferHW,
+			})
+			if err != nil {
+				b.Skipf("H264 encoder (%s) not available: %v", backend.name, err)
+			}
+			defer enc.Close()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		srcFrame.PTS = uint32(i * 3000)
-		enc.EncodeInto(srcFrame, encBuf, i == 0)
+			srcFrame := frame.NewI420Frame(1280, 720)
+			fillTestPattern(srcFrame)
+			encBuf := make([]byte, enc.MaxEncodedSize())
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				srcFrame.PTS = uint32(i * 3000)
+				enc.EncodeInto(srcFrame, encBuf, i == 0)
+			}
+		})
 	}
 }
 
@@ -471,9 +492,14 @@ func BenchmarkAllVideoCodecs(b *testing.B) {
 		name   string
 		newEnc func() (encoder.VideoEncoder, error)
 	}{
-		{"H264", func() (encoder.VideoEncoder, error) {
+		{"H264_OpenH264", func() (encoder.VideoEncoder, error) {
 			return encoder.NewH264Encoder(codec.H264Config{
-				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30,
+				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30, PreferHW: false,
+			})
+		}},
+		{"H264_VideoToolbox", func() (encoder.VideoEncoder, error) {
+			return encoder.NewH264Encoder(codec.H264Config{
+				Width: 1280, Height: 720, Bitrate: 2_000_000, FPS: 30, PreferHW: true,
 			})
 		}},
 		{"VP8", func() (encoder.VideoEncoder, error) {

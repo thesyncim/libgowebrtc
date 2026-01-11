@@ -610,7 +610,7 @@ func NewScreenCapture(id int64, isWindow bool, fps int) (*ScreenCapture, error) 
 		return nil, ErrLibraryNotLoaded
 	}
 
-	var isWindowInt int32 = 0
+	var isWindowInt int32
 	if isWindow {
 		isWindowInt = 1
 	}

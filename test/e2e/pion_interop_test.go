@@ -273,7 +273,7 @@ func (pp *PionLibPeerPair) ConnectLibOffersPionAnswers() error {
 	defer candidatesMu.Unlock()
 
 	for _, c := range libCandidates {
-		idx := uint16(c.SDPMLineIndex)
+		idx := c.SDPMLineIndex
 		pp.Pion.AddICECandidate(webrtc.ICECandidateInit{
 			Candidate:     c.Candidate,
 			SDPMid:        &c.SDPMid,
@@ -991,7 +991,7 @@ func TestICECandidateExchange(t *testing.T) {
 
 	libCandidatesMu.Lock()
 	for _, c := range libCandidates {
-		idx := uint16(c.SDPMLineIndex)
+		idx := c.SDPMLineIndex
 		ufrag := c.UsernameFragment
 		if err := pp.Pion.AddICECandidate(webrtc.ICECandidateInit{
 			Candidate:        c.Candidate,

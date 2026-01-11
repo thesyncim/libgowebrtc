@@ -54,13 +54,15 @@ func TestVideoEncoderDecoderPipeline(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		forceKeyframe := i == 0
-		n, isKeyframe, err := VideoEncoderEncodeInto(
+		n, isKeyframe, err := encodeUntilOutput(
+			t,
 			encoder,
 			yPlane, uPlane, vPlane,
 			width, width/2, width/2,
 			uint32(i*3000), // timestamp
 			forceKeyframe,
 			encBuf,
+			5,
 		)
 		if err != nil {
 			t.Fatalf("Encode frame %d failed: %v", i, err)
@@ -294,13 +296,15 @@ func TestMultiCodecEncoders(t *testing.T) {
 
 			encBuf := make([]byte, width*height)
 
-			n, isKeyframe, err := VideoEncoderEncodeInto(
+			n, isKeyframe, err := encodeUntilOutput(
+				t,
 				encoder,
 				yPlane, uPlane, vPlane,
 				width, width/2, width/2,
 				0,
 				true,
 				encBuf,
+				5,
 			)
 			if err != nil {
 				t.Fatalf("%s encode failed: %v", tc.name, err)

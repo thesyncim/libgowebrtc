@@ -1,6 +1,7 @@
 package ffi
 
 import (
+	"errors"
 	"sync"
 	"testing"
 )
@@ -97,7 +98,7 @@ func TestConcurrent_VideoEncoderEncode(t *testing.T) {
 					i == 0,
 					dst,
 				)
-				if err != nil {
+				if err != nil && !errors.Is(err, ErrNeedMoreData) {
 					errCh <- err
 				}
 			}
@@ -227,8 +228,6 @@ func TestConcurrent_PeerConnectionOperations(t *testing.T) {
 		t.Fatalf("create peer connection: %v", err)
 	}
 	defer PeerConnectionDestroy(handle)
-
-	const numGoroutines = 4
 
 	var wg sync.WaitGroup
 

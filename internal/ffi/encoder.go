@@ -1,9 +1,20 @@
 package ffi
 
+import "runtime"
+
 // CreateVideoEncoder creates a video encoder for the specified codec.
 func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) (uintptr, error) {
 	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
+	}
+	if codec == CodecH264 {
+		preferHW := runtime.GOOS == "darwin"
+		if config != nil {
+			preferHW = config.PreferHW != 0
+		}
+		if err := ensureOpenH264(shouldRequireOpenH264(preferHW)); err != nil {
+			return 0, err
+		}
 	}
 	var errBuf ShimErrorBuffer
 	encoder := shimVideoEncoderCreate(int32(codec), config.Ptr(), errBuf.Ptr())
@@ -35,7 +46,7 @@ func VideoEncoderEncodeInto(
 	var outSize int32
 	var outIsKeyframe int32
 
-	var forceKF int32 = 0
+	var forceKF int32
 	if forceKeyframe {
 		forceKF = 1
 	}

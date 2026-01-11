@@ -1,0 +1,14 @@
+# Root BUILD file for libgowebrtc
+# Bazel is only used for building the C++ shim library
+# Go code uses standard `go build`
+
+exports_files([
+    "LICENSE",
+])
+
+# Alias for the shim library
+alias(
+    name = "shim",
+    actual = "//shim:webrtc_shim",
+    visibility = ["//visibility:public"],
+)

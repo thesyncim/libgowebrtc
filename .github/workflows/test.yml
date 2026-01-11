@@ -1,0 +1,54 @@
+name: Test
+
+on:
+  push:
+    branches: [main, develop, openh264-runtime]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.23'
+  SHIM_VERSION: 'shim-v0.3.0'
+
+jobs:
+  test:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin_arm64
+            extension: dylib
+          - os: ubuntu-latest
+            platform: linux_amd64
+            extension: so
+          - os: ubuntu-24.04-arm
+            platform: linux_arm64
+            extension: so
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download pre-built shim
+        run: |
+          mkdir -p lib/${{ matrix.platform }}
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
+            | tar -xz -C lib/${{ matrix.platform }}
+          ls -la lib/${{ matrix.platform }}/
+
+      - name: Run tests
+        run: |
+          go test -v ./pkg/frame/... ./pkg/codec/...
+          go test -v ./internal/ffi/...
+          go test -v ./pkg/encoder/... ./pkg/decoder/...
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"

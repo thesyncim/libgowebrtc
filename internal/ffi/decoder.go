@@ -1,9 +1,17 @@
 package ffi
 
+import "runtime"
+
 // CreateVideoDecoder creates a video decoder for the specified codec.
 func CreateVideoDecoder(codec CodecType) (uintptr, error) {
 	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
+	}
+	if codec == CodecH264 {
+		preferHW := runtime.GOOS == "darwin"
+		if err := ensureOpenH264(shouldRequireOpenH264(preferHW)); err != nil {
+			return 0, err
+		}
 	}
 	var errBuf ShimErrorBuffer
 	decoder := shimVideoDecoderCreate(int32(codec), errBuf.Ptr())
@@ -33,7 +41,7 @@ func VideoDecoderDecodeInto(
 
 	var outW, outH, outYStride, outUStride, outVStride int32
 
-	var keyframe int32 = 0
+	var keyframe int32
 	if isKeyframe {
 		keyframe = 1
 	}

@@ -1,0 +1,39 @@
+# Enable Bzlmod
+common --enable_bzlmod
+
+# Apple toolchain (for Objective-C++ on macOS)
+build --enable_platform_specific_config
+build:macos --apple_crosstool_top=@local_config_apple_cc//:toolchain
+build:macos --crosstool_top=@local_config_apple_cc//:toolchain
+build:macos --host_crosstool_top=@local_config_apple_cc//:toolchain
+
+# C++ settings
+build --cxxopt=-std=c++17
+build --host_cxxopt=-std=c++17
+
+# Compiler settings
+build --copt=-fPIC
+
+# Release configuration
+build:release --compilation_mode=opt
+build:release --copt=-O3
+
+# Platform configurations
+build:darwin_arm64 --platforms=//bazel/platforms:darwin_arm64
+build:darwin_amd64 --platforms=//bazel/platforms:darwin_amd64
+build:linux_amd64 --platforms=//bazel/platforms:linux_amd64
+build:linux_arm64 --platforms=//bazel/platforms:linux_arm64
+
+# Test settings
+test --test_output=errors
+test --test_verbose_timeout_warnings
+
+# Convenience aliases
+build:macos_arm64 --config=darwin_arm64
+build:macos_amd64 --config=darwin_amd64
+
+# Suppress some warnings
+build --copt=-Wno-deprecated-declarations
+
+# Make output more readable
+build --show_progress_rate_limit=0.5

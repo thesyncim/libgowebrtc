@@ -21,39 +21,92 @@
 go get github.com/thesyncim/libgowebrtc
 ```
 
-By default, the runtime will auto-download the prebuilt `libwebrtc_shim` for your OS/arch
-from GitHub Releases and cache it under `~/.libgowebrtc`.
+By default, the runtime will auto-download the prebuilt `libwebrtc_shim` for supported
+OS/arch combinations (currently `darwin_arm64`, `linux_amd64`, `linux_arm64`) from
+GitHub Releases and cache it under `~/.libgowebrtc`. For other platforms, build the
+shim locally and set `LIBWEBRTC_SHIM_PATH`.
 
 Override behavior with:
 
 - `LIBWEBRTC_SHIM_PATH=/path/to/libwebrtc_shim.{so|dylib|dll}` (use a local shim)
 - `LIBWEBRTC_SHIM_DISABLE_DOWNLOAD=1` (disable auto-download)
 - `LIBWEBRTC_SHIM_CACHE_DIR=/custom/cache/dir` (override cache location)
-- `LIBWEBRTC_SHIM_FLAVOR=h264` (opt-in H.264 shim flavor; see below)
+- `LIBWEBRTC_SHIM_FLAVOR=basic` (override shim flavor; default: basic)
 
-### H.264 Opt-In
+### H.264 Support
 
-H.264 is published under a separate release tag due to licensing considerations.
-To enable it, set:
+H.264 encoding and decoding uses **direct OpenH264 integration** - the shim calls
+OpenH264 APIs directly rather than going through libwebrtc's codec factories. This
+means:
+
+- **Zero configuration required** - works out of the box
+- **No FFmpeg dependency** - OpenH264 handles both encoding AND decoding
+- **Clean licensing** - Cisco's BSD-licensed OpenH264 binaries are royalty-free
+- **Cross-platform** - works on Linux, macOS, and Windows
+
+#### Platform Behavior
+
+| Platform | Default | With `PreferHW: true` | With `PreferHW: false` |
+|----------|---------|----------------------|----------------------|
+| **Linux** | OpenH264 | OpenH264 | OpenH264 |
+| **macOS** | VideoToolbox | VideoToolbox | OpenH264 |
+| **Windows** | OpenH264 | OpenH264 | OpenH264 |
+
+#### OpenH264 Runtime Download
+
+OpenH264 is downloaded automatically from Cisco on first use and cached under
+`~/.libgowebrtc/openh264/<version>/<platform>`.
+
+Defaults:
+
+- `codec.DefaultH264Config` prefers hardware on macOS (VideoToolbox) and software
+  (OpenH264) elsewhere.
+- Set `PreferHW: true` or `PreferHW: false` explicitly to override.
+
+Environment knobs:
+
+- `LIBWEBRTC_OPENH264_PATH=/path/to/openh264` (use a local OpenH264 binary)
+- `LIBWEBRTC_OPENH264_DISABLE_DOWNLOAD=1` (disable auto-download)
+- `LIBWEBRTC_OPENH264_URL=https://...` (override download URL)
+- `LIBWEBRTC_OPENH264_BASE_URL=https://...` (override base URL)
+- `LIBWEBRTC_OPENH264_VERSION=2.x.y` (override version)
+- `LIBWEBRTC_OPENH264_SOVERSION=7` (override Linux SO version)
+- `LIBWEBRTC_OPENH264_SHA256=...` (verify download)
+- `LIBWEBRTC_PREFER_SOFTWARE_CODECS=1` (force software codecs in PeerConnection)
+
+Note: Cisco provides OpenH264 binaries under their own terms. Downloading from
+Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
+
+### Building the Shim
+
+The shim is built using Bazel. The build script downloads pre-compiled libwebrtc
+from [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) (~165MB)
+and builds the shim.
 
 ```bash
-export LIBWEBRTC_SHIM_FLAVOR=h264
+# Build shim (downloads libwebrtc + builds shim)
+./scripts/build.sh
+
+# Clean and rebuild
+./scripts/build.sh --clean
+
+# Create release tarball
+./scripts/build.sh --release
 ```
 
-Ensure you have published the H.264 shim assets and updated `internal/ffi/shim_manifest.json`
-with the correct release tag and SHA256 checksums.
+Environment variables:
+- `LIBWEBRTC_VERSION` - Pre-compiled version (default: 141.7390.2.0)
+- `INSTALL_DIR` - Where to cache libwebrtc (default: ~/libwebrtc)
 
-### Publishing Shims (Local Builds)
-
-Build and package the shim on each target OS/arch locally, then upload the assets
-to GitHub Releases and update the manifest:
+Or use Bazel directly:
 
 ```bash
-LIBWEBRTC_DIR=/path/to/libwebrtc RELEASE_TAG=shim-v0.1.0 ./scripts/release_shim.sh
+# Build shim (requires LIBWEBRTC_DIR or ~/libwebrtc)
+bazel build //shim:webrtc_shim --config=darwin_arm64
+bazel build //shim:webrtc_shim --config=linux_amd64
 ```
 
-For H.264, publish under a separate tag (for example: `shim-h264-v0.1.0`) and
-set `SHIM_FLAVOR=h264`.
+Supported platforms: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`
 
 ## Quick Start
 
@@ -284,12 +337,16 @@ The example showcases:
 - Real-time connection statistics
 - Modern responsive UI
 
-## What's Pending
+## Build Status
 
-The Go layer and FFI bindings are complete for all WebRTC functionality. The shim needs to be built with actual libwebrtc:
+The Go layer and FFI bindings are complete for all WebRTC functionality. Bazel builds the shim:
 
-- Build shim for darwin-arm64/amd64
-- Build shim for linux-amd64/arm64
+| Platform | Status |
+|----------|--------|
+| darwin_arm64 | ✅ Working |
+| darwin_amd64 | ✅ CI Ready |
+| linux_amd64 | ✅ CI Ready |
+| linux_arm64 | ✅ CI Ready |
 
 ## SVC & Simulcast
 
@@ -322,15 +379,40 @@ LIBWEBRTC_SHIM_PATH=./lib/darwin_arm64/libwebrtc_shim.dylib go test ./...
 go test -v ./...
 ```
 
-## Building the Shim
+## Building from Source
 
-The shim library wraps libwebrtc's C++ API with a C interface. See `shim/CMakeLists.txt`.
+### Prerequisites
+
+- Bazel 7.4.1+ (via Bazelisk recommended)
+- curl (for downloading pre-compiled libwebrtc)
+
+### Build Commands
 
 ```bash
-cd shim
-mkdir build && cd build
-cmake .. -DLIBWEBRTC_ROOT=/path/to/libwebrtc
-make
+# Build shim (downloads pre-compiled libwebrtc automatically)
+./scripts/build.sh
+
+# Create release tarball
+./scripts/build.sh --release
+
+# Clean and rebuild
+./scripts/build.sh --clean
+```
+
+The build script automatically downloads pre-compiled libwebrtc from
+[crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) and
+caches it under `~/libwebrtc`.
+
+### Manual Bazel Build
+
+```bash
+# Ensure libwebrtc is available
+export LIBWEBRTC_DIR=~/libwebrtc
+
+# Build shim
+bazel build //shim:webrtc_shim --config=darwin_arm64
+
+# Output: bazel-bin/shim/libwebrtc_shim.{dylib,so}
 ```
 
 ## License

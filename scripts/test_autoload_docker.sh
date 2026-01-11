@@ -15,9 +15,11 @@
 #   ./scripts/test_autoload_docker.sh ./...              # Run all tests
 #
 # Environment variables:
-#   SHIM_FLAVOR  - basic (default) or h264
-#   GO_VERSION   - Go version to use (default: 1.23)
-#   VERBOSE      - Set to 1 for verbose output
+#   SHIM_FLAVOR     - basic (default) or custom
+#   GO_VERSION      - Go version to use (default: 1.23)
+#   VERBOSE         - Set to 1 for verbose output
+#   TEST_OPENH264   - Set to 1 to run OpenH264 auto-download test
+#   REQUIRE_SHIM    - Set to 1 to require shim load (default: 1)
 #
 
 set -euo pipefail
@@ -29,6 +31,8 @@ TEST_PACKAGE="${1:-./internal/ffi}"
 SHIM_FLAVOR="${SHIM_FLAVOR:-basic}"
 GO_VERSION="${GO_VERSION:-1.25}"
 VERBOSE="${VERBOSE:-0}"
+TEST_OPENH264="${TEST_OPENH264:-0}"
+REQUIRE_SHIM="${REQUIRE_SHIM:-1}"
 
 # Detect architecture
 ARCH="$(uname -m)"
@@ -50,6 +54,8 @@ echo "    Package:  $TEST_PACKAGE"
 echo "    Flavor:   $SHIM_FLAVOR"
 echo "    Go:       $GO_VERSION"
 echo "    Arch:     $GOARCH"
+echo "    OpenH264: $TEST_OPENH264"
+echo "    Require:  $REQUIRE_SHIM"
 echo ""
 
 # Build test image
@@ -66,7 +72,19 @@ FROM golang:GO_VERSION_PLACEHOLDER-bookworm
 
 # Install minimal runtime deps for the shim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
+        ca-certificates \
+        libx11-6 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxext6 \
+        libxrandr2 \
+        libxrender1 \
+        libxtst6 \
+        libglib2.0-0 \
+        libgbm1 \
+        libdrm2 \
+    && ldconfig \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
@@ -84,16 +102,31 @@ RUN rm -rf lib/ shim/build/ *.tar.gz ~/.libgowebrtc
 # Environment for auto-download (CGO not required - using purego)
 ENV CGO_ENABLED=0
 ENV LIBWEBRTC_SHIM_FLAVOR=SHIM_FLAVOR_PLACEHOLDER
+REQUIRE_SHIM_ENV_PLACEHOLDER
+OPENH264_ENV_PLACEHOLDER
 
 # Default: run tests (triggers auto-download)
-CMD ["go", "test", "-v", "-count=1", "TEST_PACKAGE_PLACEHOLDER"]
+# Skip PeerConnection tests in headless Docker (no audio devices)
+CMD ["go", "test", "-v", "-count=1", "-run", "^Test(LoadLibrary|Video|Audio|Packetizer|Depacketizer|H264|VP|AV1|Opus|Concurrent_VideoEncoder|Concurrent_VideoDecoder|Concurrent_AudioEncoder)", "TEST_PACKAGE_PLACEHOLDER"]
 DOCKERFILE_END
 )
+
+OPENH264_ENV=""
+if [ "$TEST_OPENH264" = "1" ]; then
+    OPENH264_ENV=$'ENV LIBWEBRTC_TEST_OPENH264_DOWNLOAD=1\nENV LIBWEBRTC_PREFER_SOFTWARE_CODECS=1'
+fi
+
+REQUIRE_SHIM_ENV=""
+if [ "$REQUIRE_SHIM" = "1" ]; then
+    REQUIRE_SHIM_ENV=$'ENV LIBWEBRTC_TEST_REQUIRE_SHIM=1'
+fi
 
 # Replace placeholders
 DOCKERFILE="${DOCKERFILE//GO_VERSION_PLACEHOLDER/$GO_VERSION}"
 DOCKERFILE="${DOCKERFILE//SHIM_FLAVOR_PLACEHOLDER/$SHIM_FLAVOR}"
 DOCKERFILE="${DOCKERFILE//TEST_PACKAGE_PLACEHOLDER/$TEST_PACKAGE}"
+DOCKERFILE="${DOCKERFILE//OPENH264_ENV_PLACEHOLDER/$OPENH264_ENV}"
+DOCKERFILE="${DOCKERFILE//REQUIRE_SHIM_ENV_PLACEHOLDER/$REQUIRE_SHIM_ENV}"
 
 echo "$DOCKERFILE" > "$REPO_ROOT/Dockerfile.autoload"
 

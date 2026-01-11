@@ -55,7 +55,7 @@ func (e *vp9Encoder) init() error {
 		Framerate:        float32(e.config.FPS),
 		KeyframeInterval: int32(e.config.KeyInterval),
 		VP9Profile:       int32(e.config.Profile),
-		PreferHW:         1,
+		PreferHW:         boolToInt32(e.config.PreferHW),
 	}
 
 	handle, err := ffi.CreateVideoEncoder(ffi.CodecVP9, ffiConfig)

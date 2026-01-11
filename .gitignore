@@ -51,3 +51,18 @@ shim/*.so
 shim/*.dylib
 shim/*.dll
 .goland-state.json
+
+# Bazel
+/bazel-*
+*.runfiles/
+*.runfiles_manifest
+.bazelrc.user
+MODULE.bazel.lock
+
+# Release artifacts
+*.tar.gz
+*.tar.xz
+*.sha256
+
+# Build output directories
+shim/build-*/
