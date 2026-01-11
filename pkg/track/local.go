@@ -286,11 +286,8 @@ func (t *VideoTrack) Unbind(ctx webrtc.TrackLocalContext) error {
 
 // WriteFrame encodes a video frame and writes RTP packets to the bound peer connection.
 func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	// Check if track is paused (SetParameters with Active=false)
@@ -358,11 +355,8 @@ func (t *VideoTrack) writePackets(numPackets int) error {
 // WriteEncodedData writes pre-encoded data as RTP packets.
 // Useful when you already have encoded H.264/VP8/etc data.
 func (t *VideoTrack) WriteEncodedData(data []byte, timestamp uint32, isKeyframe bool) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	t.mu.Lock()
@@ -389,11 +383,8 @@ func (t *VideoTrack) WriteEncodedData(data []byte, timestamp uint32, isKeyframe 
 
 // WriteRTP writes an already-formed RTP packet.
 func (t *VideoTrack) WriteRTP(pkt *rtp.Packet) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	t.mu.Lock()
@@ -719,6 +710,17 @@ func (t *VideoTrack) setScaleFactorLocked(scale float64) {
 	}
 }
 
+// checkReady returns nil if the track is open and bound, otherwise returns the appropriate error.
+func (t *VideoTrack) checkReady() error {
+	if t.closed.Load() {
+		return ErrTrackClosed
+	}
+	if !t.bound.Load() {
+		return ErrNotBound
+	}
+	return nil
+}
+
 // Close releases all resources.
 func (t *VideoTrack) Close() error {
 	if !t.closed.CompareAndSwap(false, true) {
@@ -934,11 +936,8 @@ func (t *AudioTrack) Unbind(ctx webrtc.TrackLocalContext) error {
 
 // WriteFrame encodes an audio frame and writes RTP packets.
 func (t *AudioTrack) WriteFrame(f *frame.AudioFrame) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	t.mu.Lock()
@@ -987,11 +986,8 @@ func (t *AudioTrack) writePackets(numPackets int) error {
 
 // WriteEncodedData writes pre-encoded Opus data as RTP packets.
 func (t *AudioTrack) WriteEncodedData(data []byte, timestamp uint32) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	t.mu.Lock()
@@ -1013,6 +1009,17 @@ func (t *AudioTrack) WriteEncodedData(data []byte, timestamp uint32) error {
 	}
 
 	return t.writePackets(numPackets)
+}
+
+// checkReady returns nil if the track is open and bound, otherwise returns the appropriate error.
+func (t *AudioTrack) checkReady() error {
+	if t.closed.Load() {
+		return ErrTrackClosed
+	}
+	if !t.bound.Load() {
+		return ErrNotBound
+	}
+	return nil
 }
 
 // SetBitrate adjusts encoder bitrate.

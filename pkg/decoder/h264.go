@@ -108,20 +108,22 @@ func (d *h264Decoder) DecodeInto(src []byte, dst *frame.VideoFrame, timestamp ui
 	return nil
 }
 
+// findStartCode checks for an Annex B start code at the given offset.
+// Returns the length of the start code (3 or 4) and true if found, or 0 and false if not.
+func findStartCode(data []byte, offset int) (length int, found bool) {
+	if offset+4 <= len(data) && data[offset] == 0 && data[offset+1] == 0 && data[offset+2] == 0 && data[offset+3] == 1 {
+		return 4, true
+	}
+	if offset+3 <= len(data) && data[offset] == 0 && data[offset+1] == 0 && data[offset+2] == 1 {
+		return 3, true
+	}
+	return 0, false
+}
+
 // isAnnexB checks if the data starts with an Annex B start code.
 func (d *h264Decoder) isAnnexB(data []byte) bool {
-	if len(data) < 4 {
-		return false
-	}
-	// Check for 4-byte start code
-	if data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 1 {
-		return true
-	}
-	// Check for 3-byte start code
-	if data[0] == 0 && data[1] == 0 && data[2] == 1 {
-		return true
-	}
-	return false
+	_, found := findStartCode(data, 0)
+	return found
 }
 
 // ensureAnnexB converts AVCC format to Annex B if needed.
@@ -170,23 +172,12 @@ func (d *h264Decoder) ensureAnnexB(data []byte) []byte {
 
 // scanForParameterSets checks if the data contains SPS (type 7) and PPS (type 8) NAL units.
 func (d *h264Decoder) scanForParameterSets(data []byte) (hasSPS, hasPPS bool) {
-	for i := 0; i < len(data)-4; i++ {
-		// Look for 4-byte start code (00 00 00 01)
-		if data[i] == 0 && data[i+1] == 0 && data[i+2] == 0 && data[i+3] == 1 {
-			if i+4 < len(data) {
-				nalType := data[i+4] & 0x1F
-				if nalType == 7 {
-					hasSPS = true
-				}
-				if nalType == 8 {
-					hasPPS = true
-				}
-			}
-		}
-		// Also check 3-byte start code (00 00 01)
-		if data[i] == 0 && data[i+1] == 0 && data[i+2] == 1 {
-			if i+3 < len(data) {
-				nalType := data[i+3] & 0x1F
+	for i := 0; i < len(data)-3; i++ {
+		scLen, found := findStartCode(data, i)
+		if found {
+			nalTypeOffset := i + scLen
+			if nalTypeOffset < len(data) {
+				nalType := data[nalTypeOffset] & 0x1F
 				if nalType == 7 {
 					hasSPS = true
 				}
@@ -201,39 +192,26 @@ func (d *h264Decoder) scanForParameterSets(data []byte) (hasSPS, hasPPS bool) {
 
 // extractNALUnit finds and extracts a NAL unit of the given type (with start code).
 func (d *h264Decoder) extractNALUnit(data []byte, targetType byte) []byte {
-	for i := 0; i < len(data)-4; i++ {
-		// Look for 4-byte start code
-		if data[i] == 0 && data[i+1] == 0 && data[i+2] == 0 && data[i+3] == 1 {
-			if i+4 < len(data) && (data[i+4]&0x1F) == targetType {
-				start := i
-				end := i + 5
-				// Find next start code
-				for end < len(data)-3 {
-					if data[end] == 0 && data[end+1] == 0 &&
-						(data[end+2] == 1 || (data[end+2] == 0 && end+3 < len(data) && data[end+3] == 1)) {
-						break
-					}
-					end++
-				}
-				return append([]byte{}, data[start:end]...)
-			}
+	for i := 0; i < len(data)-3; i++ {
+		scLen, found := findStartCode(data, i)
+		if !found {
+			continue
 		}
-		// Also check 3-byte start code
-		if data[i] == 0 && data[i+1] == 0 && data[i+2] == 1 {
-			if i+3 < len(data) && (data[i+3]&0x1F) == targetType {
-				start := i
-				end := i + 4
-				// Find next start code
-				for end < len(data)-2 {
-					if data[end] == 0 && data[end+1] == 0 &&
-						(data[end+2] == 1 || (data[end+2] == 0 && end+3 < len(data) && data[end+3] == 1)) {
-						break
-					}
-					end++
-				}
-				return append([]byte{}, data[start:end]...)
-			}
+		nalTypeOffset := i + scLen
+		if nalTypeOffset >= len(data) || (data[nalTypeOffset]&0x1F) != targetType {
+			continue
 		}
+		// Found the target NAL unit, now find its end
+		start := i
+		end := nalTypeOffset + 1
+		// Find next start code
+		for end < len(data)-2 {
+			if _, nextFound := findStartCode(data, end); nextFound {
+				break
+			}
+			end++
+		}
+		return append([]byte{}, data[start:end]...)
 	}
 	return nil
 }
