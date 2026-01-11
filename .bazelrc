@@ -23,6 +23,7 @@ build:darwin_arm64 --platforms=//bazel/platforms:darwin_arm64
 build:darwin_amd64 --platforms=//bazel/platforms:darwin_amd64
 build:linux_amd64 --platforms=//bazel/platforms:linux_amd64
 build:linux_arm64 --platforms=//bazel/platforms:linux_arm64
+build:windows_amd64 --platforms=//bazel/platforms:windows_amd64
 
 # Test settings
 test --test_output=errors

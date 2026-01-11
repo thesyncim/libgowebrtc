@@ -6,10 +6,11 @@
 # and builds the C++ shim library using Bazel.
 #
 # Usage:
-#   ./scripts/build.sh              # Build for current platform
-#   ./scripts/build.sh --clean      # Clean and rebuild
-#   ./scripts/build.sh --release    # Build release tarball
-#   ./scripts/build.sh --help       # Show help
+#   ./scripts/build.sh                        # Build for current platform
+#   ./scripts/build.sh --target darwin_amd64  # Cross-compile for Intel Mac
+#   ./scripts/build.sh --clean                # Clean and rebuild
+#   ./scripts/build.sh --release              # Build release tarball
+#   ./scripts/build.sh --help                 # Show help
 
 set -e
 
@@ -29,33 +30,33 @@ detect_platform() {
     case "$(uname -s)" in
         Darwin) os="darwin" ;;
         Linux)  os="linux" ;;
+        MINGW*|MSYS*|CYGWIN*) os="windows" ;;
         *)      os="unknown" ;;
     esac
     case "$(uname -m)" in
         arm64|aarch64) cpu="arm64" ;;
-        x86_64|amd64)  cpu="amd64" ;;
+        x86_64|amd64|AMD64)  cpu="amd64" ;;
         *)             cpu="unknown" ;;
     esac
     echo "${os}_${cpu}"
 }
 
-get_download_platform() {
-    case "$(uname -s)" in
-        Darwin)
-            case "$(uname -m)" in
-                arm64) echo "macos-arm64" ;;
-                x86_64) echo "macos-x64" ;;
-            esac ;;
-        Linux)
-            case "$(uname -m)" in
-                aarch64) echo "linux-arm64" ;;
-                x86_64) echo "linux-x64" ;;
-            esac ;;
+# Get download platform name for a given target
+get_download_platform_for_target() {
+    local target="$1"
+    case "$target" in
+        darwin_arm64)  echo "macos-arm64" ;;
+        darwin_amd64)  echo "macos-x64" ;;
+        linux_arm64)   echo "linux-arm64" ;;
+        linux_amd64)   echo "linux-x64" ;;
+        windows_amd64) echo "win-x64" ;;
+        *) echo "" ;;
     esac
 }
 
-PLATFORM=$(detect_platform)
-TARGET_OS=$(echo "$PLATFORM" | cut -d_ -f1)
+HOST_PLATFORM=$(detect_platform)
+TARGET_PLATFORM="${TARGET_PLATFORM:-$HOST_PLATFORM}"
+TARGET_OS=$(echo "$TARGET_PLATFORM" | cut -d_ -f1)
 
 # Colors
 log_info()    { echo -e "\033[0;34m[INFO]\033[0m $1"; }
@@ -73,40 +74,57 @@ Downloads pre-compiled libwebrtc and builds the C++ shim.
 Usage: ./scripts/build.sh [OPTIONS]
 
 Options:
-  --clean      Clean build artifacts and rebuild
-  --release    Create release tarball
-  --help       Show this help
+  --target PLATFORM  Target platform (darwin_arm64, darwin_amd64, linux_amd64, linux_arm64)
+                     Default: current platform ($HOST_PLATFORM)
+  --clean            Clean build artifacts and rebuild
+  --release          Create release tarball
+  --help             Show this help
 
 Environment:
   LIBWEBRTC_VERSION   Version to download (default: $LIBWEBRTC_VERSION)
   INSTALL_DIR         Where to install libwebrtc (default: ~/libwebrtc)
+  TARGET_PLATFORM     Alternative way to set target platform
 
 Examples:
-  ./scripts/build.sh              # Build shim
-  ./scripts/build.sh --release    # Create release tarball
+  ./scripts/build.sh                        # Build for current platform
+  ./scripts/build.sh --target darwin_amd64  # Cross-compile for Intel Mac
+  ./scripts/build.sh --release              # Create release tarball
+
+Cross-compilation:
+  On Apple Silicon Mac, you can cross-compile for Intel Mac:
+    ./scripts/build.sh --target darwin_amd64
+
+  The script will download the correct libwebrtc and build with Bazel.
 EOF
     exit 0
 }
 
 download_libwebrtc() {
-    if [[ -f "$INSTALL_DIR/lib/libwebrtc.a" ]]; then
+    # Check for existing installation
+    local lib_file="libwebrtc.a"
+    [[ "$TARGET_OS" == "windows" ]] && lib_file="webrtc.lib"
+
+    if [[ -f "$INSTALL_DIR/lib/$lib_file" ]]; then
         log_info "libwebrtc already installed at $INSTALL_DIR"
         return 0
     fi
 
-    log_step "Downloading pre-compiled libwebrtc v${LIBWEBRTC_VERSION}"
+    log_step "Downloading pre-compiled libwebrtc v${LIBWEBRTC_VERSION} for ${TARGET_PLATFORM}"
 
-    local platform=$(get_download_platform)
-    if [[ -z "$platform" ]]; then
-        log_error "Unsupported platform: $(uname -s) $(uname -m)"
+    local download_platform=$(get_download_platform_for_target "$TARGET_PLATFORM")
+    if [[ -z "$download_platform" ]]; then
+        log_error "Unsupported target platform: $TARGET_PLATFORM"
         exit 1
     fi
 
-    local url="https://github.com/${LIBWEBRTC_BIN_REPO}/releases/download/${LIBWEBRTC_VERSION}/libwebrtc-${platform}.tar.xz"
     local tmpdir=$(mktemp -d)
+    local archive_ext="tar.xz"
+    [[ "$TARGET_OS" == "windows" ]] && archive_ext="7z"
+
+    local url="https://github.com/${LIBWEBRTC_BIN_REPO}/releases/download/${LIBWEBRTC_VERSION}/libwebrtc-${download_platform}.${archive_ext}"
 
     log_info "Downloading from: $url"
-    if ! curl -fSL --progress-bar -o "$tmpdir/libwebrtc.tar.xz" "$url"; then
+    if ! curl -fSL --progress-bar -o "$tmpdir/libwebrtc.${archive_ext}" "$url"; then
         log_error "Download failed"
         rm -rf "$tmpdir"
         exit 1
@@ -114,13 +132,27 @@ download_libwebrtc() {
 
     log_info "Extracting to $INSTALL_DIR..."
     mkdir -p "$INSTALL_DIR"
-    tar -xf "$tmpdir/libwebrtc.tar.xz" -C "$INSTALL_DIR"
+
+    if [[ "$TARGET_OS" == "windows" ]]; then
+        # Windows uses 7z format
+        if command -v 7z &> /dev/null; then
+            7z x -o"$INSTALL_DIR" "$tmpdir/libwebrtc.7z" -y
+        elif command -v 7za &> /dev/null; then
+            7za x -o"$INSTALL_DIR" "$tmpdir/libwebrtc.7z" -y
+        else
+            log_error "7z or 7za not found. Please install p7zip."
+            rm -rf "$tmpdir"
+            exit 1
+        fi
+    else
+        tar -xf "$tmpdir/libwebrtc.tar.xz" -C "$INSTALL_DIR"
+    fi
     rm -rf "$tmpdir"
 
-    if [[ -f "$INSTALL_DIR/lib/libwebrtc.a" ]]; then
+    if [[ -f "$INSTALL_DIR/lib/$lib_file" ]]; then
         log_success "Pre-compiled libwebrtc installed to $INSTALL_DIR"
     else
-        log_error "libwebrtc.a not found after extraction"
+        log_error "$lib_file not found after extraction"
         exit 1
     fi
 }
@@ -130,14 +162,22 @@ build_shim() {
     cd "$PROJECT_ROOT"
 
     export LIBWEBRTC_DIR="$INSTALL_DIR"
-    log_info "Building for platform: $PLATFORM"
 
-    bazel build //shim:webrtc_shim --config="$PLATFORM"
+    if [[ "$HOST_PLATFORM" != "$TARGET_PLATFORM" ]]; then
+        log_info "Cross-compiling: $HOST_PLATFORM -> $TARGET_PLATFORM"
+    else
+        log_info "Building for platform: $TARGET_PLATFORM"
+    fi
+
+    bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM"
 
     local ext="so"
-    [[ "$TARGET_OS" == "darwin" ]] && ext="dylib"
+    case "$TARGET_OS" in
+        darwin)  ext="dylib" ;;
+        windows) ext="dll" ;;
+    esac
 
-    local lib_dir="$PROJECT_ROOT/lib/$PLATFORM"
+    local lib_dir="$PROJECT_ROOT/lib/$TARGET_PLATFORM"
     mkdir -p "$lib_dir"
     cp "bazel-bin/shim/libwebrtc_shim.$ext" "$lib_dir/"
 
@@ -149,9 +189,12 @@ create_release() {
     cd "$PROJECT_ROOT"
 
     local ext="so"
-    [[ "$TARGET_OS" == "darwin" ]] && ext="dylib"
+    case "$TARGET_OS" in
+        darwin)  ext="dylib" ;;
+        windows) ext="dll" ;;
+    esac
 
-    local tarball="libwebrtc_shim_${PLATFORM}.tar.gz"
+    local tarball="libwebrtc_shim_${TARGET_PLATFORM}.tar.gz"
     local dist_dir="$PROJECT_ROOT/dist"
 
     rm -rf "$dist_dir"
@@ -185,6 +228,11 @@ main() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --target)
+                TARGET_PLATFORM="$2"
+                TARGET_OS=$(echo "$TARGET_PLATFORM" | cut -d_ -f1)
+                shift 2
+                ;;
             --clean)   do_clean=true; shift ;;
             --release) do_release=true; shift ;;
             --help)    show_help ;;
@@ -192,7 +240,13 @@ main() {
         esac
     done
 
-    log_info "Platform: $PLATFORM"
+    # Update INSTALL_DIR to be platform-specific for cross-compilation
+    if [[ "$HOST_PLATFORM" != "$TARGET_PLATFORM" ]]; then
+        INSTALL_DIR="${INSTALL_DIR:-$HOME/libwebrtc}_${TARGET_PLATFORM}"
+    fi
+
+    log_info "Host platform: $HOST_PLATFORM"
+    log_info "Target platform: $TARGET_PLATFORM"
     log_info "libwebrtc version: $LIBWEBRTC_VERSION"
     log_info "Install dir: $INSTALL_DIR"
 
@@ -203,10 +257,20 @@ main() {
 
     $do_release && create_release
 
+    local ext="so"
+    case "$TARGET_OS" in
+        darwin)  ext="dylib" ;;
+        windows) ext="dll" ;;
+    esac
+
     log_success "Build complete!"
     echo ""
     echo "To test:"
-    echo "  LIBWEBRTC_SHIM_PATH=$PROJECT_ROOT/lib/$PLATFORM/libwebrtc_shim.${ext:-dylib} go test ./..."
+    if [[ "$HOST_PLATFORM" != "$TARGET_PLATFORM" && "$TARGET_PLATFORM" == "darwin_amd64" ]]; then
+        echo "  arch -x86_64 env LIBWEBRTC_SHIM_PATH=$PROJECT_ROOT/lib/$TARGET_PLATFORM/libwebrtc_shim.$ext go test ./..."
+    else
+        echo "  LIBWEBRTC_SHIM_PATH=$PROJECT_ROOT/lib/$TARGET_PLATFORM/libwebrtc_shim.$ext go test ./..."
+    fi
 }
 
 main "$@"

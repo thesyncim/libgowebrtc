@@ -77,6 +77,25 @@ _LINUX_LINKOPTS = [
     "-Wl,--end-group",
 ]
 
+# Windows libraries
+_WINDOWS_LINKOPTS = [
+    "-DEFAULTLIB:ole32.lib",
+    "-DEFAULTLIB:oleaut32.lib",
+    "-DEFAULTLIB:strmiids.lib",
+    "-DEFAULTLIB:mfuuid.lib",
+    "-DEFAULTLIB:wmcodecdspuuid.lib",
+    "-DEFAULTLIB:secur32.lib",
+    "-DEFAULTLIB:winmm.lib",
+    "-DEFAULTLIB:dmoguids.lib",
+    "-DEFAULTLIB:crypt32.lib",
+    "-DEFAULTLIB:iphlpapi.lib",
+    "-DEFAULTLIB:ws2_32.lib",
+    "-DEFAULTLIB:dwmapi.lib",
+    "-DEFAULTLIB:dxgi.lib",
+    "-DEFAULTLIB:d3d11.lib",
+    "-DEFAULTLIB:shcore.lib",
+]
+
 # Main shim library - compile all sources together
 # On macOS, include the .mm file and use ObjC++ for it
 cc_library(
@@ -85,6 +104,7 @@ cc_library(
         # On macOS, we need to handle .mm separately
         "@platforms//os:macos": [],
         "@platforms//os:linux": ["shim_permission.cc"],
+        "@platforms//os:windows": ["shim_permission.cc"],
         "//conditions:default": ["shim_permission.cc"],
     }),
     hdrs = _SHIM_HDRS,
@@ -93,6 +113,7 @@ cc_library(
     defines = _COMMON_DEFINES + select({
         "@platforms//os:macos": ["WEBRTC_MAC"],
         "@platforms//os:linux": ["WEBRTC_LINUX"],
+        "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"],
         "//conditions:default": [],
     }),
     visibility = ["//visibility:private"],
@@ -100,6 +121,7 @@ cc_library(
 )
 
 # For macOS, compile the .mm file with a genrule
+# Uses select on CPU to handle cross-compilation (arm64 -> x86_64)
 genrule(
     name = "compile_permission_mac",
     srcs = [
@@ -107,8 +129,16 @@ genrule(
     ] + _SHIM_HDRS + ["@libwebrtc//:libwebrtc"],
     outs = ["shim_permission_mac.o"],
     cmd = select({
-        "@platforms//os:macos": """
-            clang++ -c -o $@ -x objective-c++ -std=c++17 -fPIC \
+        "@platforms//cpu:x86_64": """
+            clang++ -c -o $@ -x objective-c++ -std=c++17 -fPIC -arch x86_64 \
+                -DWEBRTC_MAC -DWEBRTC_POSIX -DWEBRTC_LIBRARY_IMPL \
+                -I$$(dirname $(location shim.h)) \
+                -isystem external/libwebrtc/include \
+                -isystem external/libwebrtc/include/third_party/abseil-cpp \
+                $(location shim_permission_mac.mm)
+        """,
+        "@platforms//cpu:aarch64": """
+            clang++ -c -o $@ -x objective-c++ -std=c++17 -fPIC -arch arm64 \
                 -DWEBRTC_MAC -DWEBRTC_POSIX -DWEBRTC_LIBRARY_IMPL \
                 -I$$(dirname $(location shim.h)) \
                 -isystem external/libwebrtc/include \
@@ -121,7 +151,7 @@ genrule(
     visibility = ["//visibility:private"],
 )
 
-# Shared library - outputs libwebrtc_shim.{dylib,so}
+# Shared library - outputs libwebrtc_shim.{dylib,so,dll}
 cc_binary(
     name = "webrtc_shim",
     srcs = select({
@@ -131,6 +161,7 @@ cc_binary(
     linkopts = select({
         "@platforms//os:macos": _MACOS_LINKOPTS,
         "@platforms//os:linux": _LINUX_LINKOPTS,
+        "@platforms//os:windows": _WINDOWS_LINKOPTS,
         "//conditions:default": [],
     }),
     linkshared = True,
