@@ -1,11 +1,8 @@
-name: Build & Test
+name: Build & Release
 
 on:
   push:
-    branches: [main, develop, openh264-runtime]
     tags: ['v*', 'shim-v*']
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 env:
