@@ -99,6 +99,7 @@ _WINDOWS_LINKOPTS = [
     "-DEFAULTLIB:secur32.lib",
     "-DEFAULTLIB:winmm.lib",
     "-DEFAULTLIB:dmoguids.lib",
+    "-DEFAULTLIB:msdmo.lib",      # DMO functions (MoInitMediaType, etc.)
     "-DEFAULTLIB:crypt32.lib",
     "-DEFAULTLIB:iphlpapi.lib",
     "-DEFAULTLIB:ws2_32.lib",
@@ -106,6 +107,8 @@ _WINDOWS_LINKOPTS = [
     "-DEFAULTLIB:dxgi.lib",
     "-DEFAULTLIB:d3d11.lib",
     "-DEFAULTLIB:shcore.lib",
+    "-DEFAULTLIB:gdi32.lib",      # GDI functions (GetDeviceCaps, BitBlt, etc.)
+    "-DEFAULTLIB:user32.lib",     # Window functions
 ]
 
 # Main shim library - compile all sources together
