@@ -77,6 +77,14 @@ Environment knobs:
 Note: Cisco provides OpenH264 binaries under their own terms. Downloading from
 Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 
+### Pinned Versions
+
+| Dependency | Version | Source |
+|------------|---------|--------|
+| libwebrtc (pre-compiled) | 141.7390.2.0 | [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) |
+| libwebrtc_shim | shim-v0.3.0 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
+| OpenH264 | 2.5.1 | [Cisco OpenH264](https://github.com/cisco/openh264/releases) |
+
 ### Building the Shim
 
 The shim is built using Bazel with pre-compiled libwebrtc from
