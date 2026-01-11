@@ -2,7 +2,9 @@
 
 **Pion-compatible Go wrapper for libwebrtc** - high-performance video/audio encoding, decoding, and WebRTC connectivity without CGO.
 
+[![Test](https://github.com/thesyncim/libgowebrtc/actions/workflows/test.yml/badge.svg)](https://github.com/thesyncim/libgowebrtc/actions/workflows/test.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/thesyncim/libgowebrtc.svg)](https://pkg.go.dev/github.com/thesyncim/libgowebrtc)
+[![Go Report Card](https://goreportcard.com/badge/github.com/thesyncim/libgowebrtc)](https://goreportcard.com/report/github.com/thesyncim/libgowebrtc)
 
 ## Features
 
@@ -14,6 +16,66 @@
 - **SVC/Simulcast** support with Chrome/Firefox-compatible presets
 - **purego FFI** - no CGO required by default, optional CGO mode for 5x faster FFI
 - **Device capture** - camera, microphone, screen/window capture
+
+## Why libgowebrtc?
+
+libgowebrtc brings native codec performance to Go WebRTC applications. It's designed to **complement** [Pion](https://github.com/pion/webrtc) - use Pion for networking and signaling, libgowebrtc for encoding/decoding.
+
+**Key benefits:**
+- **Native codec performance** - H.264, VP8, VP9, AV1 via Google's libwebrtc
+- **Hardware acceleration** - VideoToolbox on macOS for H.264
+- **SVC/Simulcast** - Full support with Chrome/Firefox-compatible presets
+- **Browser-like API** - `GetUserMedia`, `GetDisplayMedia`, `PeerConnection`
+- **No CGO required** - Uses purego by default (optional CGO mode for 5x faster FFI)
+- **Pion integration** - Implements `webrtc.TrackLocal` for seamless interop
+
+**Use cases:**
+- Add native codecs to your Pion-based SFU/MCU
+- Build browser-like WebRTC apps in Go
+- High-throughput media processing pipelines
+- Hardware-accelerated transcoding
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Go Application                           │
+├─────────────────────────────────────────────────────────────────┤
+│  libgowebrtc (Go)                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ track.Local  │  │ encoder/     │  │ packetizer/          │  │
+│  │ (implements  │  │ decoder      │  │ depacketizer         │  │
+│  │ webrtc.      │  │              │  │                      │  │
+│  │ TrackLocal)  │  └──────────────┘  └──────────────────────┘  │
+│  └──────────────┘                                               │
+│         │                    │                    │             │
+│         └────────────────────┼────────────────────┘             │
+│                              │                                  │
+│                     ┌────────▼────────┐                         │
+│                     │  internal/ffi   │  ← purego bindings      │
+│                     └────────┬────────┘                         │
+└──────────────────────────────┼──────────────────────────────────┘
+                               │ dlopen/dlsym
+                    ┌──────────▼──────────┐
+                    │  libwebrtc_shim.so  │  ← C wrapper (pre-built)
+                    │  (C API over C++)   │
+                    └──────────┬──────────┘
+                               │
+        ┌──────────────────────┼──────────────────────┐
+        │ (linked)             │ (dlopen)             │ (framework)
+        │                      │                      │
+┌───────▼───────┐    ┌─────────▼─────────┐    ┌──────▼───────┐
+│   libwebrtc   │    │     OpenH264      │    │ VideoToolbox │
+│ VP8/VP9/AV1   │    │   (H.264 codec)   │    │(macOS H.264) │
+│    Opus       │    │ auto-downloaded   │    │  hardware    │
+│ Google WebRTC │    │   from Cisco      │    │  accelerated │
+└───────────────┘    └───────────────────┘    └──────────────┘
+```
+
+**Runtime loading:**
+- **libwebrtc_shim**: Auto-downloaded from GitHub releases on first use, cached in `~/.libgowebrtc/`
+- **OpenH264**: Auto-downloaded from Cisco on first H.264 use, loaded via `dlopen` at runtime
+- **VideoToolbox**: macOS system framework (no download needed)
 
 ## Installation
 
@@ -242,79 +304,124 @@ libgowebrtc/
 
 ## What's Working
 
-### Core Encoding/Decoding
+### At a Glance
+
+| Category | Status | Key Features |
+|----------|--------|--------------|
+| **Encoding/Decoding** | ✅ Complete | H.264, VP8, VP9, AV1, Opus - allocation-free |
+| **PeerConnection** | ✅ Complete | Offer/answer, ICE, tracks, data channels |
+| **RTP Control** | ✅ Complete | Sender/receiver/transceiver, simulcast layers |
+| **Media Capture** | ✅ Complete | Camera, microphone, screen/window |
+| **Statistics** | ✅ Complete | Full RTCStats, BWE, quality metrics |
+
+<details>
+<summary><strong>Core Encoding/Decoding</strong></summary>
+
 - H.264/VP8/VP9/AV1 video encoding/decoding via FFI
 - Opus audio encoding/decoding via FFI
 - Allocation-free encode/decode with reusable buffers
 - Runtime bitrate/framerate control
 - Keyframe request
+</details>
 
-### PeerConnection
+<details>
+<summary><strong>PeerConnection</strong></summary>
+
 - Full offer/answer/ICE support
 - Track writing with frame push to native source
-- Frame receiving from remote tracks (SetOnVideoFrame/SetOnAudioFrame)
+- Frame receiving from remote tracks (`SetOnVideoFrame`/`SetOnAudioFrame`)
 - DataChannel communication
 - `GetStats()` - connection statistics
 - `RestartICE()` - ICE restart trigger
 - `AddTransceiver()` - add transceivers with direction control
+</details>
 
-### RTPSender
-- `ReplaceTrack()` - replace sender track
-- `SetParameters()` / `GetParameters()` - encoding parameters
-- `SetLayerActive()` / `SetLayerBitrate()` - simulcast layer control
-- `GetActiveLayers()` - get active layer count
-- `SetOnRTCPFeedback()` - RTCP feedback events (PLI/FIR/NACK)
-- `SetScalabilityMode()` / `GetScalabilityMode()` - runtime SVC mode control
-- `GetStats()` - sender statistics
+<details>
+<summary><strong>RTPSender</strong></summary>
 
-### RTPReceiver
-- `GetStats()` - receiver statistics
-- `RequestKeyframe()` - send PLI
-- `SetJitterBufferTarget()` - set target buffer delay
-- `SetJitterBufferBounds()` - set min/max delay bounds
-- `GetJitterBufferStats()` - get buffer statistics
-- `OnJitterBufferStats()` - periodic stats callback
-- `SetAdaptiveJitterBuffer()` - enable/disable adaptive mode
+| Method | Description |
+|--------|-------------|
+| `ReplaceTrack()` | Replace sender track |
+| `SetParameters()` / `GetParameters()` | Encoding parameters |
+| `SetLayerActive()` / `SetLayerBitrate()` | Simulcast layer control |
+| `GetActiveLayers()` | Get active layer count |
+| `SetOnRTCPFeedback()` | RTCP feedback events (PLI/FIR/NACK) |
+| `SetScalabilityMode()` / `GetScalabilityMode()` | Runtime SVC mode control |
+| `GetStats()` | Sender statistics |
+</details>
 
-### RTPTransceiver
+<details>
+<summary><strong>RTPReceiver</strong></summary>
+
+| Method | Description |
+|--------|-------------|
+| `GetStats()` | Receiver statistics |
+| `RequestKeyframe()` | Send PLI |
+| `SetJitterBufferTarget()` | Set target buffer delay |
+| `SetJitterBufferBounds()` | Set min/max delay bounds |
+| `GetJitterBufferStats()` | Get buffer statistics |
+| `OnJitterBufferStats()` | Periodic stats callback |
+| `SetAdaptiveJitterBuffer()` | Enable/disable adaptive mode |
+</details>
+
+<details>
+<summary><strong>RTPTransceiver</strong></summary>
+
 - `SetDirection()` / `Direction()` / `CurrentDirection()` - direction control
 - `Stop()` - stop transceiver
 - `Mid()` - get media ID
 - `Sender()` / `Receiver()` - get sender/receiver
+</details>
 
-### Event Callbacks
-- `OnConnectionStateChange` - connection state events
-- `OnSignalingStateChange` - signaling state events
-- `OnICEConnectionStateChange` - ICE connection state events
-- `OnICEGatheringStateChange` - ICE gathering progress events
-- `OnNegotiationNeeded` - renegotiation trigger events
-- `OnICECandidate` - new ICE candidate events
-- `OnTrack` - remote track received events
-- `OnDataChannel` - data channel received events
+<details>
+<summary><strong>Event Callbacks</strong></summary>
 
-### Media Capture
-- Device/screen capture wired into GetUserMedia/GetDisplayMedia
+| Callback | Description |
+|----------|-------------|
+| `OnConnectionStateChange` | Connection state events |
+| `OnSignalingStateChange` | Signaling state events |
+| `OnICEConnectionStateChange` | ICE connection state events |
+| `OnICEGatheringStateChange` | ICE gathering progress events |
+| `OnNegotiationNeeded` | Renegotiation trigger events |
+| `OnICECandidate` | New ICE candidate events |
+| `OnTrack` | Remote track received events |
+| `OnDataChannel` | Data channel received events |
+</details>
+
+<details>
+<summary><strong>Media Capture</strong></summary>
+
+- Device/screen capture via `GetUserMedia`/`GetDisplayMedia`
 - Pion interop (libwebrtc tracks work with Pion PC)
+</details>
 
-### Statistics (RTCStats)
+<details>
+<summary><strong>Statistics (RTCStats)</strong></summary>
+
 - Transport stats (bytes/packets sent/received)
 - Quality metrics (RTT, jitter, packet loss)
 - Video stats (frames encoded/decoded, keyframes, NACK/PLI/FIR)
 - Audio stats (audio level, energy, concealment)
-- **SCTP/DataChannel stats** - channels opened/closed, messages sent/received
-- **Quality limitation** - reason (none/cpu/bandwidth/other) and duration
-- **Remote RTP stats** - remote jitter, RTT, packet loss
+- SCTP/DataChannel stats - channels opened/closed, messages sent/received
+- Quality limitation - reason (none/cpu/bandwidth/other) and duration
+- Remote RTP stats - remote jitter, RTT, packet loss
+</details>
 
-### Codec Capabilities
+<details>
+<summary><strong>Codec & Bandwidth APIs</strong></summary>
+
+**Codec Capabilities:**
 - `GetSupportedVideoCodecs()` - enumerate video codecs (VP8, VP9, H264, AV1)
 - `GetSupportedAudioCodecs()` - enumerate audio codecs (Opus, PCMU, PCMA)
 - `IsCodecSupported(mimeType)` - check codec support
 
-### Bandwidth Estimation
+**Bandwidth Estimation:**
 - `GetBandwidthEstimate()` - get current BWE (target bitrate, available bandwidth)
 - `SetOnBandwidthEstimate(callback)` - receive BWE updates
+</details>
 
 ### Jitter Buffer Control
+
 Control libwebrtc's internal jitter buffer for latency vs quality tradeoffs:
 
 ```go
@@ -354,6 +461,29 @@ The example showcases:
 - DataChannel for bidirectional messaging
 - Real-time connection statistics
 - Modern responsive UI
+
+## Performance Benchmarks
+
+Tested on Apple M2 Pro at 1280x720:
+
+| Codec | Encode Time | Notes |
+|-------|-------------|-------|
+| H.264 | ~1.14 ms/frame | OpenH264 software encoder |
+| VP8 | ~3.08 ms/frame | libvpx |
+| VP9 | ~3.21 ms/frame | libvpx |
+| AV1 | ~1.88 ms/frame | libaom |
+
+**FFI Overhead:**
+
+| Mode | Overhead | Requirements |
+|------|----------|--------------|
+| purego (default) | ~200 ns/call | None (pure Go) |
+| CGO (`-tags ffigo_cgo`) | ~44 ns/call | C compiler |
+
+Run benchmarks locally:
+```bash
+go test -bench=BenchmarkAllVideoCodecs -benchtime=1s ./test/e2e/
+```
 
 ## Build Status
 
@@ -440,12 +570,104 @@ bazel build //shim:webrtc_shim --config=darwin_arm64
 # Output: bazel-bin/shim/libwebrtc_shim.{dylib,so}
 ```
 
+## Troubleshooting
+
+<details>
+<summary><strong>Shim library not found</strong></summary>
+
+**Error:** `failed to load libwebrtc_shim`
+
+**Solutions:**
+1. Let auto-download work (default behavior downloads from GitHub releases)
+2. Set explicit path: `export LIBWEBRTC_SHIM_PATH=/path/to/libwebrtc_shim.dylib`
+3. Check platform is supported: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`
+
+</details>
+
+<details>
+<summary><strong>H.264 encoding fails</strong></summary>
+
+**Error:** `failed to create H264 encoder` or codec not found
+
+**Solutions:**
+1. OpenH264 should auto-download from Cisco on first use
+2. Check cache: `ls ~/.libgowebrtc/openh264/`
+3. Set explicit path: `export LIBWEBRTC_OPENH264_PATH=/path/to/libopenh264.dylib`
+4. On macOS, VideoToolbox is used by default - try `PreferHW: false` to use OpenH264
+
+</details>
+
+<details>
+<summary><strong>CGO mode issues</strong></summary>
+
+**Error:** `undefined: ...` when building with `-tags ffigo_cgo`
+
+**Solutions:**
+1. Ensure C compiler is installed (`gcc`, `clang`, or MSVC)
+2. On macOS: `xcode-select --install`
+3. On Linux: `apt install build-essential`
+4. On Windows: Install Visual Studio Build Tools
+
+</details>
+
+<details>
+<summary><strong>Video not appearing in browser</strong></summary>
+
+**Potential causes:**
+1. ICE connectivity failed - check STUN/TURN servers
+2. Codec mismatch - browser may not support chosen codec
+3. Firewall blocking UDP - try TURN with TCP
+
+**Debug steps:**
+```go
+pc.OnConnectionStateChange = func(state pc.PeerConnectionState) {
+    log.Printf("Connection state: %s", state)
+}
+pc.OnICEConnectionStateChange = func(state pc.ICEConnectionState) {
+    log.Printf("ICE state: %s", state)
+}
+```
+
+</details>
+
+## Contributing
+
+Contributions are welcome! Here's how to get started:
+
+1. **Report bugs** - Open an issue with reproduction steps
+2. **Request features** - Describe the use case in an issue
+3. **Submit PRs** - Fork, create a branch, make changes, open PR
+
+**Development setup:**
+```bash
+# Clone and build
+git clone https://github.com/thesyncim/libgowebrtc
+cd libgowebrtc
+
+# Run tests (downloads shim automatically)
+go test ./...
+
+# Run with verbose output
+go test -v ./pkg/encoder/...
+
+# Run linter
+golangci-lint run
+```
+
+**Code style:**
+- Run `golangci-lint run` before committing
+- Follow existing patterns in the codebase
+- Add tests for new functionality
+- Keep allocation-free hot paths allocation-free
+
 ## License
 
 MIT
 
 ## See Also
 
+- [API Documentation (pkg.go.dev)](https://pkg.go.dev/github.com/thesyncim/libgowebrtc) - Full Go API reference
 - [PLAN.md](PLAN.md) - Detailed design document and implementation progress
 - [Pion WebRTC](https://github.com/pion/webrtc) - Pure Go WebRTC implementation
 - [libwebrtc](https://webrtc.googlesource.com/src) - Google's WebRTC implementation
+- [OpenH264](https://github.com/cisco/openh264) - Cisco's H.264 codec (BSD licensed)
