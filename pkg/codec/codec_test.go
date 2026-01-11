@@ -114,8 +114,6 @@ func TestSVCPresets(t *testing.T) {
 		{"SVCPresetSFULite", SVCPresetSFULite, SVCModeL2T3_KEY},
 		{"SVCPresetSimulcast", SVCPresetSimulcast, SVCModeS3T3},
 		{"SVCPresetSimulcastLite", SVCPresetSimulcastLite, SVCModeS2T1},
-		{"SVCPresetChrome", SVCPresetChrome, SVCModeL3T3_KEY},
-		{"SVCPresetFirefox", SVCPresetFirefox, SVCModeL2T3},
 	}
 
 	for _, tt := range tests {
@@ -172,8 +170,8 @@ func TestDefaultConfigs(t *testing.T) {
 		if cfg.Bitrate == 0 {
 			t.Error("Bitrate should be auto-calculated")
 		}
-		if cfg.Profile != VP9Profile0 {
-			t.Errorf("Profile = %v, want %v", cfg.Profile, VP9Profile0)
+		if cfg.VP9Profile != VP9Profile0 {
+			t.Errorf("VP9Profile = %v, want %v", cfg.VP9Profile, VP9Profile0)
 		}
 	})
 

@@ -129,18 +129,18 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 		cfg.MTU = 1200
 	}
 
-	// Default auto adaptation to true (browser-like behavior)
-	// Use explicit false to disable
-	if !cfg.AutoKeyframe && cfg.MinBitrate == 0 && cfg.MaxBitrate == 0 {
+	// Default auto adaptation to true for browser-like behavior.
+	// Users must set constraints (MinBitrate, MaxBitrate, etc.) to enable adaptation,
+	// or explicitly set Auto* fields to false to disable.
+	hasConstraints := cfg.MinBitrate != 0 || cfg.MaxBitrate != 0 ||
+		cfg.MinFramerate != 0 || cfg.MaxFramerate != 0 ||
+		cfg.MinWidth != 0 || cfg.MinHeight != 0
+
+	// If no constraints are set, enable all auto features by default
+	if !hasConstraints {
 		cfg.AutoKeyframe = true
-	}
-	if !cfg.AutoBitrate && cfg.MinBitrate == 0 && cfg.MaxBitrate == 0 {
 		cfg.AutoBitrate = true
-	}
-	if !cfg.AutoFramerate && cfg.MinFramerate == 0 && cfg.MaxFramerate == 0 {
 		cfg.AutoFramerate = true
-	}
-	if !cfg.AutoResolution && cfg.MinWidth == 0 && cfg.MinHeight == 0 {
 		cfg.AutoResolution = true
 	}
 
@@ -751,46 +751,14 @@ func (t *VideoTrack) Close() error {
 }
 
 func (t *VideoTrack) createEncoder() (encoder.VideoEncoder, error) {
-	switch t.codec {
-	case codec.H264:
-		cfg := codec.DefaultH264Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		return encoder.NewH264Encoder(cfg)
-	case codec.VP8:
-		cfg := codec.DefaultVP8Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		return encoder.NewVP8Encoder(cfg)
-	case codec.VP9:
-		cfg := codec.DefaultVP9Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		return encoder.NewVP9Encoder(cfg)
-	case codec.AV1:
-		cfg := codec.DefaultAV1Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		return encoder.NewAV1Encoder(cfg)
-	default:
-		return nil, ErrInvalidConfig
+	cfg := codec.DefaultVideoEncoderConfig(t.codec, t.config.Width, t.config.Height)
+	if t.config.Bitrate != 0 {
+		cfg.Bitrate = t.config.Bitrate
 	}
+	if t.config.FPS != 0 {
+		cfg.FPS = t.config.FPS
+	}
+	return encoder.NewVideoEncoder(cfg)
 }
 
 // AudioTrackConfig configures an audio track.
