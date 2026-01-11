@@ -76,6 +76,7 @@ jobs:
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
       - name: Package artifact
+        shell: bash
         run: |
           mkdir -p dist
           cp lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }} dist/
