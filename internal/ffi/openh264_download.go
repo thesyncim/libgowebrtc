@@ -14,8 +14,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-
-	"github.com/ebitengine/purego"
 )
 
 const (
@@ -58,7 +56,7 @@ func ensureOpenH264(required bool) error {
 
 		addLibraryDirToEnv(filepath.Dir(path))
 
-		_, err = dlopenLibrary(path, purego.RTLD_NOW|purego.RTLD_GLOBAL)
+		_, err = dlopenLibrary(path, RTLD_NOW|RTLD_GLOBAL)
 		if err != nil {
 			openh264Err = fmt.Errorf("load openh264: %w", err)
 			return
