@@ -3,6 +3,7 @@ package encoder
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
@@ -307,6 +308,7 @@ func TestVideoEncoder_ConcurrentEncode(t *testing.T) {
 
 			var wg sync.WaitGroup
 			errCh := make(chan error, numGoroutines*framesPerGoroutine)
+			var pts atomic.Uint32
 
 			for g := 0; g < numGoroutines; g++ {
 				wg.Add(1)
@@ -316,7 +318,7 @@ func TestVideoEncoder_ConcurrentEncode(t *testing.T) {
 					encBuf := make([]byte, enc.MaxEncodedSize())
 
 					for i := 0; i < framesPerGoroutine; i++ {
-						srcFrame.PTS = uint32(id*1000 + i*100)
+						srcFrame.PTS = pts.Add(3000)
 						_, err := enc.EncodeInto(srcFrame, encBuf, i == 0)
 						if err != nil && !errors.Is(err, ffi.ErrNeedMoreData) {
 							errCh <- err
