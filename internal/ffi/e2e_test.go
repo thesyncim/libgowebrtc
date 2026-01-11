@@ -159,7 +159,9 @@ func TestAudioEncoderDecoderPipeline(t *testing.T) {
 	}
 
 	// Decode frames
-	decSamples := make([]byte, numSamples*2*2) // 16-bit stereo as bytes
+	// Opus can output up to 120ms of audio (5760 samples at 48kHz) per frame
+	// Use a larger buffer to be safe: 48000 * 0.12 * 2 channels * 2 bytes = 23040 bytes
+	decSamples := make([]byte, 48000/10*2*2) // 100ms worth of stereo audio
 
 	for i, encoded := range encodedFrames {
 		decodedSamples, err := AudioDecoderDecodeInto(decoder, encoded, decSamples)

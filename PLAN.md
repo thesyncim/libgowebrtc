@@ -944,7 +944,7 @@ func TestDataChannel(t *testing.T) {
 }
 ```
 
-### Phase 10: Shim Build & Distribution (Bazel Migration Complete)
+### Phase 10: Shim Build & Distribution (Complete)
 - [x] Migrated from CMake to Bazel
 - [x] shim/BUILD.bazel - Bazel build configuration
 - [x] scripts/build.sh - Unified build script (libwebrtc + shim + release)
@@ -952,11 +952,12 @@ func TestDataChannel(t *testing.T) {
 - [x] .bazelrc, MODULE.bazel, .bazelversion - Bazel configuration
 - [x] shim/shim.cc - Full implementation (encode/decode/packetizer/PeerConnection)
 - [x] Build shim with actual libwebrtc for darwin-arm64 ✅
-- [x] Build shim with actual libwebrtc for darwin-amd64 (CI ready)
-- [x] Build shim with actual libwebrtc for linux-amd64 (CI ready)
-- [x] Build shim with actual libwebrtc for linux-arm64 (CI ready)
+- [x] Build shim with actual libwebrtc for darwin-amd64 ✅
+- [x] Build shim with actual libwebrtc for linux-amd64 ✅
+- [x] Build shim with actual libwebrtc for linux-arm64 ✅
+- [x] Build shim with actual libwebrtc for windows-amd64 ✅
 - [x] CI/CD workflow (.github/workflows/bazel.yml)
-- [ ] GitHub releases with pre-built binaries (CI pending)
+- [x] GitHub releases with pre-built binaries (shim-v0.4.0)
 
 ### Phase 11: Device Capture (via libwebrtc)
 

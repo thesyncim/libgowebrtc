@@ -16,6 +16,12 @@
 #include <optional>
 #include <vector>
 
+// Windows compatibility: strcasecmp is _stricmp on MSVC
+#ifdef _WIN32
+#include <string.h>
+#define strcasecmp _stricmp
+#endif
+
 #include "api/video_codecs/builtin_video_encoder_factory.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
 #include "api/video_codecs/scalability_mode.h"

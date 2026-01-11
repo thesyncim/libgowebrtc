@@ -268,7 +268,7 @@ func getLibraryNameFor(goos string) string {
 	case "darwin":
 		return "libwebrtc_shim.dylib"
 	case "windows":
-		return "webrtc_shim.dll"
+		return "libwebrtc_shim.dll"
 	default:
 		return "libwebrtc_shim.so"
 	}

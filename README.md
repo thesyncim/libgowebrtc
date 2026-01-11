@@ -22,8 +22,8 @@ go get github.com/thesyncim/libgowebrtc
 ```
 
 By default, the runtime will auto-download the prebuilt `libwebrtc_shim` for supported
-OS/arch combinations (currently `darwin_arm64`, `linux_amd64`, `linux_arm64`) from
-GitHub Releases and cache it under `~/.libgowebrtc`. For other platforms, build the
+OS/arch combinations (`darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`)
+from GitHub Releases and cache it under `~/.libgowebrtc`. For other platforms, build the
 shim locally and set `LIBWEBRTC_SHIM_PATH`.
 
 Override behavior with:
@@ -101,7 +101,7 @@ Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 | Dependency | Version | Source |
 |------------|---------|--------|
 | libwebrtc (pre-compiled) | 141.7390.2.0 | [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) |
-| libwebrtc_shim | shim-v0.3.0 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
+| libwebrtc_shim | shim-v0.4.0 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
 | OpenH264 | 2.5.1 | [Cisco OpenH264](https://github.com/cisco/openh264/releases) |
 
 ### Building the Shim
@@ -124,7 +124,7 @@ Environment variables:
 - `LIBWEBRTC_VERSION` - Pre-compiled version (default: 141.7390.2.0)
 - `INSTALL_DIR` - Where to cache libwebrtc (default: ~/libwebrtc)
 
-Supported platforms: `darwin_arm64`, `linux_amd64`, `linux_arm64`
+Supported platforms: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`
 
 ## Quick Start
 
@@ -361,9 +361,11 @@ The Go layer and FFI bindings are complete for all WebRTC functionality. Bazel b
 
 | Platform | Status |
 |----------|--------|
-| darwin_arm64 | ✅ Working |
-| linux_amd64 | ✅ Working |
-| linux_arm64 | ✅ Working |
+| darwin_arm64 (macOS Apple Silicon) | ✅ Working |
+| darwin_amd64 (macOS Intel) | ✅ Working |
+| linux_amd64 (Linux x86_64) | ✅ Working |
+| linux_arm64 (Linux ARM64) | ✅ Working |
+| windows_amd64 (Windows x64) | ✅ Working |
 
 ## SVC & Simulcast
 
@@ -411,6 +413,9 @@ go test -v ./...
 ```bash
 # Build shim (downloads pre-compiled libwebrtc automatically)
 ./scripts/build.sh
+
+# Cross-compile for Intel Mac (from ARM64 Mac)
+./scripts/build.sh --target darwin_amd64
 
 # Create release tarball
 ./scripts/build.sh --release

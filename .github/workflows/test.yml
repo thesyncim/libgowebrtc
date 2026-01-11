@@ -8,10 +8,12 @@ on:
   workflow_dispatch:
 
 env:
-  GO_VERSION: '1.23'
-  SHIM_VERSION: 'shim-v0.3.0'
+  GO_VERSION: '1.25.x'
+  GO_VERSION_FULL: '1.25.0'  # Full version for direct downloads (Rosetta job)
+  SHIM_VERSION: 'shim-v0.4.0'
 
 jobs:
+  # Native platform tests
   test:
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
@@ -28,6 +30,9 @@ jobs:
           - os: ubuntu-24.04-arm
             platform: linux_arm64
             extension: so
+          - os: windows-latest
+            platform: windows_amd64
+            extension: dll
 
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +42,17 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Download pre-built shim
+      - name: Download pre-built shim (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p lib/${{ matrix.platform }}
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
+            | tar -xz -C lib/${{ matrix.platform }}
+          ls -la lib/${{ matrix.platform }}/
+
+      - name: Download pre-built shim (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
         run: |
           mkdir -p lib/${{ matrix.platform }}
           curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
@@ -45,6 +60,7 @@ jobs:
           ls -la lib/${{ matrix.platform }}/
 
       - name: Run tests (purego - default)
+        shell: bash
         run: |
           echo "=== Testing with purego (default) ==="
           go test -v ./pkg/frame/... ./pkg/codec/...
@@ -55,6 +71,7 @@ jobs:
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
       - name: Run tests (CGO variant)
+        if: runner.os != 'Windows'  # CGO tests need extra setup on Windows
         run: |
           echo "=== Testing with CGO (ffigo_cgo tag) ==="
           go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
@@ -65,6 +82,7 @@ jobs:
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
       - name: Run benchmarks (comparison)
+        if: runner.os != 'Windows'
         run: |
           echo "=== Benchmark: purego ==="
           go test -bench=BenchmarkShimVersion -benchmem -run=^$ ./internal/ffi/ || true
@@ -73,4 +91,47 @@ jobs:
           go test -tags ffigo_cgo -bench=BenchmarkShimVersion -benchmem -run=^$ ./internal/ffi/ || true
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+  # darwin_amd64 via Rosetta emulation on ARM64 runner
+  test-darwin-amd64-rosetta:
+    name: darwin_amd64 (Rosetta)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go (x86_64 via Rosetta)
+        run: |
+          curl -fsSL "https://go.dev/dl/go${{ env.GO_VERSION_FULL }}.darwin-amd64.tar.gz" -o go.tar.gz
+          sudo rm -rf /usr/local/go-amd64
+          sudo mkdir -p /usr/local/go-amd64
+          sudo tar -C /usr/local/go-amd64 -xzf go.tar.gz --strip-components=1
+          rm go.tar.gz
+
+      - name: Download pre-built shim
+        run: |
+          mkdir -p lib/darwin_amd64
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_darwin_amd64.tar.gz" \
+            | tar -xz -C lib/darwin_amd64
+          ls -la lib/darwin_amd64/
+          file lib/darwin_amd64/libwebrtc_shim.dylib
+
+      - name: Run tests via Rosetta
+        run: |
+          echo "=== Testing darwin_amd64 via Rosetta ==="
+          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/frame/... ./pkg/codec/...
+          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./internal/ffi/...
+          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/encoder/... ./pkg/decoder/...
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+      - name: Run tests (CGO variant via Rosetta)
+        run: |
+          echo "=== Testing with CGO via Rosetta ==="
+          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
+          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./internal/ffi/...
+          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"

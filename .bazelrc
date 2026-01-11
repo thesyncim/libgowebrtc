@@ -7,12 +7,21 @@ build:macos --apple_crosstool_top=@local_config_apple_cc//:toolchain
 build:macos --crosstool_top=@local_config_apple_cc//:toolchain
 build:macos --host_crosstool_top=@local_config_apple_cc//:toolchain
 
-# C++ settings
-build --cxxopt=-std=c++17
-build --host_cxxopt=-std=c++17
+# C++ settings (Unix)
+build:macos --cxxopt=-std=c++17
+build:macos --host_cxxopt=-std=c++17
+build:linux --cxxopt=-std=c++17
+build:linux --host_cxxopt=-std=c++17
 
-# Compiler settings
-build --copt=-fPIC
+# C++ settings (Windows MSVC)
+build:windows --cxxopt=/std:c++17
+build:windows --host_cxxopt=/std:c++17
+# Use static CRT (/MT) to match prebuilt webrtc.lib
+build:windows --features=static_link_msvcrt
+
+# Compiler settings (Unix only - fPIC not valid on Windows)
+build:macos --copt=-fPIC
+build:linux --copt=-fPIC
 
 # Release configuration
 build:release --compilation_mode=opt
@@ -23,17 +32,26 @@ build:darwin_arm64 --platforms=//bazel/platforms:darwin_arm64
 build:darwin_amd64 --platforms=//bazel/platforms:darwin_amd64
 build:linux_amd64 --platforms=//bazel/platforms:linux_amd64
 build:linux_arm64 --platforms=//bazel/platforms:linux_arm64
+build:windows_amd64 --platforms=//bazel/platforms:windows_amd64
 
 # Test settings
 test --test_output=errors
 test --test_verbose_timeout_warnings
 
+# Config inheritance - platform configs inherit base OS configs
+build:darwin_arm64 --config=macos
+build:darwin_amd64 --config=macos
+build:linux_amd64 --config=linux
+build:linux_arm64 --config=linux
+build:windows_amd64 --config=windows
+
 # Convenience aliases
 build:macos_arm64 --config=darwin_arm64
 build:macos_amd64 --config=darwin_amd64
 
-# Suppress some warnings
-build --copt=-Wno-deprecated-declarations
+# Suppress some warnings (Unix)
+build:macos --copt=-Wno-deprecated-declarations
+build:linux --copt=-Wno-deprecated-declarations
 
 # Make output more readable
 build --show_progress_rate_limit=0.5

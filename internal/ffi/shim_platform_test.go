@@ -50,7 +50,7 @@ func TestShimLibraryNames(t *testing.T) {
 		expected string
 	}{
 		{"darwin", "libwebrtc_shim.dylib"},
-		{"windows", "webrtc_shim.dll"},
+		{"windows", "libwebrtc_shim.dll"},
 		{"linux", "libwebrtc_shim.so"},
 		{"freebsd", "libwebrtc_shim.so"},
 	}
