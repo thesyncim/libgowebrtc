@@ -101,13 +101,25 @@ jobs:
   build-darwin-amd64:
     name: darwin_amd64 (cross-compile)
     runs-on: macos-latest
+    env:
+      GO_AMD64_PATH: /usr/local/go-amd64/bin/go
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: Setup Go (ARM64 for building)
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Go (x86_64 for testing via Rosetta)
+        run: |
+          curl -fsSL "https://go.dev/dl/go1.25.0.darwin-amd64.tar.gz" -o go-amd64.tar.gz
+          sudo rm -rf /usr/local/go-amd64
+          sudo mkdir -p /usr/local/go-amd64
+          sudo tar -C /usr/local/go-amd64 -xzf go-amd64.tar.gz --strip-components=1
+          rm go-amd64.tar.gz
+          # Verify it's x86_64
+          file /usr/local/go-amd64/bin/go
 
       - name: Setup Bazelisk
         uses: bazel-contrib/setup-bazel@0.9.0
@@ -123,9 +135,9 @@ jobs:
 
       - name: Run tests with Rosetta
         run: |
-          arch -x86_64 go test -v ./pkg/frame/... ./pkg/codec/...
-          arch -x86_64 go test -v ./internal/ffi/...
-          arch -x86_64 go test -v ./pkg/encoder/... ./pkg/decoder/...
+          arch -x86_64 $GO_AMD64_PATH test -v ./pkg/frame/... ./pkg/codec/...
+          arch -x86_64 $GO_AMD64_PATH test -v ./internal/ffi/...
+          arch -x86_64 $GO_AMD64_PATH test -v ./pkg/encoder/... ./pkg/decoder/...
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"

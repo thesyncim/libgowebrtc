@@ -136,23 +136,43 @@ download_libwebrtc() {
     if [[ "$TARGET_OS" == "windows" ]]; then
         # Windows uses 7z format
         if command -v 7z &> /dev/null; then
-            7z x -o"$INSTALL_DIR" "$tmpdir/libwebrtc.7z" -y
+            7z x -o"$tmpdir/extract" "$tmpdir/libwebrtc.7z" -y
         elif command -v 7za &> /dev/null; then
-            7za x -o"$INSTALL_DIR" "$tmpdir/libwebrtc.7z" -y
+            7za x -o"$tmpdir/extract" "$tmpdir/libwebrtc.7z" -y
         else
             log_error "7z or 7za not found. Please install p7zip."
             rm -rf "$tmpdir"
             exit 1
+        fi
+        # crow-misia structure: find the lib and include dirs
+        # They might be in a subdirectory
+        local extracted_dir=$(find "$tmpdir/extract" -name "lib" -type d | head -1 | xargs dirname)
+        if [[ -z "$extracted_dir" ]]; then
+            # Try to find webrtc.lib directly
+            extracted_dir=$(find "$tmpdir/extract" -name "webrtc.lib" -type f | head -1 | xargs dirname | xargs dirname)
+        fi
+        if [[ -n "$extracted_dir" && -d "$extracted_dir" ]]; then
+            cp -r "$extracted_dir"/* "$INSTALL_DIR/"
+        else
+            # Just copy everything from extract dir
+            cp -r "$tmpdir/extract"/* "$INSTALL_DIR/"
         fi
     else
         tar -xf "$tmpdir/libwebrtc.tar.xz" -C "$INSTALL_DIR"
     fi
     rm -rf "$tmpdir"
 
+    # Debug: show what we got
+    log_info "Contents of $INSTALL_DIR:"
+    ls -la "$INSTALL_DIR/" 2>/dev/null || true
+    ls -la "$INSTALL_DIR/lib/" 2>/dev/null || true
+
     if [[ -f "$INSTALL_DIR/lib/$lib_file" ]]; then
         log_success "Pre-compiled libwebrtc installed to $INSTALL_DIR"
     else
-        log_error "$lib_file not found after extraction"
+        log_error "$lib_file not found after extraction at $INSTALL_DIR/lib/$lib_file"
+        log_error "Available files:"
+        find "$INSTALL_DIR" -name "*.lib" -o -name "*.a" 2>/dev/null | head -20 || true
         exit 1
     fi
 }

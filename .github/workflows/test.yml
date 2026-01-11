@@ -30,9 +30,10 @@ jobs:
           - os: ubuntu-24.04-arm
             platform: linux_arm64
             extension: so
-          - os: windows-latest
-            platform: windows_amd64
-            extension: dll
+          # Uncomment once shim release includes windows_amd64:
+          # - os: windows-latest
+          #   platform: windows_amd64
+          #   extension: dll
 
     steps:
       - uses: actions/checkout@v4
@@ -93,46 +94,46 @@ jobs:
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
   # darwin_amd64 via Rosetta emulation on ARM64 runner
-  test-darwin-amd64-rosetta:
-    name: darwin_amd64 (Rosetta)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Go (x86_64 via Rosetta)
-        run: |
-          # Download and install Go for amd64
-          curl -fsSL "https://go.dev/dl/go${{ env.GO_VERSION_FULL }}.darwin-amd64.tar.gz" -o go.tar.gz
-          sudo rm -rf /usr/local/go-amd64
-          sudo mkdir -p /usr/local/go-amd64
-          sudo tar -C /usr/local/go-amd64 -xzf go.tar.gz --strip-components=1
-          rm go.tar.gz
-
-      - name: Download pre-built shim
-        run: |
-          mkdir -p lib/darwin_amd64
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_darwin_amd64.tar.gz" \
-            | tar -xz -C lib/darwin_amd64
-          ls -la lib/darwin_amd64/
-          file lib/darwin_amd64/libwebrtc_shim.dylib
-
-      - name: Run tests via Rosetta
-        run: |
-          echo "=== Testing darwin_amd64 via Rosetta ==="
-          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/frame/... ./pkg/codec/...
-          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./internal/ffi/...
-          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/encoder/... ./pkg/decoder/...
-        env:
-          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
-          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
-
-      - name: Run tests (CGO variant via Rosetta)
-        run: |
-          echo "=== Testing with CGO via Rosetta ==="
-          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
-          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./internal/ffi/...
-          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
-        env:
-          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
-          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+  # Uncomment once SHIM_VERSION includes darwin_amd64
+  # test-darwin-amd64-rosetta:
+  #   name: darwin_amd64 (Rosetta)
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Setup Go (x86_64 via Rosetta)
+  #       run: |
+  #         curl -fsSL "https://go.dev/dl/go${{ env.GO_VERSION_FULL }}.darwin-amd64.tar.gz" -o go.tar.gz
+  #         sudo rm -rf /usr/local/go-amd64
+  #         sudo mkdir -p /usr/local/go-amd64
+  #         sudo tar -C /usr/local/go-amd64 -xzf go.tar.gz --strip-components=1
+  #         rm go.tar.gz
+  #
+  #     - name: Download pre-built shim
+  #       run: |
+  #         mkdir -p lib/darwin_amd64
+  #         curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_darwin_amd64.tar.gz" \
+  #           | tar -xz -C lib/darwin_amd64
+  #         ls -la lib/darwin_amd64/
+  #         file lib/darwin_amd64/libwebrtc_shim.dylib
+  #
+  #     - name: Run tests via Rosetta
+  #       run: |
+  #         echo "=== Testing darwin_amd64 via Rosetta ==="
+  #         arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/frame/... ./pkg/codec/...
+  #         arch -x86_64 /usr/local/go-amd64/bin/go test -v ./internal/ffi/...
+  #         arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/encoder/... ./pkg/decoder/...
+  #       env:
+  #         LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
+  #         LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+  #
+  #     - name: Run tests (CGO variant via Rosetta)
+  #       run: |
+  #         echo "=== Testing with CGO via Rosetta ==="
+  #         arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
+  #         arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./internal/ffi/...
+  #         arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
+  #       env:
+  #         LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
+  #         LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
