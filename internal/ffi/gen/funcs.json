@@ -1,0 +1,1379 @@
+{
+  "functions": [
+    {
+      "go_name": "shimVideoEncoderCreate",
+      "c_name": "shim_video_encoder_create",
+      "params": [
+        {"name": "codec", "type": "int32"},
+        {"name": "configPtr", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "VideoEncoder"
+    },
+    {
+      "go_name": "shimVideoEncoderEncode",
+      "c_name": "shim_video_encoder_encode",
+      "params": [
+        {"name": "encoder", "type": "uintptr"},
+        {"name": "yPlane", "type": "uintptr"},
+        {"name": "uPlane", "type": "uintptr"},
+        {"name": "vPlane", "type": "uintptr"},
+        {"name": "yStride", "type": "int32"},
+        {"name": "uStride", "type": "int32"},
+        {"name": "vStride", "type": "int32"},
+        {"name": "timestamp", "type": "uint32"},
+        {"name": "forceKeyframe", "type": "int32"},
+        {"name": "outData", "type": "uintptr"},
+        {"name": "dstBufferSize", "type": "int32"},
+        {"name": "outSize", "type": "uintptr"},
+        {"name": "outIsKeyframe", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "VideoEncoder"
+    },
+    {
+      "go_name": "shimVideoEncoderSetBitrate",
+      "c_name": "shim_video_encoder_set_bitrate",
+      "params": [
+        {"name": "encoder", "type": "uintptr"},
+        {"name": "bitrate", "type": "uint32"}
+      ],
+      "return": "int32",
+      "category": "VideoEncoder"
+    },
+    {
+      "go_name": "shimVideoEncoderSetFramerate",
+      "c_name": "shim_video_encoder_set_framerate",
+      "params": [
+        {"name": "encoder", "type": "uintptr"},
+        {"name": "framerate", "type": "float32"}
+      ],
+      "return": "int32",
+      "category": "VideoEncoder"
+    },
+    {
+      "go_name": "shimVideoEncoderRequestKeyframe",
+      "c_name": "shim_video_encoder_request_keyframe",
+      "params": [
+        {"name": "encoder", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "VideoEncoder"
+    },
+    {
+      "go_name": "shimVideoEncoderDestroy",
+      "c_name": "shim_video_encoder_destroy",
+      "params": [
+        {"name": "encoder", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "VideoEncoder"
+    },
+    {
+      "go_name": "shimVideoDecoderCreate",
+      "c_name": "shim_video_decoder_create",
+      "params": [
+        {"name": "codec", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "VideoDecoder"
+    },
+    {
+      "go_name": "shimVideoDecoderDecode",
+      "c_name": "shim_video_decoder_decode",
+      "params": [
+        {"name": "decoder", "type": "uintptr"},
+        {"name": "data", "type": "uintptr"},
+        {"name": "size", "type": "int32"},
+        {"name": "timestamp", "type": "uint32"},
+        {"name": "isKeyframe", "type": "int32"},
+        {"name": "outY", "type": "uintptr"},
+        {"name": "outU", "type": "uintptr"},
+        {"name": "outV", "type": "uintptr"},
+        {"name": "outW", "type": "uintptr"},
+        {"name": "outH", "type": "uintptr"},
+        {"name": "outYStride", "type": "uintptr"},
+        {"name": "outUStride", "type": "uintptr"},
+        {"name": "outVStride", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "VideoDecoder"
+    },
+    {
+      "go_name": "shimVideoDecoderDestroy",
+      "c_name": "shim_video_decoder_destroy",
+      "params": [
+        {"name": "decoder", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "VideoDecoder"
+    },
+    {
+      "go_name": "shimAudioEncoderCreate",
+      "c_name": "shim_audio_encoder_create",
+      "params": [
+        {"name": "configPtr", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "AudioEncoder"
+    },
+    {
+      "go_name": "shimAudioEncoderEncode",
+      "c_name": "shim_audio_encoder_encode",
+      "params": [
+        {"name": "encoder", "type": "uintptr"},
+        {"name": "samples", "type": "uintptr"},
+        {"name": "numSamples", "type": "int32"},
+        {"name": "outData", "type": "uintptr"},
+        {"name": "outSize", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "AudioEncoder"
+    },
+    {
+      "go_name": "shimAudioEncoderSetBitrate",
+      "c_name": "shim_audio_encoder_set_bitrate",
+      "params": [
+        {"name": "encoder", "type": "uintptr"},
+        {"name": "bitrate", "type": "uint32"}
+      ],
+      "return": "int32",
+      "category": "AudioEncoder"
+    },
+    {
+      "go_name": "shimAudioEncoderDestroy",
+      "c_name": "shim_audio_encoder_destroy",
+      "params": [
+        {"name": "encoder", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "AudioEncoder"
+    },
+    {
+      "go_name": "shimAudioDecoderCreate",
+      "c_name": "shim_audio_decoder_create",
+      "params": [
+        {"name": "sampleRate", "type": "int32"},
+        {"name": "channels", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "AudioDecoder"
+    },
+    {
+      "go_name": "shimAudioDecoderDecode",
+      "c_name": "shim_audio_decoder_decode",
+      "params": [
+        {"name": "decoder", "type": "uintptr"},
+        {"name": "data", "type": "uintptr"},
+        {"name": "size", "type": "int32"},
+        {"name": "outSamples", "type": "uintptr"},
+        {"name": "outNumSamples", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "AudioDecoder"
+    },
+    {
+      "go_name": "shimAudioDecoderDestroy",
+      "c_name": "shim_audio_decoder_destroy",
+      "params": [
+        {"name": "decoder", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "AudioDecoder"
+    },
+    {
+      "go_name": "shimPacketizerCreate",
+      "c_name": "shim_packetizer_create",
+      "params": [
+        {"name": "configPtr", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "Packetizer"
+    },
+    {
+      "go_name": "shimPacketizerPacketize",
+      "c_name": "shim_packetizer_packetize",
+      "params": [
+        {"name": "packetizer", "type": "uintptr"},
+        {"name": "data", "type": "uintptr"},
+        {"name": "size", "type": "int32"},
+        {"name": "timestamp", "type": "uint32"},
+        {"name": "isKeyframe", "type": "int32"},
+        {"name": "dst", "type": "uintptr"},
+        {"name": "offsets", "type": "uintptr"},
+        {"name": "sizes", "type": "uintptr"},
+        {"name": "maxPackets", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "Packetizer"
+    },
+    {
+      "go_name": "shimPacketizerSeqNum",
+      "c_name": "shim_packetizer_sequence_number",
+      "params": [
+        {"name": "packetizer", "type": "uintptr"}
+      ],
+      "return": "uint16",
+      "category": "Packetizer"
+    },
+    {
+      "go_name": "shimPacketizerDestroy",
+      "c_name": "shim_packetizer_destroy",
+      "params": [
+        {"name": "packetizer", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "Packetizer"
+    },
+    {
+      "go_name": "shimDepacketizerCreate",
+      "c_name": "shim_depacketizer_create",
+      "params": [
+        {"name": "codec", "type": "int32"}
+      ],
+      "return": "uintptr",
+      "category": "Depacketizer"
+    },
+    {
+      "go_name": "shimDepacketizerPush",
+      "c_name": "shim_depacketizer_push",
+      "params": [
+        {"name": "depacketizer", "type": "uintptr"},
+        {"name": "data", "type": "uintptr"},
+        {"name": "size", "type": "int32"}
+      ],
+      "return": "int32",
+      "category": "Depacketizer"
+    },
+    {
+      "go_name": "shimDepacketizerPop",
+      "c_name": "shim_depacketizer_pop",
+      "params": [
+        {"name": "depacketizer", "type": "uintptr"},
+        {"name": "outData", "type": "uintptr"},
+        {"name": "outSize", "type": "uintptr"},
+        {"name": "outTimestamp", "type": "uintptr"},
+        {"name": "outIsKeyframe", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "Depacketizer"
+    },
+    {
+      "go_name": "shimDepacketizerDestroy",
+      "c_name": "shim_depacketizer_destroy",
+      "params": [
+        {"name": "depacketizer", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "Depacketizer"
+    },
+    {
+      "go_name": "shimFreeBuffer",
+      "c_name": "shim_free_buffer",
+      "params": [
+        {"name": "buffer", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "Memory"
+    },
+    {
+      "go_name": "shimFreePackets",
+      "c_name": "shim_free_packets",
+      "params": [
+        {"name": "packets", "type": "uintptr"},
+        {"name": "sizes", "type": "uintptr"},
+        {"name": "count", "type": "int32"}
+      ],
+      "return": "void",
+      "category": "Memory"
+    },
+    {
+      "go_name": "shimLibwebrtcVersion",
+      "c_name": "shim_libwebrtc_version",
+      "params": [],
+      "return": "uintptr",
+      "category": "Version"
+    },
+    {
+      "go_name": "shimVersion",
+      "c_name": "shim_version",
+      "params": [],
+      "return": "uintptr",
+      "category": "Version"
+    },
+    {
+      "go_name": "shimPeerConnectionCreate",
+      "c_name": "shim_peer_connection_create",
+      "params": [
+        {"name": "configPtr", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionDestroy",
+      "c_name": "shim_peer_connection_destroy",
+      "params": [
+        {"name": "pc", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnICECandidate",
+      "c_name": "shim_peer_connection_set_on_ice_candidate",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnConnectionStateChange",
+      "c_name": "shim_peer_connection_set_on_connection_state_change",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnTrack",
+      "c_name": "shim_peer_connection_set_on_track",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnDataChannel",
+      "c_name": "shim_peer_connection_set_on_data_channel",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionCreateOffer",
+      "c_name": "shim_peer_connection_create_offer",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "sdpOut", "type": "uintptr"},
+        {"name": "sdpOutSize", "type": "int32"},
+        {"name": "outSdpLen", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionCreateAnswer",
+      "c_name": "shim_peer_connection_create_answer",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "sdpOut", "type": "uintptr"},
+        {"name": "sdpOutSize", "type": "int32"},
+        {"name": "outSdpLen", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionSetLocalDescription",
+      "c_name": "shim_peer_connection_set_local_description",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "sdpType", "type": "int32"},
+        {"name": "sdp", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionSetRemoteDescription",
+      "c_name": "shim_peer_connection_set_remote_description",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "sdpType", "type": "int32"},
+        {"name": "sdp", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionAddICECandidate",
+      "c_name": "shim_peer_connection_add_ice_candidate",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "candidate", "type": "uintptr"},
+        {"name": "sdpMid", "type": "uintptr"},
+        {"name": "sdpMLineIndex", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionSignalingState",
+      "c_name": "shim_peer_connection_signaling_state",
+      "params": [
+        {"name": "pc", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionICEConnectionState",
+      "c_name": "shim_peer_connection_ice_connection_state",
+      "params": [
+        {"name": "pc", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionICEGatheringState",
+      "c_name": "shim_peer_connection_ice_gathering_state",
+      "params": [
+        {"name": "pc", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionConnectionState",
+      "c_name": "shim_peer_connection_connection_state",
+      "params": [
+        {"name": "pc", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionAddTrack",
+      "c_name": "shim_peer_connection_add_track",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "codec", "type": "int32"},
+        {"name": "trackID", "type": "uintptr"},
+        {"name": "streamID", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionRemoveTrack",
+      "c_name": "shim_peer_connection_remove_track",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "sender", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionCreateDataChannel",
+      "c_name": "shim_peer_connection_create_data_channel",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "label", "type": "uintptr"},
+        {"name": "ordered", "type": "int32"},
+        {"name": "maxRetransmits", "type": "int32"},
+        {"name": "protocol", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimPeerConnectionClose",
+      "c_name": "shim_peer_connection_close",
+      "params": [
+        {"name": "pc", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnection"
+    },
+    {
+      "go_name": "shimRTPSenderSetBitrate",
+      "c_name": "shim_rtp_sender_set_bitrate",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "bitrate", "type": "uint32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderReplaceTrack",
+      "c_name": "shim_rtp_sender_replace_track",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "track", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderDestroy",
+      "c_name": "shim_rtp_sender_destroy",
+      "params": [
+        {"name": "sender", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimDataChannelSetOnMessage",
+      "c_name": "shim_data_channel_set_on_message",
+      "params": [
+        {"name": "dc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DataChannel"
+    },
+    {
+      "go_name": "shimDataChannelSetOnOpen",
+      "c_name": "shim_data_channel_set_on_open",
+      "params": [
+        {"name": "dc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DataChannel"
+    },
+    {
+      "go_name": "shimDataChannelSetOnClose",
+      "c_name": "shim_data_channel_set_on_close",
+      "params": [
+        {"name": "dc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DataChannel"
+    },
+    {
+      "go_name": "shimDataChannelSend",
+      "c_name": "shim_data_channel_send",
+      "params": [
+        {"name": "dc", "type": "uintptr"},
+        {"name": "data", "type": "uintptr"},
+        {"name": "size", "type": "int32"},
+        {"name": "isBinary", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "DataChannel"
+    },
+    {
+      "go_name": "shimDataChannelLabel",
+      "c_name": "shim_data_channel_label",
+      "params": [
+        {"name": "dc", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "DataChannel"
+    },
+    {
+      "go_name": "shimDataChannelReadyState",
+      "c_name": "shim_data_channel_ready_state",
+      "params": [
+        {"name": "dc", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "DataChannel"
+    },
+    {
+      "go_name": "shimDataChannelClose",
+      "c_name": "shim_data_channel_close",
+      "params": [
+        {"name": "dc", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DataChannel"
+    },
+    {
+      "go_name": "shimDataChannelDestroy",
+      "c_name": "shim_data_channel_destroy",
+      "params": [
+        {"name": "dc", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DataChannel"
+    },
+    {
+      "go_name": "shimVideoTrackSourceCreate",
+      "c_name": "shim_video_track_source_create",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "width", "type": "int32"},
+        {"name": "height", "type": "int32"}
+      ],
+      "return": "uintptr",
+      "category": "VideoTrackSource"
+    },
+    {
+      "go_name": "shimVideoTrackSourcePushFrame",
+      "c_name": "shim_video_track_source_push_frame",
+      "params": [
+        {"name": "source", "type": "uintptr"},
+        {"name": "yPlane", "type": "uintptr"},
+        {"name": "uPlane", "type": "uintptr"},
+        {"name": "vPlane", "type": "uintptr"},
+        {"name": "yStride", "type": "int32"},
+        {"name": "uStride", "type": "int32"},
+        {"name": "vStride", "type": "int32"},
+        {"name": "timestampUs", "type": "int64"}
+      ],
+      "return": "int32",
+      "category": "VideoTrackSource"
+    },
+    {
+      "go_name": "shimPeerConnectionAddVideoTrackFromSource",
+      "c_name": "shim_peer_connection_add_video_track_from_source",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "source", "type": "uintptr"},
+        {"name": "trackID", "type": "uintptr"},
+        {"name": "streamID", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "VideoTrackSource"
+    },
+    {
+      "go_name": "shimVideoTrackSourceDestroy",
+      "c_name": "shim_video_track_source_destroy",
+      "params": [
+        {"name": "source", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "VideoTrackSource"
+    },
+    {
+      "go_name": "shimAudioTrackSourceCreate",
+      "c_name": "shim_audio_track_source_create",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "sampleRate", "type": "int32"},
+        {"name": "channels", "type": "int32"}
+      ],
+      "return": "uintptr",
+      "category": "AudioTrackSource"
+    },
+    {
+      "go_name": "shimAudioTrackSourcePushFrame",
+      "c_name": "shim_audio_track_source_push_frame",
+      "params": [
+        {"name": "source", "type": "uintptr"},
+        {"name": "samples", "type": "uintptr"},
+        {"name": "numSamples", "type": "int32"},
+        {"name": "timestampUs", "type": "int64"}
+      ],
+      "return": "int32",
+      "category": "AudioTrackSource"
+    },
+    {
+      "go_name": "shimPeerConnectionAddAudioTrackFromSource",
+      "c_name": "shim_peer_connection_add_audio_track_from_source",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "source", "type": "uintptr"},
+        {"name": "trackID", "type": "uintptr"},
+        {"name": "streamID", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "AudioTrackSource"
+    },
+    {
+      "go_name": "shimAudioTrackSourceDestroy",
+      "c_name": "shim_audio_track_source_destroy",
+      "params": [
+        {"name": "source", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "AudioTrackSource"
+    },
+    {
+      "go_name": "shimTrackSetVideoSink",
+      "c_name": "shim_track_set_video_sink",
+      "params": [
+        {"name": "track", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RemoteTrack"
+    },
+    {
+      "go_name": "shimTrackSetAudioSink",
+      "c_name": "shim_track_set_audio_sink",
+      "params": [
+        {"name": "track", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RemoteTrack"
+    },
+    {
+      "go_name": "shimTrackRemoveVideoSink",
+      "c_name": "shim_track_remove_video_sink",
+      "params": [
+        {"name": "track", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "RemoteTrack"
+    },
+    {
+      "go_name": "shimTrackRemoveAudioSink",
+      "c_name": "shim_track_remove_audio_sink",
+      "params": [
+        {"name": "track", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "RemoteTrack"
+    },
+    {
+      "go_name": "shimTrackKind",
+      "c_name": "shim_track_kind",
+      "params": [
+        {"name": "track", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "RemoteTrack"
+    },
+    {
+      "go_name": "shimTrackID",
+      "c_name": "shim_track_id",
+      "params": [
+        {"name": "track", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "RemoteTrack"
+    },
+    {
+      "go_name": "shimRTPSenderGetParameters",
+      "c_name": "shim_rtp_sender_get_parameters",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "outParams", "type": "uintptr"},
+        {"name": "encodings", "type": "uintptr"},
+        {"name": "maxEncodings", "type": "int32"}
+      ],
+      "return": "int32",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderSetParameters",
+      "c_name": "shim_rtp_sender_set_parameters",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "params", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderGetTrack",
+      "c_name": "shim_rtp_sender_get_track",
+      "params": [
+        {"name": "sender", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderGetStats",
+      "c_name": "shim_rtp_sender_get_stats",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "outStats", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderSetOnRTCPFeedback",
+      "c_name": "shim_rtp_sender_set_on_rtcp_feedback",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderSetLayerActive",
+      "c_name": "shim_rtp_sender_set_layer_active",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "rid", "type": "uintptr"},
+        {"name": "active", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderSetLayerBitrate",
+      "c_name": "shim_rtp_sender_set_layer_bitrate",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "rid", "type": "uintptr"},
+        {"name": "maxBitrate", "type": "uint32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPSenderGetActiveLayers",
+      "c_name": "shim_rtp_sender_get_active_layers",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "outSpatial", "type": "uintptr"},
+        {"name": "outTemporal", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSender"
+    },
+    {
+      "go_name": "shimRTPReceiverGetTrack",
+      "c_name": "shim_rtp_receiver_get_track",
+      "params": [
+        {"name": "receiver", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "RTPReceiver"
+    },
+    {
+      "go_name": "shimRTPReceiverGetStats",
+      "c_name": "shim_rtp_receiver_get_stats",
+      "params": [
+        {"name": "receiver", "type": "uintptr"},
+        {"name": "outStats", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPReceiver"
+    },
+    {
+      "go_name": "shimRTPReceiverSetJitterBufferMinDelay",
+      "c_name": "shim_rtp_receiver_set_jitter_buffer_min_delay",
+      "params": [
+        {"name": "receiver", "type": "uintptr"},
+        {"name": "minDelayMs", "type": "int32"}
+      ],
+      "return": "int32",
+      "category": "RTPReceiver"
+    },
+    {
+      "go_name": "shimTransceiverGetDirection",
+      "c_name": "shim_transceiver_get_direction",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimTransceiverSetDirection",
+      "c_name": "shim_transceiver_set_direction",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"},
+        {"name": "direction", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimTransceiverGetCurrentDirection",
+      "c_name": "shim_transceiver_get_current_direction",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimTransceiverStop",
+      "c_name": "shim_transceiver_stop",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimTransceiverMid",
+      "c_name": "shim_transceiver_mid",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimTransceiverGetSender",
+      "c_name": "shim_transceiver_get_sender",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimTransceiverGetReceiver",
+      "c_name": "shim_transceiver_get_receiver",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimTransceiverSetCodecPreferences",
+      "c_name": "shim_transceiver_set_codec_preferences",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"},
+        {"name": "codecs", "type": "uintptr"},
+        {"name": "count", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimTransceiverGetCodecPreferences",
+      "c_name": "shim_transceiver_get_codec_preferences",
+      "params": [
+        {"name": "transceiver", "type": "uintptr"},
+        {"name": "codecs", "type": "uintptr"},
+        {"name": "maxCodecs", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPTransceiver"
+    },
+    {
+      "go_name": "shimPeerConnectionAddTransceiver",
+      "c_name": "shim_peer_connection_add_transceiver",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "kind", "type": "int32"},
+        {"name": "direction", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionGetSenders",
+      "c_name": "shim_peer_connection_get_senders",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "senders", "type": "uintptr"},
+        {"name": "maxSenders", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionGetReceivers",
+      "c_name": "shim_peer_connection_get_receivers",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "receivers", "type": "uintptr"},
+        {"name": "maxReceivers", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionGetTransceivers",
+      "c_name": "shim_peer_connection_get_transceivers",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "transceivers", "type": "uintptr"},
+        {"name": "maxTransceivers", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionRestartICE",
+      "c_name": "shim_peer_connection_restart_ice",
+      "params": [
+        {"name": "pc", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionGetStats",
+      "c_name": "shim_peer_connection_get_stats",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "outStats", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnSignalingStateChange",
+      "c_name": "shim_peer_connection_set_on_signaling_state_change",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnICEConnectionStateChange",
+      "c_name": "shim_peer_connection_set_on_ice_connection_state_change",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnICEGatheringStateChange",
+      "c_name": "shim_peer_connection_set_on_ice_gathering_state_change",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnNegotiationNeeded",
+      "c_name": "shim_peer_connection_set_on_negotiation_needed",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "PeerConnectionExtended"
+    },
+    {
+      "go_name": "shimRTPSenderSetScalabilityMode",
+      "c_name": "shim_rtp_sender_set_scalability_mode",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "mode", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "ScalabilityMode"
+    },
+    {
+      "go_name": "shimRTPSenderGetScalabilityMode",
+      "c_name": "shim_rtp_sender_get_scalability_mode",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "modeOut", "type": "uintptr"},
+        {"name": "modeOutSize", "type": "int32"}
+      ],
+      "return": "int32",
+      "category": "ScalabilityMode"
+    },
+    {
+      "go_name": "shimGetSupportedVideoCodecs",
+      "c_name": "shim_get_supported_video_codecs",
+      "params": [
+        {"name": "codecs", "type": "uintptr"},
+        {"name": "maxCodecs", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "CodecCapabilities"
+    },
+    {
+      "go_name": "shimGetSupportedAudioCodecs",
+      "c_name": "shim_get_supported_audio_codecs",
+      "params": [
+        {"name": "codecs", "type": "uintptr"},
+        {"name": "maxCodecs", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "CodecCapabilities"
+    },
+    {
+      "go_name": "shimIsCodecSupported",
+      "c_name": "shim_is_codec_supported",
+      "params": [
+        {"name": "mimeType", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "CodecCapabilities"
+    },
+    {
+      "go_name": "shimRTPSenderGetNegotiatedCodecs",
+      "c_name": "shim_rtp_sender_get_negotiated_codecs",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "codecs", "type": "uintptr"},
+        {"name": "maxCodecs", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSenderCodec"
+    },
+    {
+      "go_name": "shimRTPSenderSetPreferredCodec",
+      "c_name": "shim_rtp_sender_set_preferred_codec",
+      "params": [
+        {"name": "sender", "type": "uintptr"},
+        {"name": "mimeType", "type": "uintptr"},
+        {"name": "payloadType", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "RTPSenderCodec"
+    },
+    {
+      "go_name": "shimPeerConnectionSetOnBandwidthEstimate",
+      "c_name": "shim_peer_connection_set_on_bandwidth_estimate",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "BandwidthEstimation"
+    },
+    {
+      "go_name": "shimPeerConnectionGetBandwidthEstimate",
+      "c_name": "shim_peer_connection_get_bandwidth_estimate",
+      "params": [
+        {"name": "pc", "type": "uintptr"},
+        {"name": "outEstimate", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "BandwidthEstimation"
+    },
+    {
+      "go_name": "shimEnumerateDevices",
+      "c_name": "shim_enumerate_devices",
+      "params": [
+        {"name": "devices", "type": "uintptr"},
+        {"name": "maxDevices", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimVideoCaptureCreate",
+      "c_name": "shim_video_capture_create",
+      "params": [
+        {"name": "deviceID", "type": "uintptr"},
+        {"name": "width", "type": "int32"},
+        {"name": "height", "type": "int32"},
+        {"name": "fps", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimVideoCaptureStart",
+      "c_name": "shim_video_capture_start",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimVideoCaptureStop",
+      "c_name": "shim_video_capture_stop",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimVideoCaptureDestroy",
+      "c_name": "shim_video_capture_destroy",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimAudioCaptureCreate",
+      "c_name": "shim_audio_capture_create",
+      "params": [
+        {"name": "deviceID", "type": "uintptr"},
+        {"name": "sampleRate", "type": "int32"},
+        {"name": "channels", "type": "int32"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "uintptr",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimAudioCaptureStart",
+      "c_name": "shim_audio_capture_start",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimAudioCaptureStop",
+      "c_name": "shim_audio_capture_stop",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimAudioCaptureDestroy",
+      "c_name": "shim_audio_capture_destroy",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "DeviceCapture"
+    },
+    {
+      "go_name": "shimEnumerateScreens",
+      "c_name": "shim_enumerate_screens",
+      "params": [
+        {"name": "screens", "type": "uintptr"},
+        {"name": "maxScreens", "type": "int32"},
+        {"name": "outCount", "type": "uintptr"},
+        {"name": "errorOut", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "ScreenCapture"
+    },
+    {
+      "go_name": "shimScreenCaptureCreate",
+      "c_name": "shim_screen_capture_create",
+      "params": [
+        {"name": "id", "type": "int64"},
+        {"name": "isWindow", "type": "int32"},
+        {"name": "fps", "type": "int32"}
+      ],
+      "return": "uintptr",
+      "category": "ScreenCapture"
+    },
+    {
+      "go_name": "shimScreenCaptureStart",
+      "c_name": "shim_screen_capture_start",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"},
+        {"name": "callback", "type": "uintptr"},
+        {"name": "ctx", "type": "uintptr"}
+      ],
+      "return": "int32",
+      "category": "ScreenCapture"
+    },
+    {
+      "go_name": "shimScreenCaptureStop",
+      "c_name": "shim_screen_capture_stop",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "ScreenCapture"
+    },
+    {
+      "go_name": "shimScreenCaptureDestroy",
+      "c_name": "shim_screen_capture_destroy",
+      "params": [
+        {"name": "capturePtr", "type": "uintptr"}
+      ],
+      "return": "void",
+      "category": "ScreenCapture"
+    },
+    {
+      "go_name": "shimCheckCameraPermission",
+      "c_name": "shim_check_camera_permission",
+      "params": [],
+      "return": "int32",
+      "category": "Permissions"
+    },
+    {
+      "go_name": "shimCheckMicrophonePermission",
+      "c_name": "shim_check_microphone_permission",
+      "params": [],
+      "return": "int32",
+      "category": "Permissions"
+    },
+    {
+      "go_name": "shimRequestCameraPermission",
+      "c_name": "shim_request_camera_permission",
+      "params": [],
+      "return": "int32",
+      "category": "Permissions"
+    },
+    {
+      "go_name": "shimRequestMicrophonePermission",
+      "c_name": "shim_request_microphone_permission",
+      "params": [],
+      "return": "int32",
+      "category": "Permissions"
+    }
+  ]
+}

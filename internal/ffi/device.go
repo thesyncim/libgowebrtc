@@ -132,34 +132,7 @@ var (
 	captureRegistryMu     sync.RWMutex
 )
 
-// Device capture FFI function pointers
-// NOTE: All int/uint types are explicitly sized to match C ABI (int = int32)
-// NOTE: Functions with error_out parameter take uintptr to ShimErrorBuffer as last parameter
-var (
-	shimEnumerateDevices func(devices uintptr, maxDevices int32, outCount uintptr, errorOut uintptr) int32
-
-	shimVideoCaptureCreate  func(deviceID uintptr, width, height, fps int32, errorOut uintptr) uintptr
-	shimVideoCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr, errorOut uintptr) int32
-	shimVideoCaptureStop    func(capturePtr uintptr)
-	shimVideoCaptureDestroy func(capturePtr uintptr)
-
-	shimAudioCaptureCreate  func(deviceID uintptr, sampleRate, channels int32, errorOut uintptr) uintptr
-	shimAudioCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr, errorOut uintptr) int32
-	shimAudioCaptureStop    func(capturePtr uintptr)
-	shimAudioCaptureDestroy func(capturePtr uintptr)
-
-	shimEnumerateScreens     func(screens uintptr, maxScreens int32, outCount uintptr, errorOut uintptr) int32
-	shimScreenCaptureCreate  func(id int64, isWindow int32, fps int32) uintptr
-	shimScreenCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
-	shimScreenCaptureStop    func(capturePtr uintptr)
-	shimScreenCaptureDestroy func(capturePtr uintptr)
-
-	// Permission functions
-	shimCheckCameraPermission       func() int32
-	shimCheckMicrophonePermission   func() int32
-	shimRequestCameraPermission     func() int32
-	shimRequestMicrophonePermission func() int32
-)
+// Device capture FFI function pointers are defined in func_vars.go
 
 // ErrCaptureNotStarted is returned when trying to stop a capture that wasn't started.
 var ErrCaptureNotStarted = errors.New("capture not started")

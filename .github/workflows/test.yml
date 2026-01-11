@@ -44,11 +44,33 @@ jobs:
             | tar -xz -C lib/${{ matrix.platform }}
           ls -la lib/${{ matrix.platform }}/
 
-      - name: Run tests
+      - name: Run tests (purego - default)
         run: |
+          echo "=== Testing with purego (default) ==="
           go test -v ./pkg/frame/... ./pkg/codec/...
           go test -v ./internal/ffi/...
           go test -v ./pkg/encoder/... ./pkg/decoder/...
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+      - name: Run tests (CGO variant)
+        run: |
+          echo "=== Testing with CGO (ffigo_cgo tag) ==="
+          go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
+          go test -tags ffigo_cgo -v ./internal/ffi/...
+          go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+      - name: Run benchmarks (comparison)
+        run: |
+          echo "=== Benchmark: purego ==="
+          go test -bench=BenchmarkShimVersion -benchmem -run=^$ ./internal/ffi/ || true
+          echo ""
+          echo "=== Benchmark: CGO ==="
+          go test -tags ffigo_cgo -bench=BenchmarkShimVersion -benchmem -run=^$ ./internal/ffi/ || true
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
