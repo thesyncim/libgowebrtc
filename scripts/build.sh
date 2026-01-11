@@ -248,7 +248,13 @@ build_shim() {
 
     local lib_dir="$PROJECT_ROOT/lib/$TARGET_PLATFORM"
     mkdir -p "$lib_dir"
-    cp "bazel-bin/shim/libwebrtc_shim.$ext" "$lib_dir/"
+
+    # Bazel outputs: libwebrtc_shim.{so,dylib} on Unix, webrtc_shim.dll on Windows
+    # We unify to libwebrtc_shim.* for consistency
+    local src_name="libwebrtc_shim.$ext"
+    [[ "$TARGET_OS" == "windows" ]] && src_name="webrtc_shim.$ext"
+
+    cp "bazel-bin/shim/$src_name" "$lib_dir/libwebrtc_shim.$ext"
 
     log_success "Shim built: $lib_dir/libwebrtc_shim.$ext"
 }
