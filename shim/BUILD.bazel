@@ -1,0 +1,154 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+# Source files
+_SHIM_SRCS_COMMON = [
+    "openh264_codec.cc",
+    "shim_audio_codec.cc",
+    "shim_capture.cc",
+    "shim_common.cc",
+    "shim_data_channel.cc",
+    "shim_packetizer.cc",
+    "shim_peer_connection.cc",
+    "shim_remote_sink.cc",
+    "shim_rtp_receiver.cc",
+    "shim_rtp_sender.cc",
+    "shim_rtp_transceiver.cc",
+    "shim_stats.cc",
+    "shim_track_source.cc",
+    "shim_video_codec.cc",
+]
+
+_SHIM_HDRS = [
+    "openh264_codec.h",
+    "openh264_types.h",
+    "shim.h",
+    "shim_common.h",
+    "shim_internal.h",
+]
+
+_COMMON_COPTS = [
+    "-std=c++17",
+    "-fPIC",
+    "-fvisibility=hidden",
+    "-Wno-deprecated-declarations",
+]
+
+_COMMON_DEFINES = [
+    "WEBRTC_POSIX",
+    "WEBRTC_LIBRARY_IMPL",
+    "SHIM_ENABLE_DEVICE_CAPTURE",
+]
+
+# macOS frameworks
+_MACOS_LINKOPTS = [
+    "-framework Foundation",
+    "-framework AVFoundation",
+    "-framework CoreAudio",
+    "-framework CoreMedia",
+    "-framework CoreVideo",
+    "-framework VideoToolbox",
+    "-framework AudioToolbox",
+    "-framework CoreFoundation",
+    "-framework CoreGraphics",
+    "-framework IOSurface",
+    "-framework Metal",
+    "-framework AppKit",
+    "-framework ScreenCaptureKit",
+    "-framework ApplicationServices",
+]
+
+# Linux libraries
+_LINUX_LINKOPTS = [
+    "-Wl,--start-group",
+    "-lpthread",
+    "-ldl",
+    "-lrt",
+    "-lX11",
+    "-lXcomposite",
+    "-lXdamage",
+    "-lXfixes",
+    "-lXrandr",
+    "-lXrender",
+    "-lXtst",
+    "-lXext",
+    "-lgio-2.0",
+    "-lgobject-2.0",
+    "-lglib-2.0",
+    "-Wl,--end-group",
+    "-Wl,--pack-dyn-relocs=none",
+]
+
+# Main shim library - compile all sources together
+# On macOS, include the .mm file and use ObjC++ for it
+cc_library(
+    name = "shim_lib",
+    srcs = _SHIM_SRCS_COMMON + select({
+        # On macOS, we need to handle .mm separately
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": ["shim_permission.cc"],
+        "//conditions:default": ["shim_permission.cc"],
+    }),
+    hdrs = _SHIM_HDRS,
+    alwayslink = True,  # Ensure all symbols are exported to shared lib
+    copts = _COMMON_COPTS,
+    defines = _COMMON_DEFINES + select({
+        "@platforms//os:macos": ["WEBRTC_MAC"],
+        "@platforms//os:linux": ["WEBRTC_LINUX"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:private"],
+    deps = ["@libwebrtc"],
+)
+
+# For macOS, compile the .mm file with a genrule
+genrule(
+    name = "compile_permission_mac",
+    srcs = [
+        "shim_permission_mac.mm",
+    ] + _SHIM_HDRS + ["@libwebrtc//:libwebrtc"],
+    outs = ["shim_permission_mac.o"],
+    cmd = select({
+        "@platforms//os:macos": """
+            clang++ -c -o $@ -x objective-c++ -std=c++17 -fPIC \
+                -DWEBRTC_MAC -DWEBRTC_POSIX -DWEBRTC_LIBRARY_IMPL \
+                -I$$(dirname $(location shim.h)) \
+                -isystem external/libwebrtc/include \
+                -isystem external/libwebrtc/include/third_party/abseil-cpp \
+                $(location shim_permission_mac.mm)
+        """,
+        "//conditions:default": "touch $@",
+    }),
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//visibility:private"],
+)
+
+# Shared library - outputs libwebrtc_shim.{dylib,so}
+cc_binary(
+    name = "webrtc_shim",
+    srcs = select({
+        "@platforms//os:macos": [":compile_permission_mac"],
+        "//conditions:default": [],
+    }),
+    linkopts = select({
+        "@platforms//os:macos": _MACOS_LINKOPTS,
+        "@platforms//os:linux": _LINUX_LINKOPTS,
+        "//conditions:default": [],
+    }),
+    linkshared = True,
+    visibility = ["//visibility:public"],
+    deps = [":shim_lib"],
+)
+
+# Filegroup for distribution
+filegroup(
+    name = "shim_dist",
+    srcs = [":webrtc_shim"],
+    visibility = ["//visibility:public"],
+)
+
+# Export headers for consumers
+filegroup(
+    name = "headers",
+    srcs = _SHIM_HDRS,
+    visibility = ["//visibility:public"],
+)

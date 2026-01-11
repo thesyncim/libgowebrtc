@@ -1,0 +1,21 @@
+module(
+    name = "libgowebrtc",
+    version = "0.1.0",
+)
+
+# C++ rules for building the shim
+bazel_dep(name = "rules_cc", version = "0.0.16")
+bazel_dep(name = "platforms", version = "0.0.10")
+
+# Apple support for Objective-C++ compilation on macOS
+bazel_dep(name = "apple_support", version = "1.17.1")
+
+apple_cc_configure = use_extension(
+    "@apple_support//crosstool:setup.bzl",
+    "apple_cc_configure_extension",
+)
+use_repo(apple_cc_configure, "local_config_apple_cc")
+
+# libwebrtc external repository
+libwebrtc = use_extension("//bazel/webrtc:extensions.bzl", "libwebrtc")
+use_repo(libwebrtc, "libwebrtc")

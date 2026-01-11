@@ -944,15 +944,19 @@ func TestDataChannel(t *testing.T) {
 }
 ```
 
-### Phase 10: Shim Build & Distribution
-- [x] shim/CMakeLists.txt - CMake build configuration
+### Phase 10: Shim Build & Distribution (Bazel Migration Complete)
+- [x] Migrated from CMake to Bazel
+- [x] shim/BUILD.bazel - Bazel build configuration
+- [x] scripts/build.sh - Unified build script (libwebrtc + shim + release)
+- [x] bazel/webrtc/repository.bzl - Repository rule for libwebrtc
+- [x] .bazelrc, MODULE.bazel, .bazelversion - Bazel configuration
 - [x] shim/shim.cc - Full implementation (encode/decode/packetizer/PeerConnection)
-- [ ] Build shim with actual libwebrtc for darwin-arm64
-- [ ] Build shim with actual libwebrtc for darwin-amd64
-- [ ] Build shim with actual libwebrtc for linux-amd64
-- [ ] Build shim with actual libwebrtc for linux-arm64
-- [ ] CI/CD for automated shim builds
-- [ ] GitHub releases with pre-built binaries
+- [x] Build shim with actual libwebrtc for darwin-arm64 ✅
+- [x] Build shim with actual libwebrtc for darwin-amd64 (CI ready)
+- [x] Build shim with actual libwebrtc for linux-amd64 (CI ready)
+- [x] Build shim with actual libwebrtc for linux-arm64 (CI ready)
+- [x] CI/CD workflow (.github/workflows/bazel.yml)
+- [ ] GitHub releases with pre-built binaries (CI pending)
 
 ### Phase 11: Device Capture (via libwebrtc)
 
@@ -1473,18 +1477,24 @@ LIBWEBRTC_SHIM_PATH=$PWD/lib/darwin_arm64/libwebrtc_shim.dylib go test -bench=Be
 
 ### Build Requirements
 
-**libwebrtc (M141.7390):**
+**Full Build (libwebrtc + shim):**
 ```bash
-# Full build with scripts/build_libwebrtc.sh
-./scripts/build_libwebrtc.sh
+# First time: builds libwebrtc from source (~2-3 hours) + shim
+./scripts/build.sh
 
-# Or skip fetch for rebuilds
-./scripts/build_libwebrtc.sh --skip-fetch
+# Rebuild shim only (fast)
+./scripts/build.sh --shim-only
+
+# Create release tarball
+./scripts/build.sh --release
 ```
 
-**Shim:**
+**Using Bazel directly:**
 ```bash
-LIBWEBRTC_DIR=~/libwebrtc make shim shim-install
+# Requires LIBWEBRTC_DIR or ~/libwebrtc
+bazel build //shim:webrtc_shim
+bazel build //shim:webrtc_shim --config=darwin_arm64
+bazel build //shim:webrtc_shim --config=linux_amd64
 ```
 
 **Run tests:**

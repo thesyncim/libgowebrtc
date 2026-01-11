@@ -231,7 +231,7 @@ int OpenH264Encoder::Initialize(const ShimVideoEncoderConfig* config, ShimErrorB
     param.sSpatialLayers[0].uiLevelIdc = LEVEL_3_1;
 
     // Slice mode: single slice per frame
-    param.sSpatialLayers[0].uiSliceMode = 0;  // SM_SINGLE_SLICE
+    param.sSpatialLayers[0].sSliceArgument.uiSliceMode = SM_SINGLE_SLICE;
 
     // Additional settings matching libwebrtc
     param.iNumRefFrame = 1;
@@ -417,7 +417,8 @@ int OpenH264Decoder::Initialize(ShimErrorBuffer* error_out) {
     memset(&param, 0, sizeof(param));
     param.uiTargetDqLayer = 0xFF;  // All layers
     param.eEcActiveIdc = ERROR_CON_SLICE_COPY;  // Error concealment
-    param.sVideoProperty.eVideoFormat = videoFormatI420;
+    param.sVideoProperty.size = sizeof(SVideoProperty);
+    param.sVideoProperty.eVideoBsType = VIDEO_BITSTREAM_AVC;
 
     // Initialize
     ret = CallDecoderMethod<long, const SDecodingParam*>(decoder_, kDecoderVtable_Initialize, &param);

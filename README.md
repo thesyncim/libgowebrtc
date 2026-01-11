@@ -77,17 +77,36 @@ Environment knobs:
 Note: Cisco provides OpenH264 binaries under their own terms. Downloading from
 Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 
-### Publishing Shims (Local Builds)
+### Building the Shim
 
-Build and package the shim on each target OS/arch locally, then upload the assets
-to GitHub Releases and update the manifest:
+The shim is built using Bazel. The build script downloads pre-compiled libwebrtc
+from [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) (~165MB)
+and builds the shim.
 
 ```bash
-LIBWEBRTC_DIR=/path/to/libwebrtc RELEASE_TAG=shim-v0.1.0 ./scripts/release_shim.sh
+# Build shim (downloads libwebrtc + builds shim)
+./scripts/build.sh
+
+# Clean and rebuild
+./scripts/build.sh --clean
+
+# Create release tarball
+./scripts/build.sh --release
 ```
 
-If you publish multiple flavors, use different release tags and set
-`SHIM_FLAVOR` when releasing each one.
+Environment variables:
+- `LIBWEBRTC_VERSION` - Pre-compiled version (default: 141.7390.2.0)
+- `INSTALL_DIR` - Where to cache libwebrtc (default: ~/libwebrtc)
+
+Or use Bazel directly:
+
+```bash
+# Build shim (requires LIBWEBRTC_DIR or ~/libwebrtc)
+bazel build //shim:webrtc_shim --config=darwin_arm64
+bazel build //shim:webrtc_shim --config=linux_amd64
+```
+
+Supported platforms: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`
 
 ## Quick Start
 
@@ -318,12 +337,16 @@ The example showcases:
 - Real-time connection statistics
 - Modern responsive UI
 
-## What's Pending
+## Build Status
 
-The Go layer and FFI bindings are complete for all WebRTC functionality. The shim needs to be built with actual libwebrtc:
+The Go layer and FFI bindings are complete for all WebRTC functionality. Bazel builds the shim:
 
-- Build shim for darwin-arm64/amd64
-- Build shim for linux-amd64/arm64
+| Platform | Status |
+|----------|--------|
+| darwin_arm64 | ✅ Working |
+| darwin_amd64 | ✅ CI Ready |
+| linux_amd64 | ✅ CI Ready |
+| linux_arm64 | ✅ CI Ready |
 
 ## SVC & Simulcast
 
@@ -356,15 +379,40 @@ LIBWEBRTC_SHIM_PATH=./lib/darwin_arm64/libwebrtc_shim.dylib go test ./...
 go test -v ./...
 ```
 
-## Building the Shim
+## Building from Source
 
-The shim library wraps libwebrtc's C++ API with a C interface. See `shim/CMakeLists.txt`.
+### Prerequisites
+
+- Bazel 7.4.1+ (via Bazelisk recommended)
+- curl (for downloading pre-compiled libwebrtc)
+
+### Build Commands
 
 ```bash
-cd shim
-mkdir build && cd build
-cmake .. -DLIBWEBRTC_ROOT=/path/to/libwebrtc
-make
+# Build shim (downloads pre-compiled libwebrtc automatically)
+./scripts/build.sh
+
+# Create release tarball
+./scripts/build.sh --release
+
+# Clean and rebuild
+./scripts/build.sh --clean
+```
+
+The build script automatically downloads pre-compiled libwebrtc from
+[crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) and
+caches it under `~/libwebrtc`.
+
+### Manual Bazel Build
+
+```bash
+# Ensure libwebrtc is available
+export LIBWEBRTC_DIR=~/libwebrtc
+
+# Build shim
+bazel build //shim:webrtc_shim --config=darwin_arm64
+
+# Output: bazel-bin/shim/libwebrtc_shim.{dylib,so}
 ```
 
 ## License

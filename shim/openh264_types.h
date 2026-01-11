@@ -161,6 +161,46 @@ typedef enum {
 } WELS_LOG;
 
 typedef enum {
+    LOW_COMPLEXITY = 0,
+    MEDIUM_COMPLEXITY,
+    HIGH_COMPLEXITY
+} ECOMPLEXITY_MODE;
+
+typedef enum {
+    CONSTANT_ID = 0,
+    INCREASING_ID = 0x01,
+    SPS_LISTING = 0x02,
+    SPS_LISTING_AND_PPS_INCREASING = 0x03,
+    SPS_PPS_LISTING = 0x06,
+} EParameterSetStrategy;
+
+typedef enum {
+    SM_SINGLE_SLICE = 0,
+    SM_FIXEDSLCNUM_SLICE = 1,
+    SM_RASTER_SLICE = 2,
+    SM_SIZELIMITED_SLICE = 3,
+    SM_RESERVED = 4
+} SliceModeEnum;
+
+typedef enum {
+    ASP_UNSPECIFIED = 0,
+    ASP_1x1 = 1,
+    ASP_12x11 = 2,
+    ASP_10x11 = 3,
+    ASP_16x11 = 4,
+    ASP_40x33 = 5,
+    ASP_24x11 = 6,
+    ASP_20x11 = 7,
+    ASP_32x11 = 8,
+    ASP_80x33 = 9,
+    ASP_18x11 = 10,
+    ASP_15x11 = 11,
+    ASP_64x33 = 12,
+    ASP_160x99 = 13,
+    ASP_EXT_SAR = 255
+} ESampleAspectRatio;
+
+typedef enum {
     ENCODER_OPTION_DATAFORMAT = 0,
     ENCODER_OPTION_IDR_INTERVAL,
     ENCODER_OPTION_SVC_ENCODE_PARAM_BASE,
@@ -234,12 +274,12 @@ typedef struct {
     unsigned char uiTemporalId;
     unsigned char uiSpatialId;
     unsigned char uiQualityId;
+    EVideoFrameType eFrameType;
     unsigned char uiLayerType;
+    int iSubSeqId;
     int iNalCount;
     int* pNalLengthInByte;
     unsigned char* pBsBuf;
-    int iSubSeqId;
-    EVideoFrameType eFrameType;
 } SLayerBSInfo;
 
 #define MAX_LAYER_NUM_OF_FRAME 128
@@ -252,6 +292,17 @@ typedef struct {
     long long uiTimeStamp;
 } SFrameBSInfo;
 
+// MAX_SLICES_NUM_TMP = ((128 - 21) / 3) = 35
+// SAVED_NALUNIT_NUM_TMP = (4*4) + 1 + 4 = 21
+#define MAX_SLICES_NUM_TMP 35
+
+typedef struct {
+    SliceModeEnum uiSliceMode;
+    unsigned int uiSliceNum;
+    unsigned int uiSliceMbNum[MAX_SLICES_NUM_TMP];
+    unsigned int uiSliceSizeConstraint;
+} SSliceArgument;
+
 typedef struct {
     int iVideoWidth;
     int iVideoHeight;
@@ -261,16 +312,18 @@ typedef struct {
     EProfileIdc uiProfileIdc;
     ELevelIdc uiLevelIdc;
     int iDLayerQp;
-    // Slice config
-    unsigned int uiSliceMode;
-    unsigned int uiSliceNum;
-    unsigned int uiSliceMbNum[35];
-    unsigned int uiSliceSizeConstraint;
-    // Aspect ratio
+    SSliceArgument sSliceArgument;
+    bool bVideoSignalTypePresent;
+    unsigned char uiVideoFormat;
+    bool bFullRange;
+    bool bColorDescriptionPresent;
+    unsigned char uiColorPrimaries;
+    unsigned char uiTransferCharacteristics;
+    unsigned char uiColorMatrix;
     bool bAspectRatioPresent;
-    unsigned char uiAspectRatioIdc;
-    unsigned short uiAspectSarWidth;
-    unsigned short uiAspectSarHeight;
+    ESampleAspectRatio eAspectRatio;
+    unsigned short sAspectRatioExtWidth;
+    unsigned short sAspectRatioExtHeight;
 } SSpatialLayerConfig;
 
 typedef struct {
@@ -295,10 +348,10 @@ typedef struct {
     int iSpatialLayerNum;
     SSpatialLayerConfig sSpatialLayers[MAX_SPATIAL_LAYER_NUM];
 
-    int iComplexityMode;
+    ECOMPLEXITY_MODE iComplexityMode;
     unsigned int uiIntraPeriod;
     int iNumRefFrame;
-    unsigned char uiSpsPpsIdStrategy;
+    EParameterSetStrategy eSpsPpsIdStrategy;
     bool bPrefixNalAddingCtrl;
     bool bEnableSSEI;
     bool bSimulcastAVC;
@@ -356,13 +409,8 @@ typedef struct {
 // ============================================================================
 
 typedef struct {
-    EVideoFormatType eVideoFormat;
-    int iColorMatrix;
-    int iColorPrimaries;
-    int iTransferCharacteristics;
-    int iColorRange;
-    int iChromaSampleLocTypeTopField;
-    int iChromaSampleLocTypeBottomField;
+    unsigned int size;              // size of the struct
+    VIDEO_BITSTREAM_TYPE eVideoBsType;  // video stream type (AVC/SVC)
 } SVideoProperty;
 
 typedef struct {
@@ -377,16 +425,18 @@ typedef struct {
 typedef struct {
     int iWidth;
     int iHeight;
+    int iFormat;                   // EVideoFormatType
     int iStride[2];
 } SSysMEMBuffer;
 
 typedef struct {
+    int iBufferStatus;             // 0: not ready; 1: ready
+    unsigned long long uiInBsTimeStamp;
+    unsigned long long uiOutYuvTimeStamp;
     union {
         SSysMEMBuffer sSystemBuffer;
     } UsrData;
-    int iBufferStatus;
-    long long uiInBsTimeStamp;
-    long long uiOutYuvTimeStamp;
+    unsigned char* pDst[3];        // point to picture YUV data
 } SBufferInfo;
 
 typedef struct {

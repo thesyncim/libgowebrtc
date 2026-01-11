@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -303,6 +304,62 @@ func Close() error {
 
 	libLoaded.Store(false)
 	libHandle = 0
+	return nil
+}
+
+// ExpectedLibWebRTCVersion is the libwebrtc version this Go code expects.
+// Must match kLibWebRTCVersion in shim/shim_common.cc.
+const ExpectedLibWebRTCVersion = "M141"
+
+// ExpectedShimVersion is the shim API version this Go code expects.
+// Must match kShimVersion in shim/shim_common.cc.
+const ExpectedShimVersion = "0.1.0"
+
+// ErrVersionMismatch is returned when the shim version doesn't match.
+var ErrVersionMismatch = errors.New("shim version mismatch")
+
+// ShimVersion returns the shim library version.
+// Returns empty string if library is not loaded.
+func ShimVersion() string {
+	if !libLoaded.Load() {
+		return ""
+	}
+	ptr := shimVersion()
+	if ptr == 0 {
+		return ""
+	}
+	return GoString(unsafe.Pointer(ptr))
+}
+
+// LibWebRTCVersion returns the libwebrtc version the shim was built with.
+// Returns empty string if library is not loaded.
+func LibWebRTCVersion() string {
+	if !libLoaded.Load() {
+		return ""
+	}
+	ptr := shimLibwebrtcVersion()
+	if ptr == 0 {
+		return ""
+	}
+	return GoString(unsafe.Pointer(ptr))
+}
+
+// CheckVersion verifies the shim version matches what this Go code expects.
+// Returns nil if versions match, ErrVersionMismatch otherwise.
+func CheckVersion() error {
+	if !libLoaded.Load() {
+		return ErrLibraryNotLoaded
+	}
+
+	shimVer := ShimVersion()
+	webrtcVer := LibWebRTCVersion()
+
+	if shimVer != ExpectedShimVersion {
+		return fmt.Errorf("%w: shim version %q, expected %q", ErrVersionMismatch, shimVer, ExpectedShimVersion)
+	}
+	if webrtcVer != ExpectedLibWebRTCVersion {
+		return fmt.Errorf("%w: libwebrtc version %q, expected %q", ErrVersionMismatch, webrtcVer, ExpectedLibWebRTCVersion)
+	}
 	return nil
 }
 

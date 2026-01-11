@@ -1,0 +1,137 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main, develop, openh264-runtime]
+    tags: ['v*', 'shim-v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  USE_BAZEL_VERSION: '7.4.1'
+  GO_VERSION: '1.23'
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: darwin_arm64
+            extension: dylib
+          - os: macos-13
+            platform: darwin_amd64
+            extension: dylib
+          - os: ubuntu-latest
+            platform: linux_amd64
+            extension: so
+          # - os: ubuntu-24.04-arm
+          #   platform: linux_arm64
+          #   extension: so
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Bazelisk
+        uses: bazel-contrib/setup-bazel@0.9.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ matrix.platform }}
+          repository-cache: true
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
+            libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
+            libglib2.0-dev libgbm-dev libdrm-dev
+
+      - name: Build shim
+        run: ./scripts/build.sh
+        env:
+          INSTALL_DIR: ${{ runner.temp }}/libwebrtc
+
+      - name: Run tests
+        run: |
+          go test -v ./pkg/frame/... ./pkg/codec/...
+          go test -v ./internal/ffi/...
+          go test -v ./pkg/encoder/... ./pkg/decoder/...
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          cp lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }} dist/
+          cp shim/shim.h dist/
+          cp LICENSE dist/ || true
+          cd dist && tar -czf ../libwebrtc_shim_${{ matrix.platform }}.tar.gz *
+          cd ..
+          if command -v sha256sum &> /dev/null; then
+            sha256sum libwebrtc_shim_${{ matrix.platform }}.tar.gz > libwebrtc_shim_${{ matrix.platform }}.tar.gz.sha256
+          else
+            shasum -a 256 libwebrtc_shim_${{ matrix.platform }}.tar.gz > libwebrtc_shim_${{ matrix.platform }}.tar.gz.sha256
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shim-${{ matrix.platform }}
+          path: |
+            libwebrtc_shim_${{ matrix.platform }}.tar.gz
+            libwebrtc_shim_${{ matrix.platform }}.tar.gz.sha256
+
+  release:
+    name: Release
+    needs: build-and-test
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -name "*.tar.gz" -exec cp {} release/ \;
+          find artifacts -name "*.sha256" -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          body: |
+            ## libgowebrtc ${{ github.ref_name }}
+
+            Pre-built shim libraries:
+            - `darwin_arm64` - macOS Apple Silicon
+            - `darwin_amd64` - macOS Intel
+            - `linux_amd64` - Linux x86_64
+
+            ### Usage
+
+            ```go
+            import "github.com/thesyncim/libgowebrtc/pkg/encoder"
+
+            enc, _ := encoder.NewH264Encoder(config)
+            ```
+
+            The shim downloads automatically on first use.
