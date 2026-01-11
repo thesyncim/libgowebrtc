@@ -173,8 +173,11 @@ download_libwebrtc() {
         found_lib="$INSTALL_DIR/lib/$lib_file"
     elif [[ "$TARGET_OS" == "windows" ]]; then
         # Try alternative Windows locations/names
+        # crow-misia puts it in debug/ folder
         for try_path in \
             "$INSTALL_DIR/lib/webrtc.lib" \
+            "$INSTALL_DIR/debug/webrtc.lib" \
+            "$INSTALL_DIR/release/webrtc.lib" \
             "$INSTALL_DIR/webrtc.lib" \
             "$INSTALL_DIR/lib/libwebrtc.lib" \
             "$INSTALL_DIR/libwebrtc.lib" \
