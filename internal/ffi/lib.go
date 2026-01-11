@@ -1,5 +1,8 @@
-// Package ffi provides purego-based FFI bindings to the libwebrtc shim library.
+// Package ffi provides FFI bindings to the libwebrtc shim library.
+// It supports both purego (default) and CGO backends via build tags.
 package ffi
+
+//go:generate go run ./gen
 
 import (
 	"errors"
@@ -10,8 +13,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
-
-	"github.com/ebitengine/purego"
 )
 
 var (
@@ -66,167 +67,8 @@ var (
 	libMu     sync.Mutex  // Still used for load/unload operations
 )
 
-// Function pointers - populated by LoadLibrary
-// NOTE: All int/uint types are explicitly sized to match C ABI (int = int32, size_t = varies)
-// NOTE: Functions with error_out parameter take uintptr to ShimErrorBuffer as last parameter
-var (
-	// Video Encoder
-	shimVideoEncoderCreate          func(codec int32, configPtr uintptr, errorOut uintptr) uintptr
-	shimVideoEncoderEncode          func(encoder uintptr, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int32, timestamp uint32, forceKeyframe int32, outData uintptr, dstBufferSize int32, outSize, outIsKeyframe uintptr, errorOut uintptr) int32
-	shimVideoEncoderSetBitrate      func(encoder uintptr, bitrate uint32) int32
-	shimVideoEncoderSetFramerate    func(encoder uintptr, framerate float32) int32
-	shimVideoEncoderRequestKeyframe func(encoder uintptr) int32
-	shimVideoEncoderDestroy         func(encoder uintptr)
-
-	// Video Decoder
-	shimVideoDecoderCreate  func(codec int32, errorOut uintptr) uintptr
-	shimVideoDecoderDecode  func(decoder uintptr, data uintptr, size int32, timestamp uint32, isKeyframe int32, outY, outU, outV, outW, outH, outYStride, outUStride, outVStride uintptr, errorOut uintptr) int32
-	shimVideoDecoderDestroy func(decoder uintptr)
-
-	// Audio Encoder
-	shimAudioEncoderCreate     func(configPtr uintptr, errorOut uintptr) uintptr
-	shimAudioEncoderEncode     func(encoder uintptr, samples uintptr, numSamples int32, outData, outSize uintptr) int32
-	shimAudioEncoderSetBitrate func(encoder uintptr, bitrate uint32) int32
-	shimAudioEncoderDestroy    func(encoder uintptr)
-
-	// Audio Decoder
-	shimAudioDecoderCreate  func(sampleRate, channels int32, errorOut uintptr) uintptr
-	shimAudioDecoderDecode  func(decoder uintptr, data uintptr, size int32, outSamples, outNumSamples uintptr, errorOut uintptr) int32
-	shimAudioDecoderDestroy func(decoder uintptr)
-
-	// Packetizer
-	shimPacketizerCreate    func(configPtr uintptr) uintptr
-	shimPacketizerPacketize func(packetizer uintptr, data uintptr, size int32, timestamp uint32, isKeyframe int32, dst uintptr, offsets uintptr, sizes uintptr, maxPackets int32, outCount uintptr) int32
-	shimPacketizerSeqNum    func(packetizer uintptr) uint16
-	shimPacketizerDestroy   func(packetizer uintptr)
-
-	// Depacketizer
-	shimDepacketizerCreate  func(codec int32) uintptr
-	shimDepacketizerPush    func(depacketizer uintptr, data uintptr, size int32) int32
-	shimDepacketizerPop     func(depacketizer uintptr, outData, outSize, outTimestamp, outIsKeyframe uintptr) int32
-	shimDepacketizerDestroy func(depacketizer uintptr)
-
-	// Memory
-	shimFreeBuffer  func(buffer uintptr)
-	shimFreePackets func(packets, sizes uintptr, count int32)
-
-	// Version
-	shimLibwebrtcVersion func() uintptr
-	shimVersion          func() uintptr
-)
-
-// PeerConnection FFI function pointers - populated by registerFunctions
-// NOTE: All int/uint types are explicitly sized to match C ABI (int = int32)
-// NOTE: Functions with error_out parameter take uintptr to ShimErrorBuffer as last parameter
-var (
-	shimPeerConnectionCreate                     func(configPtr uintptr, errorOut uintptr) uintptr
-	shimPeerConnectionDestroy                    func(pc uintptr)
-	shimPeerConnectionSetOnICECandidate          func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnConnectionStateChange func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnTrack                 func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnDataChannel           func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionCreateOffer                func(pc uintptr, sdpOut uintptr, sdpOutSize int32, outSdpLen uintptr, errorOut uintptr) int32
-	shimPeerConnectionCreateAnswer               func(pc uintptr, sdpOut uintptr, sdpOutSize int32, outSdpLen uintptr, errorOut uintptr) int32
-	shimPeerConnectionSetLocalDescription        func(pc uintptr, sdpType int32, sdp uintptr, errorOut uintptr) int32
-	shimPeerConnectionSetRemoteDescription       func(pc uintptr, sdpType int32, sdp uintptr, errorOut uintptr) int32
-	shimPeerConnectionAddICECandidate            func(pc uintptr, candidate, sdpMid uintptr, sdpMLineIndex int32, errorOut uintptr) int32
-	shimPeerConnectionSignalingState             func(pc uintptr) int32
-	shimPeerConnectionICEConnectionState         func(pc uintptr) int32
-	shimPeerConnectionICEGatheringState          func(pc uintptr) int32
-	shimPeerConnectionConnectionState            func(pc uintptr) int32
-	shimPeerConnectionAddTrack                   func(pc uintptr, codec int32, trackID, streamID uintptr, errorOut uintptr) uintptr
-	shimPeerConnectionRemoveTrack                func(pc uintptr, sender uintptr, errorOut uintptr) int32
-	shimPeerConnectionCreateDataChannel          func(pc uintptr, label uintptr, ordered, maxRetransmits int32, protocol uintptr, errorOut uintptr) uintptr
-	shimPeerConnectionClose                      func(pc uintptr)
-
-	shimRTPSenderSetBitrate   func(sender uintptr, bitrate uint32, errorOut uintptr) int32
-	shimRTPSenderReplaceTrack func(sender uintptr, track uintptr) int32
-	shimRTPSenderDestroy      func(sender uintptr)
-
-	shimDataChannelSetOnMessage func(dc uintptr, callback uintptr, ctx uintptr)
-	shimDataChannelSetOnOpen    func(dc uintptr, callback uintptr, ctx uintptr)
-	shimDataChannelSetOnClose   func(dc uintptr, callback uintptr, ctx uintptr)
-	shimDataChannelSend         func(dc uintptr, data uintptr, size int32, isBinary int32, errorOut uintptr) int32
-	shimDataChannelLabel        func(dc uintptr) uintptr
-	shimDataChannelReadyState   func(dc uintptr) int32
-	shimDataChannelClose        func(dc uintptr)
-	shimDataChannelDestroy      func(dc uintptr)
-
-	// Video Track Source (for frame injection)
-	shimVideoTrackSourceCreate                func(pc uintptr, width, height int32) uintptr
-	shimVideoTrackSourcePushFrame             func(source uintptr, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int32, timestampUs int64) int32
-	shimPeerConnectionAddVideoTrackFromSource func(pc, source uintptr, trackID, streamID uintptr, errorOut uintptr) uintptr
-	shimVideoTrackSourceDestroy               func(source uintptr)
-
-	// Audio Track Source (for frame injection)
-	shimAudioTrackSourceCreate                func(pc uintptr, sampleRate, channels int32) uintptr
-	shimAudioTrackSourcePushFrame             func(source uintptr, samples uintptr, numSamples int32, timestampUs int64) int32
-	shimPeerConnectionAddAudioTrackFromSource func(pc, source uintptr, trackID, streamID uintptr, errorOut uintptr) uintptr
-	shimAudioTrackSourceDestroy               func(source uintptr)
-
-	// Remote Track Sink (for receiving frames from remote tracks)
-	shimTrackSetVideoSink    func(track uintptr, callback uintptr, ctx uintptr) int32
-	shimTrackSetAudioSink    func(track uintptr, callback uintptr, ctx uintptr) int32
-	shimTrackRemoveVideoSink func(track uintptr)
-	shimTrackRemoveAudioSink func(track uintptr)
-	shimTrackKind            func(track uintptr) uintptr
-	shimTrackID              func(track uintptr) uintptr
-
-	// RTPSender Parameters
-	shimRTPSenderGetParameters     func(sender uintptr, outParams uintptr, encodings uintptr, maxEncodings int32) int32
-	shimRTPSenderSetParameters     func(sender uintptr, params uintptr, errorOut uintptr) int32
-	shimRTPSenderGetTrack          func(sender uintptr) uintptr
-	shimRTPSenderGetStats          func(sender uintptr, outStats uintptr) int32
-	shimRTPSenderSetOnRTCPFeedback func(sender uintptr, callback uintptr, ctx uintptr)
-	shimRTPSenderSetLayerActive    func(sender uintptr, rid uintptr, active int32, errorOut uintptr) int32
-	shimRTPSenderSetLayerBitrate   func(sender uintptr, rid uintptr, maxBitrate uint32, errorOut uintptr) int32
-	shimRTPSenderGetActiveLayers   func(sender uintptr, outSpatial uintptr, outTemporal uintptr) int32
-
-	// RTPReceiver
-	shimRTPReceiverGetTrack                func(receiver uintptr) uintptr
-	shimRTPReceiverGetStats                func(receiver uintptr, outStats uintptr) int32
-	shimRTPReceiverSetJitterBufferMinDelay func(receiver uintptr, minDelayMs int32) int32
-
-	// RTPTransceiver
-	shimTransceiverGetDirection        func(transceiver uintptr) int32
-	shimTransceiverSetDirection        func(transceiver uintptr, direction int32, errorOut uintptr) int32
-	shimTransceiverGetCurrentDirection func(transceiver uintptr) int32
-	shimTransceiverStop                func(transceiver uintptr, errorOut uintptr) int32
-	shimTransceiverMid                 func(transceiver uintptr) uintptr
-	shimTransceiverGetSender           func(transceiver uintptr) uintptr
-	shimTransceiverGetReceiver         func(transceiver uintptr) uintptr
-	shimTransceiverSetCodecPreferences func(transceiver uintptr, codecs uintptr, count int32, errorOut uintptr) int32
-	shimTransceiverGetCodecPreferences func(transceiver uintptr, codecs uintptr, maxCodecs int32, outCount uintptr) int32
-
-	// PeerConnection Extended
-	shimPeerConnectionAddTransceiver                func(pc uintptr, kind int32, direction int32, errorOut uintptr) uintptr
-	shimPeerConnectionGetSenders                    func(pc uintptr, senders uintptr, maxSenders int32, outCount uintptr) int32
-	shimPeerConnectionGetReceivers                  func(pc uintptr, receivers uintptr, maxReceivers int32, outCount uintptr) int32
-	shimPeerConnectionGetTransceivers               func(pc uintptr, transceivers uintptr, maxTransceivers int32, outCount uintptr) int32
-	shimPeerConnectionRestartICE                    func(pc uintptr) int32
-	shimPeerConnectionGetStats                      func(pc uintptr, outStats uintptr) int32
-	shimPeerConnectionSetOnSignalingStateChange     func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnICEConnectionStateChange func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnICEGatheringStateChange  func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnNegotiationNeeded        func(pc uintptr, callback uintptr, ctx uintptr)
-
-	// RTPSender Scalability Mode
-	shimRTPSenderSetScalabilityMode func(sender uintptr, mode uintptr, errorOut uintptr) int32
-	shimRTPSenderGetScalabilityMode func(sender uintptr, modeOut uintptr, modeOutSize int32) int32
-
-	// Codec Capabilities
-	shimGetSupportedVideoCodecs func(codecs uintptr, maxCodecs int32, outCount uintptr) int32
-	shimGetSupportedAudioCodecs func(codecs uintptr, maxCodecs int32, outCount uintptr) int32
-	shimIsCodecSupported        func(mimeType uintptr) int32
-
-	// RTPSender Codec API
-	shimRTPSenderGetNegotiatedCodecs func(sender uintptr, codecs uintptr, maxCodecs int32, outCount uintptr) int32
-	shimRTPSenderSetPreferredCodec   func(sender uintptr, mimeType uintptr, payloadType int32, errorOut uintptr) int32
-
-	// Bandwidth Estimation
-	shimPeerConnectionSetOnBandwidthEstimate func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionGetBandwidthEstimate   func(pc uintptr, outEstimate uintptr) int32
-)
+// Function pointers are defined in func_vars.go and populated by registerFunctions() in
+// either func_bind_purego.go or func_bind_cgo.go depending on build tags.
 
 // LoadLibrary loads the libwebrtc_shim shared library.
 // It searches in the following locations:
@@ -258,7 +100,7 @@ func LoadLibrary() error {
 		return err
 	}
 
-	handle, err := dlopenLibrary(libPath, purego.RTLD_NOW|purego.RTLD_GLOBAL)
+	handle, err := dlopenLibrary(libPath, RTLD_NOW|RTLD_GLOBAL)
 	if err != nil {
 		if downloadErr != nil {
 			return fmt.Errorf("failed to load %s: %w (auto-download failed: %w)", libPath, err, downloadErr)
@@ -432,202 +274,7 @@ func getLibraryNameFor(goos string) string {
 	}
 }
 
-func registerLibFunc(fptr any, handle uintptr, name string) {
-	sym, err := dlsymLibrary(handle, name)
-	if err != nil {
-		panic(err)
-	}
-	purego.RegisterFunc(fptr, sym)
-}
-
-func registerFunctions() error {
-	var err error
-
-	// Video Encoder
-	registerLibFunc(&shimVideoEncoderCreate, libHandle, "shim_video_encoder_create")
-	registerLibFunc(&shimVideoEncoderEncode, libHandle, "shim_video_encoder_encode")
-	registerLibFunc(&shimVideoEncoderSetBitrate, libHandle, "shim_video_encoder_set_bitrate")
-	registerLibFunc(&shimVideoEncoderSetFramerate, libHandle, "shim_video_encoder_set_framerate")
-	registerLibFunc(&shimVideoEncoderRequestKeyframe, libHandle, "shim_video_encoder_request_keyframe")
-	registerLibFunc(&shimVideoEncoderDestroy, libHandle, "shim_video_encoder_destroy")
-
-	// Video Decoder
-	registerLibFunc(&shimVideoDecoderCreate, libHandle, "shim_video_decoder_create")
-	registerLibFunc(&shimVideoDecoderDecode, libHandle, "shim_video_decoder_decode")
-	registerLibFunc(&shimVideoDecoderDestroy, libHandle, "shim_video_decoder_destroy")
-
-	// Audio Encoder
-	registerLibFunc(&shimAudioEncoderCreate, libHandle, "shim_audio_encoder_create")
-	registerLibFunc(&shimAudioEncoderEncode, libHandle, "shim_audio_encoder_encode")
-	registerLibFunc(&shimAudioEncoderSetBitrate, libHandle, "shim_audio_encoder_set_bitrate")
-	registerLibFunc(&shimAudioEncoderDestroy, libHandle, "shim_audio_encoder_destroy")
-
-	// Audio Decoder
-	registerLibFunc(&shimAudioDecoderCreate, libHandle, "shim_audio_decoder_create")
-	registerLibFunc(&shimAudioDecoderDecode, libHandle, "shim_audio_decoder_decode")
-	registerLibFunc(&shimAudioDecoderDestroy, libHandle, "shim_audio_decoder_destroy")
-
-	// Packetizer
-	registerLibFunc(&shimPacketizerCreate, libHandle, "shim_packetizer_create")
-	registerLibFunc(&shimPacketizerPacketize, libHandle, "shim_packetizer_packetize")
-	registerLibFunc(&shimPacketizerSeqNum, libHandle, "shim_packetizer_sequence_number")
-	registerLibFunc(&shimPacketizerDestroy, libHandle, "shim_packetizer_destroy")
-
-	// Depacketizer
-	registerLibFunc(&shimDepacketizerCreate, libHandle, "shim_depacketizer_create")
-	registerLibFunc(&shimDepacketizerPush, libHandle, "shim_depacketizer_push")
-	registerLibFunc(&shimDepacketizerPop, libHandle, "shim_depacketizer_pop")
-	registerLibFunc(&shimDepacketizerDestroy, libHandle, "shim_depacketizer_destroy")
-
-	// Memory
-	registerLibFunc(&shimFreeBuffer, libHandle, "shim_free_buffer")
-	registerLibFunc(&shimFreePackets, libHandle, "shim_free_packets")
-
-	// Version
-	registerLibFunc(&shimLibwebrtcVersion, libHandle, "shim_libwebrtc_version")
-	registerLibFunc(&shimVersion, libHandle, "shim_version")
-
-	// PeerConnection
-	registerLibFunc(&shimPeerConnectionCreate, libHandle, "shim_peer_connection_create")
-	registerLibFunc(&shimPeerConnectionDestroy, libHandle, "shim_peer_connection_destroy")
-	registerLibFunc(&shimPeerConnectionSetOnICECandidate, libHandle, "shim_peer_connection_set_on_ice_candidate")
-	registerLibFunc(&shimPeerConnectionSetOnConnectionStateChange, libHandle, "shim_peer_connection_set_on_connection_state_change")
-	registerLibFunc(&shimPeerConnectionSetOnTrack, libHandle, "shim_peer_connection_set_on_track")
-	registerLibFunc(&shimPeerConnectionSetOnDataChannel, libHandle, "shim_peer_connection_set_on_data_channel")
-	registerLibFunc(&shimPeerConnectionCreateOffer, libHandle, "shim_peer_connection_create_offer")
-	registerLibFunc(&shimPeerConnectionCreateAnswer, libHandle, "shim_peer_connection_create_answer")
-	registerLibFunc(&shimPeerConnectionSetLocalDescription, libHandle, "shim_peer_connection_set_local_description")
-	registerLibFunc(&shimPeerConnectionSetRemoteDescription, libHandle, "shim_peer_connection_set_remote_description")
-	registerLibFunc(&shimPeerConnectionAddICECandidate, libHandle, "shim_peer_connection_add_ice_candidate")
-	registerLibFunc(&shimPeerConnectionSignalingState, libHandle, "shim_peer_connection_signaling_state")
-	registerLibFunc(&shimPeerConnectionICEConnectionState, libHandle, "shim_peer_connection_ice_connection_state")
-	registerLibFunc(&shimPeerConnectionICEGatheringState, libHandle, "shim_peer_connection_ice_gathering_state")
-	registerLibFunc(&shimPeerConnectionConnectionState, libHandle, "shim_peer_connection_connection_state")
-	registerLibFunc(&shimPeerConnectionAddTrack, libHandle, "shim_peer_connection_add_track")
-	registerLibFunc(&shimPeerConnectionRemoveTrack, libHandle, "shim_peer_connection_remove_track")
-	registerLibFunc(&shimPeerConnectionCreateDataChannel, libHandle, "shim_peer_connection_create_data_channel")
-	registerLibFunc(&shimPeerConnectionClose, libHandle, "shim_peer_connection_close")
-
-	// RTPSender
-	registerLibFunc(&shimRTPSenderSetBitrate, libHandle, "shim_rtp_sender_set_bitrate")
-	registerLibFunc(&shimRTPSenderReplaceTrack, libHandle, "shim_rtp_sender_replace_track")
-	registerLibFunc(&shimRTPSenderDestroy, libHandle, "shim_rtp_sender_destroy")
-
-	// DataChannel
-	registerLibFunc(&shimDataChannelSetOnMessage, libHandle, "shim_data_channel_set_on_message")
-	registerLibFunc(&shimDataChannelSetOnOpen, libHandle, "shim_data_channel_set_on_open")
-	registerLibFunc(&shimDataChannelSetOnClose, libHandle, "shim_data_channel_set_on_close")
-	registerLibFunc(&shimDataChannelSend, libHandle, "shim_data_channel_send")
-	registerLibFunc(&shimDataChannelLabel, libHandle, "shim_data_channel_label")
-	registerLibFunc(&shimDataChannelReadyState, libHandle, "shim_data_channel_ready_state")
-	registerLibFunc(&shimDataChannelClose, libHandle, "shim_data_channel_close")
-	registerLibFunc(&shimDataChannelDestroy, libHandle, "shim_data_channel_destroy")
-
-	// Device Enumeration
-	registerLibFunc(&shimEnumerateDevices, libHandle, "shim_enumerate_devices")
-
-	// Video Capture
-	registerLibFunc(&shimVideoCaptureCreate, libHandle, "shim_video_capture_create")
-	registerLibFunc(&shimVideoCaptureStart, libHandle, "shim_video_capture_start")
-	registerLibFunc(&shimVideoCaptureStop, libHandle, "shim_video_capture_stop")
-	registerLibFunc(&shimVideoCaptureDestroy, libHandle, "shim_video_capture_destroy")
-
-	// Audio Capture
-	registerLibFunc(&shimAudioCaptureCreate, libHandle, "shim_audio_capture_create")
-	registerLibFunc(&shimAudioCaptureStart, libHandle, "shim_audio_capture_start")
-	registerLibFunc(&shimAudioCaptureStop, libHandle, "shim_audio_capture_stop")
-	registerLibFunc(&shimAudioCaptureDestroy, libHandle, "shim_audio_capture_destroy")
-
-	// Screen Capture
-	registerLibFunc(&shimEnumerateScreens, libHandle, "shim_enumerate_screens")
-	registerLibFunc(&shimScreenCaptureCreate, libHandle, "shim_screen_capture_create")
-	registerLibFunc(&shimScreenCaptureStart, libHandle, "shim_screen_capture_start")
-	registerLibFunc(&shimScreenCaptureStop, libHandle, "shim_screen_capture_stop")
-	registerLibFunc(&shimScreenCaptureDestroy, libHandle, "shim_screen_capture_destroy")
-
-	// Permission Functions
-	registerLibFunc(&shimCheckCameraPermission, libHandle, "shim_check_camera_permission")
-	registerLibFunc(&shimCheckMicrophonePermission, libHandle, "shim_check_microphone_permission")
-	registerLibFunc(&shimRequestCameraPermission, libHandle, "shim_request_camera_permission")
-	registerLibFunc(&shimRequestMicrophonePermission, libHandle, "shim_request_microphone_permission")
-
-	// Video Track Source
-	registerLibFunc(&shimVideoTrackSourceCreate, libHandle, "shim_video_track_source_create")
-	registerLibFunc(&shimVideoTrackSourcePushFrame, libHandle, "shim_video_track_source_push_frame")
-	registerLibFunc(&shimPeerConnectionAddVideoTrackFromSource, libHandle, "shim_peer_connection_add_video_track_from_source")
-	registerLibFunc(&shimVideoTrackSourceDestroy, libHandle, "shim_video_track_source_destroy")
-
-	// Audio Track Source
-	registerLibFunc(&shimAudioTrackSourceCreate, libHandle, "shim_audio_track_source_create")
-	registerLibFunc(&shimAudioTrackSourcePushFrame, libHandle, "shim_audio_track_source_push_frame")
-	registerLibFunc(&shimPeerConnectionAddAudioTrackFromSource, libHandle, "shim_peer_connection_add_audio_track_from_source")
-	registerLibFunc(&shimAudioTrackSourceDestroy, libHandle, "shim_audio_track_source_destroy")
-
-	// Remote Track Sink
-	registerLibFunc(&shimTrackSetVideoSink, libHandle, "shim_track_set_video_sink")
-	registerLibFunc(&shimTrackSetAudioSink, libHandle, "shim_track_set_audio_sink")
-	registerLibFunc(&shimTrackRemoveVideoSink, libHandle, "shim_track_remove_video_sink")
-	registerLibFunc(&shimTrackRemoveAudioSink, libHandle, "shim_track_remove_audio_sink")
-	registerLibFunc(&shimTrackKind, libHandle, "shim_track_kind")
-	registerLibFunc(&shimTrackID, libHandle, "shim_track_id")
-
-	// RTPSender Parameters
-	registerLibFunc(&shimRTPSenderGetParameters, libHandle, "shim_rtp_sender_get_parameters")
-	registerLibFunc(&shimRTPSenderSetParameters, libHandle, "shim_rtp_sender_set_parameters")
-	registerLibFunc(&shimRTPSenderGetTrack, libHandle, "shim_rtp_sender_get_track")
-	registerLibFunc(&shimRTPSenderGetStats, libHandle, "shim_rtp_sender_get_stats")
-	registerLibFunc(&shimRTPSenderSetOnRTCPFeedback, libHandle, "shim_rtp_sender_set_on_rtcp_feedback")
-	registerLibFunc(&shimRTPSenderSetLayerActive, libHandle, "shim_rtp_sender_set_layer_active")
-	registerLibFunc(&shimRTPSenderSetLayerBitrate, libHandle, "shim_rtp_sender_set_layer_bitrate")
-	registerLibFunc(&shimRTPSenderGetActiveLayers, libHandle, "shim_rtp_sender_get_active_layers")
-
-	// RTPReceiver
-	registerLibFunc(&shimRTPReceiverGetTrack, libHandle, "shim_rtp_receiver_get_track")
-	registerLibFunc(&shimRTPReceiverGetStats, libHandle, "shim_rtp_receiver_get_stats")
-	registerLibFunc(&shimRTPReceiverSetJitterBufferMinDelay, libHandle, "shim_rtp_receiver_set_jitter_buffer_min_delay")
-
-	// RTPTransceiver
-	registerLibFunc(&shimTransceiverGetDirection, libHandle, "shim_transceiver_get_direction")
-	registerLibFunc(&shimTransceiverSetDirection, libHandle, "shim_transceiver_set_direction")
-	registerLibFunc(&shimTransceiverGetCurrentDirection, libHandle, "shim_transceiver_get_current_direction")
-	registerLibFunc(&shimTransceiverStop, libHandle, "shim_transceiver_stop")
-	registerLibFunc(&shimTransceiverMid, libHandle, "shim_transceiver_mid")
-	registerLibFunc(&shimTransceiverGetSender, libHandle, "shim_transceiver_get_sender")
-	registerLibFunc(&shimTransceiverGetReceiver, libHandle, "shim_transceiver_get_receiver")
-	registerLibFunc(&shimTransceiverSetCodecPreferences, libHandle, "shim_transceiver_set_codec_preferences")
-	registerLibFunc(&shimTransceiverGetCodecPreferences, libHandle, "shim_transceiver_get_codec_preferences")
-
-	// PeerConnection Extended
-	registerLibFunc(&shimPeerConnectionAddTransceiver, libHandle, "shim_peer_connection_add_transceiver")
-	registerLibFunc(&shimPeerConnectionGetSenders, libHandle, "shim_peer_connection_get_senders")
-	registerLibFunc(&shimPeerConnectionGetReceivers, libHandle, "shim_peer_connection_get_receivers")
-	registerLibFunc(&shimPeerConnectionGetTransceivers, libHandle, "shim_peer_connection_get_transceivers")
-	registerLibFunc(&shimPeerConnectionRestartICE, libHandle, "shim_peer_connection_restart_ice")
-	registerLibFunc(&shimPeerConnectionGetStats, libHandle, "shim_peer_connection_get_stats")
-	registerLibFunc(&shimPeerConnectionSetOnSignalingStateChange, libHandle, "shim_peer_connection_set_on_signaling_state_change")
-	registerLibFunc(&shimPeerConnectionSetOnICEConnectionStateChange, libHandle, "shim_peer_connection_set_on_ice_connection_state_change")
-	registerLibFunc(&shimPeerConnectionSetOnICEGatheringStateChange, libHandle, "shim_peer_connection_set_on_ice_gathering_state_change")
-	registerLibFunc(&shimPeerConnectionSetOnNegotiationNeeded, libHandle, "shim_peer_connection_set_on_negotiation_needed")
-
-	// RTPSender Scalability Mode
-	registerLibFunc(&shimRTPSenderSetScalabilityMode, libHandle, "shim_rtp_sender_set_scalability_mode")
-	registerLibFunc(&shimRTPSenderGetScalabilityMode, libHandle, "shim_rtp_sender_get_scalability_mode")
-
-	// Codec Capabilities
-	registerLibFunc(&shimGetSupportedVideoCodecs, libHandle, "shim_get_supported_video_codecs")
-	registerLibFunc(&shimGetSupportedAudioCodecs, libHandle, "shim_get_supported_audio_codecs")
-	registerLibFunc(&shimIsCodecSupported, libHandle, "shim_is_codec_supported")
-
-	// RTPSender Codec API
-	registerLibFunc(&shimRTPSenderGetNegotiatedCodecs, libHandle, "shim_rtp_sender_get_negotiated_codecs")
-	registerLibFunc(&shimRTPSenderSetPreferredCodec, libHandle, "shim_rtp_sender_set_preferred_codec")
-
-	// Bandwidth Estimation
-	registerLibFunc(&shimPeerConnectionSetOnBandwidthEstimate, libHandle, "shim_peer_connection_set_on_bandwidth_estimate")
-	registerLibFunc(&shimPeerConnectionGetBandwidthEstimate, libHandle, "shim_peer_connection_get_bandwidth_estimate")
-
-	return err
-}
+// registerFunctions is implemented in func_bind_purego.go or func_bind_cgo.go
 
 // ShimError converts a shim error code to a Go error.
 // Returns sentinel errors that support errors.Is() comparisons.
@@ -671,6 +318,6 @@ func preloadLinuxDeps() {
 	}
 	for _, lib := range libs {
 		// Best effort - ignore errors as these may not be needed on all systems
-		_, _ = dlopenLibrary(lib, purego.RTLD_NOW|purego.RTLD_GLOBAL)
+		_, _ = dlopenLibrary(lib, RTLD_NOW|RTLD_GLOBAL)
 	}
 }

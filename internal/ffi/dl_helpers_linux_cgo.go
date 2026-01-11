@@ -15,6 +15,12 @@ import (
 	"unsafe"
 )
 
+// RTLD flags for dlopen - using C constants from dlfcn.h
+const (
+	RTLD_NOW    = C.RTLD_NOW
+	RTLD_GLOBAL = C.RTLD_GLOBAL
+)
+
 func dlopenLibrary(path string, flags int) (uintptr, error) {
 	cpath := C.CString(path)
 	defer C.free(unsafe.Pointer(cpath))
