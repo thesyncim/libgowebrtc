@@ -17,6 +17,60 @@ type cStructLayout struct {
 	offsets map[string]uintptr
 }
 
+func cShimAudioEncoderConfigLayout() cStructLayout {
+	var cCfg C.ShimAudioEncoderConfig
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"SampleRate": unsafe.Offsetof(cCfg.sample_rate),
+			"Channels":   unsafe.Offsetof(cCfg.channels),
+			"BitrateBps": unsafe.Offsetof(cCfg.bitrate_bps),
+		},
+	}
+}
+
+func cShimBandwidthEstimateLayout() cStructLayout {
+	var cCfg C.ShimBandwidthEstimate
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"TimestampUs":      unsafe.Offsetof(cCfg.timestamp_us),
+			"TargetBitrateBps": unsafe.Offsetof(cCfg.target_bitrate_bps),
+			"AvailableSendBps": unsafe.Offsetof(cCfg.available_send_bps),
+			"AvailableRecvBps": unsafe.Offsetof(cCfg.available_recv_bps),
+			"PacingRateBps":    unsafe.Offsetof(cCfg.pacing_rate_bps),
+			"CongestionWindow": unsafe.Offsetof(cCfg.congestion_window),
+			"LossRate":         unsafe.Offsetof(cCfg.loss_rate),
+		},
+	}
+}
+
+func cShimCodecCapabilityLayout() cStructLayout {
+	var cCfg C.ShimCodecCapability
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"MimeType":    unsafe.Offsetof(cCfg.mime_type),
+			"ClockRate":   unsafe.Offsetof(cCfg.clock_rate),
+			"Channels":    unsafe.Offsetof(cCfg.channels),
+			"SDPFmtpLine": unsafe.Offsetof(cCfg.sdp_fmtp_line),
+			"PayloadType": unsafe.Offsetof(cCfg.payload_type),
+		},
+	}
+}
+
+func cShimDeviceInfoLayout() cStructLayout {
+	var cCfg C.ShimDeviceInfo
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"deviceID": unsafe.Offsetof(cCfg.device_id),
+			"label":    unsafe.Offsetof(cCfg.label),
+			"kind":     unsafe.Offsetof(cCfg.kind),
+		},
+	}
+}
+
 func cShimErrorBufferLayout() cStructLayout {
 	var cCfg C.ShimErrorBuffer
 	return cStructLayout{
@@ -27,31 +81,27 @@ func cShimErrorBufferLayout() cStructLayout {
 	}
 }
 
-func cShimVideoEncoderConfigLayout() cStructLayout {
-	var cCfg C.ShimVideoEncoderConfig
+func cShimICECandidateLayout() cStructLayout {
+	var cCfg C.ShimICECandidate
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"Width":            unsafe.Offsetof(cCfg.width),
-			"Height":           unsafe.Offsetof(cCfg.height),
-			"BitrateBps":       unsafe.Offsetof(cCfg.bitrate_bps),
-			"Framerate":        unsafe.Offsetof(cCfg.framerate),
-			"KeyframeInterval": unsafe.Offsetof(cCfg.keyframe_interval),
-			"H264Profile":      unsafe.Offsetof(cCfg.h264_profile),
-			"VP9Profile":       unsafe.Offsetof(cCfg.vp9_profile),
-			"PreferHW":         unsafe.Offsetof(cCfg.prefer_hw),
+			"Candidate":     unsafe.Offsetof(cCfg.candidate),
+			"SDPMid":        unsafe.Offsetof(cCfg.sdp_mid),
+			"SDPMLineIndex": unsafe.Offsetof(cCfg.sdp_mline_index),
 		},
 	}
 }
 
-func cShimAudioEncoderConfigLayout() cStructLayout {
-	var cCfg C.ShimAudioEncoderConfig
+func cShimICEServerLayout() cStructLayout {
+	var cCfg C.ShimICEServer
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"SampleRate": unsafe.Offsetof(cCfg.sample_rate),
-			"Channels":   unsafe.Offsetof(cCfg.channels),
-			"BitrateBps": unsafe.Offsetof(cCfg.bitrate_bps),
+			"URLs":       unsafe.Offsetof(cCfg.urls),
+			"URLCount":   unsafe.Offsetof(cCfg.url_count),
+			"Username":   unsafe.Offsetof(cCfg.username),
+			"Credential": unsafe.Offsetof(cCfg.credential),
 		},
 	}
 }
@@ -70,19 +120,6 @@ func cShimPacketizerConfigLayout() cStructLayout {
 	}
 }
 
-func cShimICEServerLayout() cStructLayout {
-	var cCfg C.ShimICEServer
-	return cStructLayout{
-		size: unsafe.Sizeof(cCfg),
-		offsets: map[string]uintptr{
-			"URLs":       unsafe.Offsetof(cCfg.urls),
-			"URLCount":   unsafe.Offsetof(cCfg.url_count),
-			"Username":   unsafe.Offsetof(cCfg.username),
-			"Credential": unsafe.Offsetof(cCfg.credential),
-		},
-	}
-}
-
 func cShimPeerConnectionConfigLayout() cStructLayout {
 	var cCfg C.ShimPeerConnectionConfig
 	return cStructLayout{
@@ -94,57 +131,6 @@ func cShimPeerConnectionConfigLayout() cStructLayout {
 			"BundlePolicy":         unsafe.Offsetof(cCfg.bundle_policy),
 			"RTCPMuxPolicy":        unsafe.Offsetof(cCfg.rtcp_mux_policy),
 			"SDPSemantics":         unsafe.Offsetof(cCfg.sdp_semantics),
-		},
-	}
-}
-
-func cShimSessionDescriptionLayout() cStructLayout {
-	var cCfg C.ShimSessionDescription
-	return cStructLayout{
-		size: unsafe.Sizeof(cCfg),
-		offsets: map[string]uintptr{
-			"Type": unsafe.Offsetof(cCfg._type),
-			"SDP":  unsafe.Offsetof(cCfg.sdp),
-		},
-	}
-}
-
-func cShimICECandidateLayout() cStructLayout {
-	var cCfg C.ShimICECandidate
-	return cStructLayout{
-		size: unsafe.Sizeof(cCfg),
-		offsets: map[string]uintptr{
-			"Candidate":     unsafe.Offsetof(cCfg.candidate),
-			"SDPMid":        unsafe.Offsetof(cCfg.sdp_mid),
-			"SDPMLineIndex": unsafe.Offsetof(cCfg.sdp_mline_index),
-		},
-	}
-}
-
-func cShimRTPEncodingParametersLayout() cStructLayout {
-	var cCfg C.ShimRTPEncodingParameters
-	return cStructLayout{
-		size: unsafe.Sizeof(cCfg),
-		offsets: map[string]uintptr{
-			"RID":                   unsafe.Offsetof(cCfg.rid),
-			"MaxBitrateBps":         unsafe.Offsetof(cCfg.max_bitrate_bps),
-			"MinBitrateBps":         unsafe.Offsetof(cCfg.min_bitrate_bps),
-			"MaxFramerate":          unsafe.Offsetof(cCfg.max_framerate),
-			"ScaleResolutionDownBy": unsafe.Offsetof(cCfg.scale_resolution_down_by),
-			"Active":                unsafe.Offsetof(cCfg.active),
-			"ScalabilityMode":       unsafe.Offsetof(cCfg.scalability_mode),
-		},
-	}
-}
-
-func cShimRTPSendParametersLayout() cStructLayout {
-	var cCfg C.ShimRTPSendParameters
-	return cStructLayout{
-		size: unsafe.Sizeof(cCfg),
-		offsets: map[string]uintptr{
-			"Encodings":     unsafe.Offsetof(cCfg.encodings),
-			"EncodingCount": unsafe.Offsetof(cCfg.encoding_count),
-			"TransactionID": unsafe.Offsetof(cCfg.transaction_id),
 		},
 	}
 }
@@ -198,44 +184,30 @@ func cShimRTCStatsLayout() cStructLayout {
 	}
 }
 
-func cShimCodecCapabilityLayout() cStructLayout {
-	var cCfg C.ShimCodecCapability
+func cShimRTPEncodingParametersLayout() cStructLayout {
+	var cCfg C.ShimRTPEncodingParameters
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"MimeType":    unsafe.Offsetof(cCfg.mime_type),
-			"ClockRate":   unsafe.Offsetof(cCfg.clock_rate),
-			"Channels":    unsafe.Offsetof(cCfg.channels),
-			"SDPFmtpLine": unsafe.Offsetof(cCfg.sdp_fmtp_line),
-			"PayloadType": unsafe.Offsetof(cCfg.payload_type),
+			"RID":                   unsafe.Offsetof(cCfg.rid),
+			"MaxBitrateBps":         unsafe.Offsetof(cCfg.max_bitrate_bps),
+			"MinBitrateBps":         unsafe.Offsetof(cCfg.min_bitrate_bps),
+			"MaxFramerate":          unsafe.Offsetof(cCfg.max_framerate),
+			"ScaleResolutionDownBy": unsafe.Offsetof(cCfg.scale_resolution_down_by),
+			"Active":                unsafe.Offsetof(cCfg.active),
+			"ScalabilityMode":       unsafe.Offsetof(cCfg.scalability_mode),
 		},
 	}
 }
 
-func cShimBandwidthEstimateLayout() cStructLayout {
-	var cCfg C.ShimBandwidthEstimate
+func cShimRTPSendParametersLayout() cStructLayout {
+	var cCfg C.ShimRTPSendParameters
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"TimestampUs":      unsafe.Offsetof(cCfg.timestamp_us),
-			"TargetBitrateBps": unsafe.Offsetof(cCfg.target_bitrate_bps),
-			"AvailableSendBps": unsafe.Offsetof(cCfg.available_send_bps),
-			"AvailableRecvBps": unsafe.Offsetof(cCfg.available_recv_bps),
-			"PacingRateBps":    unsafe.Offsetof(cCfg.pacing_rate_bps),
-			"CongestionWindow": unsafe.Offsetof(cCfg.congestion_window),
-			"LossRate":         unsafe.Offsetof(cCfg.loss_rate),
-		},
-	}
-}
-
-func cShimDeviceInfoLayout() cStructLayout {
-	var cCfg C.ShimDeviceInfo
-	return cStructLayout{
-		size: unsafe.Sizeof(cCfg),
-		offsets: map[string]uintptr{
-			"deviceID": unsafe.Offsetof(cCfg.device_id),
-			"label":    unsafe.Offsetof(cCfg.label),
-			"kind":     unsafe.Offsetof(cCfg.kind),
+			"Encodings":     unsafe.Offsetof(cCfg.encodings),
+			"EncodingCount": unsafe.Offsetof(cCfg.encoding_count),
+			"TransactionID": unsafe.Offsetof(cCfg.transaction_id),
 		},
 	}
 }
@@ -248,6 +220,34 @@ func cShimScreenInfoLayout() cStructLayout {
 			"id":       unsafe.Offsetof(cCfg.id),
 			"title":    unsafe.Offsetof(cCfg.title),
 			"isWindow": unsafe.Offsetof(cCfg.is_window),
+		},
+	}
+}
+
+func cShimSessionDescriptionLayout() cStructLayout {
+	var cCfg C.ShimSessionDescription
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"Type": unsafe.Offsetof(cCfg._type),
+			"SDP":  unsafe.Offsetof(cCfg.sdp),
+		},
+	}
+}
+
+func cShimVideoEncoderConfigLayout() cStructLayout {
+	var cCfg C.ShimVideoEncoderConfig
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"Width":            unsafe.Offsetof(cCfg.width),
+			"Height":           unsafe.Offsetof(cCfg.height),
+			"BitrateBps":       unsafe.Offsetof(cCfg.bitrate_bps),
+			"Framerate":        unsafe.Offsetof(cCfg.framerate),
+			"KeyframeInterval": unsafe.Offsetof(cCfg.keyframe_interval),
+			"H264Profile":      unsafe.Offsetof(cCfg.h264_profile),
+			"VP9Profile":       unsafe.Offsetof(cCfg.vp9_profile),
+			"PreferHW":         unsafe.Offsetof(cCfg.prefer_hw),
 		},
 	}
 }

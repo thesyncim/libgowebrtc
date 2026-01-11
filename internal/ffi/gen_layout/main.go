@@ -7,15 +7,22 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"go/ast"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"sort"
+	"strings"
 )
 
 type fieldSpec struct {
-	CName string
+	CName  string
 	GoName string
 }
 
@@ -25,214 +32,514 @@ type structSpec struct {
 	Fields []fieldSpec
 }
 
-var structSpecs = []structSpec{
-	{
-		CName:  "ShimErrorBuffer",
-		GoType: "ShimErrorBuffer",
-		Fields: []fieldSpec{
-			{CName: "message", GoName: "Message"},
-		},
-	},
-	{
-		CName:  "ShimVideoEncoderConfig",
-		GoType: "VideoEncoderConfig",
-		Fields: []fieldSpec{
-			{CName: "width", GoName: "Width"},
-			{CName: "height", GoName: "Height"},
-			{CName: "bitrate_bps", GoName: "BitrateBps"},
-			{CName: "framerate", GoName: "Framerate"},
-			{CName: "keyframe_interval", GoName: "KeyframeInterval"},
-			{CName: "h264_profile", GoName: "H264Profile"},
-			{CName: "vp9_profile", GoName: "VP9Profile"},
-			{CName: "prefer_hw", GoName: "PreferHW"},
-		},
-	},
-	{
-		CName:  "ShimAudioEncoderConfig",
-		GoType: "AudioEncoderConfig",
-		Fields: []fieldSpec{
-			{CName: "sample_rate", GoName: "SampleRate"},
-			{CName: "channels", GoName: "Channels"},
-			{CName: "bitrate_bps", GoName: "BitrateBps"},
-		},
-	},
-	{
-		CName:  "ShimPacketizerConfig",
-		GoType: "PacketizerConfig",
-		Fields: []fieldSpec{
-			{CName: "codec", GoName: "Codec"},
-			{CName: "ssrc", GoName: "SSRC"},
-			{CName: "payload_type", GoName: "PayloadType"},
-			{CName: "mtu", GoName: "MTU"},
-			{CName: "clock_rate", GoName: "ClockRate"},
-		},
-	},
-	{
-		CName:  "ShimICEServer",
-		GoType: "ICEServerConfig",
-		Fields: []fieldSpec{
-			{CName: "urls", GoName: "URLs"},
-			{CName: "url_count", GoName: "URLCount"},
-			{CName: "username", GoName: "Username"},
-			{CName: "credential", GoName: "Credential"},
-		},
-	},
-	{
-		CName:  "ShimPeerConnectionConfig",
-		GoType: "PeerConnectionConfig",
-		Fields: []fieldSpec{
-			{CName: "ice_servers", GoName: "ICEServers"},
-			{CName: "ice_server_count", GoName: "ICEServerCount"},
-			{CName: "ice_candidate_pool_size", GoName: "ICECandidatePoolSize"},
-			{CName: "bundle_policy", GoName: "BundlePolicy"},
-			{CName: "rtcp_mux_policy", GoName: "RTCPMuxPolicy"},
-			{CName: "sdp_semantics", GoName: "SDPSemantics"},
-		},
-	},
-	{
-		CName:  "ShimSessionDescription",
-		GoType: "shimSessionDescription",
-		Fields: []fieldSpec{
-			{CName: "type", GoName: "Type"},
-			{CName: "sdp", GoName: "SDP"},
-		},
-	},
-	{
-		CName:  "ShimICECandidate",
-		GoType: "shimICECandidate",
-		Fields: []fieldSpec{
-			{CName: "candidate", GoName: "Candidate"},
-			{CName: "sdp_mid", GoName: "SDPMid"},
-			{CName: "sdp_mline_index", GoName: "SDPMLineIndex"},
-		},
-	},
-	{
-		CName:  "ShimRTPEncodingParameters",
-		GoType: "RTPEncodingParameters",
-		Fields: []fieldSpec{
-			{CName: "rid", GoName: "RID"},
-			{CName: "max_bitrate_bps", GoName: "MaxBitrateBps"},
-			{CName: "min_bitrate_bps", GoName: "MinBitrateBps"},
-			{CName: "max_framerate", GoName: "MaxFramerate"},
-			{CName: "scale_resolution_down_by", GoName: "ScaleResolutionDownBy"},
-			{CName: "active", GoName: "Active"},
-			{CName: "scalability_mode", GoName: "ScalabilityMode"},
-		},
-	},
-	{
-		CName:  "ShimRTPSendParameters",
-		GoType: "RTPSendParameters",
-		Fields: []fieldSpec{
-			{CName: "encodings", GoName: "Encodings"},
-			{CName: "encoding_count", GoName: "EncodingCount"},
-			{CName: "transaction_id", GoName: "TransactionID"},
-		},
-	},
-	{
-		CName:  "ShimRTCStats",
-		GoType: "RTCStats",
-		Fields: []fieldSpec{
-			{CName: "timestamp_us", GoName: "TimestampUs"},
-			{CName: "bytes_sent", GoName: "BytesSent"},
-			{CName: "bytes_received", GoName: "BytesReceived"},
-			{CName: "packets_sent", GoName: "PacketsSent"},
-			{CName: "packets_received", GoName: "PacketsReceived"},
-			{CName: "packets_lost", GoName: "PacketsLost"},
-			{CName: "round_trip_time_ms", GoName: "RoundTripTimeMs"},
-			{CName: "jitter_ms", GoName: "JitterMs"},
-			{CName: "available_outgoing_bitrate", GoName: "AvailableOutgoingBitrate"},
-			{CName: "available_incoming_bitrate", GoName: "AvailableIncomingBitrate"},
-			{CName: "current_rtt_ms", GoName: "CurrentRTTMs"},
-			{CName: "total_rtt_ms", GoName: "TotalRTTMs"},
-			{CName: "responses_received", GoName: "ResponsesReceived"},
-			{CName: "frames_encoded", GoName: "FramesEncoded"},
-			{CName: "frames_decoded", GoName: "FramesDecoded"},
-			{CName: "frames_dropped", GoName: "FramesDropped"},
-			{CName: "key_frames_encoded", GoName: "KeyFramesEncoded"},
-			{CName: "key_frames_decoded", GoName: "KeyFramesDecoded"},
-			{CName: "nack_count", GoName: "NACKCount"},
-			{CName: "pli_count", GoName: "PLICount"},
-			{CName: "fir_count", GoName: "FIRCount"},
-			{CName: "qp_sum", GoName: "QPSum"},
-			{CName: "audio_level", GoName: "AudioLevel"},
-			{CName: "total_audio_energy", GoName: "TotalAudioEnergy"},
-			{CName: "concealment_events", GoName: "ConcealmentEvents"},
-			{CName: "data_channels_opened", GoName: "DataChannelsOpened"},
-			{CName: "data_channels_closed", GoName: "DataChannelsClosed"},
-			{CName: "messages_sent", GoName: "MessagesSent"},
-			{CName: "messages_received", GoName: "MessagesReceived"},
-			{CName: "bytes_sent_data_channel", GoName: "BytesSentDataChannel"},
-			{CName: "bytes_received_data_channel", GoName: "BytesReceivedDataChannel"},
-			{CName: "quality_limitation_reason", GoName: "QualityLimitationReason"},
-			{CName: "quality_limitation_duration_ms", GoName: "QualityLimitationDurationMs"},
-			{CName: "remote_packets_lost", GoName: "RemotePacketsLost"},
-			{CName: "remote_jitter_ms", GoName: "RemoteJitterMs"},
-			{CName: "remote_round_trip_time_ms", GoName: "RemoteRoundTripTimeMs"},
-			{CName: "jitter_buffer_delay_ms", GoName: "JitterBufferDelayMs"},
-			{CName: "jitter_buffer_target_delay_ms", GoName: "JitterBufferTargetDelayMs"},
-			{CName: "jitter_buffer_minimum_delay_ms", GoName: "JitterBufferMinimumDelayMs"},
-			{CName: "jitter_buffer_emitted_count", GoName: "JitterBufferEmittedCount"},
-		},
-	},
-	{
-		CName:  "ShimCodecCapability",
-		GoType: "CodecCapability",
-		Fields: []fieldSpec{
-			{CName: "mime_type", GoName: "MimeType"},
-			{CName: "clock_rate", GoName: "ClockRate"},
-			{CName: "channels", GoName: "Channels"},
-			{CName: "sdp_fmtp_line", GoName: "SDPFmtpLine"},
-			{CName: "payload_type", GoName: "PayloadType"},
-		},
-	},
-	{
-		CName:  "ShimBandwidthEstimate",
-		GoType: "BandwidthEstimate",
-		Fields: []fieldSpec{
-			{CName: "timestamp_us", GoName: "TimestampUs"},
-			{CName: "target_bitrate_bps", GoName: "TargetBitrateBps"},
-			{CName: "available_send_bps", GoName: "AvailableSendBps"},
-			{CName: "available_recv_bps", GoName: "AvailableRecvBps"},
-			{CName: "pacing_rate_bps", GoName: "PacingRateBps"},
-			{CName: "congestion_window", GoName: "CongestionWindow"},
-			{CName: "loss_rate", GoName: "LossRate"},
-		},
-	},
-	{
-		CName:  "ShimDeviceInfo",
-		GoType: "shimDeviceInfo",
-		Fields: []fieldSpec{
-			{CName: "device_id", GoName: "deviceID"},
-			{CName: "label", GoName: "label"},
-			{CName: "kind", GoName: "kind"},
-		},
-	},
-	{
-		CName:  "ShimScreenInfo",
-		GoType: "shimScreenInfo",
-		Fields: []fieldSpec{
-			{CName: "id", GoName: "id"},
-			{CName: "title", GoName: "title"},
-			{CName: "is_window", GoName: "isWindow"},
-		},
-	},
+type cStructSpec struct {
+	Name   string
+	Fields []string
 }
 
-var testLocalTypes = map[string]string{
-	"shimSessionDescription": "type shimSessionDescription struct {\n\tType int32\n\tSDP  *byte\n}\n",
-	"shimICECandidate": "type shimICECandidate struct {\n\tCandidate     *byte\n\tSDPMid        *byte\n\tSDPMLineIndex int32\n}\n",
+type goStructSpec struct {
+	Name   string
+	Fields []string
+	Doc    string
+}
+
+type genPaths struct {
+	ffiDir     string
+	shimHeader string
+}
+
+var (
+	cFieldNameRE = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*$`)
+	shimNameRE   = regexp.MustCompile(`\bShim[A-Za-z0-9_]+`)
+)
+
+var initialisms = map[string]string{
+	"id":   "ID",
+	"url":  "URL",
+	"urls": "URLs",
+	"sdp":  "SDP",
+	"rtp":  "RTP",
+	"rtcp": "RTCP",
+	"rtc":  "RTC",
+	"rtt":  "RTT",
+	"ice":  "ICE",
+	"ssrc": "SSRC",
+	"mtu":  "MTU",
+	"h264": "H264",
+	"vp8":  "VP8",
+	"vp9":  "VP9",
+	"av1":  "AV1",
+	"rid":  "RID",
+	"nack": "NACK",
+	"pli":  "PLI",
+	"fir":  "FIR",
+	"qp":   "QP",
+	"hw":   "HW",
+}
+
+var specialTokens = map[string]string{
+	"mline": "MLine",
 }
 
 func main() {
-	outDir := ".."
-	if err := writeGoFile(filepath.Join(outDir, "struct_layout_cgo.go"), generateLayoutGo(structSpecs)); err != nil {
+	paths, err := resolvePaths()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving generator paths: %v\n", err)
+		os.Exit(1)
+	}
+
+	cStructs, err := parseShimStructs(paths.shimHeader)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing shim header: %v\n", err)
+		os.Exit(1)
+	}
+
+	goStructs, err := parseGoStructs(paths.ffiDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing Go structs: %v\n", err)
+		os.Exit(1)
+	}
+
+	structSpecs, err := buildStructSpecs(cStructs, goStructs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error building struct specs: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := writeGoFile(filepath.Join(paths.ffiDir, "struct_layout_cgo.go"), generateLayoutGo(structSpecs)); err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating struct_layout_cgo.go: %v\n", err)
 		os.Exit(1)
 	}
-	if err := writeGoFile(filepath.Join(outDir, "struct_layout_cgo_test.go"), generateLayoutTestGo(structSpecs)); err != nil {
+
+	if err := writeGoFile(filepath.Join(paths.ffiDir, "struct_layout_cgo_test.go"), generateLayoutTestGo(structSpecs)); err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating struct_layout_cgo_test.go: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func resolvePaths() (genPaths, error) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return genPaths{}, errors.New("unable to resolve generator path")
+	}
+	genDir := filepath.Dir(thisFile)
+	ffiDir := filepath.Dir(genDir)
+	repoRoot := filepath.Dir(filepath.Dir(ffiDir))
+	shimHeader := filepath.Join(repoRoot, "shim", "shim.h")
+	return genPaths{ffiDir: ffiDir, shimHeader: shimHeader}, nil
+}
+
+func parseShimStructs(path string) (map[string]cStructSpec, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	src := stripCComments(string(data))
+	structs := make(map[string]cStructSpec)
+	for idx := 0; idx < len(src); {
+		pos := strings.Index(src[idx:], "typedef struct")
+		if pos == -1 {
+			break
+		}
+		pos += idx
+
+		brace := strings.Index(src[pos:], "{")
+		semi := strings.Index(src[pos:], ";")
+		if brace == -1 || (semi != -1 && semi < brace) {
+			if semi == -1 {
+				break
+			}
+			idx = pos + semi + 1
+			continue
+		}
+		brace += pos
+
+		end, err := findMatchingBrace(src, brace)
+		if err != nil {
+			return nil, err
+		}
+
+		body := src[brace+1 : end]
+		name, next := readIdentifier(src, end+1)
+		if name == "" {
+			return nil, fmt.Errorf("unable to parse struct name near offset %d", end)
+		}
+
+		fields := parseCStructFields(body)
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("no fields found for struct %s", name)
+		}
+		structs[name] = cStructSpec{Name: name, Fields: fields}
+		idx = next
+	}
+
+	if len(structs) == 0 {
+		return nil, fmt.Errorf("no structs found in %s", path)
+	}
+	return structs, nil
+}
+
+func parseGoStructs(dir string) (map[string]goStructSpec, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	fset := token.NewFileSet()
+	specs := make(map[string]goStructSpec)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		path := filepath.Join(dir, name)
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", path, err)
+		}
+
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range genDecl.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+				structType, ok := typeSpec.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+				fields := structFieldNames(structType)
+				doc := docText(typeSpec.Doc, genDecl.Doc)
+				specs[typeSpec.Name.Name] = goStructSpec{
+					Name:   typeSpec.Name.Name,
+					Fields: fields,
+					Doc:    doc,
+				}
+			}
+		}
+	}
+
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("no Go structs found in %s", dir)
+	}
+	return specs, nil
+}
+
+func buildStructSpecs(cStructs map[string]cStructSpec, goStructs map[string]goStructSpec) ([]structSpec, error) {
+	mapped := make(map[string]structSpec)
+	for _, goSpec := range goStructs {
+		cName, err := matchCStructName(goSpec, cStructs)
+		if err != nil {
+			return nil, err
+		}
+		if cName == "" {
+			continue
+		}
+
+		cSpec := cStructs[cName]
+		spec, err := mapStructFields(cSpec, goSpec)
+		if err != nil {
+			return nil, err
+		}
+		mapped[cName] = spec
+	}
+
+	var missing []string
+	for name := range cStructs {
+		if _, ok := mapped[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return nil, fmt.Errorf("missing Go struct matches for: %s", strings.Join(missing, ", "))
+	}
+
+	names := make([]string, 0, len(mapped))
+	for name := range mapped {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	out := make([]structSpec, 0, len(names))
+	for _, name := range names {
+		out = append(out, mapped[name])
+	}
+	return out, nil
+}
+
+func matchCStructName(goSpec goStructSpec, cStructs map[string]cStructSpec) (string, error) {
+	if shimName := shimNameFromDoc(goSpec.Doc); shimName != "" {
+		if _, ok := cStructs[shimName]; !ok {
+			return "", fmt.Errorf("struct %s references %s but it is not in shim.h", goSpec.Name, shimName)
+		}
+		return shimName, nil
+	}
+
+	if _, ok := cStructs[goSpec.Name]; ok {
+		return goSpec.Name, nil
+	}
+
+	if strings.HasPrefix(goSpec.Name, "shim") {
+		candidate := "Shim" + goSpec.Name[len("shim"):]
+		if _, ok := cStructs[candidate]; ok {
+			return candidate, nil
+		}
+	}
+
+	return "", nil
+}
+
+func mapStructFields(cSpec cStructSpec, goSpec goStructSpec) (structSpec, error) {
+	goFields := make(map[string]struct{}, len(goSpec.Fields))
+	for _, name := range goSpec.Fields {
+		goFields[name] = struct{}{}
+	}
+
+	matched := make(map[string]struct{}, len(goSpec.Fields))
+	fields := make([]fieldSpec, 0, len(cSpec.Fields))
+	for _, cField := range cSpec.Fields {
+		goName, ok := matchGoField(cField, goFields)
+		if !ok {
+			return structSpec{}, fmt.Errorf("%s: no Go field matches C field %q", cSpec.Name, cField)
+		}
+		fields = append(fields, fieldSpec{CName: cField, GoName: goName})
+		matched[goName] = struct{}{}
+	}
+
+	var extra []string
+	for name := range goFields {
+		if _, ok := matched[name]; !ok {
+			extra = append(extra, name)
+		}
+	}
+	if len(extra) > 0 {
+		sort.Strings(extra)
+		return structSpec{}, fmt.Errorf("%s: Go fields not present in C: %s", cSpec.Name, strings.Join(extra, ", "))
+	}
+
+	return structSpec{CName: cSpec.Name, GoType: goSpec.Name, Fields: fields}, nil
+}
+
+func matchGoField(cField string, goFields map[string]struct{}) (string, bool) {
+	for _, candidate := range cFieldCandidates(cField) {
+		if _, ok := goFields[candidate]; ok {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func cFieldCandidates(cField string) []string {
+	parts := strings.Split(cField, "_")
+	candInit := tokensToGo(parts, true)
+	candTitle := tokensToGo(parts, false)
+
+	candidates := []string{
+		candInit,
+		lowerFirst(candInit),
+		candTitle,
+		lowerFirst(candTitle),
+	}
+	return uniqueStrings(candidates)
+}
+
+func tokensToGo(tokens []string, useInitialisms bool) string {
+	var b strings.Builder
+	for _, token := range tokens {
+		lower := strings.ToLower(token)
+		if useInitialisms {
+			if mapped, ok := specialTokens[lower]; ok {
+				b.WriteString(mapped)
+				continue
+			}
+			if mapped, ok := initialisms[lower]; ok {
+				b.WriteString(mapped)
+				continue
+			}
+		}
+		b.WriteString(titleCase(lower))
+	}
+	return b.String()
+}
+
+func titleCase(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func lowerFirst(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToLower(s[:1]) + s[1:]
+}
+
+func uniqueStrings(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, item := range in {
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func shimNameFromDoc(doc string) string {
+	if doc == "" {
+		return ""
+	}
+	if !strings.Contains(strings.ToLower(doc), "matches") {
+		return ""
+	}
+	return shimNameRE.FindString(doc)
+}
+
+func docText(typeDoc, declDoc *ast.CommentGroup) string {
+	if typeDoc != nil {
+		return strings.TrimSpace(typeDoc.Text())
+	}
+	if declDoc != nil {
+		return strings.TrimSpace(declDoc.Text())
+	}
+	return ""
+}
+
+func structFieldNames(st *ast.StructType) []string {
+	fields := make([]string, 0, len(st.Fields.List))
+	for _, field := range st.Fields.List {
+		if len(field.Names) == 0 {
+			continue
+		}
+		for _, name := range field.Names {
+			if name.Name == "_" {
+				continue
+			}
+			fields = append(fields, name.Name)
+		}
+	}
+	return fields
+}
+
+func stripCComments(src string) string {
+	var out strings.Builder
+	inLine := false
+	inBlock := false
+
+	for i := 0; i < len(src); i++ {
+		if inLine {
+			if src[i] == '\n' {
+				inLine = false
+				out.WriteByte(src[i])
+			}
+			continue
+		}
+		if inBlock {
+			if i+1 < len(src) && src[i] == '*' && src[i+1] == '/' {
+				inBlock = false
+				i++
+			}
+			continue
+		}
+		if i+1 < len(src) && src[i] == '/' && src[i+1] == '/' {
+			inLine = true
+			i++
+			continue
+		}
+		if i+1 < len(src) && src[i] == '/' && src[i+1] == '*' {
+			inBlock = true
+			i++
+			continue
+		}
+		out.WriteByte(src[i])
+	}
+
+	return out.String()
+}
+
+func findMatchingBrace(src string, start int) (int, error) {
+	depth := 0
+	for i := start; i < len(src); i++ {
+		switch src[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i, nil
+			}
+		}
+	}
+	return 0, errors.New("unbalanced braces in shim header")
+}
+
+func readIdentifier(src string, start int) (string, int) {
+	i := start
+	for i < len(src) && isSpace(src[i]) {
+		i++
+	}
+	j := i
+	for j < len(src) && isIdentChar(src[j]) {
+		j++
+	}
+	return src[i:j], j
+}
+
+func isSpace(b byte) bool {
+	return b == ' ' || b == '\n' || b == '\t' || b == '\r'
+}
+
+func isIdentChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
+}
+
+func parseCStructFields(body string) []string {
+	parts := strings.Split(body, ";")
+	fields := make([]string, 0, len(parts))
+	for _, part := range parts {
+		name, ok := parseCFieldName(part)
+		if !ok {
+			continue
+		}
+		fields = append(fields, name)
+	}
+	return fields
+}
+
+func parseCFieldName(decl string) (string, bool) {
+	decl = strings.TrimSpace(decl)
+	if decl == "" {
+		return "", false
+	}
+	if strings.HasPrefix(decl, "#") {
+		return "", false
+	}
+	if idx := strings.Index(decl, "["); idx != -1 {
+		decl = decl[:idx]
+	}
+	decl = strings.TrimSpace(decl)
+	name := cFieldNameRE.FindString(decl)
+	if name == "" {
+		return "", false
+	}
+	return name, true
 }
 
 func generateLayoutGo(specs []structSpec) []byte {
@@ -292,12 +599,6 @@ import (
 
 `)
 
-	usedLocalTypes := collectLocalTypes(specs)
-	for _, typeName := range usedLocalTypes {
-		buf.WriteString(testLocalTypes[typeName])
-		buf.WriteString("\n")
-	}
-
 	buf.WriteString("// TestShimStructLayoutCgo compares Go struct layouts against the C shim headers.\n")
 	buf.WriteString("func TestShimStructLayoutCgo(t *testing.T) {\n")
 	for _, spec := range specs {
@@ -333,25 +634,10 @@ func layoutFuncName(cName string) string {
 }
 
 func cgoFieldName(cName string) string {
-	if cName == "type" {
-		return "_type"
+	if token.Lookup(cName) != token.IDENT {
+		return "_" + cName
 	}
 	return cName
-}
-
-func collectLocalTypes(specs []structSpec) []string {
-	seen := make(map[string]struct{})
-	for _, spec := range specs {
-		if _, ok := testLocalTypes[spec.GoType]; ok {
-			seen[spec.GoType] = struct{}{}
-		}
-	}
-	out := make([]string, 0, len(seen))
-	for name := range seen {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
 }
 
 func writeGoFile(path string, data []byte) error {

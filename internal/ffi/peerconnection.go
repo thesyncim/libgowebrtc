@@ -933,7 +933,7 @@ const (
 	QualityLimitationOther     = 3
 )
 
-// CodecCapability represents a supported codec.
+// CodecCapability matches ShimCodecCapability in shim.h.
 type CodecCapability struct {
 	MimeType    [64]byte
 	ClockRate   int32
@@ -942,7 +942,7 @@ type CodecCapability struct {
 	PayloadType int32
 }
 
-// BandwidthEstimate represents bandwidth estimation info.
+// BandwidthEstimate matches ShimBandwidthEstimate in shim.h.
 type BandwidthEstimate struct {
 	TimestampUs      int64
 	TargetBitrateBps int64

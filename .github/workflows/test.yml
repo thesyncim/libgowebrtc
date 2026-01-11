@@ -37,13 +37,57 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect shim changes
+        id: shim_changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shim:
+              - 'shim/**'
+              - 'scripts/build.sh'
+              - 'BUILD.bazel'
+              - 'MODULE.bazel'
+              - 'MODULE.bazel.lock'
+              - 'bazel/**'
+              - '.bazelrc'
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      - name: Setup Bazelisk
+        if: steps.shim_changes.outputs.shim == 'true'
+        uses: bazel-contrib/setup-bazel@0.9.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ matrix.platform }}
+          repository-cache: true
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux' && steps.shim_changes.outputs.shim == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
+            libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
+            libglib2.0-dev libgbm-dev libdrm-dev
+
+      - name: Build shim (Unix)
+        if: runner.os != 'Windows' && steps.shim_changes.outputs.shim == 'true'
+        run: ./scripts/build.sh
+        env:
+          INSTALL_DIR: ${{ runner.temp }}/libwebrtc
+
+      - name: Build shim (Windows)
+        if: runner.os == 'Windows' && steps.shim_changes.outputs.shim == 'true'
+        shell: bash
+        run: ./scripts/build.sh
+        env:
+          INSTALL_DIR: ${{ runner.temp }}/libwebrtc
+
       - name: Download pre-built shim (Unix)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && steps.shim_changes.outputs.shim != 'true'
         run: |
           mkdir -p lib/${{ matrix.platform }}
           curl -fsSL --retry 10 --retry-delay 20 --retry-all-errors \
@@ -52,7 +96,7 @@ jobs:
           ls -la lib/${{ matrix.platform }}/
 
       - name: Download pre-built shim (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.shim_changes.outputs.shim != 'true'
         shell: bash
         run: |
           mkdir -p lib/${{ matrix.platform }}
@@ -101,6 +145,19 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Detect shim changes
+        id: shim_changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shim:
+              - 'shim/**'
+              - 'scripts/build.sh'
+              - 'BUILD.bazel'
+              - 'MODULE.bazel'
+              - 'MODULE.bazel.lock'
+              - 'bazel/**'
+              - '.bazelrc'
 
       - name: Setup Go (x86_64 via Rosetta)
         run: |
@@ -110,7 +167,22 @@ jobs:
           sudo tar -C /usr/local/go-amd64 -xzf go.tar.gz --strip-components=1
           rm go.tar.gz
 
+      - name: Setup Bazelisk
+        if: steps.shim_changes.outputs.shim == 'true'
+        uses: bazel-contrib/setup-bazel@0.9.0
+        with:
+          bazelisk-cache: true
+          disk-cache: darwin_amd64
+          repository-cache: true
+
+      - name: Build shim (darwin_amd64)
+        if: steps.shim_changes.outputs.shim == 'true'
+        run: ./scripts/build.sh --target darwin_amd64
+        env:
+          INSTALL_DIR: ${{ runner.temp }}/libwebrtc
+
       - name: Download pre-built shim
+        if: steps.shim_changes.outputs.shim != 'true'
         run: |
           mkdir -p lib/darwin_amd64
           curl -fsSL --retry 10 --retry-delay 20 --retry-all-errors \

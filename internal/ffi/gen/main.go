@@ -14,6 +14,7 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -36,8 +37,14 @@ type FuncDefs struct {
 }
 
 func main() {
+	paths, err := resolvePaths()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving generator paths: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Read function definitions
-	data, err := os.ReadFile("funcs.json")
+	data, err := os.ReadFile(paths.funcsJSON)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading funcs.json: %v\n", err)
 		os.Exit(1)
@@ -49,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	outDir := ".."
+	outDir := paths.ffiDir
 
 	// Generate all files
 	if err := generateFuncVars(defs, outDir); err != nil {
@@ -68,6 +75,23 @@ func main() {
 	}
 
 	fmt.Printf("Generated %d function bindings\n", len(defs.Functions))
+}
+
+type genPaths struct {
+	ffiDir    string
+	funcsJSON string
+}
+
+func resolvePaths() (genPaths, error) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return genPaths{}, fmt.Errorf("unable to resolve generator path")
+	}
+	genDir := filepath.Dir(thisFile)
+	return genPaths{
+		ffiDir:    filepath.Dir(genDir),
+		funcsJSON: filepath.Join(genDir, "funcs.json"),
+	}, nil
 }
 
 // generateFuncVars generates the shared function variable declarations
