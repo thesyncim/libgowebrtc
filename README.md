@@ -79,34 +79,25 @@ Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 
 ### Building the Shim
 
-The shim is built using Bazel. The build script downloads pre-compiled libwebrtc
-from [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) (~165MB)
-and builds the shim.
+The shim is built using Bazel with pre-compiled libwebrtc from
+[crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) (~165MB).
 
 ```bash
-# Build shim (downloads libwebrtc + builds shim)
+# Build for current platform
 ./scripts/build.sh
 
-# Clean and rebuild
-./scripts/build.sh --clean
+# Cross-compile all platforms via Docker and create release
+./scripts/release.sh
 
-# Create release tarball
-./scripts/build.sh --release
+# Build all and upload to GitHub release
+./scripts/release.sh --upload shim-v0.4.0
 ```
 
 Environment variables:
 - `LIBWEBRTC_VERSION` - Pre-compiled version (default: 141.7390.2.0)
 - `INSTALL_DIR` - Where to cache libwebrtc (default: ~/libwebrtc)
 
-Or use Bazel directly:
-
-```bash
-# Build shim (requires LIBWEBRTC_DIR or ~/libwebrtc)
-bazel build //shim:webrtc_shim --config=darwin_arm64
-bazel build //shim:webrtc_shim --config=linux_amd64
-```
-
-Supported platforms: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`
+Supported platforms: `darwin_arm64`, `linux_amd64`, `linux_arm64`
 
 ## Quick Start
 
@@ -344,9 +335,8 @@ The Go layer and FFI bindings are complete for all WebRTC functionality. Bazel b
 | Platform | Status |
 |----------|--------|
 | darwin_arm64 | ✅ Working |
-| darwin_amd64 | ✅ CI Ready |
-| linux_amd64 | ✅ CI Ready |
-| linux_arm64 | ✅ CI Ready |
+| linux_amd64 | ✅ Working |
+| linux_arm64 | ✅ Working |
 
 ## SVC & Simulcast
 
