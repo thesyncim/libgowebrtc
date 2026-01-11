@@ -10,8 +10,15 @@ build:macos --host_crosstool_top=@local_config_apple_cc//:toolchain
 # C++ settings (Unix)
 build:macos --cxxopt=-std=c++17
 build:macos --host_cxxopt=-std=c++17
+# Linux: use clang with libc++ to match libwebrtc which is built with clang/libc++
+build:linux --repo_env=CC=clang
+build:linux --repo_env=CXX=clang++
 build:linux --cxxopt=-std=c++17
+build:linux --cxxopt=-stdlib=libc++
 build:linux --host_cxxopt=-std=c++17
+build:linux --host_cxxopt=-stdlib=libc++
+build:linux --linkopt=-stdlib=libc++
+build:linux --linkopt=-fuse-ld=lld
 
 # C++ settings (Windows MSVC)
 build:windows --cxxopt=/std:c++17

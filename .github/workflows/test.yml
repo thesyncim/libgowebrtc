@@ -68,10 +68,33 @@ jobs:
         if: runner.os == 'Linux' && steps.shim_changes.outputs.shim == 'true'
         run: |
           sudo apt-get update
+          # Install clang and libc++ for building (libwebrtc is built with clang/libc++)
+          # Try versioned packages first (Ubuntu 22.04/24.04)
+          LLVM_VERSION=$(apt-cache search '^clang-[0-9]+$' | sort -V | tail -1 | grep -oP 'clang-\K[0-9]+' || echo "")
+          if [ -n "$LLVM_VERSION" ]; then
+            echo "Installing clang-${LLVM_VERSION} and libc++-${LLVM_VERSION}..."
+            sudo apt-get install -y \
+              clang-${LLVM_VERSION} \
+              libc++-${LLVM_VERSION}-dev \
+              libc++abi-${LLVM_VERSION}-dev \
+              lld-${LLVM_VERSION} || true
+            # Create symlinks if needed
+            sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${LLVM_VERSION} 100 || true
+            sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${LLVM_VERSION} 100 || true
+          else
+            echo "Installing unversioned clang and libc++..."
+            sudo apt-get install -y clang libc++-dev libc++abi-dev lld || true
+          fi
+          # Install X11 and other dependencies
           sudo apt-get install -y \
             libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
             libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
             libglib2.0-dev libgbm-dev libdrm-dev
+          # Verify clang is available
+          echo "=== Clang version ==="
+          clang++ --version || echo "clang++ not found"
+          echo "=== libc++ check ==="
+          ls -la /usr/lib/*/libc++* 2>/dev/null | head -10 || echo "libc++ not found in /usr/lib"
 
       - name: Build shim (Unix)
         if: runner.os != 'Windows' && steps.shim_changes.outputs.shim == 'true'

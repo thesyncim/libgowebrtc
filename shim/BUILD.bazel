@@ -70,8 +70,16 @@ _MACOS_LINKOPTS = [
 ]
 
 # Linux libraries
+# libwebrtc is built with clang/libc++, so we statically link the C++ runtime
+# to avoid runtime dependency on libc++.so which may not be installed
 _LINUX_LINKOPTS = [
+    # Use libc++ as the C++ standard library (matches libwebrtc build)
+    "-stdlib=libc++",
+    # Statically link libc++ and libc++abi to avoid runtime dependency
+    "-static-libstdc++",
     "-Wl,--start-group",
+    "-lc++",
+    "-lc++abi",
     "-lpthread",
     "-ldl",
     "-lrt",
