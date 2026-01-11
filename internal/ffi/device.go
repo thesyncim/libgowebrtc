@@ -254,27 +254,27 @@ func videoCaptureCallbackBridge(
 	width, height int32,
 	yStride, uStride, vStride int32,
 	timestampUs int64,
-) {
+) uintptr {
 	captureRegistryMu.RLock()
 	capture, ok := videoCaptureRegistry[ctx]
 	captureRegistryMu.RUnlock()
 
 	if !ok || capture.callback == nil {
-		return
+		return 0
 	}
 
 	// Bounds validation to prevent integer overflow and invalid memory access
 	if width <= 0 || height <= 0 || width > 16384 || height > 16384 {
-		return
+		return 0
 	}
 	if yStride <= 0 || uStride <= 0 || vStride <= 0 {
-		return
+		return 0
 	}
 	if yStride > 16384 || uStride > 16384 || vStride > 16384 {
-		return
+		return 0
 	}
 	if yPlane == 0 || uPlane == 0 || vPlane == 0 {
-		return
+		return 0
 	}
 
 	// Calculate plane sizes
@@ -286,7 +286,7 @@ func videoCaptureCallbackBridge(
 	// Additional sanity check for total size
 	const maxFrameSize = 64 * 1024 * 1024 // 64MB max
 	if ySize > maxFrameSize || uSize > maxFrameSize || vSize > maxFrameSize {
-		return
+		return 0
 	}
 
 	// Copy data from C memory to Go-managed memory for safety.
@@ -310,6 +310,7 @@ func videoCaptureCallbackBridge(
 	safeCallback(func() {
 		capture.callback(frame)
 	})
+	return 0
 }
 
 // Start begins video capture with the given callback.
@@ -431,21 +432,21 @@ func audioCaptureCallbackBridge(
 	numChannels int32,
 	sampleRate int32,
 	timestampUs int64,
-) {
+) uintptr {
 	captureRegistryMu.RLock()
 	capture, ok := audioCaptureRegistry[ctx]
 	captureRegistryMu.RUnlock()
 
 	if !ok || capture.callback == nil {
-		return
+		return 0
 	}
 
 	// Bounds validation to prevent integer overflow and invalid memory access
 	if numSamples <= 0 || numSamples > 48000 || numChannels <= 0 || numChannels > 8 {
-		return
+		return 0
 	}
 	if samples == 0 {
-		return
+		return 0
 	}
 
 	// Copy data from C memory to Go-managed memory for safety.
@@ -463,6 +464,7 @@ func audioCaptureCallbackBridge(
 	safeCallback(func() {
 		capture.callback(frame)
 	})
+	return 0
 }
 
 // Start begins audio capture with the given callback.
@@ -607,27 +609,27 @@ func screenCaptureCallbackBridge(
 	width, height int32,
 	yStride, uStride, vStride int32,
 	timestampUs int64,
-) {
+) uintptr {
 	captureRegistryMu.RLock()
 	capture, ok := screenCaptureRegistry[ctx]
 	captureRegistryMu.RUnlock()
 
 	if !ok || capture.callback == nil {
-		return
+		return 0
 	}
 
 	// Bounds validation to prevent integer overflow and invalid memory access
 	if width <= 0 || height <= 0 || width > 16384 || height > 16384 {
-		return
+		return 0
 	}
 	if yStride <= 0 || uStride <= 0 || vStride <= 0 {
-		return
+		return 0
 	}
 	if yStride > 16384 || uStride > 16384 || vStride > 16384 {
-		return
+		return 0
 	}
 	if yPlane == 0 || uPlane == 0 || vPlane == 0 {
-		return
+		return 0
 	}
 
 	// Calculate plane sizes
@@ -639,7 +641,7 @@ func screenCaptureCallbackBridge(
 	// Additional sanity check for total size
 	const maxFrameSize = 64 * 1024 * 1024 // 64MB max
 	if ySize > maxFrameSize || uSize > maxFrameSize || vSize > maxFrameSize {
-		return
+		return 0
 	}
 
 	// Copy data from C memory to Go-managed memory for safety.
@@ -663,6 +665,7 @@ func screenCaptureCallbackBridge(
 	safeCallback(func() {
 		capture.callback(frame)
 	})
+	return 0
 }
 
 // Start begins screen capture with the given callback.

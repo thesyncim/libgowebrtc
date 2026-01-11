@@ -122,13 +122,13 @@ type AudioEncoderConfig struct {
 }
 
 // PacketizerConfig matches ShimPacketizerConfig in shim.h
+// C layout: codec(4) + ssrc(4) + pt(1) + pad(1) + mtu(2) + clockrate(4) = 16 bytes
 type PacketizerConfig struct {
 	Codec       int32
 	SSRC        uint32
 	PayloadType uint8
-	_           [3]byte // padding
+	_           byte   // 1 byte padding to align MTU
 	MTU         uint16
-	_           [2]byte // padding
 	ClockRate   uint32
 }
 

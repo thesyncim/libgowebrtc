@@ -7,7 +7,7 @@ on:
 
 env:
   USE_BAZEL_VERSION: '7.4.1'
-  GO_VERSION: '1.23'
+  GO_VERSION: '1.25.x'
 
 jobs:
   build-and-test:
@@ -20,16 +20,15 @@ jobs:
           - os: macos-latest
             platform: darwin_arm64
             extension: dylib
-          # darwin_amd64 requires paid macos-15-large runner (no free Intel macOS runners)
-          # - os: macos-15-large
-          #   platform: darwin_amd64
-          #   extension: dylib
           - os: ubuntu-latest
             platform: linux_amd64
             extension: so
           - os: ubuntu-24.04-arm
             platform: linux_arm64
             extension: so
+          - os: windows-latest
+            platform: windows_amd64
+            extension: dll
     steps:
       - uses: actions/checkout@v4
 
@@ -54,7 +53,15 @@ jobs:
             libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
             libglib2.0-dev libgbm-dev libdrm-dev
 
-      - name: Build shim
+      - name: Build shim (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/build.sh
+        env:
+          INSTALL_DIR: ${{ runner.temp }}/libwebrtc
+
+      - name: Build shim (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
         run: ./scripts/build.sh
         env:
           INSTALL_DIR: ${{ runner.temp }}/libwebrtc
@@ -69,6 +76,7 @@ jobs:
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
       - name: Package artifact
+        shell: bash
         run: |
           mkdir -p dist
           cp lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }} dist/
@@ -90,9 +98,72 @@ jobs:
             libwebrtc_shim_${{ matrix.platform }}.tar.gz
             libwebrtc_shim_${{ matrix.platform }}.tar.gz.sha256
 
+  # Cross-compile darwin_amd64 on ARM64 runner, test with Rosetta
+  build-darwin-amd64:
+    name: darwin_amd64 (cross-compile)
+    runs-on: macos-latest
+    env:
+      GO_AMD64_PATH: /usr/local/go-amd64/bin/go
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go (ARM64 for building)
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Go (x86_64 for testing via Rosetta)
+        run: |
+          curl -fsSL "https://go.dev/dl/go1.25.0.darwin-amd64.tar.gz" -o go-amd64.tar.gz
+          sudo rm -rf /usr/local/go-amd64
+          sudo mkdir -p /usr/local/go-amd64
+          sudo tar -C /usr/local/go-amd64 -xzf go-amd64.tar.gz --strip-components=1
+          rm go-amd64.tar.gz
+          # Verify it's x86_64
+          file /usr/local/go-amd64/bin/go
+
+      - name: Setup Bazelisk
+        uses: bazel-contrib/setup-bazel@0.9.0
+        with:
+          bazelisk-cache: true
+          disk-cache: darwin_amd64
+          repository-cache: true
+
+      - name: Cross-compile shim for Intel Mac
+        run: ./scripts/build.sh --target darwin_amd64
+        env:
+          INSTALL_DIR: ${{ runner.temp }}/libwebrtc_darwin_amd64
+
+      - name: Run tests with Rosetta
+        run: |
+          arch -x86_64 $GO_AMD64_PATH test -v ./pkg/frame/... ./pkg/codec/...
+          arch -x86_64 $GO_AMD64_PATH test -v ./internal/ffi/...
+          arch -x86_64 $GO_AMD64_PATH test -v ./pkg/encoder/... ./pkg/decoder/...
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          cp lib/darwin_amd64/libwebrtc_shim.dylib dist/
+          cp shim/shim.h dist/
+          cp LICENSE dist/ || true
+          cd dist && tar -czf ../libwebrtc_shim_darwin_amd64.tar.gz *
+          cd ..
+          shasum -a 256 libwebrtc_shim_darwin_amd64.tar.gz > libwebrtc_shim_darwin_amd64.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shim-darwin_amd64
+          path: |
+            libwebrtc_shim_darwin_amd64.tar.gz
+            libwebrtc_shim_darwin_amd64.tar.gz.sha256
+
   release:
     name: Release
-    needs: build-and-test
+    needs: [build-and-test, build-darwin-amd64]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -121,8 +192,10 @@ jobs:
 
             Pre-built shim libraries:
             - `darwin_arm64` - macOS Apple Silicon
+            - `darwin_amd64` - macOS Intel
             - `linux_amd64` - Linux x86_64
             - `linux_arm64` - Linux ARM64
+            - `windows_amd64` - Windows x64
 
             ### Usage
 

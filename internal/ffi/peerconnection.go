@@ -58,24 +58,24 @@ func initCallbacks() {
 	// Create the video sink callback
 	// Signature: void(ctx, width, height, y_plane, u_plane, v_plane, y_stride, u_stride, v_stride, timestamp_us)
 	// NOTE: C uses 'int' (32-bit) for width/height/strides, so we must use int32 to match
-	videoSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, width, height int32, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int32, timestampUs int64) {
+	videoSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, width, height int32, yPlane, uPlane, vPlane uintptr, yStride, uStride, vStride int32, timestampUs int64) uintptr {
 		videoCallbackMu.RLock()
 		cb, ok := videoCallbacks[ctx]
 		videoCallbackMu.RUnlock()
 
 		if !ok || cb == nil {
-			return
+			return 0
 		}
 
 		// Validate dimensions to prevent panic from invalid data
 		if width <= 0 || height <= 0 || width > 8192 || height > 8192 {
-			return
+			return 0
 		}
 		if yStride <= 0 || uStride <= 0 || vStride <= 0 {
-			return
+			return 0
 		}
 		if yStride > 16384 || uStride > 16384 || vStride > 16384 {
-			return
+			return 0
 		}
 
 		// Calculate plane sizes
@@ -87,7 +87,7 @@ func initCallbacks() {
 		// Additional sanity check for total size
 		const maxFrameSize = 64 * 1024 * 1024 // 64MB max
 		if ySize > maxFrameSize || uSize > maxFrameSize || vSize > maxFrameSize {
-			return
+			return 0
 		}
 
 		// Copy data from C memory to Go slices (avoid holding pointers across calls)
@@ -98,23 +98,24 @@ func initCallbacks() {
 		safeCallback(func() {
 			cb(int(width), int(height), yData, uData, vData, int(yStride), int(uStride), int(vStride), timestampUs)
 		})
+		return 0
 	})
 
 	// Create the audio sink callback
 	// Signature: void(ctx, samples, num_samples, sample_rate, channels, timestamp_us)
 	// NOTE: C uses 'int' (32-bit) for numSamples/sampleRate/channels, so we must use int32 to match
-	audioSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, samples uintptr, numSamples, sampleRate, channels int32, timestampUs int64) {
+	audioSinkCallbackPtr = purego.NewCallback(func(ctx uintptr, samples uintptr, numSamples, sampleRate, channels int32, timestampUs int64) uintptr {
 		audioCallbackMu.RLock()
 		cb, ok := audioCallbacks[ctx]
 		audioCallbackMu.RUnlock()
 
 		if !ok || cb == nil {
-			return
+			return 0
 		}
 
 		// Validate parameters
 		if numSamples <= 0 || numSamples > 48000 || channels <= 0 || channels > 8 {
-			return
+			return 0
 		}
 
 		// Total samples = numSamples * channels (interleaved)
@@ -126,6 +127,7 @@ func initCallbacks() {
 		safeCallback(func() {
 			cb(samplesData, int(sampleRate), int(channels), timestampUs)
 		})
+		return 0
 	})
 
 	callbacksInitialized = true
@@ -531,7 +533,7 @@ func initDCMessageCallback() {
 		return
 	}
 	// NOTE: C uses 'int' (32-bit) for size/isBinary, so we must use int32 to match
-	dcMessageCallbackPtr = purego.NewCallback(func(ctx uintptr, data uintptr, size int32, isBinary int32) {
+	dcMessageCallbackPtr = purego.NewCallback(func(ctx uintptr, data uintptr, size int32, isBinary int32) uintptr {
 		dcMessageCallbackMu.RLock()
 		cb, ok := dcMessageCallbacks[ctx]
 		dcMessageCallbackMu.RUnlock()
@@ -539,7 +541,7 @@ func initDCMessageCallback() {
 			// Bounds validation: DataChannel messages should be reasonably sized
 			const maxMessageSize = 256 * 1024 * 1024 // 256MB max
 			if size < 0 || size > maxMessageSize {
-				return
+				return 0
 			}
 			// Copy data before callback (C memory may be reused)
 			// Note: size=0 is valid for empty messages
@@ -551,6 +553,7 @@ func initDCMessageCallback() {
 			}
 			safeCallback(func() { cb(goData, isBinary != 0) })
 		}
+		return 0
 	})
 	dcMessageInitialized = true
 }
@@ -561,13 +564,14 @@ func initDCOpenCallback() {
 	if dcOpenInitialized {
 		return
 	}
-	dcOpenCallbackPtr = purego.NewCallback(func(ctx uintptr) {
+	dcOpenCallbackPtr = purego.NewCallback(func(ctx uintptr) uintptr {
 		dcOpenCallbackMu.RLock()
 		cb, ok := dcOpenCallbacks[ctx]
 		dcOpenCallbackMu.RUnlock()
 		if ok && cb != nil {
 			safeCallback(cb)
 		}
+		return 0
 	})
 	dcOpenInitialized = true
 }
@@ -578,13 +582,14 @@ func initDCCloseCallback() {
 	if dcCloseInitialized {
 		return
 	}
-	dcCloseCallbackPtr = purego.NewCallback(func(ctx uintptr) {
+	dcCloseCallbackPtr = purego.NewCallback(func(ctx uintptr) uintptr {
 		dcCloseCallbackMu.RLock()
 		cb, ok := dcCloseCallbacks[ctx]
 		dcCloseCallbackMu.RUnlock()
 		if ok && cb != nil {
 			safeCallback(cb)
 		}
+		return 0
 	})
 	dcCloseInitialized = true
 }
@@ -996,7 +1001,7 @@ func initRTCPCallback() {
 	}
 
 	// NOTE: C uses 'int' (32-bit) for feedbackType, so we must use int32 to match
-	rtcpFeedbackCallbackPtr = purego.NewCallback(func(ctx uintptr, feedbackType int32, ssrc uint32) {
+	rtcpFeedbackCallbackPtr = purego.NewCallback(func(ctx uintptr, feedbackType int32, ssrc uint32) uintptr {
 		rtcpFeedbackCallbackMu.RLock()
 		cb, ok := rtcpFeedbackCallbacks[ctx]
 		rtcpFeedbackCallbackMu.RUnlock()
@@ -1006,6 +1011,7 @@ func initRTCPCallback() {
 				cb(int(feedbackType), ssrc)
 			})
 		}
+		return 0
 	})
 
 	rtcpCallbackInitialized = true
@@ -1338,7 +1344,7 @@ func initConnectionStateCallback() {
 	}
 
 	// NOTE: C uses 'int' (32-bit) for state, so we must use int32 to match
-	connectionStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) {
+	connectionStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) uintptr {
 		connectionStateCallbackMu.RLock()
 		cb, ok := connectionStateCallbacks[ctx]
 		connectionStateCallbackMu.RUnlock()
@@ -1348,6 +1354,7 @@ func initConnectionStateCallback() {
 				cb(int(state))
 			})
 		}
+		return 0
 	})
 
 	connectionStateInitialized = true
@@ -1397,7 +1404,7 @@ func initOnTrackCallback() {
 		return
 	}
 
-	onTrackCallbackPtr = purego.NewCallback(func(ctx uintptr, track, receiver uintptr, streams uintptr) {
+	onTrackCallbackPtr = purego.NewCallback(func(ctx uintptr, track, receiver uintptr, streams uintptr) uintptr {
 		onTrackCallbackMu.RLock()
 		cb, ok := onTrackCallbacks[ctx]
 		onTrackCallbackMu.RUnlock()
@@ -1408,6 +1415,7 @@ func initOnTrackCallback() {
 				cb(track, receiver, streamsStr)
 			})
 		}
+		return 0
 	})
 
 	onTrackInitialized = true
@@ -1458,7 +1466,7 @@ func initOnICECandidateCallback() {
 	}
 
 	// Callback receives pointer to ShimICECandidate struct
-	onICECandidateCallbackPtr = purego.NewCallback(func(ctx uintptr, candidatePtr uintptr) {
+	onICECandidateCallbackPtr = purego.NewCallback(func(ctx uintptr, candidatePtr uintptr) uintptr {
 		onICECandidateCallbackMu.RLock()
 		cb, ok := onICECandidateCallbacks[ctx]
 		onICECandidateCallbackMu.RUnlock()
@@ -1476,6 +1484,7 @@ func initOnICECandidateCallback() {
 				cb(candidate, sdpMid, int(sdpMLineIndex))
 			})
 		}
+		return 0
 	})
 
 	onICECandidateInitialized = true
@@ -1525,7 +1534,7 @@ func initOnDataChannelCallback() {
 		return
 	}
 
-	onDataChannelCallbackPtr = purego.NewCallback(func(ctx uintptr, dc uintptr) {
+	onDataChannelCallbackPtr = purego.NewCallback(func(ctx uintptr, dc uintptr) uintptr {
 		onDataChannelCallbackMu.RLock()
 		cb, ok := onDataChannelCallbacks[ctx]
 		onDataChannelCallbackMu.RUnlock()
@@ -1535,6 +1544,7 @@ func initOnDataChannelCallback() {
 				cb(dc)
 			})
 		}
+		return 0
 	})
 
 	onDataChannelInitialized = true
@@ -1585,7 +1595,7 @@ func initSignalingStateCallback() {
 	}
 
 	// NOTE: C uses 'int' (32-bit) for state, so we must use int32 to match
-	signalingStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) {
+	signalingStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) uintptr {
 		signalingStateCallbackMu.RLock()
 		cb, ok := signalingStateCallbacks[ctx]
 		signalingStateCallbackMu.RUnlock()
@@ -1595,6 +1605,7 @@ func initSignalingStateCallback() {
 				cb(int(state))
 			})
 		}
+		return 0
 	})
 
 	signalingStateInitialized = true
@@ -1645,7 +1656,7 @@ func initICEConnectionStateCallback() {
 	}
 
 	// NOTE: C uses 'int' (32-bit) for state, so we must use int32 to match
-	iceConnectionStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) {
+	iceConnectionStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) uintptr {
 		iceConnectionStateCallbackMu.RLock()
 		cb, ok := iceConnectionStateCallbacks[ctx]
 		iceConnectionStateCallbackMu.RUnlock()
@@ -1655,6 +1666,7 @@ func initICEConnectionStateCallback() {
 				cb(int(state))
 			})
 		}
+		return 0
 	})
 
 	iceConnectionStateInitialized = true
@@ -1705,7 +1717,7 @@ func initICEGatheringStateCallback() {
 	}
 
 	// NOTE: C uses 'int' (32-bit) for state, so we must use int32 to match
-	iceGatheringStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) {
+	iceGatheringStateCallbackPtr = purego.NewCallback(func(ctx uintptr, state int32) uintptr {
 		iceGatheringStateCallbackMu.RLock()
 		cb, ok := iceGatheringStateCallbacks[ctx]
 		iceGatheringStateCallbackMu.RUnlock()
@@ -1715,6 +1727,7 @@ func initICEGatheringStateCallback() {
 				cb(int(state))
 			})
 		}
+		return 0
 	})
 
 	iceGatheringStateInitialized = true
@@ -1764,7 +1777,7 @@ func initNegotiationNeededCallback() {
 		return
 	}
 
-	negotiationNeededCallbackPtr = purego.NewCallback(func(ctx uintptr) {
+	negotiationNeededCallbackPtr = purego.NewCallback(func(ctx uintptr) uintptr {
 		negotiationNeededCallbackMu.RLock()
 		cb, ok := negotiationNeededCallbacks[ctx]
 		negotiationNeededCallbackMu.RUnlock()
@@ -1774,6 +1787,7 @@ func initNegotiationNeededCallback() {
 				cb()
 			})
 		}
+		return 0
 	})
 
 	negotiationNeededInitialized = true
@@ -1990,7 +2004,7 @@ func initBWECallback() {
 		return
 	}
 
-	bweCallbackPtr = purego.NewCallback(func(ctx uintptr, estimatePtr uintptr) {
+	bweCallbackPtr = purego.NewCallback(func(ctx uintptr, estimatePtr uintptr) uintptr {
 		bweCallbackMu.RLock()
 		cb, ok := bweCallbacks[ctx]
 		bweCallbackMu.RUnlock()
@@ -2004,6 +2018,7 @@ func initBWECallback() {
 				})
 			}
 		}
+		return 0
 	})
 
 	bweInitialized = true
