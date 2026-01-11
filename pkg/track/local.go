@@ -519,6 +519,15 @@ func (t *VideoTrack) stopAdaptLoop() {
 }
 
 func (t *VideoTrack) adaptLoop() {
+	// Capture stop channel once at start to avoid race with stopAdaptLoop
+	t.mu.Lock()
+	stopChan := t.adaptStop
+	t.mu.Unlock()
+
+	if stopChan == nil {
+		return
+	}
+
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -543,7 +552,7 @@ func (t *VideoTrack) adaptLoop() {
 
 			t.adapt(bwe)
 
-		case <-t.adaptStop:
+		case <-stopChan:
 			return
 		}
 	}
