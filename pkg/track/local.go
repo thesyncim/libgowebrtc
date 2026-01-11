@@ -339,16 +339,19 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 		return err
 	}
 
-	// Write each RTP packet
+	return t.writePackets(numPackets)
+}
+
+// writePackets writes numPackets RTP packets from the pre-allocated buffers.
+// Must be called with t.mu held.
+func (t *VideoTrack) writePackets(numPackets int) error {
 	for i := 0; i < numPackets; i++ {
 		info := t.packetInfo[i]
 		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
-
 		if _, err := t.writer.Write(pktData); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -381,17 +384,7 @@ func (t *VideoTrack) WriteEncodedData(data []byte, timestamp uint32, isKeyframe 
 		return err
 	}
 
-	// Write each RTP packet
-	for i := 0; i < numPackets; i++ {
-		info := t.packetInfo[i]
-		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
-
-		if _, err := t.writer.Write(pktData); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return t.writePackets(numPackets)
 }
 
 // WriteRTP writes an already-formed RTP packet.
@@ -976,16 +969,19 @@ func (t *AudioTrack) WriteFrame(f *frame.AudioFrame) error {
 		return err
 	}
 
-	// Write packets
+	return t.writePackets(numPackets)
+}
+
+// writePackets writes numPackets RTP packets from the pre-allocated buffers.
+// Must be called with t.mu held.
+func (t *AudioTrack) writePackets(numPackets int) error {
 	for i := 0; i < numPackets; i++ {
 		info := t.packetInfo[i]
 		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
-
 		if _, err := t.writer.Write(pktData); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -1016,16 +1012,7 @@ func (t *AudioTrack) WriteEncodedData(data []byte, timestamp uint32) error {
 		return err
 	}
 
-	for i := 0; i < numPackets; i++ {
-		info := t.packetInfo[i]
-		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
-
-		if _, err := t.writer.Write(pktData); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return t.writePackets(numPackets)
 }
 
 // SetBitrate adjusts encoder bitrate.
