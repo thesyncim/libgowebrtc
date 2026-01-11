@@ -23,15 +23,16 @@ jobs:
           - os: macos-latest
             platform: darwin_arm64
             extension: dylib
-          - os: macos-15-large
-            platform: darwin_amd64
-            extension: dylib
+          # darwin_amd64 requires paid macos-15-large runner (no free Intel macOS runners)
+          # - os: macos-15-large
+          #   platform: darwin_amd64
+          #   extension: dylib
           - os: ubuntu-latest
             platform: linux_amd64
             extension: so
-          # - os: ubuntu-24.04-arm
-          #   platform: linux_arm64
-          #   extension: so
+          - os: ubuntu-24.04-arm
+            platform: linux_arm64
+            extension: so
     steps:
       - uses: actions/checkout@v4
 
@@ -123,8 +124,8 @@ jobs:
 
             Pre-built shim libraries:
             - `darwin_arm64` - macOS Apple Silicon
-            - `darwin_amd64` - macOS Intel
             - `linux_amd64` - Linux x86_64
+            - `linux_arm64` - Linux ARM64
 
             ### Usage
 
