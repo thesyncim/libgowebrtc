@@ -20,20 +20,17 @@ func ScaleI420Frame(src, dst *frame.VideoFrame, scaleFactor float64) {
 	dstW, dstH := dst.Width, dst.Height
 
 	// Scale Y plane
-	scaleYPlane(src.Data[0], dst.Data[0], srcW, srcH, dstW, dstH, src.Stride[0], dst.Stride[0])
+	scalePlane(src.Data[0], dst.Data[0], srcW, srcH, dstW, dstH, src.Stride[0], dst.Stride[0])
 
-	// Scale U plane (already quarter size for I420)
+	// Scale U and V planes (chroma is quarter size for I420)
 	srcUW, srcUH := srcW/2, srcH/2
 	dstUW, dstUH := dstW/2, dstH/2
-	scaleChromaPlane(src.Data[1], dst.Data[1], srcUW, srcUH, dstUW, dstUH, src.Stride[1], dst.Stride[1])
-
-	// Scale V plane
-	scaleChromaPlane(src.Data[2], dst.Data[2], srcUW, srcUH, dstUW, dstUH, src.Stride[2], dst.Stride[2])
+	scalePlane(src.Data[1], dst.Data[1], srcUW, srcUH, dstUW, dstUH, src.Stride[1], dst.Stride[1])
+	scalePlane(src.Data[2], dst.Data[2], srcUW, srcUH, dstUW, dstUH, src.Stride[2], dst.Stride[2])
 }
 
-// scaleYPlane scales the Y (luma) plane using box filter downsampling.
-func scaleYPlane(src, dst []byte, srcW, srcH, dstW, dstH, srcStride, dstStride int) {
-	// Calculate scale ratios
+// scalePlane scales a plane (Y, U, or V) using box filter downsampling.
+func scalePlane(src, dst []byte, srcW, srcH, dstW, dstH, srcStride, dstStride int) {
 	xRatio := float64(srcW) / float64(dstW)
 	yRatio := float64(srcH) / float64(dstH)
 
@@ -54,45 +51,6 @@ func scaleYPlane(src, dst []byte, srcW, srcH, dstW, dstH, srcStride, dstStride i
 			}
 
 			// Box filter: average all pixels in the source region
-			var sum int
-			count := 0
-			for sy := srcY0; sy < srcY1; sy++ {
-				srcRow := sy * srcStride
-				for sx := srcX0; sx < srcX1; sx++ {
-					sum += int(src[srcRow+sx])
-					count++
-				}
-			}
-
-			if count > 0 {
-				dst[dstRow+dstX] = byte(sum / count)
-			}
-		}
-	}
-}
-
-// scaleChromaPlane scales a chroma (U or V) plane using box filter downsampling.
-func scaleChromaPlane(src, dst []byte, srcW, srcH, dstW, dstH, srcStride, dstStride int) {
-	// Same algorithm as Y plane
-	xRatio := float64(srcW) / float64(dstW)
-	yRatio := float64(srcH) / float64(dstH)
-
-	for dstY := 0; dstY < dstH; dstY++ {
-		srcY0 := int(float64(dstY) * yRatio)
-		srcY1 := int(float64(dstY+1) * yRatio)
-		if srcY1 > srcH {
-			srcY1 = srcH
-		}
-
-		dstRow := dstY * dstStride
-
-		for dstX := 0; dstX < dstW; dstX++ {
-			srcX0 := int(float64(dstX) * xRatio)
-			srcX1 := int(float64(dstX+1) * xRatio)
-			if srcX1 > srcW {
-				srcX1 = srcW
-			}
-
 			var sum int
 			count := 0
 			for sy := srcY0; sy < srcY1; sy++ {
