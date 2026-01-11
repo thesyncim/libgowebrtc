@@ -70,7 +70,6 @@ _MACOS_LINKOPTS = [
 ]
 
 # Linux libraries
-# Note: libwebrtc is built with libc++ (LLVM), so we must link against it
 _LINUX_LINKOPTS = [
     "-Wl,--start-group",
     "-lpthread",
@@ -87,8 +86,6 @@ _LINUX_LINKOPTS = [
     "-lgio-2.0",
     "-lgobject-2.0",
     "-lglib-2.0",
-    "-lc++",
-    "-lc++abi",
     "-Wl,--end-group",
 ]
 
