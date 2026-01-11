@@ -70,14 +70,12 @@ _MACOS_LINKOPTS = [
 ]
 
 # Linux libraries
-# libwebrtc is built with clang/libc++, so we link against libc++
-# The runtime library must be available (installed via libc++1 package)
+# Note: libwebrtc from crow-misia is built with Chromium's libc++ (__Cr ABI)
+# which is incompatible with Ubuntu's libc++ (__1 ABI). We use libstdc++ instead
+# and rely on the static libwebrtc.a containing all needed C++ runtime code.
 _LINUX_LINKOPTS = [
-    # Use libc++ as the C++ standard library (matches libwebrtc build)
-    "-stdlib=libc++",
-    # Link libc++ dynamically - static libraries aren't available in Ubuntu
-    "-lc++",
-    "-lc++abi",
+    # Use libstdc++ - the GNU C++ standard library (widely available)
+    "-lstdc++",
     # System libraries
     "-lpthread",
     "-ldl",
@@ -93,14 +91,6 @@ _LINUX_LINKOPTS = [
     "-lgio-2.0",
     "-lgobject-2.0",
     "-lglib-2.0",
-    # Set RPATH to help find libc++ at runtime - include all common locations
-    "-Wl,-rpath,/lib/x86_64-linux-gnu",
-    "-Wl,-rpath,/lib/aarch64-linux-gnu",
-    "-Wl,-rpath,/usr/lib/x86_64-linux-gnu",
-    "-Wl,-rpath,/usr/lib/aarch64-linux-gnu",
-    "-Wl,-rpath,/usr/lib/llvm-18/lib",
-    "-Wl,-rpath,/usr/lib/llvm-17/lib",
-    "-Wl,-rpath,$$ORIGIN",
 ]
 
 # Windows libraries
