@@ -135,27 +135,35 @@ download_libwebrtc() {
 
     if [[ "$TARGET_OS" == "windows" ]]; then
         # Windows uses 7z format
+        log_info "Listing archive contents..."
+        local sevenzip_cmd=""
         if command -v 7z &> /dev/null; then
-            7z x -o"$tmpdir/extract" "$tmpdir/libwebrtc.7z" -y
+            sevenzip_cmd="7z"
         elif command -v 7za &> /dev/null; then
-            7za x -o"$tmpdir/extract" "$tmpdir/libwebrtc.7z" -y
+            sevenzip_cmd="7za"
         else
             log_error "7z or 7za not found. Please install p7zip."
             rm -rf "$tmpdir"
             exit 1
         fi
-        # crow-misia structure: find the lib and include dirs
-        # They might be in a subdirectory
-        local extracted_dir=$(find "$tmpdir/extract" -name "lib" -type d | head -1 | xargs dirname)
-        if [[ -z "$extracted_dir" ]]; then
-            # Try to find webrtc.lib directly
-            extracted_dir=$(find "$tmpdir/extract" -name "webrtc.lib" -type f | head -1 | xargs dirname | xargs dirname)
-        fi
-        if [[ -n "$extracted_dir" && -d "$extracted_dir" ]]; then
-            cp -r "$extracted_dir"/* "$INSTALL_DIR/"
+
+        # List archive contents to see what we're working with
+        $sevenzip_cmd l "$tmpdir/libwebrtc.7z" | grep -E "(webrtc\.lib|debug/|release/)" | head -20 || true
+
+        log_info "Extracting archive (this may take a while for large files)..."
+        # Extract directly to INSTALL_DIR to avoid copy issues
+        $sevenzip_cmd x -o"$INSTALL_DIR" "$tmpdir/libwebrtc.7z" -y -bb1
+
+        log_info "Extraction complete. Contents of $INSTALL_DIR:"
+        ls -la "$INSTALL_DIR/" 2>/dev/null || dir "$INSTALL_DIR/" 2>/dev/null || true
+
+        # Check specifically for debug folder
+        if [[ -d "$INSTALL_DIR/debug" ]]; then
+            log_info "Contents of debug/:"
+            ls -la "$INSTALL_DIR/debug/" 2>/dev/null || dir "$INSTALL_DIR/debug/" 2>/dev/null || true
         else
-            # Just copy everything from extract dir
-            cp -r "$tmpdir/extract"/* "$INSTALL_DIR/"
+            log_info "No debug/ folder found, checking all subdirs:"
+            find "$INSTALL_DIR" -type d 2>/dev/null | head -20 || true
         fi
     else
         tar -xf "$tmpdir/libwebrtc.tar.xz" -C "$INSTALL_DIR"
