@@ -75,7 +75,6 @@ _LINUX_LINKOPTS = [
     "-lgobject-2.0",
     "-lglib-2.0",
     "-Wl,--end-group",
-    "-Wl,--pack-dyn-relocs=none",
 ]
 
 # Main shim library - compile all sources together

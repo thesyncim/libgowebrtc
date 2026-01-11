@@ -20,10 +20,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-latest
             platform: darwin_arm64
             extension: dylib
-          - os: macos-13
+          - os: macos-15-large
             platform: darwin_amd64
             extension: dylib
           - os: ubuntu-latest
