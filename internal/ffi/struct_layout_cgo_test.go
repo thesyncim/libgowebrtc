@@ -11,6 +11,17 @@ import (
 
 // TestShimStructLayoutCgo compares Go struct layouts against the C shim headers.
 func TestShimStructLayoutCgo(t *testing.T) {
+	t.Run("ShimAudioDecoderDecodeParams", func(t *testing.T) {
+		var goCfg shimAudioDecoderDecodeParams
+		layout := cShimAudioDecoderDecodeParamsLayout()
+		checkSizeEqual(t, "ShimAudioDecoderDecodeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioDecoderDecodeParams.Data", unsafe.Offsetof(goCfg.Data), layout.offsets["Data"])
+		checkOffsetEqual(t, "ShimAudioDecoderDecodeParams.Size", unsafe.Offsetof(goCfg.Size), layout.offsets["Size"])
+		checkOffsetEqual(t, "ShimAudioDecoderDecodeParams.DstSamples", unsafe.Offsetof(goCfg.DstSamples), layout.offsets["DstSamples"])
+		checkOffsetEqual(t, "ShimAudioDecoderDecodeParams.OutNumSamples", unsafe.Offsetof(goCfg.OutNumSamples), layout.offsets["OutNumSamples"])
+		checkOffsetEqual(t, "ShimAudioDecoderDecodeParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
 	t.Run("ShimAudioEncoderConfig", func(t *testing.T) {
 		var goCfg AudioEncoderConfig
 		layout := cShimAudioEncoderConfigLayout()
@@ -18,6 +29,16 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimAudioEncoderConfig.SampleRate", unsafe.Offsetof(goCfg.SampleRate), layout.offsets["SampleRate"])
 		checkOffsetEqual(t, "ShimAudioEncoderConfig.Channels", unsafe.Offsetof(goCfg.Channels), layout.offsets["Channels"])
 		checkOffsetEqual(t, "ShimAudioEncoderConfig.BitrateBps", unsafe.Offsetof(goCfg.BitrateBps), layout.offsets["BitrateBps"])
+	})
+
+	t.Run("ShimAudioEncoderEncodeParams", func(t *testing.T) {
+		var goCfg shimAudioEncoderEncodeParams
+		layout := cShimAudioEncoderEncodeParamsLayout()
+		checkSizeEqual(t, "ShimAudioEncoderEncodeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioEncoderEncodeParams.Samples", unsafe.Offsetof(goCfg.Samples), layout.offsets["Samples"])
+		checkOffsetEqual(t, "ShimAudioEncoderEncodeParams.NumSamples", unsafe.Offsetof(goCfg.NumSamples), layout.offsets["NumSamples"])
+		checkOffsetEqual(t, "ShimAudioEncoderEncodeParams.DstBuffer", unsafe.Offsetof(goCfg.DstBuffer), layout.offsets["DstBuffer"])
+		checkOffsetEqual(t, "ShimAudioEncoderEncodeParams.OutSize", unsafe.Offsetof(goCfg.OutSize), layout.offsets["OutSize"])
 	})
 
 	t.Run("ShimBandwidthEstimate", func(t *testing.T) {
@@ -187,6 +208,25 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimSessionDescription.SDP", unsafe.Offsetof(goCfg.SDP), layout.offsets["SDP"])
 	})
 
+	t.Run("ShimVideoDecoderDecodeParams", func(t *testing.T) {
+		var goCfg shimVideoDecoderDecodeParams
+		layout := cShimVideoDecoderDecodeParamsLayout()
+		checkSizeEqual(t, "ShimVideoDecoderDecodeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.Data", unsafe.Offsetof(goCfg.Data), layout.offsets["Data"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.Size", unsafe.Offsetof(goCfg.Size), layout.offsets["Size"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.Timestamp", unsafe.Offsetof(goCfg.Timestamp), layout.offsets["Timestamp"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.IsKeyframe", unsafe.Offsetof(goCfg.IsKeyframe), layout.offsets["IsKeyframe"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.YDst", unsafe.Offsetof(goCfg.YDst), layout.offsets["YDst"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.UDst", unsafe.Offsetof(goCfg.UDst), layout.offsets["UDst"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.VDst", unsafe.Offsetof(goCfg.VDst), layout.offsets["VDst"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.OutWidth", unsafe.Offsetof(goCfg.OutWidth), layout.offsets["OutWidth"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.OutHeight", unsafe.Offsetof(goCfg.OutHeight), layout.offsets["OutHeight"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.OutYStride", unsafe.Offsetof(goCfg.OutYStride), layout.offsets["OutYStride"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.OutUStride", unsafe.Offsetof(goCfg.OutUStride), layout.offsets["OutUStride"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.OutVStride", unsafe.Offsetof(goCfg.OutVStride), layout.offsets["OutVStride"])
+		checkOffsetEqual(t, "ShimVideoDecoderDecodeParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
 	t.Run("ShimVideoEncoderConfig", func(t *testing.T) {
 		var goCfg VideoEncoderConfig
 		layout := cShimVideoEncoderConfigLayout()
@@ -199,6 +239,25 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimVideoEncoderConfig.H264Profile", unsafe.Offsetof(goCfg.H264Profile), layout.offsets["H264Profile"])
 		checkOffsetEqual(t, "ShimVideoEncoderConfig.VP9Profile", unsafe.Offsetof(goCfg.VP9Profile), layout.offsets["VP9Profile"])
 		checkOffsetEqual(t, "ShimVideoEncoderConfig.PreferHW", unsafe.Offsetof(goCfg.PreferHW), layout.offsets["PreferHW"])
+	})
+
+	t.Run("ShimVideoEncoderEncodeParams", func(t *testing.T) {
+		var goCfg shimVideoEncoderEncodeParams
+		layout := cShimVideoEncoderEncodeParamsLayout()
+		checkSizeEqual(t, "ShimVideoEncoderEncodeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.YPlane", unsafe.Offsetof(goCfg.YPlane), layout.offsets["YPlane"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.UPlane", unsafe.Offsetof(goCfg.UPlane), layout.offsets["UPlane"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.VPlane", unsafe.Offsetof(goCfg.VPlane), layout.offsets["VPlane"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.YStride", unsafe.Offsetof(goCfg.YStride), layout.offsets["YStride"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.UStride", unsafe.Offsetof(goCfg.UStride), layout.offsets["UStride"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.VStride", unsafe.Offsetof(goCfg.VStride), layout.offsets["VStride"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.Timestamp", unsafe.Offsetof(goCfg.Timestamp), layout.offsets["Timestamp"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.ForceKeyframe", unsafe.Offsetof(goCfg.ForceKeyframe), layout.offsets["ForceKeyframe"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.DstBuffer", unsafe.Offsetof(goCfg.DstBuffer), layout.offsets["DstBuffer"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.DstBufferSize", unsafe.Offsetof(goCfg.DstBufferSize), layout.offsets["DstBufferSize"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.OutSize", unsafe.Offsetof(goCfg.OutSize), layout.offsets["OutSize"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.OutIsKeyframe", unsafe.Offsetof(goCfg.OutIsKeyframe), layout.offsets["OutIsKeyframe"])
+		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
 	})
 
 }

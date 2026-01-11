@@ -17,6 +17,20 @@ type cStructLayout struct {
 	offsets map[string]uintptr
 }
 
+func cShimAudioDecoderDecodeParamsLayout() cStructLayout {
+	var cCfg C.ShimAudioDecoderDecodeParams
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"Data":          unsafe.Offsetof(cCfg.data),
+			"Size":          unsafe.Offsetof(cCfg.size),
+			"DstSamples":    unsafe.Offsetof(cCfg.dst_samples),
+			"OutNumSamples": unsafe.Offsetof(cCfg.out_num_samples),
+			"ErrorOut":      unsafe.Offsetof(cCfg.error_out),
+		},
+	}
+}
+
 func cShimAudioEncoderConfigLayout() cStructLayout {
 	var cCfg C.ShimAudioEncoderConfig
 	return cStructLayout{
@@ -25,6 +39,19 @@ func cShimAudioEncoderConfigLayout() cStructLayout {
 			"SampleRate": unsafe.Offsetof(cCfg.sample_rate),
 			"Channels":   unsafe.Offsetof(cCfg.channels),
 			"BitrateBps": unsafe.Offsetof(cCfg.bitrate_bps),
+		},
+	}
+}
+
+func cShimAudioEncoderEncodeParamsLayout() cStructLayout {
+	var cCfg C.ShimAudioEncoderEncodeParams
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"Samples":    unsafe.Offsetof(cCfg.samples),
+			"NumSamples": unsafe.Offsetof(cCfg.num_samples),
+			"DstBuffer":  unsafe.Offsetof(cCfg.dst_buffer),
+			"OutSize":    unsafe.Offsetof(cCfg.out_size),
 		},
 	}
 }
@@ -235,6 +262,28 @@ func cShimSessionDescriptionLayout() cStructLayout {
 	}
 }
 
+func cShimVideoDecoderDecodeParamsLayout() cStructLayout {
+	var cCfg C.ShimVideoDecoderDecodeParams
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"Data":       unsafe.Offsetof(cCfg.data),
+			"Size":       unsafe.Offsetof(cCfg.size),
+			"Timestamp":  unsafe.Offsetof(cCfg.timestamp),
+			"IsKeyframe": unsafe.Offsetof(cCfg.is_keyframe),
+			"YDst":       unsafe.Offsetof(cCfg.y_dst),
+			"UDst":       unsafe.Offsetof(cCfg.u_dst),
+			"VDst":       unsafe.Offsetof(cCfg.v_dst),
+			"OutWidth":   unsafe.Offsetof(cCfg.out_width),
+			"OutHeight":  unsafe.Offsetof(cCfg.out_height),
+			"OutYStride": unsafe.Offsetof(cCfg.out_y_stride),
+			"OutUStride": unsafe.Offsetof(cCfg.out_u_stride),
+			"OutVStride": unsafe.Offsetof(cCfg.out_v_stride),
+			"ErrorOut":   unsafe.Offsetof(cCfg.error_out),
+		},
+	}
+}
+
 func cShimVideoEncoderConfigLayout() cStructLayout {
 	var cCfg C.ShimVideoEncoderConfig
 	return cStructLayout{
@@ -248,6 +297,28 @@ func cShimVideoEncoderConfigLayout() cStructLayout {
 			"H264Profile":      unsafe.Offsetof(cCfg.h264_profile),
 			"VP9Profile":       unsafe.Offsetof(cCfg.vp9_profile),
 			"PreferHW":         unsafe.Offsetof(cCfg.prefer_hw),
+		},
+	}
+}
+
+func cShimVideoEncoderEncodeParamsLayout() cStructLayout {
+	var cCfg C.ShimVideoEncoderEncodeParams
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"YPlane":        unsafe.Offsetof(cCfg.y_plane),
+			"UPlane":        unsafe.Offsetof(cCfg.u_plane),
+			"VPlane":        unsafe.Offsetof(cCfg.v_plane),
+			"YStride":       unsafe.Offsetof(cCfg.y_stride),
+			"UStride":       unsafe.Offsetof(cCfg.u_stride),
+			"VStride":       unsafe.Offsetof(cCfg.v_stride),
+			"Timestamp":     unsafe.Offsetof(cCfg.timestamp),
+			"ForceKeyframe": unsafe.Offsetof(cCfg.force_keyframe),
+			"DstBuffer":     unsafe.Offsetof(cCfg.dst_buffer),
+			"DstBufferSize": unsafe.Offsetof(cCfg.dst_buffer_size),
+			"OutSize":       unsafe.Offsetof(cCfg.out_size),
+			"OutIsKeyframe": unsafe.Offsetof(cCfg.out_is_keyframe),
+			"ErrorOut":      unsafe.Offsetof(cCfg.error_out),
 		},
 	}
 }

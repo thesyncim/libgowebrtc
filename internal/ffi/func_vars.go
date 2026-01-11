@@ -7,7 +7,7 @@ package ffi
 var (
 	// VideoEncoder
 	shimVideoEncoderCreate          func(codec int32, configPtr uintptr, errorOut uintptr) uintptr
-	shimVideoEncoderEncode          func(encoder uintptr, yPlane uintptr, uPlane uintptr, vPlane uintptr, yStride int32, uStride int32, vStride int32, timestamp uint32, forceKeyframe int32, outData uintptr, dstBufferSize int32, outSize uintptr, outIsKeyframe uintptr, errorOut uintptr) int32
+	shimVideoEncoderEncode          func(encoder uintptr, params uintptr) int32
 	shimVideoEncoderSetBitrate      func(encoder uintptr, bitrate uint32) int32
 	shimVideoEncoderSetFramerate    func(encoder uintptr, framerate float32) int32
 	shimVideoEncoderRequestKeyframe func(encoder uintptr) int32
@@ -15,18 +15,18 @@ var (
 
 	// VideoDecoder
 	shimVideoDecoderCreate  func(codec int32, errorOut uintptr) uintptr
-	shimVideoDecoderDecode  func(decoder uintptr, data uintptr, size int32, timestamp uint32, isKeyframe int32, outY uintptr, outU uintptr, outV uintptr, outW uintptr, outH uintptr, outYStride uintptr, outUStride uintptr, outVStride uintptr, errorOut uintptr) int32
+	shimVideoDecoderDecode  func(decoder uintptr, params uintptr) int32
 	shimVideoDecoderDestroy func(decoder uintptr)
 
 	// AudioEncoder
 	shimAudioEncoderCreate     func(configPtr uintptr, errorOut uintptr) uintptr
-	shimAudioEncoderEncode     func(encoder uintptr, samples uintptr, numSamples int32, outData uintptr, outSize uintptr) int32
+	shimAudioEncoderEncode     func(encoder uintptr, params uintptr) int32
 	shimAudioEncoderSetBitrate func(encoder uintptr, bitrate uint32) int32
 	shimAudioEncoderDestroy    func(encoder uintptr)
 
 	// AudioDecoder
 	shimAudioDecoderCreate  func(sampleRate int32, channels int32, errorOut uintptr) uintptr
-	shimAudioDecoderDecode  func(decoder uintptr, data uintptr, size int32, outSamples uintptr, outNumSamples uintptr, errorOut uintptr) int32
+	shimAudioDecoderDecode  func(decoder uintptr, params uintptr) int32
 	shimAudioDecoderDestroy func(decoder uintptr)
 
 	// Packetizer

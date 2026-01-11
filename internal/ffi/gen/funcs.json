@@ -16,19 +16,7 @@
       "c_name": "shim_video_encoder_encode",
       "params": [
         {"name": "encoder", "type": "uintptr"},
-        {"name": "yPlane", "type": "uintptr"},
-        {"name": "uPlane", "type": "uintptr"},
-        {"name": "vPlane", "type": "uintptr"},
-        {"name": "yStride", "type": "int32"},
-        {"name": "uStride", "type": "int32"},
-        {"name": "vStride", "type": "int32"},
-        {"name": "timestamp", "type": "uint32"},
-        {"name": "forceKeyframe", "type": "int32"},
-        {"name": "outData", "type": "uintptr"},
-        {"name": "dstBufferSize", "type": "int32"},
-        {"name": "outSize", "type": "uintptr"},
-        {"name": "outIsKeyframe", "type": "uintptr"},
-        {"name": "errorOut", "type": "uintptr"}
+        {"name": "params", "type": "uintptr"}
       ],
       "return": "int32",
       "category": "VideoEncoder"
@@ -86,19 +74,7 @@
       "c_name": "shim_video_decoder_decode",
       "params": [
         {"name": "decoder", "type": "uintptr"},
-        {"name": "data", "type": "uintptr"},
-        {"name": "size", "type": "int32"},
-        {"name": "timestamp", "type": "uint32"},
-        {"name": "isKeyframe", "type": "int32"},
-        {"name": "outY", "type": "uintptr"},
-        {"name": "outU", "type": "uintptr"},
-        {"name": "outV", "type": "uintptr"},
-        {"name": "outW", "type": "uintptr"},
-        {"name": "outH", "type": "uintptr"},
-        {"name": "outYStride", "type": "uintptr"},
-        {"name": "outUStride", "type": "uintptr"},
-        {"name": "outVStride", "type": "uintptr"},
-        {"name": "errorOut", "type": "uintptr"}
+        {"name": "params", "type": "uintptr"}
       ],
       "return": "int32",
       "category": "VideoDecoder"
@@ -127,10 +103,7 @@
       "c_name": "shim_audio_encoder_encode",
       "params": [
         {"name": "encoder", "type": "uintptr"},
-        {"name": "samples", "type": "uintptr"},
-        {"name": "numSamples", "type": "int32"},
-        {"name": "outData", "type": "uintptr"},
-        {"name": "outSize", "type": "uintptr"}
+        {"name": "params", "type": "uintptr"}
       ],
       "return": "int32",
       "category": "AudioEncoder"
@@ -170,11 +143,7 @@
       "c_name": "shim_audio_decoder_decode",
       "params": [
         {"name": "decoder", "type": "uintptr"},
-        {"name": "data", "type": "uintptr"},
-        {"name": "size", "type": "int32"},
-        {"name": "outSamples", "type": "uintptr"},
-        {"name": "outNumSamples", "type": "uintptr"},
-        {"name": "errorOut", "type": "uintptr"}
+        {"name": "params", "type": "uintptr"}
       ],
       "return": "int32",
       "category": "AudioDecoder"

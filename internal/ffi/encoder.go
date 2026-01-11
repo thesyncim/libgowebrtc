@@ -1,6 +1,9 @@
 package ffi
 
-import "runtime"
+import (
+	"runtime"
+	"unsafe"
+)
 
 // CreateVideoEncoder creates a video encoder for the specified codec.
 func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) (uintptr, error) {
@@ -43,36 +46,40 @@ func VideoEncoderEncodeInto(
 		return 0, false, ErrLibraryNotLoaded
 	}
 
-	var outSize int32
-	var outIsKeyframe int32
-
 	var forceKF int32
 	if forceKeyframe {
 		forceKF = 1
 	}
 
-	// Pass dst buffer pointer and size - shim writes directly into it
 	var errBuf ShimErrorBuffer
-	result := shimVideoEncoderEncode(
-		encoder,
-		ByteSlicePtr(yPlane),
-		ByteSlicePtr(uPlane),
-		ByteSlicePtr(vPlane),
-		int32(yStride), int32(uStride), int32(vStride),
-		timestamp,
-		forceKF,
-		ByteSlicePtr(dst), // dst buffer for shim to write into
-		int32(len(dst)),   // buffer size for overflow protection
-		Int32Ptr(&outSize),
-		Int32Ptr(&outIsKeyframe),
-		errBuf.Ptr(),
-	)
+	params := shimVideoEncoderEncodeParams{
+		YPlane:        ByteSlicePtr(yPlane),
+		UPlane:        ByteSlicePtr(uPlane),
+		VPlane:        ByteSlicePtr(vPlane),
+		YStride:       int32(yStride),
+		UStride:       int32(uStride),
+		VStride:       int32(vStride),
+		Timestamp:     timestamp,
+		ForceKeyframe: forceKF,
+		DstBuffer:     ByteSlicePtr(dst),
+		DstBufferSize: int32(len(dst)),
+		ErrorOut:      errBuf.Ptr(),
+	}
 
-	if err := errBuf.ToError(result); err != nil {
+	result := shimVideoEncoderEncode(encoder, uintptr(unsafe.Pointer(&params)))
+
+	err = errBuf.ToError(result)
+	runtime.KeepAlive(&params)
+	runtime.KeepAlive(&errBuf)
+	runtime.KeepAlive(yPlane)
+	runtime.KeepAlive(uPlane)
+	runtime.KeepAlive(vPlane)
+	runtime.KeepAlive(dst)
+	if err != nil {
 		return 0, false, err
 	}
 
-	return int(outSize), outIsKeyframe != 0, nil
+	return int(params.OutSize), params.OutIsKeyframe != 0, nil
 }
 
 // VideoEncoderSetBitrate updates the encoder bitrate.
@@ -134,21 +141,23 @@ func AudioEncoderEncodeInto(encoder uintptr, samples []byte, numSamples int, dst
 		return 0, ErrLibraryNotLoaded
 	}
 
-	var outSize int32
+	params := shimAudioEncoderEncodeParams{
+		Samples:    ByteSlicePtr(samples),
+		NumSamples: int32(numSamples),
+		DstBuffer:  ByteSlicePtr(dst),
+	}
 
-	result := shimAudioEncoderEncode(
-		encoder,
-		ByteSlicePtr(samples),
-		int32(numSamples),
-		ByteSlicePtr(dst),
-		Int32Ptr(&outSize),
-	)
+	result := shimAudioEncoderEncode(encoder, uintptr(unsafe.Pointer(&params)))
 
-	if err := ShimError(result); err != nil {
+	err := ShimError(result)
+	runtime.KeepAlive(&params)
+	runtime.KeepAlive(samples)
+	runtime.KeepAlive(dst)
+	if err != nil {
 		return 0, err
 	}
 
-	return int(outSize), nil
+	return int(params.OutSize), nil
 }
 
 // AudioEncoderSetBitrate updates the encoder bitrate.

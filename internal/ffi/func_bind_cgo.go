@@ -276,9 +276,9 @@ uintptr_t call_shim_video_encoder_create(int32_t codec, uintptr_t configPtr, uin
     typedef uintptr_t (*fn_t)(int32_t, uintptr_t, uintptr_t);
     return ((fn_t)fn_shim_video_encoder_create)(codec, configPtr, errorOut);
 }
-int32_t call_shim_video_encoder_encode(uintptr_t encoder, uintptr_t yPlane, uintptr_t uPlane, uintptr_t vPlane, int32_t yStride, int32_t uStride, int32_t vStride, uint32_t timestamp, int32_t forceKeyframe, uintptr_t outData, int32_t dstBufferSize, uintptr_t outSize, uintptr_t outIsKeyframe, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, int32_t, int32_t, int32_t, uint32_t, int32_t, uintptr_t, int32_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_video_encoder_encode)(encoder, yPlane, uPlane, vPlane, yStride, uStride, vStride, timestamp, forceKeyframe, outData, dstBufferSize, outSize, outIsKeyframe, errorOut);
+int32_t call_shim_video_encoder_encode(uintptr_t encoder, uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
+    return ((fn_t)fn_shim_video_encoder_encode)(encoder, params);
 }
 int32_t call_shim_video_encoder_set_bitrate(uintptr_t encoder, uint32_t bitrate) {
     typedef int32_t (*fn_t)(uintptr_t, uint32_t);
@@ -300,9 +300,9 @@ uintptr_t call_shim_video_decoder_create(int32_t codec, uintptr_t errorOut) {
     typedef uintptr_t (*fn_t)(int32_t, uintptr_t);
     return ((fn_t)fn_shim_video_decoder_create)(codec, errorOut);
 }
-int32_t call_shim_video_decoder_decode(uintptr_t decoder, uintptr_t data, int32_t size, uint32_t timestamp, int32_t isKeyframe, uintptr_t outY, uintptr_t outU, uintptr_t outV, uintptr_t outW, uintptr_t outH, uintptr_t outYStride, uintptr_t outUStride, uintptr_t outVStride, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uint32_t, int32_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_video_decoder_decode)(decoder, data, size, timestamp, isKeyframe, outY, outU, outV, outW, outH, outYStride, outUStride, outVStride, errorOut);
+int32_t call_shim_video_decoder_decode(uintptr_t decoder, uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
+    return ((fn_t)fn_shim_video_decoder_decode)(decoder, params);
 }
 void call_shim_video_decoder_destroy(uintptr_t decoder) {
     typedef void (*fn_t)(uintptr_t);
@@ -312,9 +312,9 @@ uintptr_t call_shim_audio_encoder_create(uintptr_t configPtr, uintptr_t errorOut
     typedef uintptr_t (*fn_t)(uintptr_t, uintptr_t);
     return ((fn_t)fn_shim_audio_encoder_create)(configPtr, errorOut);
 }
-int32_t call_shim_audio_encoder_encode(uintptr_t encoder, uintptr_t samples, int32_t numSamples, uintptr_t outData, uintptr_t outSize) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_audio_encoder_encode)(encoder, samples, numSamples, outData, outSize);
+int32_t call_shim_audio_encoder_encode(uintptr_t encoder, uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
+    return ((fn_t)fn_shim_audio_encoder_encode)(encoder, params);
 }
 int32_t call_shim_audio_encoder_set_bitrate(uintptr_t encoder, uint32_t bitrate) {
     typedef int32_t (*fn_t)(uintptr_t, uint32_t);
@@ -328,9 +328,9 @@ uintptr_t call_shim_audio_decoder_create(int32_t sampleRate, int32_t channels, u
     typedef uintptr_t (*fn_t)(int32_t, int32_t, uintptr_t);
     return ((fn_t)fn_shim_audio_decoder_create)(sampleRate, channels, errorOut);
 }
-int32_t call_shim_audio_decoder_decode(uintptr_t decoder, uintptr_t data, int32_t size, uintptr_t outSamples, uintptr_t outNumSamples, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_audio_decoder_decode)(decoder, data, size, outSamples, outNumSamples, errorOut);
+int32_t call_shim_audio_decoder_decode(uintptr_t decoder, uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
+    return ((fn_t)fn_shim_audio_decoder_decode)(decoder, params);
 }
 void call_shim_audio_decoder_destroy(uintptr_t decoder) {
     typedef void (*fn_t)(uintptr_t);
@@ -980,8 +980,8 @@ func registerFunctions() error {
 	shimVideoEncoderCreate = func(codec int32, configPtr uintptr, errorOut uintptr) uintptr {
 		return uintptr(C.call_shim_video_encoder_create(C.int32_t(codec), C.uintptr_t(configPtr), C.uintptr_t(errorOut)))
 	}
-	shimVideoEncoderEncode = func(encoder uintptr, yPlane uintptr, uPlane uintptr, vPlane uintptr, yStride int32, uStride int32, vStride int32, timestamp uint32, forceKeyframe int32, outData uintptr, dstBufferSize int32, outSize uintptr, outIsKeyframe uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_video_encoder_encode(C.uintptr_t(encoder), C.uintptr_t(yPlane), C.uintptr_t(uPlane), C.uintptr_t(vPlane), C.int32_t(yStride), C.int32_t(uStride), C.int32_t(vStride), C.uint32_t(timestamp), C.int32_t(forceKeyframe), C.uintptr_t(outData), C.int32_t(dstBufferSize), C.uintptr_t(outSize), C.uintptr_t(outIsKeyframe), C.uintptr_t(errorOut)))
+	shimVideoEncoderEncode = func(encoder uintptr, params uintptr) int32 {
+		return int32(C.call_shim_video_encoder_encode(C.uintptr_t(encoder), C.uintptr_t(params)))
 	}
 	shimVideoEncoderSetBitrate = func(encoder uintptr, bitrate uint32) int32 {
 		return int32(C.call_shim_video_encoder_set_bitrate(C.uintptr_t(encoder), C.uint32_t(bitrate)))
@@ -1000,8 +1000,8 @@ func registerFunctions() error {
 	shimVideoDecoderCreate = func(codec int32, errorOut uintptr) uintptr {
 		return uintptr(C.call_shim_video_decoder_create(C.int32_t(codec), C.uintptr_t(errorOut)))
 	}
-	shimVideoDecoderDecode = func(decoder uintptr, data uintptr, size int32, timestamp uint32, isKeyframe int32, outY uintptr, outU uintptr, outV uintptr, outW uintptr, outH uintptr, outYStride uintptr, outUStride uintptr, outVStride uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_video_decoder_decode(C.uintptr_t(decoder), C.uintptr_t(data), C.int32_t(size), C.uint32_t(timestamp), C.int32_t(isKeyframe), C.uintptr_t(outY), C.uintptr_t(outU), C.uintptr_t(outV), C.uintptr_t(outW), C.uintptr_t(outH), C.uintptr_t(outYStride), C.uintptr_t(outUStride), C.uintptr_t(outVStride), C.uintptr_t(errorOut)))
+	shimVideoDecoderDecode = func(decoder uintptr, params uintptr) int32 {
+		return int32(C.call_shim_video_decoder_decode(C.uintptr_t(decoder), C.uintptr_t(params)))
 	}
 	shimVideoDecoderDestroy = func(decoder uintptr) {
 		C.call_shim_video_decoder_destroy(C.uintptr_t(decoder))
@@ -1011,8 +1011,8 @@ func registerFunctions() error {
 	shimAudioEncoderCreate = func(configPtr uintptr, errorOut uintptr) uintptr {
 		return uintptr(C.call_shim_audio_encoder_create(C.uintptr_t(configPtr), C.uintptr_t(errorOut)))
 	}
-	shimAudioEncoderEncode = func(encoder uintptr, samples uintptr, numSamples int32, outData uintptr, outSize uintptr) int32 {
-		return int32(C.call_shim_audio_encoder_encode(C.uintptr_t(encoder), C.uintptr_t(samples), C.int32_t(numSamples), C.uintptr_t(outData), C.uintptr_t(outSize)))
+	shimAudioEncoderEncode = func(encoder uintptr, params uintptr) int32 {
+		return int32(C.call_shim_audio_encoder_encode(C.uintptr_t(encoder), C.uintptr_t(params)))
 	}
 	shimAudioEncoderSetBitrate = func(encoder uintptr, bitrate uint32) int32 {
 		return int32(C.call_shim_audio_encoder_set_bitrate(C.uintptr_t(encoder), C.uint32_t(bitrate)))
@@ -1025,8 +1025,8 @@ func registerFunctions() error {
 	shimAudioDecoderCreate = func(sampleRate int32, channels int32, errorOut uintptr) uintptr {
 		return uintptr(C.call_shim_audio_decoder_create(C.int32_t(sampleRate), C.int32_t(channels), C.uintptr_t(errorOut)))
 	}
-	shimAudioDecoderDecode = func(decoder uintptr, data uintptr, size int32, outSamples uintptr, outNumSamples uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_audio_decoder_decode(C.uintptr_t(decoder), C.uintptr_t(data), C.int32_t(size), C.uintptr_t(outSamples), C.uintptr_t(outNumSamples), C.uintptr_t(errorOut)))
+	shimAudioDecoderDecode = func(decoder uintptr, params uintptr) int32 {
+		return int32(C.call_shim_audio_decoder_decode(C.uintptr_t(decoder), C.uintptr_t(params)))
 	}
 	shimAudioDecoderDestroy = func(decoder uintptr) {
 		C.call_shim_audio_decoder_destroy(C.uintptr_t(decoder))

@@ -109,35 +109,29 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
  * Encode a video frame into a pre-allocated buffer.
  *
  * @param encoder Encoder handle
- * @param y_plane Y plane data (I420 input)
- * @param u_plane U plane data
- * @param v_plane V plane data
- * @param y_stride Y plane stride
- * @param u_stride U plane stride
- * @param v_stride V plane stride
- * @param timestamp RTP timestamp (90kHz clock)
- * @param force_keyframe Force this frame to be a keyframe
- * @param dst_buffer Pre-allocated output buffer (caller provides)
- * @param dst_buffer_size Size of dst_buffer in bytes
- * @param out_size Output: number of bytes written to dst_buffer
- * @param out_is_keyframe Output: true if encoded frame is a keyframe
+ * @param params Encode parameters (inputs + outputs)
  * @return SHIM_OK on success, SHIM_ERROR_BUFFER_TOO_SMALL if buffer insufficient
  */
+/* Encode parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    const uint8_t* y_plane;
+    const uint8_t* u_plane;
+    const uint8_t* v_plane;
+    int y_stride;
+    int u_stride;
+    int v_stride;
+    uint32_t timestamp;
+    int force_keyframe;
+    uint8_t* dst_buffer;
+    int dst_buffer_size;
+    int out_size;
+    int out_is_keyframe;
+    ShimErrorBuffer* error_out;
+} ShimVideoEncoderEncodeParams;
+
 SHIM_EXPORT int shim_video_encoder_encode(
     ShimVideoEncoder* encoder,
-    const uint8_t* y_plane,
-    const uint8_t* u_plane,
-    const uint8_t* v_plane,
-    int y_stride,
-    int u_stride,
-    int v_stride,
-    uint32_t timestamp,
-    int force_keyframe,
-    uint8_t* dst_buffer,        /* Caller-provided output buffer */
-    int dst_buffer_size,        /* Size of dst_buffer */
-    int* out_size,
-    int* out_is_keyframe,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimVideoEncoderEncodeParams* params
 );
 
 SHIM_EXPORT int shim_video_encoder_set_bitrate(ShimVideoEncoder* encoder, uint32_t bitrate_bps);
@@ -158,35 +152,29 @@ SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(
  * Decode video into pre-allocated frame buffers.
  *
  * @param decoder Decoder handle
- * @param data Encoded data
- * @param size Size of encoded data
- * @param timestamp RTP timestamp
- * @param is_keyframe Hint if this is a keyframe
- * @param y_dst Pre-allocated Y plane buffer (caller provides)
- * @param u_dst Pre-allocated U plane buffer
- * @param v_dst Pre-allocated V plane buffer
- * @param out_width Output: decoded frame width
- * @param out_height Output: decoded frame height
- * @param out_y_stride Output: Y stride
- * @param out_u_stride Output: U stride
- * @param out_v_stride Output: V stride
+ * @param params Decode parameters (inputs + outputs)
  * @return SHIM_OK on success, SHIM_ERROR_NEED_MORE_DATA if buffering
  */
+/* Decode parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    const uint8_t* data;
+    int size;
+    uint32_t timestamp;
+    int is_keyframe;
+    uint8_t* y_dst;
+    uint8_t* u_dst;
+    uint8_t* v_dst;
+    int out_width;
+    int out_height;
+    int out_y_stride;
+    int out_u_stride;
+    int out_v_stride;
+    ShimErrorBuffer* error_out;
+} ShimVideoDecoderDecodeParams;
+
 SHIM_EXPORT int shim_video_decoder_decode(
     ShimVideoDecoder* decoder,
-    const uint8_t* data,
-    int size,
-    uint32_t timestamp,
-    int is_keyframe,
-    uint8_t* y_dst,             /* Caller-provided output buffers */
-    uint8_t* u_dst,
-    uint8_t* v_dst,
-    int* out_width,
-    int* out_height,
-    int* out_y_stride,
-    int* out_u_stride,
-    int* out_v_stride,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimVideoDecoderDecodeParams* params
 );
 
 SHIM_EXPORT void shim_video_decoder_destroy(ShimVideoDecoder* decoder);
@@ -214,18 +202,20 @@ SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
  * Encode audio samples into a pre-allocated buffer.
  *
  * @param encoder Encoder handle
- * @param samples PCM samples (S16LE interleaved)
- * @param num_samples Number of total samples (samples_per_channel * channels)
- * @param dst_buffer Pre-allocated output buffer
- * @param out_size Output: number of bytes written
+ * @param params Encode parameters (inputs + outputs)
  * @return SHIM_OK on success
  */
+/* Encode parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    const uint8_t* samples;
+    int num_samples;
+    uint8_t* dst_buffer;
+    int out_size;
+} ShimAudioEncoderEncodeParams;
+
 SHIM_EXPORT int shim_audio_encoder_encode(
     ShimAudioEncoder* encoder,
-    const uint8_t* samples,     /* S16LE as bytes */
-    int num_samples,
-    uint8_t* dst_buffer,        /* Caller-provided output buffer */
-    int* out_size
+    ShimAudioEncoderEncodeParams* params
 );
 
 SHIM_EXPORT int shim_audio_encoder_set_bitrate(ShimAudioEncoder* encoder, uint32_t bitrate_bps);
@@ -245,19 +235,21 @@ SHIM_EXPORT ShimAudioDecoder* shim_audio_decoder_create(
  * Decode audio into a pre-allocated buffer.
  *
  * @param decoder Decoder handle
- * @param data Encoded Opus data
- * @param size Size of encoded data
- * @param dst_samples Pre-allocated output buffer (S16LE)
- * @param out_num_samples Output: total samples decoded (samples_per_channel * channels)
+ * @param params Decode parameters (inputs + outputs)
  * @return SHIM_OK on success
  */
+/* Decode parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    const uint8_t* data;
+    int size;
+    uint8_t* dst_samples;
+    int out_num_samples;
+    ShimErrorBuffer* error_out;
+} ShimAudioDecoderDecodeParams;
+
 SHIM_EXPORT int shim_audio_decoder_decode(
     ShimAudioDecoder* decoder,
-    const uint8_t* data,
-    int size,
-    uint8_t* dst_samples,       /* Caller-provided output buffer */
-    int* out_num_samples,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimAudioDecoderDecodeParams* params
 );
 
 SHIM_EXPORT void shim_audio_decoder_destroy(ShimAudioDecoder* decoder);

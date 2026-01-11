@@ -1,6 +1,9 @@
 package ffi
 
-import "runtime"
+import (
+	"runtime"
+	"unsafe"
+)
 
 // CreateVideoDecoder creates a video decoder for the specified codec.
 func CreateVideoDecoder(codec CodecType) (uintptr, error) {
@@ -39,37 +42,37 @@ func VideoDecoderDecodeInto(
 		return 0, 0, 0, 0, 0, ErrLibraryNotLoaded
 	}
 
-	var outW, outH, outYStride, outUStride, outVStride int32
-
 	var keyframe int32
 	if isKeyframe {
 		keyframe = 1
 	}
 
-	// Pass destination buffers - shim writes directly into them
 	var errBuf ShimErrorBuffer
-	result := shimVideoDecoderDecode(
-		decoder,
-		ByteSlicePtr(src),
-		int32(len(src)),
-		timestamp,
-		keyframe,
-		ByteSlicePtr(yDst),
-		ByteSlicePtr(uDst),
-		ByteSlicePtr(vDst),
-		Int32Ptr(&outW),
-		Int32Ptr(&outH),
-		Int32Ptr(&outYStride),
-		Int32Ptr(&outUStride),
-		Int32Ptr(&outVStride),
-		errBuf.Ptr(),
-	)
+	params := shimVideoDecoderDecodeParams{
+		Data:       ByteSlicePtr(src),
+		Size:       int32(len(src)),
+		Timestamp:  timestamp,
+		IsKeyframe: keyframe,
+		YDst:       ByteSlicePtr(yDst),
+		UDst:       ByteSlicePtr(uDst),
+		VDst:       ByteSlicePtr(vDst),
+		ErrorOut:   errBuf.Ptr(),
+	}
 
-	if err := errBuf.ToError(result); err != nil {
+	result := shimVideoDecoderDecode(decoder, uintptr(unsafe.Pointer(&params)))
+
+	err = errBuf.ToError(result)
+	runtime.KeepAlive(&params)
+	runtime.KeepAlive(&errBuf)
+	runtime.KeepAlive(src)
+	runtime.KeepAlive(yDst)
+	runtime.KeepAlive(uDst)
+	runtime.KeepAlive(vDst)
+	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
 
-	return int(outW), int(outH), int(outYStride), int(outUStride), int(outVStride), nil
+	return int(params.OutWidth), int(params.OutHeight), int(params.OutYStride), int(params.OutUStride), int(params.OutVStride), nil
 }
 
 // VideoDecoderDestroy destroys a video decoder.
@@ -105,23 +108,26 @@ func AudioDecoderDecodeInto(decoder uintptr, src []byte, samplesDst []byte) (num
 		return 0, ErrLibraryNotLoaded
 	}
 
-	var outNumSamples int32
-
 	var errBuf ShimErrorBuffer
-	result := shimAudioDecoderDecode(
-		decoder,
-		ByteSlicePtr(src),
-		int32(len(src)),
-		ByteSlicePtr(samplesDst),
-		Int32Ptr(&outNumSamples),
-		errBuf.Ptr(),
-	)
+	params := shimAudioDecoderDecodeParams{
+		Data:       ByteSlicePtr(src),
+		Size:       int32(len(src)),
+		DstSamples: ByteSlicePtr(samplesDst),
+		ErrorOut:   errBuf.Ptr(),
+	}
 
-	if err := errBuf.ToError(result); err != nil {
+	result := shimAudioDecoderDecode(decoder, uintptr(unsafe.Pointer(&params)))
+
+	err = errBuf.ToError(result)
+	runtime.KeepAlive(&params)
+	runtime.KeepAlive(&errBuf)
+	runtime.KeepAlive(src)
+	runtime.KeepAlive(samplesDst)
+	if err != nil {
 		return 0, err
 	}
 
-	return int(outNumSamples), nil
+	return int(params.OutNumSamples), nil
 }
 
 // AudioDecoderDestroy destroys an audio decoder.

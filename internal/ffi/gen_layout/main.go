@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -113,6 +114,11 @@ func main() {
 
 	if err := writeGoFile(filepath.Join(paths.ffiDir, "struct_layout_cgo_test.go"), generateLayoutTestGo(structSpecs)); err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating struct_layout_cgo_test.go: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := writeJSONFile(filepath.Join(paths.ffiDir, "gen", "types.json"), generateTypesJSON(structSpecs)); err != nil {
+		fmt.Fprintf(os.Stderr, "Error generating gen/types.json: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -640,6 +646,49 @@ func cgoFieldName(cName string) string {
 	return cName
 }
 
+type typesFile struct {
+	GeneratedFrom string       `json:"generated_from"`
+	Structs       []typesEntry `json:"structs"`
+}
+
+type typesEntry struct {
+	CName  string       `json:"c_name"`
+	GoName string       `json:"go_name"`
+	Fields []typesField `json:"fields"`
+}
+
+type typesField struct {
+	CName  string `json:"c_name"`
+	GoName string `json:"go_name"`
+}
+
+func generateTypesJSON(specs []structSpec) []byte {
+	out := typesFile{
+		GeneratedFrom: filepath.ToSlash(filepath.Join("shim", "shim.h")),
+		Structs:       make([]typesEntry, 0, len(specs)),
+	}
+	for _, spec := range specs {
+		entry := typesEntry{
+			CName:  spec.CName,
+			GoName: spec.GoType,
+			Fields: make([]typesField, 0, len(spec.Fields)),
+		}
+		for _, field := range spec.Fields {
+			entry.Fields = append(entry.Fields, typesField{
+				CName:  field.CName,
+				GoName: field.GoName,
+			})
+		}
+		out.Structs = append(out.Structs, entry)
+	}
+
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return append(data, '\n')
+}
+
 func writeGoFile(path string, data []byte) error {
 	formatted, err := format.Source(data)
 	if err != nil {
@@ -649,4 +698,11 @@ func writeGoFile(path string, data []byte) error {
 		return err
 	}
 	return os.WriteFile(path, formatted, 0644)
+}
+
+func writeJSONFile(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
