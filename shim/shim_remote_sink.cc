@@ -118,13 +118,15 @@ static std::unordered_map<void*, std::unique_ptr<GoAudioSink>> g_audio_sinks;
 extern "C" {
 
 SHIM_EXPORT int shim_track_set_video_sink(
-    void* track_ptr,
-    ShimOnVideoFrame callback,
-    void* ctx
+    ShimTrackSetVideoSinkParams* params
 ) {
-    if (!track_ptr || !callback) {
+    if (!params || !params->track || !params->callback) {
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto track_ptr = params->track;
+    auto callback = params->callback;
+    void* ctx = params->ctx;
 
     auto* track = static_cast<webrtc::MediaStreamTrackInterface*>(track_ptr);
     if (track->kind() != webrtc::MediaStreamTrackInterface::kVideoKind) {
@@ -151,13 +153,15 @@ SHIM_EXPORT int shim_track_set_video_sink(
 }
 
 SHIM_EXPORT int shim_track_set_audio_sink(
-    void* track_ptr,
-    ShimOnAudioFrame callback,
-    void* ctx
+    ShimTrackSetAudioSinkParams* params
 ) {
-    if (!track_ptr || !callback) {
+    if (!params || !params->track || !params->callback) {
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto track_ptr = params->track;
+    auto callback = params->callback;
+    void* ctx = params->ctx;
 
     auto* track = static_cast<webrtc::MediaStreamTrackInterface*>(track_ptr);
     if (track->kind() != webrtc::MediaStreamTrackInterface::kAudioKind) {

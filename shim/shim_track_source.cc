@@ -246,13 +246,15 @@ struct ShimAudioTrackSource {
 extern "C" {
 
 SHIM_EXPORT ShimVideoTrackSource* shim_video_track_source_create(
-    ShimPeerConnection* pc,
-    int width,
-    int height
+    ShimVideoTrackSourceCreateParams* params
 ) {
-    if (!pc || width <= 0 || height <= 0) {
+    if (!params || !params->pc || params->width <= 0 || params->height <= 0) {
         return nullptr;
     }
+
+    auto pc = params->pc;
+    int width = params->width;
+    int height = params->height;
 
     auto shim_source = std::make_unique<ShimVideoTrackSource>();
     shim_source->source = webrtc::make_ref_counted<PushableVideoTrackSource>(width, height);
@@ -265,18 +267,20 @@ SHIM_EXPORT ShimVideoTrackSource* shim_video_track_source_create(
 }
 
 SHIM_EXPORT int shim_video_track_source_push_frame(
-    ShimVideoTrackSource* source,
-    const uint8_t* y_plane,
-    const uint8_t* u_plane,
-    const uint8_t* v_plane,
-    int y_stride,
-    int u_stride,
-    int v_stride,
-    int64_t timestamp_us
+    ShimVideoTrackSourcePushFrameParams* params
 ) {
-    if (!source || !source->source || !y_plane || !u_plane || !v_plane) {
+    if (!params || !params->source || !params->source->source || !params->y_plane || !params->u_plane || !params->v_plane) {
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto source = params->source;
+    const uint8_t* y_plane = params->y_plane;
+    const uint8_t* u_plane = params->u_plane;
+    const uint8_t* v_plane = params->v_plane;
+    int y_stride = params->y_stride;
+    int u_stride = params->u_stride;
+    int v_stride = params->v_stride;
+    int64_t timestamp_us = params->timestamp_us;
 
     // Create I420 buffer from input planes
     webrtc::scoped_refptr<webrtc::I420Buffer> buffer = webrtc::I420Buffer::Copy(
@@ -308,13 +312,15 @@ SHIM_EXPORT void shim_video_track_source_destroy(ShimVideoTrackSource* source) {
 }
 
 SHIM_EXPORT ShimAudioTrackSource* shim_audio_track_source_create(
-    ShimPeerConnection* pc,
-    int sample_rate,
-    int channels
+    ShimAudioTrackSourceCreateParams* params
 ) {
-    if (!pc || sample_rate <= 0 || channels <= 0 || channels > 2) {
+    if (!params || !params->pc || params->sample_rate <= 0 || params->channels <= 0 || params->channels > 2) {
         return nullptr;
     }
+
+    auto pc = params->pc;
+    int sample_rate = params->sample_rate;
+    int channels = params->channels;
 
     auto shim_source = std::make_unique<ShimAudioTrackSource>();
     shim_source->source = webrtc::make_ref_counted<PushableAudioSource>(sample_rate, channels);
@@ -327,14 +333,16 @@ SHIM_EXPORT ShimAudioTrackSource* shim_audio_track_source_create(
 }
 
 SHIM_EXPORT int shim_audio_track_source_push_frame(
-    ShimAudioTrackSource* source,
-    const int16_t* samples,
-    int num_samples,
-    int64_t timestamp_us
+    ShimAudioTrackSourcePushFrameParams* params
 ) {
-    if (!source || !source->source || !samples || num_samples <= 0) {
+    if (!params || !params->source || !params->source->source || !params->samples || params->num_samples <= 0) {
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto source = params->source;
+    const int16_t* samples = params->samples;
+    int num_samples = params->num_samples;
+    int64_t timestamp_us = params->timestamp_us;
 
     source->source->PushAudio(samples, num_samples, timestamp_us);
     return SHIM_OK;
@@ -349,16 +357,18 @@ SHIM_EXPORT void shim_audio_track_source_destroy(ShimAudioTrackSource* source) {
 }
 
 SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
-    ShimPeerConnection* pc,
-    ShimVideoTrackSource* source,
-    const char* track_id,
-    const char* stream_id,
-    ShimErrorBuffer* error_out
+    ShimPeerConnectionAddVideoTrackFromSourceParams* params
 ) {
-    if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
-        shim::SetErrorMessage(error_out, "invalid parameter");
+    if (!params || !params->pc || !params->pc->peer_connection || !params->pc->factory || !params->source || !params->source->source || !params->track_id) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter");
         return nullptr;
     }
+
+    auto pc = params->pc;
+    auto source = params->source;
+    const char* track_id = params->track_id;
+    const char* stream_id = params->stream_id;
+    ShimErrorBuffer* error_out = params->error_out;
 
     // Create video track from source
     source->track = pc->factory->CreateVideoTrack(
@@ -393,16 +403,18 @@ SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
 }
 
 SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
-    ShimPeerConnection* pc,
-    ShimAudioTrackSource* source,
-    const char* track_id,
-    const char* stream_id,
-    ShimErrorBuffer* error_out
+    ShimPeerConnectionAddAudioTrackFromSourceParams* params
 ) {
-    if (!pc || !pc->peer_connection || !pc->factory || !source || !source->source || !track_id) {
-        shim::SetErrorMessage(error_out, "invalid parameter");
+    if (!params || !params->pc || !params->pc->peer_connection || !params->pc->factory || !params->source || !params->source->source || !params->track_id) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter");
         return nullptr;
     }
+
+    auto pc = params->pc;
+    auto source = params->source;
+    const char* track_id = params->track_id;
+    const char* stream_id = params->stream_id;
+    ShimErrorBuffer* error_out = params->error_out;
 
     // Create audio track from source
     source->track = pc->factory->CreateAudioTrack(

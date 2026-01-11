@@ -11,6 +11,35 @@ import (
 
 // TestShimStructLayoutCgo compares Go struct layouts against the C shim headers.
 func TestShimStructLayoutCgo(t *testing.T) {
+	t.Run("ShimAudioCaptureCreateParams", func(t *testing.T) {
+		var goCfg shimAudioCaptureCreateParams
+		layout := cShimAudioCaptureCreateParamsLayout()
+		checkSizeEqual(t, "ShimAudioCaptureCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioCaptureCreateParams.DeviceID", unsafe.Offsetof(goCfg.DeviceID), layout.offsets["DeviceID"])
+		checkOffsetEqual(t, "ShimAudioCaptureCreateParams.SampleRate", unsafe.Offsetof(goCfg.SampleRate), layout.offsets["SampleRate"])
+		checkOffsetEqual(t, "ShimAudioCaptureCreateParams.Channels", unsafe.Offsetof(goCfg.Channels), layout.offsets["Channels"])
+		checkOffsetEqual(t, "ShimAudioCaptureCreateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimAudioCaptureStartParams", func(t *testing.T) {
+		var goCfg shimAudioCaptureStartParams
+		layout := cShimAudioCaptureStartParamsLayout()
+		checkSizeEqual(t, "ShimAudioCaptureStartParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioCaptureStartParams.Cap", unsafe.Offsetof(goCfg.Cap), layout.offsets["Cap"])
+		checkOffsetEqual(t, "ShimAudioCaptureStartParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimAudioCaptureStartParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+		checkOffsetEqual(t, "ShimAudioCaptureStartParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimAudioDecoderCreateParams", func(t *testing.T) {
+		var goCfg shimAudioDecoderCreateParams
+		layout := cShimAudioDecoderCreateParamsLayout()
+		checkSizeEqual(t, "ShimAudioDecoderCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioDecoderCreateParams.SampleRate", unsafe.Offsetof(goCfg.SampleRate), layout.offsets["SampleRate"])
+		checkOffsetEqual(t, "ShimAudioDecoderCreateParams.Channels", unsafe.Offsetof(goCfg.Channels), layout.offsets["Channels"])
+		checkOffsetEqual(t, "ShimAudioDecoderCreateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
 	t.Run("ShimAudioDecoderDecodeParams", func(t *testing.T) {
 		var goCfg shimAudioDecoderDecodeParams
 		layout := cShimAudioDecoderDecodeParamsLayout()
@@ -31,6 +60,14 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimAudioEncoderConfig.BitrateBps", unsafe.Offsetof(goCfg.BitrateBps), layout.offsets["BitrateBps"])
 	})
 
+	t.Run("ShimAudioEncoderCreateParams", func(t *testing.T) {
+		var goCfg shimAudioEncoderCreateParams
+		layout := cShimAudioEncoderCreateParamsLayout()
+		checkSizeEqual(t, "ShimAudioEncoderCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioEncoderCreateParams.Config", unsafe.Offsetof(goCfg.Config), layout.offsets["Config"])
+		checkOffsetEqual(t, "ShimAudioEncoderCreateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
 	t.Run("ShimAudioEncoderEncodeParams", func(t *testing.T) {
 		var goCfg shimAudioEncoderEncodeParams
 		layout := cShimAudioEncoderEncodeParamsLayout()
@@ -39,6 +76,34 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimAudioEncoderEncodeParams.NumSamples", unsafe.Offsetof(goCfg.NumSamples), layout.offsets["NumSamples"])
 		checkOffsetEqual(t, "ShimAudioEncoderEncodeParams.DstBuffer", unsafe.Offsetof(goCfg.DstBuffer), layout.offsets["DstBuffer"])
 		checkOffsetEqual(t, "ShimAudioEncoderEncodeParams.OutSize", unsafe.Offsetof(goCfg.OutSize), layout.offsets["OutSize"])
+	})
+
+	t.Run("ShimAudioEncoderSetBitrateParams", func(t *testing.T) {
+		var goCfg shimAudioEncoderSetBitrateParams
+		layout := cShimAudioEncoderSetBitrateParamsLayout()
+		checkSizeEqual(t, "ShimAudioEncoderSetBitrateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioEncoderSetBitrateParams.Encoder", unsafe.Offsetof(goCfg.Encoder), layout.offsets["Encoder"])
+		checkOffsetEqual(t, "ShimAudioEncoderSetBitrateParams.BitrateBps", unsafe.Offsetof(goCfg.BitrateBps), layout.offsets["BitrateBps"])
+		checkOffsetEqual(t, "ShimAudioEncoderSetBitrateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimAudioTrackSourceCreateParams", func(t *testing.T) {
+		var goCfg shimAudioTrackSourceCreateParams
+		layout := cShimAudioTrackSourceCreateParamsLayout()
+		checkSizeEqual(t, "ShimAudioTrackSourceCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioTrackSourceCreateParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimAudioTrackSourceCreateParams.SampleRate", unsafe.Offsetof(goCfg.SampleRate), layout.offsets["SampleRate"])
+		checkOffsetEqual(t, "ShimAudioTrackSourceCreateParams.Channels", unsafe.Offsetof(goCfg.Channels), layout.offsets["Channels"])
+	})
+
+	t.Run("ShimAudioTrackSourcePushFrameParams", func(t *testing.T) {
+		var goCfg shimAudioTrackSourcePushFrameParams
+		layout := cShimAudioTrackSourcePushFrameParamsLayout()
+		checkSizeEqual(t, "ShimAudioTrackSourcePushFrameParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimAudioTrackSourcePushFrameParams.Source", unsafe.Offsetof(goCfg.Source), layout.offsets["Source"])
+		checkOffsetEqual(t, "ShimAudioTrackSourcePushFrameParams.Samples", unsafe.Offsetof(goCfg.Samples), layout.offsets["Samples"])
+		checkOffsetEqual(t, "ShimAudioTrackSourcePushFrameParams.NumSamples", unsafe.Offsetof(goCfg.NumSamples), layout.offsets["NumSamples"])
+		checkOffsetEqual(t, "ShimAudioTrackSourcePushFrameParams.TimestampUs", unsafe.Offsetof(goCfg.TimestampUs), layout.offsets["TimestampUs"])
 	})
 
 	t.Run("ShimBandwidthEstimate", func(t *testing.T) {
@@ -65,6 +130,64 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimCodecCapability.PayloadType", unsafe.Offsetof(goCfg.PayloadType), layout.offsets["PayloadType"])
 	})
 
+	t.Run("ShimDataChannelSendParams", func(t *testing.T) {
+		var goCfg shimDataChannelSendParams
+		layout := cShimDataChannelSendParamsLayout()
+		checkSizeEqual(t, "ShimDataChannelSendParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimDataChannelSendParams.DC", unsafe.Offsetof(goCfg.DC), layout.offsets["DC"])
+		checkOffsetEqual(t, "ShimDataChannelSendParams.Data", unsafe.Offsetof(goCfg.Data), layout.offsets["Data"])
+		checkOffsetEqual(t, "ShimDataChannelSendParams.Size", unsafe.Offsetof(goCfg.Size), layout.offsets["Size"])
+		checkOffsetEqual(t, "ShimDataChannelSendParams.IsBinary", unsafe.Offsetof(goCfg.IsBinary), layout.offsets["IsBinary"])
+		checkOffsetEqual(t, "ShimDataChannelSendParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimDataChannelSetOnCloseParams", func(t *testing.T) {
+		var goCfg shimDataChannelSetOnCloseParams
+		layout := cShimDataChannelSetOnCloseParamsLayout()
+		checkSizeEqual(t, "ShimDataChannelSetOnCloseParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimDataChannelSetOnCloseParams.DC", unsafe.Offsetof(goCfg.DC), layout.offsets["DC"])
+		checkOffsetEqual(t, "ShimDataChannelSetOnCloseParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimDataChannelSetOnCloseParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimDataChannelSetOnMessageParams", func(t *testing.T) {
+		var goCfg shimDataChannelSetOnMessageParams
+		layout := cShimDataChannelSetOnMessageParamsLayout()
+		checkSizeEqual(t, "ShimDataChannelSetOnMessageParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimDataChannelSetOnMessageParams.DC", unsafe.Offsetof(goCfg.DC), layout.offsets["DC"])
+		checkOffsetEqual(t, "ShimDataChannelSetOnMessageParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimDataChannelSetOnMessageParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimDataChannelSetOnOpenParams", func(t *testing.T) {
+		var goCfg shimDataChannelSetOnOpenParams
+		layout := cShimDataChannelSetOnOpenParamsLayout()
+		checkSizeEqual(t, "ShimDataChannelSetOnOpenParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimDataChannelSetOnOpenParams.DC", unsafe.Offsetof(goCfg.DC), layout.offsets["DC"])
+		checkOffsetEqual(t, "ShimDataChannelSetOnOpenParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimDataChannelSetOnOpenParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimDepacketizerPopParams", func(t *testing.T) {
+		var goCfg shimDepacketizerPopParams
+		layout := cShimDepacketizerPopParamsLayout()
+		checkSizeEqual(t, "ShimDepacketizerPopParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimDepacketizerPopParams.Depacketizer", unsafe.Offsetof(goCfg.Depacketizer), layout.offsets["Depacketizer"])
+		checkOffsetEqual(t, "ShimDepacketizerPopParams.DstBuffer", unsafe.Offsetof(goCfg.DstBuffer), layout.offsets["DstBuffer"])
+		checkOffsetEqual(t, "ShimDepacketizerPopParams.OutSize", unsafe.Offsetof(goCfg.OutSize), layout.offsets["OutSize"])
+		checkOffsetEqual(t, "ShimDepacketizerPopParams.OutTimestamp", unsafe.Offsetof(goCfg.OutTimestamp), layout.offsets["OutTimestamp"])
+		checkOffsetEqual(t, "ShimDepacketizerPopParams.OutIsKeyframe", unsafe.Offsetof(goCfg.OutIsKeyframe), layout.offsets["OutIsKeyframe"])
+	})
+
+	t.Run("ShimDepacketizerPushParams", func(t *testing.T) {
+		var goCfg shimDepacketizerPushParams
+		layout := cShimDepacketizerPushParamsLayout()
+		checkSizeEqual(t, "ShimDepacketizerPushParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimDepacketizerPushParams.Depacketizer", unsafe.Offsetof(goCfg.Depacketizer), layout.offsets["Depacketizer"])
+		checkOffsetEqual(t, "ShimDepacketizerPushParams.Data", unsafe.Offsetof(goCfg.Data), layout.offsets["Data"])
+		checkOffsetEqual(t, "ShimDepacketizerPushParams.Size", unsafe.Offsetof(goCfg.Size), layout.offsets["Size"])
+	})
+
 	t.Run("ShimDeviceInfo", func(t *testing.T) {
 		var goCfg shimDeviceInfo
 		layout := cShimDeviceInfoLayout()
@@ -74,11 +197,49 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimDeviceInfo.kind", unsafe.Offsetof(goCfg.kind), layout.offsets["kind"])
 	})
 
+	t.Run("ShimEnumerateDevicesParams", func(t *testing.T) {
+		var goCfg shimEnumerateDevicesParams
+		layout := cShimEnumerateDevicesParamsLayout()
+		checkSizeEqual(t, "ShimEnumerateDevicesParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimEnumerateDevicesParams.Devices", unsafe.Offsetof(goCfg.Devices), layout.offsets["Devices"])
+		checkOffsetEqual(t, "ShimEnumerateDevicesParams.MaxDevices", unsafe.Offsetof(goCfg.MaxDevices), layout.offsets["MaxDevices"])
+		checkOffsetEqual(t, "ShimEnumerateDevicesParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+		checkOffsetEqual(t, "ShimEnumerateDevicesParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimEnumerateScreensParams", func(t *testing.T) {
+		var goCfg shimEnumerateScreensParams
+		layout := cShimEnumerateScreensParamsLayout()
+		checkSizeEqual(t, "ShimEnumerateScreensParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimEnumerateScreensParams.Screens", unsafe.Offsetof(goCfg.Screens), layout.offsets["Screens"])
+		checkOffsetEqual(t, "ShimEnumerateScreensParams.MaxScreens", unsafe.Offsetof(goCfg.MaxScreens), layout.offsets["MaxScreens"])
+		checkOffsetEqual(t, "ShimEnumerateScreensParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+		checkOffsetEqual(t, "ShimEnumerateScreensParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
 	t.Run("ShimErrorBuffer", func(t *testing.T) {
 		var goCfg ShimErrorBuffer
 		layout := cShimErrorBufferLayout()
 		checkSizeEqual(t, "ShimErrorBuffer", unsafe.Sizeof(goCfg), layout.size)
 		checkOffsetEqual(t, "ShimErrorBuffer.Message", unsafe.Offsetof(goCfg.Message), layout.offsets["Message"])
+	})
+
+	t.Run("ShimGetSupportedAudioCodecsParams", func(t *testing.T) {
+		var goCfg shimGetSupportedAudioCodecsParams
+		layout := cShimGetSupportedAudioCodecsParamsLayout()
+		checkSizeEqual(t, "ShimGetSupportedAudioCodecsParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimGetSupportedAudioCodecsParams.Codecs", unsafe.Offsetof(goCfg.Codecs), layout.offsets["Codecs"])
+		checkOffsetEqual(t, "ShimGetSupportedAudioCodecsParams.MaxCodecs", unsafe.Offsetof(goCfg.MaxCodecs), layout.offsets["MaxCodecs"])
+		checkOffsetEqual(t, "ShimGetSupportedAudioCodecsParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+	})
+
+	t.Run("ShimGetSupportedVideoCodecsParams", func(t *testing.T) {
+		var goCfg shimGetSupportedVideoCodecsParams
+		layout := cShimGetSupportedVideoCodecsParamsLayout()
+		checkSizeEqual(t, "ShimGetSupportedVideoCodecsParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimGetSupportedVideoCodecsParams.Codecs", unsafe.Offsetof(goCfg.Codecs), layout.offsets["Codecs"])
+		checkOffsetEqual(t, "ShimGetSupportedVideoCodecsParams.MaxCodecs", unsafe.Offsetof(goCfg.MaxCodecs), layout.offsets["MaxCodecs"])
+		checkOffsetEqual(t, "ShimGetSupportedVideoCodecsParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
 	})
 
 	t.Run("ShimICECandidate", func(t *testing.T) {
@@ -111,6 +272,76 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimPacketizerConfig.ClockRate", unsafe.Offsetof(goCfg.ClockRate), layout.offsets["ClockRate"])
 	})
 
+	t.Run("ShimPacketizerPacketizeParams", func(t *testing.T) {
+		var goCfg shimPacketizerPacketizeParams
+		layout := cShimPacketizerPacketizeParamsLayout()
+		checkSizeEqual(t, "ShimPacketizerPacketizeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.Packetizer", unsafe.Offsetof(goCfg.Packetizer), layout.offsets["Packetizer"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.Data", unsafe.Offsetof(goCfg.Data), layout.offsets["Data"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.Size", unsafe.Offsetof(goCfg.Size), layout.offsets["Size"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.Timestamp", unsafe.Offsetof(goCfg.Timestamp), layout.offsets["Timestamp"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.IsKeyframe", unsafe.Offsetof(goCfg.IsKeyframe), layout.offsets["IsKeyframe"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.DstBuffer", unsafe.Offsetof(goCfg.DstBuffer), layout.offsets["DstBuffer"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.DstOffsets", unsafe.Offsetof(goCfg.DstOffsets), layout.offsets["DstOffsets"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.DstSizes", unsafe.Offsetof(goCfg.DstSizes), layout.offsets["DstSizes"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.MaxPackets", unsafe.Offsetof(goCfg.MaxPackets), layout.offsets["MaxPackets"])
+		checkOffsetEqual(t, "ShimPacketizerPacketizeParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+	})
+
+	t.Run("ShimPeerConnectionAddAudioTrackFromSourceParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionAddAudioTrackFromSourceParams
+		layout := cShimPeerConnectionAddAudioTrackFromSourceParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionAddAudioTrackFromSourceParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionAddAudioTrackFromSourceParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddAudioTrackFromSourceParams.Source", unsafe.Offsetof(goCfg.Source), layout.offsets["Source"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddAudioTrackFromSourceParams.TrackID", unsafe.Offsetof(goCfg.TrackID), layout.offsets["TrackID"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddAudioTrackFromSourceParams.StreamID", unsafe.Offsetof(goCfg.StreamID), layout.offsets["StreamID"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddAudioTrackFromSourceParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionAddICECandidateParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionAddICECandidateParams
+		layout := cShimPeerConnectionAddICECandidateParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionAddICECandidateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionAddICECandidateParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddICECandidateParams.Candidate", unsafe.Offsetof(goCfg.Candidate), layout.offsets["Candidate"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddICECandidateParams.SDPMid", unsafe.Offsetof(goCfg.SDPMid), layout.offsets["SDPMid"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddICECandidateParams.SDPMLineIndex", unsafe.Offsetof(goCfg.SDPMLineIndex), layout.offsets["SDPMLineIndex"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddICECandidateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionAddTrackParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionAddTrackParams
+		layout := cShimPeerConnectionAddTrackParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionAddTrackParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionAddTrackParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddTrackParams.Codec", unsafe.Offsetof(goCfg.Codec), layout.offsets["Codec"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddTrackParams.TrackID", unsafe.Offsetof(goCfg.TrackID), layout.offsets["TrackID"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddTrackParams.StreamID", unsafe.Offsetof(goCfg.StreamID), layout.offsets["StreamID"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddTrackParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionAddTransceiverParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionAddTransceiverParams
+		layout := cShimPeerConnectionAddTransceiverParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionAddTransceiverParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionAddTransceiverParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddTransceiverParams.Kind", unsafe.Offsetof(goCfg.Kind), layout.offsets["Kind"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddTransceiverParams.Direction", unsafe.Offsetof(goCfg.Direction), layout.offsets["Direction"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddTransceiverParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionAddVideoTrackFromSourceParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionAddVideoTrackFromSourceParams
+		layout := cShimPeerConnectionAddVideoTrackFromSourceParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionAddVideoTrackFromSourceParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionAddVideoTrackFromSourceParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddVideoTrackFromSourceParams.Source", unsafe.Offsetof(goCfg.Source), layout.offsets["Source"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddVideoTrackFromSourceParams.TrackID", unsafe.Offsetof(goCfg.TrackID), layout.offsets["TrackID"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddVideoTrackFromSourceParams.StreamID", unsafe.Offsetof(goCfg.StreamID), layout.offsets["StreamID"])
+		checkOffsetEqual(t, "ShimPeerConnectionAddVideoTrackFromSourceParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
 	t.Run("ShimPeerConnectionConfig", func(t *testing.T) {
 		var goCfg PeerConnectionConfig
 		layout := cShimPeerConnectionConfigLayout()
@@ -121,6 +352,204 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimPeerConnectionConfig.BundlePolicy", unsafe.Offsetof(goCfg.BundlePolicy), layout.offsets["BundlePolicy"])
 		checkOffsetEqual(t, "ShimPeerConnectionConfig.RTCPMuxPolicy", unsafe.Offsetof(goCfg.RTCPMuxPolicy), layout.offsets["RTCPMuxPolicy"])
 		checkOffsetEqual(t, "ShimPeerConnectionConfig.SDPSemantics", unsafe.Offsetof(goCfg.SDPSemantics), layout.offsets["SDPSemantics"])
+	})
+
+	t.Run("ShimPeerConnectionCreateAnswerParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionCreateAnswerParams
+		layout := cShimPeerConnectionCreateAnswerParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionCreateAnswerParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionCreateAnswerParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateAnswerParams.SDPOut", unsafe.Offsetof(goCfg.SDPOut), layout.offsets["SDPOut"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateAnswerParams.SDPOutSize", unsafe.Offsetof(goCfg.SDPOutSize), layout.offsets["SDPOutSize"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateAnswerParams.OutSDPLen", unsafe.Offsetof(goCfg.OutSDPLen), layout.offsets["OutSDPLen"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateAnswerParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionCreateDataChannelParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionCreateDataChannelParams
+		layout := cShimPeerConnectionCreateDataChannelParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionCreateDataChannelParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.Label", unsafe.Offsetof(goCfg.Label), layout.offsets["Label"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.Ordered", unsafe.Offsetof(goCfg.Ordered), layout.offsets["Ordered"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.MaxRetransmits", unsafe.Offsetof(goCfg.MaxRetransmits), layout.offsets["MaxRetransmits"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.Protocol", unsafe.Offsetof(goCfg.Protocol), layout.offsets["Protocol"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionCreateOfferParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionCreateOfferParams
+		layout := cShimPeerConnectionCreateOfferParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionCreateOfferParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionCreateOfferParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateOfferParams.SDPOut", unsafe.Offsetof(goCfg.SDPOut), layout.offsets["SDPOut"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateOfferParams.SDPOutSize", unsafe.Offsetof(goCfg.SDPOutSize), layout.offsets["SDPOutSize"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateOfferParams.OutSDPLen", unsafe.Offsetof(goCfg.OutSDPLen), layout.offsets["OutSDPLen"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateOfferParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionCreateParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionCreateParams
+		layout := cShimPeerConnectionCreateParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionCreateParams.Config", unsafe.Offsetof(goCfg.Config), layout.offsets["Config"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionGetBandwidthEstimateParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionGetBandwidthEstimateParams
+		layout := cShimPeerConnectionGetBandwidthEstimateParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionGetBandwidthEstimateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionGetBandwidthEstimateParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetBandwidthEstimateParams.OutEstimate", unsafe.Offsetof(goCfg.OutEstimate), layout.offsets["OutEstimate"])
+	})
+
+	t.Run("ShimPeerConnectionGetReceiversParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionGetReceiversParams
+		layout := cShimPeerConnectionGetReceiversParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionGetReceiversParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionGetReceiversParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetReceiversParams.Receivers", unsafe.Offsetof(goCfg.Receivers), layout.offsets["Receivers"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetReceiversParams.MaxReceivers", unsafe.Offsetof(goCfg.MaxReceivers), layout.offsets["MaxReceivers"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetReceiversParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+	})
+
+	t.Run("ShimPeerConnectionGetSendersParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionGetSendersParams
+		layout := cShimPeerConnectionGetSendersParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionGetSendersParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionGetSendersParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetSendersParams.Senders", unsafe.Offsetof(goCfg.Senders), layout.offsets["Senders"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetSendersParams.MaxSenders", unsafe.Offsetof(goCfg.MaxSenders), layout.offsets["MaxSenders"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetSendersParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+	})
+
+	t.Run("ShimPeerConnectionGetStatsParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionGetStatsParams
+		layout := cShimPeerConnectionGetStatsParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionGetStatsParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionGetStatsParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetStatsParams.OutStats", unsafe.Offsetof(goCfg.OutStats), layout.offsets["OutStats"])
+	})
+
+	t.Run("ShimPeerConnectionGetTransceiversParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionGetTransceiversParams
+		layout := cShimPeerConnectionGetTransceiversParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionGetTransceiversParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionGetTransceiversParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetTransceiversParams.Transceivers", unsafe.Offsetof(goCfg.Transceivers), layout.offsets["Transceivers"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetTransceiversParams.MaxTransceivers", unsafe.Offsetof(goCfg.MaxTransceivers), layout.offsets["MaxTransceivers"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetTransceiversParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+	})
+
+	t.Run("ShimPeerConnectionRemoveTrackParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionRemoveTrackParams
+		layout := cShimPeerConnectionRemoveTrackParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionRemoveTrackParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionRemoveTrackParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionRemoveTrackParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimPeerConnectionRemoveTrackParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionSetLocalDescriptionParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetLocalDescriptionParams
+		layout := cShimPeerConnectionSetLocalDescriptionParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetLocalDescriptionParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetLocalDescriptionParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetLocalDescriptionParams.Type", unsafe.Offsetof(goCfg.Type), layout.offsets["Type"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetLocalDescriptionParams.SDP", unsafe.Offsetof(goCfg.SDP), layout.offsets["SDP"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetLocalDescriptionParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnBandwidthEstimateParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnBandwidthEstimateParams
+		layout := cShimPeerConnectionSetOnBandwidthEstimateParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnBandwidthEstimateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnBandwidthEstimateParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnBandwidthEstimateParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnBandwidthEstimateParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnConnectionStateChangeParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnConnectionStateChangeParams
+		layout := cShimPeerConnectionSetOnConnectionStateChangeParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnConnectionStateChangeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnConnectionStateChangeParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnConnectionStateChangeParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnConnectionStateChangeParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnDataChannelParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnDataChannelParams
+		layout := cShimPeerConnectionSetOnDataChannelParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnDataChannelParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnDataChannelParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnDataChannelParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnDataChannelParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnICECandidateParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnICECandidateParams
+		layout := cShimPeerConnectionSetOnICECandidateParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnICECandidateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICECandidateParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICECandidateParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICECandidateParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnICEConnectionStateChangeParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnICEConnectionStateChangeParams
+		layout := cShimPeerConnectionSetOnICEConnectionStateChangeParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnICEConnectionStateChangeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICEConnectionStateChangeParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICEConnectionStateChangeParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICEConnectionStateChangeParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnICEGatheringStateChangeParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnICEGatheringStateChangeParams
+		layout := cShimPeerConnectionSetOnICEGatheringStateChangeParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnICEGatheringStateChangeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICEGatheringStateChangeParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICEGatheringStateChangeParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnICEGatheringStateChangeParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnNegotiationNeededParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnNegotiationNeededParams
+		layout := cShimPeerConnectionSetOnNegotiationNeededParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnNegotiationNeededParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnNegotiationNeededParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnNegotiationNeededParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnNegotiationNeededParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnSignalingStateChangeParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnSignalingStateChangeParams
+		layout := cShimPeerConnectionSetOnSignalingStateChangeParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnSignalingStateChangeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnSignalingStateChangeParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnSignalingStateChangeParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnSignalingStateChangeParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetOnTrackParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetOnTrackParams
+		layout := cShimPeerConnectionSetOnTrackParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetOnTrackParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnTrackParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnTrackParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetOnTrackParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimPeerConnectionSetRemoteDescriptionParams", func(t *testing.T) {
+		var goCfg shimPeerConnectionSetRemoteDescriptionParams
+		layout := cShimPeerConnectionSetRemoteDescriptionParamsLayout()
+		checkSizeEqual(t, "ShimPeerConnectionSetRemoteDescriptionParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimPeerConnectionSetRemoteDescriptionParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetRemoteDescriptionParams.Type", unsafe.Offsetof(goCfg.Type), layout.offsets["Type"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetRemoteDescriptionParams.SDP", unsafe.Offsetof(goCfg.SDP), layout.offsets["SDP"])
+		checkOffsetEqual(t, "ShimPeerConnectionSetRemoteDescriptionParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
 	})
 
 	t.Run("ShimRTCStats", func(t *testing.T) {
@@ -182,6 +611,22 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimRTPEncodingParameters.ScalabilityMode", unsafe.Offsetof(goCfg.ScalabilityMode), layout.offsets["ScalabilityMode"])
 	})
 
+	t.Run("ShimRTPReceiverGetStatsParams", func(t *testing.T) {
+		var goCfg shimRTPReceiverGetStatsParams
+		layout := cShimRTPReceiverGetStatsParamsLayout()
+		checkSizeEqual(t, "ShimRTPReceiverGetStatsParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPReceiverGetStatsParams.Receiver", unsafe.Offsetof(goCfg.Receiver), layout.offsets["Receiver"])
+		checkOffsetEqual(t, "ShimRTPReceiverGetStatsParams.OutStats", unsafe.Offsetof(goCfg.OutStats), layout.offsets["OutStats"])
+	})
+
+	t.Run("ShimRTPReceiverSetJitterBufferMinDelayParams", func(t *testing.T) {
+		var goCfg shimRTPReceiverSetJitterBufferMinDelayParams
+		layout := cShimRTPReceiverSetJitterBufferMinDelayParamsLayout()
+		checkSizeEqual(t, "ShimRTPReceiverSetJitterBufferMinDelayParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPReceiverSetJitterBufferMinDelayParams.Receiver", unsafe.Offsetof(goCfg.Receiver), layout.offsets["Receiver"])
+		checkOffsetEqual(t, "ShimRTPReceiverSetJitterBufferMinDelayParams.MinDelayMs", unsafe.Offsetof(goCfg.MinDelayMs), layout.offsets["MinDelayMs"])
+	})
+
 	t.Run("ShimRTPSendParameters", func(t *testing.T) {
 		var goCfg RTPSendParameters
 		layout := cShimRTPSendParametersLayout()
@@ -189,6 +634,146 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimRTPSendParameters.Encodings", unsafe.Offsetof(goCfg.Encodings), layout.offsets["Encodings"])
 		checkOffsetEqual(t, "ShimRTPSendParameters.EncodingCount", unsafe.Offsetof(goCfg.EncodingCount), layout.offsets["EncodingCount"])
 		checkOffsetEqual(t, "ShimRTPSendParameters.TransactionID", unsafe.Offsetof(goCfg.TransactionID), layout.offsets["TransactionID"])
+	})
+
+	t.Run("ShimRTPSenderGetActiveLayersParams", func(t *testing.T) {
+		var goCfg shimRTPSenderGetActiveLayersParams
+		layout := cShimRTPSenderGetActiveLayersParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderGetActiveLayersParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderGetActiveLayersParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderGetActiveLayersParams.OutSpatial", unsafe.Offsetof(goCfg.OutSpatial), layout.offsets["OutSpatial"])
+		checkOffsetEqual(t, "ShimRTPSenderGetActiveLayersParams.OutTemporal", unsafe.Offsetof(goCfg.OutTemporal), layout.offsets["OutTemporal"])
+	})
+
+	t.Run("ShimRTPSenderGetNegotiatedCodecsParams", func(t *testing.T) {
+		var goCfg shimRTPSenderGetNegotiatedCodecsParams
+		layout := cShimRTPSenderGetNegotiatedCodecsParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderGetNegotiatedCodecsParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderGetNegotiatedCodecsParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderGetNegotiatedCodecsParams.Codecs", unsafe.Offsetof(goCfg.Codecs), layout.offsets["Codecs"])
+		checkOffsetEqual(t, "ShimRTPSenderGetNegotiatedCodecsParams.MaxCodecs", unsafe.Offsetof(goCfg.MaxCodecs), layout.offsets["MaxCodecs"])
+		checkOffsetEqual(t, "ShimRTPSenderGetNegotiatedCodecsParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+	})
+
+	t.Run("ShimRTPSenderGetParametersParams", func(t *testing.T) {
+		var goCfg shimRTPSenderGetParametersParams
+		layout := cShimRTPSenderGetParametersParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderGetParametersParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.Encodings", unsafe.Offsetof(goCfg.Encodings), layout.offsets["Encodings"])
+		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.MaxEncodings", unsafe.Offsetof(goCfg.MaxEncodings), layout.offsets["MaxEncodings"])
+		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.OutParams", unsafe.Offsetof(goCfg.OutParams), layout.offsets["OutParams"])
+	})
+
+	t.Run("ShimRTPSenderGetScalabilityModeParams", func(t *testing.T) {
+		var goCfg shimRTPSenderGetScalabilityModeParams
+		layout := cShimRTPSenderGetScalabilityModeParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderGetScalabilityModeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderGetScalabilityModeParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderGetScalabilityModeParams.ModeOut", unsafe.Offsetof(goCfg.ModeOut), layout.offsets["ModeOut"])
+		checkOffsetEqual(t, "ShimRTPSenderGetScalabilityModeParams.ModeOutSize", unsafe.Offsetof(goCfg.ModeOutSize), layout.offsets["ModeOutSize"])
+	})
+
+	t.Run("ShimRTPSenderGetStatsParams", func(t *testing.T) {
+		var goCfg shimRTPSenderGetStatsParams
+		layout := cShimRTPSenderGetStatsParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderGetStatsParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderGetStatsParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderGetStatsParams.OutStats", unsafe.Offsetof(goCfg.OutStats), layout.offsets["OutStats"])
+	})
+
+	t.Run("ShimRTPSenderReplaceTrackParams", func(t *testing.T) {
+		var goCfg shimRTPSenderReplaceTrackParams
+		layout := cShimRTPSenderReplaceTrackParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderReplaceTrackParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderReplaceTrackParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderReplaceTrackParams.Track", unsafe.Offsetof(goCfg.Track), layout.offsets["Track"])
+	})
+
+	t.Run("ShimRTPSenderSetBitrateParams", func(t *testing.T) {
+		var goCfg shimRTPSenderSetBitrateParams
+		layout := cShimRTPSenderSetBitrateParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderSetBitrateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderSetBitrateParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderSetBitrateParams.Bitrate", unsafe.Offsetof(goCfg.Bitrate), layout.offsets["Bitrate"])
+		checkOffsetEqual(t, "ShimRTPSenderSetBitrateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimRTPSenderSetLayerActiveParams", func(t *testing.T) {
+		var goCfg shimRTPSenderSetLayerActiveParams
+		layout := cShimRTPSenderSetLayerActiveParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderSetLayerActiveParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderSetLayerActiveParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderSetLayerActiveParams.RID", unsafe.Offsetof(goCfg.RID), layout.offsets["RID"])
+		checkOffsetEqual(t, "ShimRTPSenderSetLayerActiveParams.Active", unsafe.Offsetof(goCfg.Active), layout.offsets["Active"])
+		checkOffsetEqual(t, "ShimRTPSenderSetLayerActiveParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimRTPSenderSetLayerBitrateParams", func(t *testing.T) {
+		var goCfg shimRTPSenderSetLayerBitrateParams
+		layout := cShimRTPSenderSetLayerBitrateParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderSetLayerBitrateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderSetLayerBitrateParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderSetLayerBitrateParams.RID", unsafe.Offsetof(goCfg.RID), layout.offsets["RID"])
+		checkOffsetEqual(t, "ShimRTPSenderSetLayerBitrateParams.MaxBitrateBps", unsafe.Offsetof(goCfg.MaxBitrateBps), layout.offsets["MaxBitrateBps"])
+		checkOffsetEqual(t, "ShimRTPSenderSetLayerBitrateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimRTPSenderSetOnRTCPFeedbackParams", func(t *testing.T) {
+		var goCfg shimRTPSenderSetOnRTCPFeedbackParams
+		layout := cShimRTPSenderSetOnRTCPFeedbackParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderSetOnRTCPFeedbackParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderSetOnRTCPFeedbackParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderSetOnRTCPFeedbackParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimRTPSenderSetOnRTCPFeedbackParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimRTPSenderSetParametersParams", func(t *testing.T) {
+		var goCfg shimRTPSenderSetParametersParams
+		layout := cShimRTPSenderSetParametersParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderSetParametersParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderSetParametersParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderSetParametersParams.Params", unsafe.Offsetof(goCfg.Params), layout.offsets["Params"])
+		checkOffsetEqual(t, "ShimRTPSenderSetParametersParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimRTPSenderSetPreferredCodecParams", func(t *testing.T) {
+		var goCfg shimRTPSenderSetPreferredCodecParams
+		layout := cShimRTPSenderSetPreferredCodecParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderSetPreferredCodecParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderSetPreferredCodecParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderSetPreferredCodecParams.MimeType", unsafe.Offsetof(goCfg.MimeType), layout.offsets["MimeType"])
+		checkOffsetEqual(t, "ShimRTPSenderSetPreferredCodecParams.PayloadType", unsafe.Offsetof(goCfg.PayloadType), layout.offsets["PayloadType"])
+		checkOffsetEqual(t, "ShimRTPSenderSetPreferredCodecParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimRTPSenderSetScalabilityModeParams", func(t *testing.T) {
+		var goCfg shimRTPSenderSetScalabilityModeParams
+		layout := cShimRTPSenderSetScalabilityModeParamsLayout()
+		checkSizeEqual(t, "ShimRTPSenderSetScalabilityModeParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimRTPSenderSetScalabilityModeParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
+		checkOffsetEqual(t, "ShimRTPSenderSetScalabilityModeParams.ScalabilityMode", unsafe.Offsetof(goCfg.ScalabilityMode), layout.offsets["ScalabilityMode"])
+		checkOffsetEqual(t, "ShimRTPSenderSetScalabilityModeParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimScreenCaptureCreateParams", func(t *testing.T) {
+		var goCfg shimScreenCaptureCreateParams
+		layout := cShimScreenCaptureCreateParamsLayout()
+		checkSizeEqual(t, "ShimScreenCaptureCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimScreenCaptureCreateParams.ScreenOrWindowID", unsafe.Offsetof(goCfg.ScreenOrWindowID), layout.offsets["ScreenOrWindowID"])
+		checkOffsetEqual(t, "ShimScreenCaptureCreateParams.IsWindow", unsafe.Offsetof(goCfg.IsWindow), layout.offsets["IsWindow"])
+		checkOffsetEqual(t, "ShimScreenCaptureCreateParams.FPS", unsafe.Offsetof(goCfg.FPS), layout.offsets["FPS"])
+		checkOffsetEqual(t, "ShimScreenCaptureCreateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimScreenCaptureStartParams", func(t *testing.T) {
+		var goCfg shimScreenCaptureStartParams
+		layout := cShimScreenCaptureStartParamsLayout()
+		checkSizeEqual(t, "ShimScreenCaptureStartParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimScreenCaptureStartParams.Cap", unsafe.Offsetof(goCfg.Cap), layout.offsets["Cap"])
+		checkOffsetEqual(t, "ShimScreenCaptureStartParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimScreenCaptureStartParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+		checkOffsetEqual(t, "ShimScreenCaptureStartParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
 	})
 
 	t.Run("ShimScreenInfo", func(t *testing.T) {
@@ -206,6 +791,90 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkSizeEqual(t, "ShimSessionDescription", unsafe.Sizeof(goCfg), layout.size)
 		checkOffsetEqual(t, "ShimSessionDescription.Type", unsafe.Offsetof(goCfg.Type), layout.offsets["Type"])
 		checkOffsetEqual(t, "ShimSessionDescription.SDP", unsafe.Offsetof(goCfg.SDP), layout.offsets["SDP"])
+	})
+
+	t.Run("ShimTrackSetAudioSinkParams", func(t *testing.T) {
+		var goCfg shimTrackSetAudioSinkParams
+		layout := cShimTrackSetAudioSinkParamsLayout()
+		checkSizeEqual(t, "ShimTrackSetAudioSinkParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimTrackSetAudioSinkParams.Track", unsafe.Offsetof(goCfg.Track), layout.offsets["Track"])
+		checkOffsetEqual(t, "ShimTrackSetAudioSinkParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimTrackSetAudioSinkParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimTrackSetVideoSinkParams", func(t *testing.T) {
+		var goCfg shimTrackSetVideoSinkParams
+		layout := cShimTrackSetVideoSinkParamsLayout()
+		checkSizeEqual(t, "ShimTrackSetVideoSinkParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimTrackSetVideoSinkParams.Track", unsafe.Offsetof(goCfg.Track), layout.offsets["Track"])
+		checkOffsetEqual(t, "ShimTrackSetVideoSinkParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimTrackSetVideoSinkParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+	})
+
+	t.Run("ShimTransceiverGetCodecPreferencesParams", func(t *testing.T) {
+		var goCfg shimTransceiverGetCodecPreferencesParams
+		layout := cShimTransceiverGetCodecPreferencesParamsLayout()
+		checkSizeEqual(t, "ShimTransceiverGetCodecPreferencesParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimTransceiverGetCodecPreferencesParams.Transceiver", unsafe.Offsetof(goCfg.Transceiver), layout.offsets["Transceiver"])
+		checkOffsetEqual(t, "ShimTransceiverGetCodecPreferencesParams.Codecs", unsafe.Offsetof(goCfg.Codecs), layout.offsets["Codecs"])
+		checkOffsetEqual(t, "ShimTransceiverGetCodecPreferencesParams.MaxCodecs", unsafe.Offsetof(goCfg.MaxCodecs), layout.offsets["MaxCodecs"])
+		checkOffsetEqual(t, "ShimTransceiverGetCodecPreferencesParams.OutCount", unsafe.Offsetof(goCfg.OutCount), layout.offsets["OutCount"])
+	})
+
+	t.Run("ShimTransceiverSetCodecPreferencesParams", func(t *testing.T) {
+		var goCfg shimTransceiverSetCodecPreferencesParams
+		layout := cShimTransceiverSetCodecPreferencesParamsLayout()
+		checkSizeEqual(t, "ShimTransceiverSetCodecPreferencesParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimTransceiverSetCodecPreferencesParams.Transceiver", unsafe.Offsetof(goCfg.Transceiver), layout.offsets["Transceiver"])
+		checkOffsetEqual(t, "ShimTransceiverSetCodecPreferencesParams.Codecs", unsafe.Offsetof(goCfg.Codecs), layout.offsets["Codecs"])
+		checkOffsetEqual(t, "ShimTransceiverSetCodecPreferencesParams.Count", unsafe.Offsetof(goCfg.Count), layout.offsets["Count"])
+		checkOffsetEqual(t, "ShimTransceiverSetCodecPreferencesParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimTransceiverSetDirectionParams", func(t *testing.T) {
+		var goCfg shimTransceiverSetDirectionParams
+		layout := cShimTransceiverSetDirectionParamsLayout()
+		checkSizeEqual(t, "ShimTransceiverSetDirectionParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimTransceiverSetDirectionParams.Transceiver", unsafe.Offsetof(goCfg.Transceiver), layout.offsets["Transceiver"])
+		checkOffsetEqual(t, "ShimTransceiverSetDirectionParams.Direction", unsafe.Offsetof(goCfg.Direction), layout.offsets["Direction"])
+		checkOffsetEqual(t, "ShimTransceiverSetDirectionParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimTransceiverStopParams", func(t *testing.T) {
+		var goCfg shimTransceiverStopParams
+		layout := cShimTransceiverStopParamsLayout()
+		checkSizeEqual(t, "ShimTransceiverStopParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimTransceiverStopParams.Transceiver", unsafe.Offsetof(goCfg.Transceiver), layout.offsets["Transceiver"])
+		checkOffsetEqual(t, "ShimTransceiverStopParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimVideoCaptureCreateParams", func(t *testing.T) {
+		var goCfg shimVideoCaptureCreateParams
+		layout := cShimVideoCaptureCreateParamsLayout()
+		checkSizeEqual(t, "ShimVideoCaptureCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoCaptureCreateParams.DeviceID", unsafe.Offsetof(goCfg.DeviceID), layout.offsets["DeviceID"])
+		checkOffsetEqual(t, "ShimVideoCaptureCreateParams.Width", unsafe.Offsetof(goCfg.Width), layout.offsets["Width"])
+		checkOffsetEqual(t, "ShimVideoCaptureCreateParams.Height", unsafe.Offsetof(goCfg.Height), layout.offsets["Height"])
+		checkOffsetEqual(t, "ShimVideoCaptureCreateParams.FPS", unsafe.Offsetof(goCfg.FPS), layout.offsets["FPS"])
+		checkOffsetEqual(t, "ShimVideoCaptureCreateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimVideoCaptureStartParams", func(t *testing.T) {
+		var goCfg shimVideoCaptureStartParams
+		layout := cShimVideoCaptureStartParamsLayout()
+		checkSizeEqual(t, "ShimVideoCaptureStartParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoCaptureStartParams.Cap", unsafe.Offsetof(goCfg.Cap), layout.offsets["Cap"])
+		checkOffsetEqual(t, "ShimVideoCaptureStartParams.Callback", unsafe.Offsetof(goCfg.Callback), layout.offsets["Callback"])
+		checkOffsetEqual(t, "ShimVideoCaptureStartParams.Ctx", unsafe.Offsetof(goCfg.Ctx), layout.offsets["Ctx"])
+		checkOffsetEqual(t, "ShimVideoCaptureStartParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimVideoDecoderCreateParams", func(t *testing.T) {
+		var goCfg shimVideoDecoderCreateParams
+		layout := cShimVideoDecoderCreateParamsLayout()
+		checkSizeEqual(t, "ShimVideoDecoderCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoDecoderCreateParams.Codec", unsafe.Offsetof(goCfg.Codec), layout.offsets["Codec"])
+		checkOffsetEqual(t, "ShimVideoDecoderCreateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
 	})
 
 	t.Run("ShimVideoDecoderDecodeParams", func(t *testing.T) {
@@ -241,6 +910,15 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimVideoEncoderConfig.PreferHW", unsafe.Offsetof(goCfg.PreferHW), layout.offsets["PreferHW"])
 	})
 
+	t.Run("ShimVideoEncoderCreateParams", func(t *testing.T) {
+		var goCfg shimVideoEncoderCreateParams
+		layout := cShimVideoEncoderCreateParamsLayout()
+		checkSizeEqual(t, "ShimVideoEncoderCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoEncoderCreateParams.Codec", unsafe.Offsetof(goCfg.Codec), layout.offsets["Codec"])
+		checkOffsetEqual(t, "ShimVideoEncoderCreateParams.Config", unsafe.Offsetof(goCfg.Config), layout.offsets["Config"])
+		checkOffsetEqual(t, "ShimVideoEncoderCreateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
 	t.Run("ShimVideoEncoderEncodeParams", func(t *testing.T) {
 		var goCfg shimVideoEncoderEncodeParams
 		layout := cShimVideoEncoderEncodeParamsLayout()
@@ -258,6 +936,47 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.OutSize", unsafe.Offsetof(goCfg.OutSize), layout.offsets["OutSize"])
 		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.OutIsKeyframe", unsafe.Offsetof(goCfg.OutIsKeyframe), layout.offsets["OutIsKeyframe"])
 		checkOffsetEqual(t, "ShimVideoEncoderEncodeParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimVideoEncoderSetBitrateParams", func(t *testing.T) {
+		var goCfg shimVideoEncoderSetBitrateParams
+		layout := cShimVideoEncoderSetBitrateParamsLayout()
+		checkSizeEqual(t, "ShimVideoEncoderSetBitrateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoEncoderSetBitrateParams.Encoder", unsafe.Offsetof(goCfg.Encoder), layout.offsets["Encoder"])
+		checkOffsetEqual(t, "ShimVideoEncoderSetBitrateParams.BitrateBps", unsafe.Offsetof(goCfg.BitrateBps), layout.offsets["BitrateBps"])
+		checkOffsetEqual(t, "ShimVideoEncoderSetBitrateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimVideoEncoderSetFramerateParams", func(t *testing.T) {
+		var goCfg shimVideoEncoderSetFramerateParams
+		layout := cShimVideoEncoderSetFramerateParamsLayout()
+		checkSizeEqual(t, "ShimVideoEncoderSetFramerateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoEncoderSetFramerateParams.Encoder", unsafe.Offsetof(goCfg.Encoder), layout.offsets["Encoder"])
+		checkOffsetEqual(t, "ShimVideoEncoderSetFramerateParams.Framerate", unsafe.Offsetof(goCfg.Framerate), layout.offsets["Framerate"])
+		checkOffsetEqual(t, "ShimVideoEncoderSetFramerateParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
+	})
+
+	t.Run("ShimVideoTrackSourceCreateParams", func(t *testing.T) {
+		var goCfg shimVideoTrackSourceCreateParams
+		layout := cShimVideoTrackSourceCreateParamsLayout()
+		checkSizeEqual(t, "ShimVideoTrackSourceCreateParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoTrackSourceCreateParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
+		checkOffsetEqual(t, "ShimVideoTrackSourceCreateParams.Width", unsafe.Offsetof(goCfg.Width), layout.offsets["Width"])
+		checkOffsetEqual(t, "ShimVideoTrackSourceCreateParams.Height", unsafe.Offsetof(goCfg.Height), layout.offsets["Height"])
+	})
+
+	t.Run("ShimVideoTrackSourcePushFrameParams", func(t *testing.T) {
+		var goCfg shimVideoTrackSourcePushFrameParams
+		layout := cShimVideoTrackSourcePushFrameParamsLayout()
+		checkSizeEqual(t, "ShimVideoTrackSourcePushFrameParams", unsafe.Sizeof(goCfg), layout.size)
+		checkOffsetEqual(t, "ShimVideoTrackSourcePushFrameParams.Source", unsafe.Offsetof(goCfg.Source), layout.offsets["Source"])
+		checkOffsetEqual(t, "ShimVideoTrackSourcePushFrameParams.YPlane", unsafe.Offsetof(goCfg.YPlane), layout.offsets["YPlane"])
+		checkOffsetEqual(t, "ShimVideoTrackSourcePushFrameParams.UPlane", unsafe.Offsetof(goCfg.UPlane), layout.offsets["UPlane"])
+		checkOffsetEqual(t, "ShimVideoTrackSourcePushFrameParams.VPlane", unsafe.Offsetof(goCfg.VPlane), layout.offsets["VPlane"])
+		checkOffsetEqual(t, "ShimVideoTrackSourcePushFrameParams.YStride", unsafe.Offsetof(goCfg.YStride), layout.offsets["YStride"])
+		checkOffsetEqual(t, "ShimVideoTrackSourcePushFrameParams.UStride", unsafe.Offsetof(goCfg.UStride), layout.offsets["UStride"])
+		checkOffsetEqual(t, "ShimVideoTrackSourcePushFrameParams.VStride", unsafe.Offsetof(goCfg.VStride), layout.offsets["VStride"])
+		checkOffsetEqual(t, "ShimVideoTrackSourcePushFrameParams.TimestampUs", unsafe.Offsetof(goCfg.TimestampUs), layout.offsets["TimestampUs"])
 	})
 
 }

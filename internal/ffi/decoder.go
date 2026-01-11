@@ -17,7 +17,13 @@ func CreateVideoDecoder(codec CodecType) (uintptr, error) {
 		}
 	}
 	var errBuf ShimErrorBuffer
-	decoder := shimVideoDecoderCreate(int32(codec), errBuf.Ptr())
+	params := shimVideoDecoderCreateParams{
+		Codec:    int32(codec),
+		ErrorOut: errBuf.Ptr(),
+	}
+	decoder := shimVideoDecoderCreate(uintptr(unsafe.Pointer(&params)))
+	runtime.KeepAlive(&params)
+	runtime.KeepAlive(&errBuf)
 	if decoder == 0 {
 		msg := errBuf.String()
 		if msg != "" {
@@ -89,7 +95,14 @@ func CreateAudioDecoder(sampleRate, channels int) (uintptr, error) {
 		return 0, ErrLibraryNotLoaded
 	}
 	var errBuf ShimErrorBuffer
-	decoder := shimAudioDecoderCreate(int32(sampleRate), int32(channels), errBuf.Ptr())
+	params := shimAudioDecoderCreateParams{
+		SampleRate: int32(sampleRate),
+		Channels:   int32(channels),
+		ErrorOut:   errBuf.Ptr(),
+	}
+	decoder := shimAudioDecoderCreate(uintptr(unsafe.Pointer(&params)))
+	runtime.KeepAlive(&params)
+	runtime.KeepAlive(&errBuf)
 	if decoder == 0 {
 		msg := errBuf.String()
 		if msg != "" {

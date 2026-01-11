@@ -121,13 +121,16 @@ static std::mutex g_pc_observers_mutex;
 
 extern "C" {
 
-SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
-    const ShimPeerConnectionConfig* config,
-    ShimErrorBuffer* error_out
-) {
+SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(ShimPeerConnectionCreateParams* params) {
     shim::InitializeGlobals();
 
+    if (!params) {
+        return nullptr;
+    }
+
     auto pc = std::make_unique<ShimPeerConnection>();
+    const ShimPeerConnectionConfig* config = params->config;
+    ShimErrorBuffer* error_out = params->error_out;
 
     // Create encoder/decoder factories.
     bool use_software = shim::ShouldUseSoftwareCodecs();
@@ -215,103 +218,70 @@ SHIM_EXPORT void shim_peer_connection_destroy(ShimPeerConnection* pc) {
     }
 }
 
-SHIM_EXPORT void shim_peer_connection_set_on_ice_candidate(
-    ShimPeerConnection* pc,
-    ShimOnICECandidate callback,
-    void* ctx
-) {
-    if (pc) {
-        pc->on_ice_candidate = callback;
-        pc->on_ice_candidate_ctx = ctx;
+SHIM_EXPORT void shim_peer_connection_set_on_ice_candidate(ShimPeerConnectionSetOnICECandidateParams* params) {
+    if (params && params->pc) {
+        params->pc->on_ice_candidate = params->callback;
+        params->pc->on_ice_candidate_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_peer_connection_set_on_connection_state_change(
-    ShimPeerConnection* pc,
-    ShimOnConnectionStateChange callback,
-    void* ctx
-) {
-    if (pc) {
-        pc->on_connection_state_change = callback;
-        pc->on_connection_state_change_ctx = ctx;
+SHIM_EXPORT void shim_peer_connection_set_on_connection_state_change(ShimPeerConnectionSetOnConnectionStateChangeParams* params) {
+    if (params && params->pc) {
+        params->pc->on_connection_state_change = params->callback;
+        params->pc->on_connection_state_change_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_peer_connection_set_on_track(
-    ShimPeerConnection* pc,
-    ShimOnTrack callback,
-    void* ctx
-) {
-    if (pc) {
-        pc->on_track = callback;
-        pc->on_track_ctx = ctx;
+SHIM_EXPORT void shim_peer_connection_set_on_track(ShimPeerConnectionSetOnTrackParams* params) {
+    if (params && params->pc) {
+        params->pc->on_track = params->callback;
+        params->pc->on_track_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_peer_connection_set_on_data_channel(
-    ShimPeerConnection* pc,
-    ShimOnDataChannel callback,
-    void* ctx
-) {
-    if (pc) {
-        pc->on_data_channel = callback;
-        pc->on_data_channel_ctx = ctx;
+SHIM_EXPORT void shim_peer_connection_set_on_data_channel(ShimPeerConnectionSetOnDataChannelParams* params) {
+    if (params && params->pc) {
+        params->pc->on_data_channel = params->callback;
+        params->pc->on_data_channel_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_peer_connection_set_on_signaling_state_change(
-    ShimPeerConnection* pc,
-    ShimOnSignalingStateChange callback,
-    void* ctx
-) {
-    if (pc) {
-        pc->on_signaling_state_change = callback;
-        pc->on_signaling_state_change_ctx = ctx;
+SHIM_EXPORT void shim_peer_connection_set_on_signaling_state_change(ShimPeerConnectionSetOnSignalingStateChangeParams* params) {
+    if (params && params->pc) {
+        params->pc->on_signaling_state_change = params->callback;
+        params->pc->on_signaling_state_change_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_peer_connection_set_on_ice_connection_state_change(
-    ShimPeerConnection* pc,
-    ShimOnICEConnectionStateChange callback,
-    void* ctx
-) {
-    if (pc) {
-        pc->on_ice_connection_state_change = callback;
-        pc->on_ice_connection_state_change_ctx = ctx;
+SHIM_EXPORT void shim_peer_connection_set_on_ice_connection_state_change(ShimPeerConnectionSetOnICEConnectionStateChangeParams* params) {
+    if (params && params->pc) {
+        params->pc->on_ice_connection_state_change = params->callback;
+        params->pc->on_ice_connection_state_change_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_peer_connection_set_on_ice_gathering_state_change(
-    ShimPeerConnection* pc,
-    ShimOnICEGatheringStateChange callback,
-    void* ctx
-) {
-    if (pc) {
-        pc->on_ice_gathering_state_change = callback;
-        pc->on_ice_gathering_state_change_ctx = ctx;
+SHIM_EXPORT void shim_peer_connection_set_on_ice_gathering_state_change(ShimPeerConnectionSetOnICEGatheringStateChangeParams* params) {
+    if (params && params->pc) {
+        params->pc->on_ice_gathering_state_change = params->callback;
+        params->pc->on_ice_gathering_state_change_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT void shim_peer_connection_set_on_negotiation_needed(
-    ShimPeerConnection* pc,
-    ShimOnNegotiationNeeded callback,
-    void* ctx
-) {
-    if (pc) {
-        pc->on_negotiation_needed = callback;
-        pc->on_negotiation_needed_ctx = ctx;
+SHIM_EXPORT void shim_peer_connection_set_on_negotiation_needed(ShimPeerConnectionSetOnNegotiationNeededParams* params) {
+    if (params && params->pc) {
+        params->pc->on_negotiation_needed = params->callback;
+        params->pc->on_negotiation_needed_ctx = params->ctx;
     }
 }
 
-SHIM_EXPORT int shim_peer_connection_create_offer(
-    ShimPeerConnection* pc,
-    char* sdp_out,
-    int sdp_out_size,
-    int* out_sdp_len,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection || !sdp_out || !out_sdp_len) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_peer_connection_create_offer(ShimPeerConnectionCreateOfferParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    params->out_sdp_len = 0;
+    if (!params->pc || !params->pc->peer_connection || !params->sdp_out) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -348,7 +318,7 @@ SHIM_EXPORT int shim_peer_connection_create_offer(
     auto observer = webrtc::make_ref_counted<CreateSessionDescriptionObserver>();
 
     webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
-    pc->peer_connection->CreateOffer(observer.get(), options);
+    params->pc->peer_connection->CreateOffer(observer.get(), options);
 
     // Wait for completion
     {
@@ -357,31 +327,30 @@ SHIM_EXPORT int shim_peer_connection_create_offer(
     }
 
     if (!observer->success) {
-        shim::SetErrorMessage(error_out, observer->error_message);
+        shim::SetErrorMessage(params->error_out, observer->error_message);
         return SHIM_ERROR_INIT_FAILED;
     }
 
     int len = static_cast<int>(observer->sdp.size());
-    if (len >= sdp_out_size) {
-        shim::SetErrorMessage(error_out, "SDP buffer too small", SHIM_ERROR_BUFFER_TOO_SMALL);
+    if (len >= params->sdp_out_size) {
+        shim::SetErrorMessage(params->error_out, "SDP buffer too small", SHIM_ERROR_BUFFER_TOO_SMALL);
         return SHIM_ERROR_BUFFER_TOO_SMALL;
     }
 
-    memcpy(sdp_out, observer->sdp.c_str(), len + 1);
-    *out_sdp_len = len;
+    memcpy(params->sdp_out, observer->sdp.c_str(), len + 1);
+    params->out_sdp_len = len;
 
     return SHIM_OK;
 }
 
-SHIM_EXPORT int shim_peer_connection_create_answer(
-    ShimPeerConnection* pc,
-    char* sdp_out,
-    int sdp_out_size,
-    int* out_sdp_len,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection || !sdp_out || !out_sdp_len) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_peer_connection_create_answer(ShimPeerConnectionCreateAnswerParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    params->out_sdp_len = 0;
+    if (!params->pc || !params->pc->peer_connection || !params->sdp_out) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -418,7 +387,7 @@ SHIM_EXPORT int shim_peer_connection_create_answer(
     auto observer = webrtc::make_ref_counted<CreateSessionDescriptionObserver>();
 
     webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
-    pc->peer_connection->CreateAnswer(observer.get(), options);
+    params->pc->peer_connection->CreateAnswer(observer.get(), options);
 
     // Wait for completion
     {
@@ -427,51 +396,49 @@ SHIM_EXPORT int shim_peer_connection_create_answer(
     }
 
     if (!observer->success) {
-        shim::SetErrorMessage(error_out, observer->error_message);
+        shim::SetErrorMessage(params->error_out, observer->error_message);
         return SHIM_ERROR_INIT_FAILED;
     }
 
     int len = static_cast<int>(observer->sdp.size());
-    if (len >= sdp_out_size) {
-        shim::SetErrorMessage(error_out, "SDP buffer too small", SHIM_ERROR_BUFFER_TOO_SMALL);
+    if (len >= params->sdp_out_size) {
+        shim::SetErrorMessage(params->error_out, "SDP buffer too small", SHIM_ERROR_BUFFER_TOO_SMALL);
         return SHIM_ERROR_BUFFER_TOO_SMALL;
     }
 
-    memcpy(sdp_out, observer->sdp.c_str(), len + 1);
-    *out_sdp_len = len;
+    memcpy(params->sdp_out, observer->sdp.c_str(), len + 1);
+    params->out_sdp_len = len;
 
     return SHIM_OK;
 }
 
-SHIM_EXPORT int shim_peer_connection_set_local_description(
-    ShimPeerConnection* pc,
-    int type,
-    const char* sdp,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection || !sdp) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_peer_connection_set_local_description(ShimPeerConnectionSetLocalDescriptionParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    if (!params->pc || !params->pc->peer_connection || !params->sdp) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
     webrtc::SdpType sdp_type;
-    switch (type) {
+    switch (params->type) {
         case 0: sdp_type = webrtc::SdpType::kOffer; break;
         case 1: sdp_type = webrtc::SdpType::kPrAnswer; break;
         case 2: sdp_type = webrtc::SdpType::kAnswer; break;
         default:
-            shim::SetErrorMessage(error_out, "invalid SDP type", SHIM_ERROR_INVALID_PARAM);
+            shim::SetErrorMessage(params->error_out, "invalid SDP type", SHIM_ERROR_INVALID_PARAM);
             return SHIM_ERROR_INVALID_PARAM;
     }
 
     webrtc::SdpParseError parse_error;
-    auto desc = webrtc::CreateSessionDescription(sdp_type, sdp, &parse_error);
+    auto desc = webrtc::CreateSessionDescription(sdp_type, params->sdp, &parse_error);
     if (!desc) {
         std::string msg = "SDP parse error";
         if (!parse_error.description.empty()) {
             msg += ": " + parse_error.description;
         }
-        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INVALID_PARAM);
+        shim::SetErrorMessage(params->error_out, msg, SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -504,7 +471,7 @@ SHIM_EXPORT int shim_peer_connection_set_local_description(
     };
 
     auto observer = webrtc::make_ref_counted<SetSessionDescriptionObserver>();
-    pc->peer_connection->SetLocalDescription(observer.get(), desc.release());
+    params->pc->peer_connection->SetLocalDescription(observer.get(), desc.release());
 
     {
         std::unique_lock<std::mutex> lock(observer->mutex);
@@ -512,41 +479,39 @@ SHIM_EXPORT int shim_peer_connection_set_local_description(
     }
 
     if (!observer->success) {
-        shim::SetErrorMessage(error_out, observer->error_message);
+        shim::SetErrorMessage(params->error_out, observer->error_message);
         return SHIM_ERROR_INIT_FAILED;
     }
     return SHIM_OK;
 }
 
-SHIM_EXPORT int shim_peer_connection_set_remote_description(
-    ShimPeerConnection* pc,
-    int type,
-    const char* sdp,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection || !sdp) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_peer_connection_set_remote_description(ShimPeerConnectionSetRemoteDescriptionParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    if (!params->pc || !params->pc->peer_connection || !params->sdp) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
     webrtc::SdpType sdp_type;
-    switch (type) {
+    switch (params->type) {
         case 0: sdp_type = webrtc::SdpType::kOffer; break;
         case 1: sdp_type = webrtc::SdpType::kPrAnswer; break;
         case 2: sdp_type = webrtc::SdpType::kAnswer; break;
         default:
-            shim::SetErrorMessage(error_out, "invalid SDP type", SHIM_ERROR_INVALID_PARAM);
+            shim::SetErrorMessage(params->error_out, "invalid SDP type", SHIM_ERROR_INVALID_PARAM);
             return SHIM_ERROR_INVALID_PARAM;
     }
 
     webrtc::SdpParseError parse_error;
-    auto desc = webrtc::CreateSessionDescription(sdp_type, sdp, &parse_error);
+    auto desc = webrtc::CreateSessionDescription(sdp_type, params->sdp, &parse_error);
     if (!desc) {
         std::string msg = "SDP parse error";
         if (!parse_error.description.empty()) {
             msg += ": " + parse_error.description;
         }
-        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INVALID_PARAM);
+        shim::SetErrorMessage(params->error_out, msg, SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -579,7 +544,7 @@ SHIM_EXPORT int shim_peer_connection_set_remote_description(
     };
 
     auto observer = webrtc::make_ref_counted<SetSessionDescriptionObserver>();
-    pc->peer_connection->SetRemoteDescription(observer.get(), desc.release());
+    params->pc->peer_connection->SetRemoteDescription(observer.get(), desc.release());
 
     {
         std::unique_lock<std::mutex> lock(observer->mutex);
@@ -587,29 +552,26 @@ SHIM_EXPORT int shim_peer_connection_set_remote_description(
     }
 
     if (!observer->success) {
-        shim::SetErrorMessage(error_out, observer->error_message);
+        shim::SetErrorMessage(params->error_out, observer->error_message);
         return SHIM_ERROR_INIT_FAILED;
     }
     return SHIM_OK;
 }
 
-SHIM_EXPORT int shim_peer_connection_add_ice_candidate(
-    ShimPeerConnection* pc,
-    const char* candidate,
-    const char* sdp_mid,
-    int sdp_mline_index,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection || !candidate) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_peer_connection_add_ice_candidate(ShimPeerConnectionAddICECandidateParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    if (!params->pc || !params->pc->peer_connection || !params->candidate) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
     webrtc::SdpParseError parse_error;
     webrtc::IceCandidate* ice_candidate = webrtc::CreateIceCandidate(
-        sdp_mid ? sdp_mid : "",
-        sdp_mline_index,
-        candidate,
+        params->sdp_mid ? params->sdp_mid : "",
+        params->sdp_mline_index,
+        params->candidate,
         &parse_error
     );
 
@@ -618,13 +580,13 @@ SHIM_EXPORT int shim_peer_connection_add_ice_candidate(
         if (!parse_error.description.empty()) {
             msg += ": " + parse_error.description;
         }
-        shim::SetErrorMessage(error_out, msg, SHIM_ERROR_INVALID_PARAM);
+        shim::SetErrorMessage(params->error_out, msg, SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    if (!pc->peer_connection->AddIceCandidate(ice_candidate)) {
+    if (!params->pc->peer_connection->AddIceCandidate(ice_candidate)) {
         delete ice_candidate;
-        shim::SetErrorMessage(error_out, "AddIceCandidate failed");
+        shim::SetErrorMessage(params->error_out, "AddIceCandidate failed");
         return SHIM_ERROR_INIT_FAILED;
     }
     delete ice_candidate;
@@ -652,88 +614,80 @@ SHIM_EXPORT int shim_peer_connection_connection_state(ShimPeerConnection* pc) {
     return static_cast<int>(pc->peer_connection->peer_connection_state());
 }
 
-SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_track(
-    ShimPeerConnection* pc,
-    ShimCodecType codec,
-    const char* track_id,
-    const char* stream_id,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection || !track_id) {
-        shim::SetErrorMessage(error_out, "invalid parameter");
+SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_track(ShimPeerConnectionAddTrackParams* params) {
+    if (!params) {
+        return nullptr;
+    }
+    if (!params->pc || !params->pc->peer_connection || !params->track_id) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter");
         return nullptr;
     }
 
     // Create transceiver for the media type
-    auto result = pc->peer_connection->AddTransceiver(
-        codec == SHIM_CODEC_OPUS ? webrtc::MediaType::AUDIO : webrtc::MediaType::VIDEO
+    auto result = params->pc->peer_connection->AddTransceiver(
+        params->codec == SHIM_CODEC_OPUS ? webrtc::MediaType::AUDIO : webrtc::MediaType::VIDEO
     );
 
     if (!result.ok()) {
-        shim::SetErrorFromRTCError(error_out, result.error());
+        shim::SetErrorFromRTCError(params->error_out, result.error());
         return nullptr;
     }
 
     auto sender = result.value()->sender();
-    pc->senders.push_back(sender);
+    params->pc->senders.push_back(sender);
 
     return reinterpret_cast<ShimRTPSender*>(sender.get());
 }
 
-SHIM_EXPORT int shim_peer_connection_remove_track(
-    ShimPeerConnection* pc,
-    ShimRTPSender* sender,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection || !sender) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_peer_connection_remove_track(ShimPeerConnectionRemoveTrackParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    if (!params->pc || !params->pc->peer_connection || !params->sender) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(sender);
+    auto webrtc_sender = reinterpret_cast<webrtc::RtpSenderInterface*>(params->sender);
 
-    auto result = pc->peer_connection->RemoveTrackOrError(
+    auto result = params->pc->peer_connection->RemoveTrackOrError(
         webrtc::scoped_refptr<webrtc::RtpSenderInterface>(webrtc_sender)
     );
 
     if (!result.ok()) {
-        shim::SetErrorFromRTCError(error_out, result);
+        shim::SetErrorFromRTCError(params->error_out, result);
         return SHIM_ERROR_INIT_FAILED;
     }
     return SHIM_OK;
 }
 
-SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(
-    ShimPeerConnection* pc,
-    const char* label,
-    int ordered,
-    int max_retransmits,
-    const char* protocol,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection || !label) {
-        shim::SetErrorMessage(error_out, "invalid parameter");
+SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(ShimPeerConnectionCreateDataChannelParams* params) {
+    if (!params) {
+        return nullptr;
+    }
+    if (!params->pc || !params->pc->peer_connection || !params->label) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter");
         return nullptr;
     }
 
     webrtc::DataChannelInit config;
-    config.ordered = ordered != 0;
-    if (max_retransmits >= 0) {
-        config.maxRetransmits = max_retransmits;
+    config.ordered = params->ordered != 0;
+    if (params->max_retransmits >= 0) {
+        config.maxRetransmits = params->max_retransmits;
     }
-    if (protocol) {
-        config.protocol = protocol;
+    if (params->protocol) {
+        config.protocol = params->protocol;
     }
 
-    auto result = pc->peer_connection->CreateDataChannelOrError(label, &config);
+    auto result = params->pc->peer_connection->CreateDataChannelOrError(params->label, &config);
     if (!result.ok()) {
-        shim::SetErrorFromRTCError(error_out, result.error());
+        shim::SetErrorFromRTCError(params->error_out, result.error());
         return nullptr;
     }
 
     // Store in PC's data_channels vector to maintain proper reference count
     auto channel = result.MoveValue();
-    pc->data_channels.push_back(channel);
+    params->pc->data_channels.push_back(channel);
 
     // Return raw pointer (PC owns the reference)
     return reinterpret_cast<ShimDataChannel*>(channel.get());
@@ -745,83 +699,84 @@ SHIM_EXPORT void shim_peer_connection_close(ShimPeerConnection* pc) {
     }
 }
 
-SHIM_EXPORT ShimRTPTransceiver* shim_peer_connection_add_transceiver(
-    ShimPeerConnection* pc,
-    int kind,
-    int direction,
-    ShimErrorBuffer* error_out
-) {
-    if (!pc || !pc->peer_connection) {
-        shim::SetErrorMessage(error_out, "invalid parameter");
+SHIM_EXPORT ShimRTPTransceiver* shim_peer_connection_add_transceiver(ShimPeerConnectionAddTransceiverParams* params) {
+    if (!params) {
+        return nullptr;
+    }
+    if (!params->pc || !params->pc->peer_connection) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter");
         return nullptr;
     }
 
-    webrtc::MediaType media_type = kind == 0 ? webrtc::MediaType::AUDIO : webrtc::MediaType::VIDEO;
+    webrtc::MediaType media_type = params->kind == 0 ? webrtc::MediaType::AUDIO : webrtc::MediaType::VIDEO;
     webrtc::RtpTransceiverInit init;
-    init.direction = static_cast<webrtc::RtpTransceiverDirection>(direction);
+    init.direction = static_cast<webrtc::RtpTransceiverDirection>(params->direction);
 
-    auto result = pc->peer_connection->AddTransceiver(media_type, init);
+    auto result = params->pc->peer_connection->AddTransceiver(media_type, init);
     if (!result.ok()) {
-        shim::SetErrorFromRTCError(error_out, result.error());
+        shim::SetErrorFromRTCError(params->error_out, result.error());
         return nullptr;
     }
 
     return reinterpret_cast<ShimRTPTransceiver*>(result.value().get());
 }
 
-SHIM_EXPORT int shim_peer_connection_get_senders(
-    ShimPeerConnection* pc,
-    ShimRTPSender** senders,
-    int max_senders,
-    int* out_count
-) {
-    if (!pc || !pc->peer_connection || !senders || !out_count) return SHIM_ERROR_INVALID_PARAM;
+SHIM_EXPORT int shim_peer_connection_get_senders(ShimPeerConnectionGetSendersParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    params->out_count = 0;
+    if (!params->pc || !params->pc->peer_connection || !params->senders || params->max_senders <= 0) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
-    auto all_senders = pc->peer_connection->GetSenders();
-    int count = std::min(static_cast<int>(all_senders.size()), max_senders);
+    auto all_senders = params->pc->peer_connection->GetSenders();
+    int count = std::min(static_cast<int>(all_senders.size()), params->max_senders);
 
     for (int i = 0; i < count; i++) {
-        senders[i] = reinterpret_cast<ShimRTPSender*>(all_senders[i].get());
+        params->senders[i] = reinterpret_cast<ShimRTPSender*>(all_senders[i].get());
     }
-    *out_count = count;
+    params->out_count = count;
 
     return SHIM_OK;
 }
 
-SHIM_EXPORT int shim_peer_connection_get_receivers(
-    ShimPeerConnection* pc,
-    ShimRTPReceiver** receivers,
-    int max_receivers,
-    int* out_count
-) {
-    if (!pc || !pc->peer_connection || !receivers || !out_count) return SHIM_ERROR_INVALID_PARAM;
+SHIM_EXPORT int shim_peer_connection_get_receivers(ShimPeerConnectionGetReceiversParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    params->out_count = 0;
+    if (!params->pc || !params->pc->peer_connection || !params->receivers || params->max_receivers <= 0) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
-    auto all_receivers = pc->peer_connection->GetReceivers();
-    int count = std::min(static_cast<int>(all_receivers.size()), max_receivers);
+    auto all_receivers = params->pc->peer_connection->GetReceivers();
+    int count = std::min(static_cast<int>(all_receivers.size()), params->max_receivers);
 
     for (int i = 0; i < count; i++) {
-        receivers[i] = reinterpret_cast<ShimRTPReceiver*>(all_receivers[i].get());
+        params->receivers[i] = reinterpret_cast<ShimRTPReceiver*>(all_receivers[i].get());
     }
-    *out_count = count;
+    params->out_count = count;
 
     return SHIM_OK;
 }
 
-SHIM_EXPORT int shim_peer_connection_get_transceivers(
-    ShimPeerConnection* pc,
-    ShimRTPTransceiver** transceivers,
-    int max_transceivers,
-    int* out_count
-) {
-    if (!pc || !pc->peer_connection || !transceivers || !out_count) return SHIM_ERROR_INVALID_PARAM;
+SHIM_EXPORT int shim_peer_connection_get_transceivers(ShimPeerConnectionGetTransceiversParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    params->out_count = 0;
+    if (!params->pc || !params->pc->peer_connection || !params->transceivers || params->max_transceivers <= 0) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
-    auto all_transceivers = pc->peer_connection->GetTransceivers();
-    int count = std::min(static_cast<int>(all_transceivers.size()), max_transceivers);
+    auto all_transceivers = params->pc->peer_connection->GetTransceivers();
+    int count = std::min(static_cast<int>(all_transceivers.size()), params->max_transceivers);
 
     for (int i = 0; i < count; i++) {
-        transceivers[i] = reinterpret_cast<ShimRTPTransceiver*>(all_transceivers[i].get());
+        params->transceivers[i] = reinterpret_cast<ShimRTPTransceiver*>(all_transceivers[i].get());
     }
-    *out_count = count;
+    params->out_count = count;
 
     return SHIM_OK;
 }
@@ -848,13 +803,20 @@ public:
     }
 };
 
-SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCStats* out_stats) {
-    if (!pc || !pc->peer_connection || !out_stats) return SHIM_ERROR_INVALID_PARAM;
-    memset(out_stats, 0, sizeof(ShimRTCStats));
+SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnectionGetStatsParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    if (!params->pc || !params->pc->peer_connection) {
+        memset(&params->out_stats, 0, sizeof(ShimRTCStats));
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    memset(&params->out_stats, 0, sizeof(ShimRTCStats));
 
     // Create callback and get stats asynchronously
     auto callback = webrtc::make_ref_counted<StatsCollectorCallback>();
-    pc->peer_connection->GetStats(callback.get());
+    params->pc->peer_connection->GetStats(callback.get());
 
     // Wait for completion
     {
@@ -866,7 +828,7 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCSt
         return SHIM_ERROR_INIT_FAILED;
     }
 
-    out_stats->timestamp_us = webrtc::TimeMicros();
+    params->out_stats.timestamp_us = webrtc::TimeMicros();
 
     // Iterate through all stats and aggregate them
     for (const auto& stat : *callback->report) {
@@ -874,35 +836,35 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCSt
         if (stat.type() == webrtc::RTCOutboundRtpStreamStats::kType) {
             const auto& outbound = stat.cast_to<webrtc::RTCOutboundRtpStreamStats>();
             if (outbound.bytes_sent.has_value()) {
-                out_stats->bytes_sent += *outbound.bytes_sent;
+                params->out_stats.bytes_sent += *outbound.bytes_sent;
             }
             if (outbound.packets_sent.has_value()) {
-                out_stats->packets_sent += *outbound.packets_sent;
+                params->out_stats.packets_sent += *outbound.packets_sent;
             }
             if (outbound.frames_encoded.has_value()) {
-                out_stats->frames_encoded += *outbound.frames_encoded;
+                params->out_stats.frames_encoded += *outbound.frames_encoded;
             }
             if (outbound.key_frames_encoded.has_value()) {
-                out_stats->key_frames_encoded += *outbound.key_frames_encoded;
+                params->out_stats.key_frames_encoded += *outbound.key_frames_encoded;
             }
             if (outbound.nack_count.has_value()) {
-                out_stats->nack_count += *outbound.nack_count;
+                params->out_stats.nack_count += *outbound.nack_count;
             }
             if (outbound.pli_count.has_value()) {
-                out_stats->pli_count += *outbound.pli_count;
+                params->out_stats.pli_count += *outbound.pli_count;
             }
             if (outbound.fir_count.has_value()) {
-                out_stats->fir_count += *outbound.fir_count;
+                params->out_stats.fir_count += *outbound.fir_count;
             }
             if (outbound.qp_sum.has_value()) {
-                out_stats->qp_sum += *outbound.qp_sum;
+                params->out_stats.qp_sum += *outbound.qp_sum;
             }
             if (outbound.quality_limitation_reason.has_value()) {
                 const std::string& reason = *outbound.quality_limitation_reason;
-                if (reason == "none") out_stats->quality_limitation_reason = SHIM_QUALITY_LIMITATION_NONE;
-                else if (reason == "cpu") out_stats->quality_limitation_reason = SHIM_QUALITY_LIMITATION_CPU;
-                else if (reason == "bandwidth") out_stats->quality_limitation_reason = SHIM_QUALITY_LIMITATION_BANDWIDTH;
-                else out_stats->quality_limitation_reason = SHIM_QUALITY_LIMITATION_OTHER;
+                if (reason == "none") params->out_stats.quality_limitation_reason = SHIM_QUALITY_LIMITATION_NONE;
+                else if (reason == "cpu") params->out_stats.quality_limitation_reason = SHIM_QUALITY_LIMITATION_CPU;
+                else if (reason == "bandwidth") params->out_stats.quality_limitation_reason = SHIM_QUALITY_LIMITATION_BANDWIDTH;
+                else params->out_stats.quality_limitation_reason = SHIM_QUALITY_LIMITATION_OTHER;
             }
         }
 
@@ -910,63 +872,63 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCSt
         if (stat.type() == webrtc::RTCInboundRtpStreamStats::kType) {
             const auto& inbound = stat.cast_to<webrtc::RTCInboundRtpStreamStats>();
             if (inbound.bytes_received.has_value()) {
-                out_stats->bytes_received += *inbound.bytes_received;
+                params->out_stats.bytes_received += *inbound.bytes_received;
             }
             if (inbound.packets_received.has_value()) {
-                out_stats->packets_received += *inbound.packets_received;
+                params->out_stats.packets_received += *inbound.packets_received;
             }
             if (inbound.packets_lost.has_value()) {
-                out_stats->packets_lost += *inbound.packets_lost;
+                params->out_stats.packets_lost += *inbound.packets_lost;
             }
             if (inbound.jitter.has_value()) {
                 // jitter is in seconds, convert to ms
-                out_stats->jitter_ms = *inbound.jitter * 1000.0;
+                params->out_stats.jitter_ms = *inbound.jitter * 1000.0;
             }
             if (inbound.frames_decoded.has_value()) {
-                out_stats->frames_decoded += *inbound.frames_decoded;
+                params->out_stats.frames_decoded += *inbound.frames_decoded;
             }
             if (inbound.key_frames_decoded.has_value()) {
-                out_stats->key_frames_decoded += *inbound.key_frames_decoded;
+                params->out_stats.key_frames_decoded += *inbound.key_frames_decoded;
             }
             if (inbound.frames_dropped.has_value()) {
-                out_stats->frames_dropped += *inbound.frames_dropped;
+                params->out_stats.frames_dropped += *inbound.frames_dropped;
             }
             if (inbound.nack_count.has_value()) {
-                out_stats->nack_count += *inbound.nack_count;
+                params->out_stats.nack_count += *inbound.nack_count;
             }
             if (inbound.pli_count.has_value()) {
-                out_stats->pli_count += *inbound.pli_count;
+                params->out_stats.pli_count += *inbound.pli_count;
             }
             if (inbound.fir_count.has_value()) {
-                out_stats->fir_count += *inbound.fir_count;
+                params->out_stats.fir_count += *inbound.fir_count;
             }
             if (inbound.qp_sum.has_value()) {
-                out_stats->qp_sum += *inbound.qp_sum;
+                params->out_stats.qp_sum += *inbound.qp_sum;
             }
             // Audio specific
             if (inbound.audio_level.has_value()) {
-                out_stats->audio_level = *inbound.audio_level;
+                params->out_stats.audio_level = *inbound.audio_level;
             }
             if (inbound.total_audio_energy.has_value()) {
-                out_stats->total_audio_energy = *inbound.total_audio_energy;
+                params->out_stats.total_audio_energy = *inbound.total_audio_energy;
             }
             if (inbound.concealment_events.has_value()) {
-                out_stats->concealment_events += *inbound.concealment_events;
+                params->out_stats.concealment_events += *inbound.concealment_events;
             }
 
             // JITTER BUFFER STATS (what the user specifically wants!)
             if (inbound.jitter_buffer_delay.has_value()) {
                 // jitter_buffer_delay is total delay in seconds, convert to ms
-                out_stats->jitter_buffer_delay_ms = *inbound.jitter_buffer_delay * 1000.0;
+                params->out_stats.jitter_buffer_delay_ms = *inbound.jitter_buffer_delay * 1000.0;
             }
             if (inbound.jitter_buffer_target_delay.has_value()) {
-                out_stats->jitter_buffer_target_delay_ms = *inbound.jitter_buffer_target_delay * 1000.0;
+                params->out_stats.jitter_buffer_target_delay_ms = *inbound.jitter_buffer_target_delay * 1000.0;
             }
             if (inbound.jitter_buffer_minimum_delay.has_value()) {
-                out_stats->jitter_buffer_minimum_delay_ms = *inbound.jitter_buffer_minimum_delay * 1000.0;
+                params->out_stats.jitter_buffer_minimum_delay_ms = *inbound.jitter_buffer_minimum_delay * 1000.0;
             }
             if (inbound.jitter_buffer_emitted_count.has_value()) {
-                out_stats->jitter_buffer_emitted_count = *inbound.jitter_buffer_emitted_count;
+                params->out_stats.jitter_buffer_emitted_count = *inbound.jitter_buffer_emitted_count;
             }
         }
 
@@ -974,13 +936,13 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCSt
         if (stat.type() == webrtc::RTCRemoteInboundRtpStreamStats::kType) {
             const auto& remote = stat.cast_to<webrtc::RTCRemoteInboundRtpStreamStats>();
             if (remote.packets_lost.has_value()) {
-                out_stats->remote_packets_lost = *remote.packets_lost;
+                params->out_stats.remote_packets_lost = *remote.packets_lost;
             }
             if (remote.jitter.has_value()) {
-                out_stats->remote_jitter_ms = *remote.jitter * 1000.0;
+                params->out_stats.remote_jitter_ms = *remote.jitter * 1000.0;
             }
             if (remote.round_trip_time.has_value()) {
-                out_stats->remote_round_trip_time_ms = *remote.round_trip_time * 1000.0;
+                params->out_stats.remote_round_trip_time_ms = *remote.round_trip_time * 1000.0;
             }
         }
 
@@ -988,19 +950,19 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCSt
         if (stat.type() == webrtc::RTCIceCandidatePairStats::kType) {
             const auto& pair = stat.cast_to<webrtc::RTCIceCandidatePairStats>();
             if (pair.current_round_trip_time.has_value()) {
-                out_stats->current_rtt_ms = static_cast<int64_t>(*pair.current_round_trip_time * 1000.0);
+                params->out_stats.current_rtt_ms = static_cast<int64_t>(*pair.current_round_trip_time * 1000.0);
             }
             if (pair.total_round_trip_time.has_value()) {
-                out_stats->total_rtt_ms = static_cast<int64_t>(*pair.total_round_trip_time * 1000.0);
+                params->out_stats.total_rtt_ms = static_cast<int64_t>(*pair.total_round_trip_time * 1000.0);
             }
             if (pair.responses_received.has_value()) {
-                out_stats->responses_received = *pair.responses_received;
+                params->out_stats.responses_received = *pair.responses_received;
             }
             if (pair.available_outgoing_bitrate.has_value()) {
-                out_stats->available_outgoing_bitrate = *pair.available_outgoing_bitrate;
+                params->out_stats.available_outgoing_bitrate = *pair.available_outgoing_bitrate;
             }
             if (pair.available_incoming_bitrate.has_value()) {
-                out_stats->available_incoming_bitrate = *pair.available_incoming_bitrate;
+                params->out_stats.available_incoming_bitrate = *pair.available_incoming_bitrate;
             }
         }
 
@@ -1008,24 +970,24 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCSt
         if (stat.type() == webrtc::RTCDataChannelStats::kType) {
             const auto& dc = stat.cast_to<webrtc::RTCDataChannelStats>();
             if (dc.messages_sent.has_value()) {
-                out_stats->messages_sent += *dc.messages_sent;
+                params->out_stats.messages_sent += *dc.messages_sent;
             }
             if (dc.messages_received.has_value()) {
-                out_stats->messages_received += *dc.messages_received;
+                params->out_stats.messages_received += *dc.messages_received;
             }
             if (dc.bytes_sent.has_value()) {
-                out_stats->bytes_sent_data_channel += *dc.bytes_sent;
+                params->out_stats.bytes_sent_data_channel += *dc.bytes_sent;
             }
             if (dc.bytes_received.has_value()) {
-                out_stats->bytes_received_data_channel += *dc.bytes_received;
+                params->out_stats.bytes_received_data_channel += *dc.bytes_received;
             }
         }
     }
 
     // Calculate average RTT if we have data
-    if (out_stats->responses_received > 0 && out_stats->total_rtt_ms > 0) {
-        out_stats->round_trip_time_ms = static_cast<double>(out_stats->total_rtt_ms) /
-                                        static_cast<double>(out_stats->responses_received);
+    if (params->out_stats.responses_received > 0 && params->out_stats.total_rtt_ms > 0) {
+        params->out_stats.round_trip_time_ms = static_cast<double>(params->out_stats.total_rtt_ms) /
+                                        static_cast<double>(params->out_stats.responses_received);
     }
 
     return SHIM_OK;
@@ -1035,35 +997,36 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnection* pc, ShimRTCSt
  * Bandwidth Estimation API
  * ========================================================================== */
 
-SHIM_EXPORT void shim_peer_connection_set_on_bandwidth_estimate(
-    ShimPeerConnection* pc,
-    ShimOnBandwidthEstimate callback,
-    void* ctx
-) {
-    if (!pc) return;
+SHIM_EXPORT void shim_peer_connection_set_on_bandwidth_estimate(ShimPeerConnectionSetOnBandwidthEstimateParams* params) {
+    if (!params || !params->pc) {
+        return;
+    }
     // TODO: Wire up BWE callback from libwebrtc's BitrateController
     // This requires implementing a NetworkControllerObserver
+    (void)params->callback;
+    (void)params->ctx;
 }
 
-SHIM_EXPORT int shim_peer_connection_get_bandwidth_estimate(
-    ShimPeerConnection* pc,
-    ShimBandwidthEstimate* out_estimate
-) {
-    if (!pc || !out_estimate) {
+SHIM_EXPORT int shim_peer_connection_get_bandwidth_estimate(ShimPeerConnectionGetBandwidthEstimateParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    if (!params->pc) {
+        memset(&params->out_estimate, 0, sizeof(ShimBandwidthEstimate));
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    memset(out_estimate, 0, sizeof(ShimBandwidthEstimate));
-    out_estimate->timestamp_us = webrtc::TimeMicros();
+    memset(&params->out_estimate, 0, sizeof(ShimBandwidthEstimate));
+    params->out_estimate.timestamp_us = webrtc::TimeMicros();
 
     // TODO: Get actual BWE from libwebrtc's transport controller
     // For now, return placeholder values
-    out_estimate->target_bitrate_bps = 0;
-    out_estimate->available_send_bps = 0;
-    out_estimate->available_recv_bps = 0;
-    out_estimate->pacing_rate_bps = 0;
-    out_estimate->congestion_window = 0;
-    out_estimate->loss_rate = 0.0;
+    params->out_estimate.target_bitrate_bps = 0;
+    params->out_estimate.available_send_bps = 0;
+    params->out_estimate.available_recv_bps = 0;
+    params->out_estimate.pacing_rate_bps = 0;
+    params->out_estimate.congestion_window = 0;
+    params->out_estimate.loss_rate = 0.0;
 
     return SHIM_OK;
 }

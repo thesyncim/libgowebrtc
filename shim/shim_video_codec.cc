@@ -123,14 +123,16 @@ private:
 extern "C" {
 
 SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
-    ShimCodecType codec,
-    const ShimVideoEncoderConfig* config,
-    ShimErrorBuffer* error_out
+    ShimVideoEncoderCreateParams* params
 ) {
-    if (!config || config->width <= 0 || config->height <= 0) {
-        shim::SetErrorMessage(error_out, "invalid encoder config", SHIM_ERROR_INVALID_PARAM);
+    if (!params || !params->config || params->config->width <= 0 || params->config->height <= 0) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid encoder config", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
+
+    const auto* config = params->config;
+    const ShimCodecType codec = params->codec;
+    ShimErrorBuffer* error_out = params->error_out;
 
     auto shim_encoder = std::make_unique<ShimVideoEncoder>();
     shim_encoder->codec_type = codec;
@@ -371,12 +373,14 @@ SHIM_EXPORT int shim_video_encoder_encode(
 }
 
 SHIM_EXPORT int shim_video_encoder_set_bitrate(
-    ShimVideoEncoder* encoder,
-    uint32_t bitrate_bps
+    ShimVideoEncoderSetBitrateParams* params
 ) {
-    if (!encoder) {
-        return SHIM_ERROR_INVALID_PARAM;
+    if (!params || !params->encoder) {
+        return shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
     }
+
+    auto encoder = params->encoder;
+    uint32_t bitrate_bps = params->bitrate_bps;
 
     // Use OpenH264 if this encoder instance uses it
     if (encoder->use_openh264 && encoder->openh264_encoder) {
@@ -397,12 +401,14 @@ SHIM_EXPORT int shim_video_encoder_set_bitrate(
 }
 
 SHIM_EXPORT int shim_video_encoder_set_framerate(
-    ShimVideoEncoder* encoder,
-    float framerate
+    ShimVideoEncoderSetFramerateParams* params
 ) {
-    if (!encoder || framerate <= 0) {
-        return SHIM_ERROR_INVALID_PARAM;
+    if (!params || !params->encoder || params->framerate <= 0) {
+        return shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
     }
+
+    auto encoder = params->encoder;
+    float framerate = params->framerate;
 
     // Use OpenH264 if this encoder instance uses it
     if (encoder->use_openh264 && encoder->openh264_encoder) {
@@ -512,9 +518,16 @@ private:
 };
 
 SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(
-    ShimCodecType codec,
-    ShimErrorBuffer* error_out
+    ShimVideoDecoderCreateParams* params
 ) {
+    if (!params) {
+        shim::SetErrorMessage(nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return nullptr;
+    }
+
+    const ShimCodecType codec = params->codec;
+    ShimErrorBuffer* error_out = params->error_out;
+
     auto shim_decoder = std::make_unique<ShimVideoDecoder>();
     shim_decoder->codec_type = codec;
 
@@ -740,19 +753,19 @@ SHIM_EXPORT void shim_video_decoder_destroy(ShimVideoDecoder* decoder) {
  * Codec Capability API
  * ========================================================================== */
 
-SHIM_EXPORT int shim_get_supported_video_codecs(
-    ShimCodecCapability* codecs,
-    int max_codecs,
-    int* out_count
-) {
-    if (!codecs || !out_count || max_codecs <= 0) {
+SHIM_EXPORT int shim_get_supported_video_codecs(ShimGetSupportedVideoCodecsParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    params->out_count = 0;
+    if (!params->codecs || params->max_codecs <= 0) {
         return SHIM_ERROR_INVALID_PARAM;
     }
 
     // Use CreateBuiltinVideoEncoderFactory for full codec support
     auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
     if (!factory) {
-        *out_count = 0;
         return SHIM_ERROR_INVALID_PARAM;
     }
     auto formats = factory->GetSupportedFormats();
@@ -760,13 +773,13 @@ SHIM_EXPORT int shim_get_supported_video_codecs(
     int payload_type = 96;
 
     for (const auto& format : formats) {
-        if (count >= max_codecs) break;
+        if (count >= params->max_codecs) break;
 
         std::string mime = "video/" + format.name;
-        strncpy(codecs[count].mime_type, mime.c_str(), sizeof(codecs[count].mime_type) - 1);
-        codecs[count].mime_type[sizeof(codecs[count].mime_type) - 1] = '\0';
-        codecs[count].clock_rate = 90000;
-        codecs[count].channels = 0;
+        strncpy(params->codecs[count].mime_type, mime.c_str(), sizeof(params->codecs[count].mime_type) - 1);
+        params->codecs[count].mime_type[sizeof(params->codecs[count].mime_type) - 1] = '\0';
+        params->codecs[count].clock_rate = 90000;
+        params->codecs[count].channels = 0;
 
         // Build fmtp line from parameters
         std::string fmtp;
@@ -774,14 +787,14 @@ SHIM_EXPORT int shim_get_supported_video_codecs(
             if (!fmtp.empty()) fmtp += ";";
             fmtp += param.first + "=" + param.second;
         }
-        strncpy(codecs[count].sdp_fmtp_line, fmtp.c_str(), sizeof(codecs[count].sdp_fmtp_line) - 1);
-        codecs[count].sdp_fmtp_line[sizeof(codecs[count].sdp_fmtp_line) - 1] = '\0';
+        strncpy(params->codecs[count].sdp_fmtp_line, fmtp.c_str(), sizeof(params->codecs[count].sdp_fmtp_line) - 1);
+        params->codecs[count].sdp_fmtp_line[sizeof(params->codecs[count].sdp_fmtp_line) - 1] = '\0';
 
-        codecs[count].payload_type = payload_type++;
+        params->codecs[count].payload_type = payload_type++;
         count++;
     }
 
-    *out_count = count;
+    params->out_count = count;
     return SHIM_OK;
 }
 

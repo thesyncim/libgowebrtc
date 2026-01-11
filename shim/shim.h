@@ -99,10 +99,14 @@ typedef struct {
  * Video Encoder API (Allocation-Free)
  * ========================================================================== */
 
+typedef struct {
+    ShimCodecType codec;
+    const ShimVideoEncoderConfig* config;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimVideoEncoderCreateParams;
+
 SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
-    ShimCodecType codec,
-    const ShimVideoEncoderConfig* config,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimVideoEncoderCreateParams* params
 );
 
 /*
@@ -134,8 +138,25 @@ SHIM_EXPORT int shim_video_encoder_encode(
     ShimVideoEncoderEncodeParams* params
 );
 
-SHIM_EXPORT int shim_video_encoder_set_bitrate(ShimVideoEncoder* encoder, uint32_t bitrate_bps);
-SHIM_EXPORT int shim_video_encoder_set_framerate(ShimVideoEncoder* encoder, float framerate);
+typedef struct {
+    ShimVideoEncoder* encoder;
+    uint32_t bitrate_bps;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimVideoEncoderSetBitrateParams;
+
+SHIM_EXPORT int shim_video_encoder_set_bitrate(
+    ShimVideoEncoderSetBitrateParams* params
+);
+
+typedef struct {
+    ShimVideoEncoder* encoder;
+    float framerate;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimVideoEncoderSetFramerateParams;
+
+SHIM_EXPORT int shim_video_encoder_set_framerate(
+    ShimVideoEncoderSetFramerateParams* params
+);
 SHIM_EXPORT int shim_video_encoder_request_keyframe(ShimVideoEncoder* encoder);
 SHIM_EXPORT void shim_video_encoder_destroy(ShimVideoEncoder* encoder);
 
@@ -143,9 +164,13 @@ SHIM_EXPORT void shim_video_encoder_destroy(ShimVideoEncoder* encoder);
  * Video Decoder API (Allocation-Free)
  * ========================================================================== */
 
+typedef struct {
+    ShimCodecType codec;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimVideoDecoderCreateParams;
+
 SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(
-    ShimCodecType codec,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimVideoDecoderCreateParams* params
 );
 
 /*
@@ -193,9 +218,13 @@ typedef struct {
  * Audio Encoder API (Allocation-Free)
  * ========================================================================== */
 
+typedef struct {
+    const ShimAudioEncoderConfig* config;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimAudioEncoderCreateParams;
+
 SHIM_EXPORT ShimAudioEncoder* shim_audio_encoder_create(
-    const ShimAudioEncoderConfig* config,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimAudioEncoderCreateParams* params
 );
 
 /*
@@ -218,17 +247,29 @@ SHIM_EXPORT int shim_audio_encoder_encode(
     ShimAudioEncoderEncodeParams* params
 );
 
-SHIM_EXPORT int shim_audio_encoder_set_bitrate(ShimAudioEncoder* encoder, uint32_t bitrate_bps);
+typedef struct {
+    ShimAudioEncoder* encoder;
+    uint32_t bitrate_bps;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimAudioEncoderSetBitrateParams;
+
+SHIM_EXPORT int shim_audio_encoder_set_bitrate(
+    ShimAudioEncoderSetBitrateParams* params
+);
 SHIM_EXPORT void shim_audio_encoder_destroy(ShimAudioEncoder* encoder);
 
 /* ============================================================================
  * Audio Decoder API (Allocation-Free)
  * ========================================================================== */
 
+typedef struct {
+    int sample_rate;
+    int channels;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimAudioDecoderCreateParams;
+
 SHIM_EXPORT ShimAudioDecoder* shim_audio_decoder_create(
-    int sample_rate,
-    int channels,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimAudioDecoderCreateParams* params
 );
 
 /*
@@ -271,29 +312,25 @@ SHIM_EXPORT ShimPacketizer* shim_packetizer_create(const ShimPacketizerConfig* c
 /*
  * Packetize encoded data into RTP packets.
  *
- * @param packetizer Packetizer handle
- * @param data Encoded frame data
- * @param size Size of encoded data
- * @param timestamp RTP timestamp
- * @param is_keyframe True if keyframe
- * @param dst_buffer Pre-allocated buffer for all packets (contiguous)
- * @param dst_offsets Pre-allocated array of offsets into dst_buffer for each packet
- * @param dst_sizes Pre-allocated array to receive packet sizes
- * @param max_packets Maximum number of packets (size of dst_offsets/dst_sizes arrays)
- * @param out_count Output: actual number of packets written
+ * @param params Packetize parameters (inputs + outputs)
  * @return SHIM_OK on success
  */
+/* Packetize parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimPacketizer* packetizer;
+    const uint8_t* data;
+    int size;
+    uint32_t timestamp;
+    int is_keyframe;
+    uint8_t* dst_buffer;
+    int* dst_offsets;
+    int* dst_sizes;
+    int max_packets;
+    int out_count;
+} ShimPacketizerPacketizeParams;
+
 SHIM_EXPORT int shim_packetizer_packetize(
-    ShimPacketizer* packetizer,
-    const uint8_t* data,
-    int size,
-    uint32_t timestamp,
-    int is_keyframe,
-    uint8_t* dst_buffer,
-    int* dst_offsets,
-    int* dst_sizes,
-    int max_packets,
-    int* out_count
+    ShimPacketizerPacketizeParams* params
 );
 
 SHIM_EXPORT uint16_t shim_packetizer_sequence_number(ShimPacketizer* packetizer);
@@ -305,28 +342,34 @@ SHIM_EXPORT void shim_packetizer_destroy(ShimPacketizer* packetizer);
 
 SHIM_EXPORT ShimDepacketizer* shim_depacketizer_create(ShimCodecType codec);
 
+/* Push parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimDepacketizer* depacketizer;
+    const uint8_t* data;
+    int size;
+} ShimDepacketizerPushParams;
+
 SHIM_EXPORT int shim_depacketizer_push(
-    ShimDepacketizer* depacketizer,
-    const uint8_t* data,
-    int size
+    ShimDepacketizerPushParams* params
 );
 
 /*
  * Pop a complete frame from the depacketizer.
  *
- * @param depacketizer Depacketizer handle
- * @param dst_buffer Pre-allocated buffer for frame data
- * @param out_size Output: size of frame
- * @param out_timestamp Output: RTP timestamp
- * @param out_is_keyframe Output: true if keyframe
+ * @param params Pop parameters (inputs + outputs)
  * @return SHIM_OK if frame available, SHIM_ERROR_NEED_MORE_DATA if not
  */
+/* Pop parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimDepacketizer* depacketizer;
+    uint8_t* dst_buffer;
+    int out_size;
+    uint32_t out_timestamp;
+    int out_is_keyframe;
+} ShimDepacketizerPopParams;
+
 SHIM_EXPORT int shim_depacketizer_pop(
-    ShimDepacketizer* depacketizer,
-    uint8_t* dst_buffer,
-    int* out_size,
-    uint32_t* out_timestamp,
-    int* out_is_keyframe
+    ShimDepacketizerPopParams* params
 );
 
 SHIM_EXPORT void shim_depacketizer_destroy(ShimDepacketizer* depacketizer);
@@ -381,95 +424,159 @@ typedef void (*ShimOnTrack)(void* ctx, void* track, void* receiver, const char* 
 typedef void (*ShimOnDataChannel)(void* ctx, void* channel);
 
 /* Create/Destroy PeerConnection */
+typedef struct {
+    const ShimPeerConnectionConfig* config;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimPeerConnectionCreateParams;
+
 SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(
-    const ShimPeerConnectionConfig* config,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionCreateParams* params
 );
 SHIM_EXPORT void shim_peer_connection_destroy(ShimPeerConnection* pc);
 
 /* Set callbacks */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnICECandidate callback;
+    void* ctx;
+} ShimPeerConnectionSetOnICECandidateParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_ice_candidate(
-    ShimPeerConnection* pc,
-    ShimOnICECandidate callback,
-    void* ctx
+    ShimPeerConnectionSetOnICECandidateParams* params
 );
+
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnConnectionStateChange callback;
+    void* ctx;
+} ShimPeerConnectionSetOnConnectionStateChangeParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_connection_state_change(
-    ShimPeerConnection* pc,
-    ShimOnConnectionStateChange callback,
-    void* ctx
+    ShimPeerConnectionSetOnConnectionStateChangeParams* params
 );
+
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnTrack callback;
+    void* ctx;
+} ShimPeerConnectionSetOnTrackParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_track(
-    ShimPeerConnection* pc,
-    ShimOnTrack callback,
-    void* ctx
+    ShimPeerConnectionSetOnTrackParams* params
 );
+
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnDataChannel callback;
+    void* ctx;
+} ShimPeerConnectionSetOnDataChannelParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_data_channel(
-    ShimPeerConnection* pc,
-    ShimOnDataChannel callback,
-    void* ctx
+    ShimPeerConnectionSetOnDataChannelParams* params
 );
+
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnSignalingStateChange callback;
+    void* ctx;
+} ShimPeerConnectionSetOnSignalingStateChangeParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_signaling_state_change(
-    ShimPeerConnection* pc,
-    ShimOnSignalingStateChange callback,
-    void* ctx
+    ShimPeerConnectionSetOnSignalingStateChangeParams* params
 );
+
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnICEConnectionStateChange callback;
+    void* ctx;
+} ShimPeerConnectionSetOnICEConnectionStateChangeParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_ice_connection_state_change(
-    ShimPeerConnection* pc,
-    ShimOnICEConnectionStateChange callback,
-    void* ctx
+    ShimPeerConnectionSetOnICEConnectionStateChangeParams* params
 );
+
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnICEGatheringStateChange callback;
+    void* ctx;
+} ShimPeerConnectionSetOnICEGatheringStateChangeParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_ice_gathering_state_change(
-    ShimPeerConnection* pc,
-    ShimOnICEGatheringStateChange callback,
-    void* ctx
+    ShimPeerConnectionSetOnICEGatheringStateChangeParams* params
 );
 
 /* Negotiation needed callback */
 typedef void (*ShimOnNegotiationNeeded)(void* ctx);
 
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnNegotiationNeeded callback;
+    void* ctx;
+} ShimPeerConnectionSetOnNegotiationNeededParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_negotiation_needed(
-    ShimPeerConnection* pc,
-    ShimOnNegotiationNeeded callback,
-    void* ctx
+    ShimPeerConnectionSetOnNegotiationNeededParams* params
 );
 
 /* Create offer/answer */
+typedef struct {
+    ShimPeerConnection* pc;
+    char* sdp_out;              /* Caller-provided buffer for SDP */
+    int sdp_out_size;
+    int out_sdp_len;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionCreateOfferParams;
+
 SHIM_EXPORT int shim_peer_connection_create_offer(
-    ShimPeerConnection* pc,
-    char* sdp_out,              /* Caller-provided buffer for SDP */
-    int sdp_out_size,
-    int* out_sdp_len,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionCreateOfferParams* params
 );
+
+typedef struct {
+    ShimPeerConnection* pc;
+    char* sdp_out;
+    int sdp_out_size;
+    int out_sdp_len;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionCreateAnswerParams;
+
 SHIM_EXPORT int shim_peer_connection_create_answer(
-    ShimPeerConnection* pc,
-    char* sdp_out,
-    int sdp_out_size,
-    int* out_sdp_len,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionCreateAnswerParams* params
 );
 
 /* Set local/remote description */
+typedef struct {
+    ShimPeerConnection* pc;
+    int type;                   /* SDP type */
+    const char* sdp;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionSetLocalDescriptionParams;
+
 SHIM_EXPORT int shim_peer_connection_set_local_description(
-    ShimPeerConnection* pc,
-    int type,                   /* SDP type */
-    const char* sdp,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionSetLocalDescriptionParams* params
 );
+
+typedef struct {
+    ShimPeerConnection* pc;
+    int type;
+    const char* sdp;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionSetRemoteDescriptionParams;
+
 SHIM_EXPORT int shim_peer_connection_set_remote_description(
-    ShimPeerConnection* pc,
-    int type,
-    const char* sdp,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionSetRemoteDescriptionParams* params
 );
 
 /* Add ICE candidate */
+typedef struct {
+    ShimPeerConnection* pc;
+    const char* candidate;
+    const char* sdp_mid;
+    int sdp_mline_index;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionAddICECandidateParams;
+
 SHIM_EXPORT int shim_peer_connection_add_ice_candidate(
-    ShimPeerConnection* pc,
-    const char* candidate,
-    const char* sdp_mid,
-    int sdp_mline_index,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionAddICECandidateParams* params
 );
 
 /* Get connection states */
@@ -479,29 +586,41 @@ SHIM_EXPORT int shim_peer_connection_ice_gathering_state(ShimPeerConnection* pc)
 SHIM_EXPORT int shim_peer_connection_connection_state(ShimPeerConnection* pc);
 
 /* Add track */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimCodecType codec;
+    const char* track_id;
+    const char* stream_id;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionAddTrackParams;
+
 SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_track(
-    ShimPeerConnection* pc,
-    ShimCodecType codec,
-    const char* track_id,
-    const char* stream_id,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionAddTrackParams* params
 );
 
 /* Remove track */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimRTPSender* sender;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionRemoveTrackParams;
+
 SHIM_EXPORT int shim_peer_connection_remove_track(
-    ShimPeerConnection* pc,
-    ShimRTPSender* sender,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionRemoveTrackParams* params
 );
 
 /* Create data channel */
+typedef struct {
+    ShimPeerConnection* pc;
+    const char* label;
+    int ordered;
+    int max_retransmits;
+    const char* protocol;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionCreateDataChannelParams;
+
 SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(
-    ShimPeerConnection* pc,
-    const char* label,
-    int ordered,
-    int max_retransmits,
-    const char* protocol,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionCreateDataChannelParams* params
 );
 
 /* Close peer connection */
@@ -511,12 +630,22 @@ SHIM_EXPORT void shim_peer_connection_close(ShimPeerConnection* pc);
  * RTPSender API
  * ========================================================================== */
 
+typedef struct {
+    ShimRTPSender* sender;
+    uint32_t bitrate;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimRTPSenderSetBitrateParams;
+
 SHIM_EXPORT int shim_rtp_sender_set_bitrate(
-    ShimRTPSender* sender,
-    uint32_t bitrate,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimRTPSenderSetBitrateParams* params
 );
-SHIM_EXPORT int shim_rtp_sender_replace_track(ShimRTPSender* sender, void* track);
+
+typedef struct {
+    ShimRTPSender* sender;
+    void* track;
+} ShimRTPSenderReplaceTrackParams;
+
+SHIM_EXPORT int shim_rtp_sender_replace_track(ShimRTPSenderReplaceTrackParams* params);
 SHIM_EXPORT void shim_rtp_sender_destroy(ShimRTPSender* sender);
 
 /* ============================================================================
@@ -539,33 +668,37 @@ typedef struct {
     char transaction_id[64];
 } ShimRTPSendParameters;
 
+typedef struct {
+    ShimRTPSender* sender;
+    ShimRTPEncodingParameters* encodings;
+    int max_encodings;
+    ShimRTPSendParameters out_params;
+} ShimRTPSenderGetParametersParams;
+
+typedef struct {
+    ShimRTPSender* sender;
+    const ShimRTPSendParameters* params;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimRTPSenderSetParametersParams;
+
 /*
  * Get current RTP send parameters.
  *
- * @param sender RTPSender handle
- * @param out_params Pre-allocated output structure
- * @param encodings Pre-allocated array for encodings
- * @param max_encodings Maximum number of encodings
+ * @param params Output parameters (encodings + limits + out params)
  * @return SHIM_OK on success
  */
 SHIM_EXPORT int shim_rtp_sender_get_parameters(
-    ShimRTPSender* sender,
-    ShimRTPSendParameters* out_params,
-    ShimRTPEncodingParameters* encodings,
-    int max_encodings
+    ShimRTPSenderGetParametersParams* params
 );
 
 /*
  * Set RTP send parameters (for bitrate/simulcast control).
  *
- * @param sender RTPSender handle
  * @param params Parameters to set
  * @return SHIM_OK on success
  */
 SHIM_EXPORT int shim_rtp_sender_set_parameters(
-    ShimRTPSender* sender,
-    const ShimRTPSendParameters* params,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimRTPSenderSetParametersParams* params
 );
 
 /* Get the track associated with this sender */
@@ -605,10 +738,14 @@ SHIM_EXPORT int shim_transceiver_get_direction(ShimRTPTransceiver* transceiver);
  * @param direction New direction (ShimTransceiverDirection)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPTransceiver* transceiver;
+    int direction;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimTransceiverSetDirectionParams;
+
 SHIM_EXPORT int shim_transceiver_set_direction(
-    ShimRTPTransceiver* transceiver,
-    int direction,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimTransceiverSetDirectionParams* params
 );
 
 /*
@@ -619,9 +756,13 @@ SHIM_EXPORT int shim_transceiver_get_current_direction(ShimRTPTransceiver* trans
 /*
  * Stop the transceiver.
  */
+typedef struct {
+    ShimRTPTransceiver* transceiver;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimTransceiverStopParams;
+
 SHIM_EXPORT int shim_transceiver_stop(
-    ShimRTPTransceiver* transceiver,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimTransceiverStopParams* params
 );
 
 /*
@@ -646,64 +787,69 @@ SHIM_EXPORT ShimRTPReceiver* shim_transceiver_get_receiver(ShimRTPTransceiver* t
 /*
  * Add a transceiver with specified media kind and direction.
  *
- * @param pc PeerConnection handle
- * @param kind Media kind (0=audio, 1=video)
- * @param direction Initial direction (ShimTransceiverDirection)
+ * @param params Parameters (pc + kind + direction)
  * @return Transceiver handle, or NULL on failure
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    int kind;
+    int direction;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimPeerConnectionAddTransceiverParams;
+
 SHIM_EXPORT ShimRTPTransceiver* shim_peer_connection_add_transceiver(
-    ShimPeerConnection* pc,
-    int kind,
-    int direction,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionAddTransceiverParams* params
 );
 
 /*
  * Get all senders associated with this PeerConnection.
  *
- * @param pc PeerConnection handle
- * @param senders Pre-allocated array for sender pointers
- * @param max_senders Maximum number of senders
- * @param out_count Output: actual number of senders
+ * @param params Output parameters (senders + counts)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimRTPSender** senders;
+    int max_senders;
+    int out_count;
+} ShimPeerConnectionGetSendersParams;
+
 SHIM_EXPORT int shim_peer_connection_get_senders(
-    ShimPeerConnection* pc,
-    ShimRTPSender** senders,
-    int max_senders,
-    int* out_count
+    ShimPeerConnectionGetSendersParams* params
 );
 
 /*
  * Get all receivers associated with this PeerConnection.
  *
- * @param pc PeerConnection handle
- * @param receivers Pre-allocated array for receiver pointers
- * @param max_receivers Maximum number of receivers
- * @param out_count Output: actual number of receivers
+ * @param params Output parameters (receivers + counts)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimRTPReceiver** receivers;
+    int max_receivers;
+    int out_count;
+} ShimPeerConnectionGetReceiversParams;
+
 SHIM_EXPORT int shim_peer_connection_get_receivers(
-    ShimPeerConnection* pc,
-    ShimRTPReceiver** receivers,
-    int max_receivers,
-    int* out_count
+    ShimPeerConnectionGetReceiversParams* params
 );
 
 /*
  * Get all transceivers associated with this PeerConnection.
  *
- * @param pc PeerConnection handle
- * @param transceivers Pre-allocated array for transceiver pointers
- * @param max_transceivers Maximum number of transceivers
- * @param out_count Output: actual number of transceivers
+ * @param params Output parameters (transceivers + counts)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimRTPTransceiver** transceivers;
+    int max_transceivers;
+    int out_count;
+} ShimPeerConnectionGetTransceiversParams;
+
 SHIM_EXPORT int shim_peer_connection_get_transceivers(
-    ShimPeerConnection* pc,
-    ShimRTPTransceiver** transceivers,
-    int max_transceivers,
-    int* out_count
+    ShimPeerConnectionGetTransceiversParams* params
 );
 
 /*
@@ -802,29 +948,35 @@ typedef struct {
 /*
  * Get supported video send codecs.
  *
- * @param codecs Pre-allocated array of codec capabilities
- * @param max_codecs Maximum codecs to return
- * @param out_count Output: actual number of codecs
+ * @param params Output parameters (codecs + counts)
  * @return SHIM_OK on success
  */
+/* Codec query parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimCodecCapability* codecs;
+    int max_codecs;
+    int out_count;
+} ShimGetSupportedVideoCodecsParams;
+
 SHIM_EXPORT int shim_get_supported_video_codecs(
-    ShimCodecCapability* codecs,
-    int max_codecs,
-    int* out_count
+    ShimGetSupportedVideoCodecsParams* params
 );
 
 /*
  * Get supported audio send codecs.
  *
- * @param codecs Pre-allocated array of codec capabilities
- * @param max_codecs Maximum codecs to return
- * @param out_count Output: actual number of codecs
+ * @param params Output parameters (codecs + counts)
  * @return SHIM_OK on success
  */
+/* Codec query parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimCodecCapability* codecs;
+    int max_codecs;
+    int out_count;
+} ShimGetSupportedAudioCodecsParams;
+
 SHIM_EXPORT int shim_get_supported_audio_codecs(
-    ShimCodecCapability* codecs,
-    int max_codecs,
-    int* out_count
+    ShimGetSupportedAudioCodecsParams* params
 );
 
 /*
@@ -843,17 +995,19 @@ SHIM_EXPORT int shim_is_codec_supported(const char* mime_type);
  * Get negotiated codecs for this sender from RtpParameters.
  * These are the codecs that were actually negotiated in SDP.
  *
- * @param sender RTPSender handle
- * @param codecs Pre-allocated array for codec capabilities
- * @param max_codecs Maximum codecs to return
- * @param out_count Output: actual number of codecs
+ * @param params Output parameters (sender + codecs + counts)
  * @return SHIM_OK on success
  */
+/* Negotiated codec query parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimRTPSender* sender;
+    ShimCodecCapability* codecs;
+    int max_codecs;
+    int out_count;
+} ShimRTPSenderGetNegotiatedCodecsParams;
+
 SHIM_EXPORT int shim_rtp_sender_get_negotiated_codecs(
-    ShimRTPSender* sender,
-    ShimCodecCapability* codecs,
-    int max_codecs,
-    int* out_count
+    ShimRTPSenderGetNegotiatedCodecsParams* params
 );
 
 /*
@@ -862,16 +1016,18 @@ SHIM_EXPORT int shim_rtp_sender_get_negotiated_codecs(
  * The codec must have been negotiated in SDP.
  * After calling this, a renegotiation is typically needed for the change to take effect.
  *
- * @param sender RTPSender handle
- * @param mime_type Codec MIME type (e.g., "video/AV1")
- * @param payload_type Optional payload type (0 to auto-detect)
+ * @param params Input parameters (sender + codec identifiers)
  * @return SHIM_OK on success, SHIM_ERROR_NOT_FOUND if codec not negotiated
  */
+typedef struct {
+    ShimRTPSender* sender;
+    const char* mime_type;
+    int payload_type;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimRTPSenderSetPreferredCodecParams;
+
 SHIM_EXPORT int shim_rtp_sender_set_preferred_codec(
-    ShimRTPSender* sender,
-    const char* mime_type,
-    int payload_type,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimRTPSenderSetPreferredCodecParams* params
 );
 
 /* ============================================================================
@@ -883,32 +1039,35 @@ SHIM_EXPORT int shim_rtp_sender_set_preferred_codec(
  * This controls which codecs are negotiated in SDP.
  * Must be called before creating offer/answer.
  *
- * @param transceiver Transceiver handle
- * @param codecs Array of codec capabilities (use GetSupportedVideoCodecs/GetSupportedAudioCodecs)
- * @param count Number of codecs in array
+ * @param params Input parameters (transceiver + codecs + count)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPTransceiver* transceiver;
+    const ShimCodecCapability* codecs;
+    int count;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimTransceiverSetCodecPreferencesParams;
+
 SHIM_EXPORT int shim_transceiver_set_codec_preferences(
-    ShimRTPTransceiver* transceiver,
-    const ShimCodecCapability* codecs,
-    int count,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimTransceiverSetCodecPreferencesParams* params
 );
 
 /*
  * Get codec preferences for a transceiver.
  *
- * @param transceiver Transceiver handle
- * @param codecs Output array to fill
- * @param max_codecs Maximum number of codecs to return
- * @param out_count Output: actual count
+ * @param params Output parameters (codecs + counts)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPTransceiver* transceiver;
+    ShimCodecCapability* codecs;
+    int max_codecs;
+    int out_count;
+} ShimTransceiverGetCodecPreferencesParams;
+
 SHIM_EXPORT int shim_transceiver_get_codec_preferences(
-    ShimRTPTransceiver* transceiver,
-    ShimCodecCapability* codecs,
-    int max_codecs,
-    int* out_count
+    ShimTransceiverGetCodecPreferencesParams* params
 );
 
 /* ============================================================================
@@ -932,62 +1091,80 @@ typedef void (*ShimOnBandwidthEstimate)(void* ctx, const ShimBandwidthEstimate* 
 /*
  * Set bandwidth estimate callback.
  *
- * @param pc PeerConnection handle
- * @param callback Callback function
- * @param ctx User context
+ * @param params Input parameters (pc + callback + ctx)
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimOnBandwidthEstimate callback;
+    void* ctx;
+} ShimPeerConnectionSetOnBandwidthEstimateParams;
+
 SHIM_EXPORT void shim_peer_connection_set_on_bandwidth_estimate(
-    ShimPeerConnection* pc,
-    ShimOnBandwidthEstimate callback,
-    void* ctx
+    ShimPeerConnectionSetOnBandwidthEstimateParams* params
 );
 
 /*
  * Get current bandwidth estimate.
  *
- * @param pc PeerConnection handle
- * @param out_estimate Pre-allocated estimate structure
+ * @param params Output parameters (pc + estimate)
  * @return SHIM_OK on success
  */
+/* Bandwidth estimate parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimBandwidthEstimate out_estimate;
+} ShimPeerConnectionGetBandwidthEstimateParams;
+
 SHIM_EXPORT int shim_peer_connection_get_bandwidth_estimate(
-    ShimPeerConnection* pc,
-    ShimBandwidthEstimate* out_estimate
+    ShimPeerConnectionGetBandwidthEstimateParams* params
 );
 
 /*
  * Get connection statistics.
  *
- * @param pc PeerConnection handle
- * @param out_stats Pre-allocated stats structure
+ * @param params Output parameters (pc + stats)
  * @return SHIM_OK on success
  */
+/* Stats parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimRTCStats out_stats;
+} ShimPeerConnectionGetStatsParams;
+
 SHIM_EXPORT int shim_peer_connection_get_stats(
-    ShimPeerConnection* pc,
-    ShimRTCStats* out_stats
+    ShimPeerConnectionGetStatsParams* params
 );
 
 /*
  * Get statistics for a specific sender.
  *
- * @param sender RTPSender handle
- * @param out_stats Pre-allocated stats structure
+ * @param params Output parameters (sender + stats)
  * @return SHIM_OK on success
  */
+/* Stats parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimRTPSender* sender;
+    ShimRTCStats out_stats;
+} ShimRTPSenderGetStatsParams;
+
 SHIM_EXPORT int shim_rtp_sender_get_stats(
-    ShimRTPSender* sender,
-    ShimRTCStats* out_stats
+    ShimRTPSenderGetStatsParams* params
 );
 
 /*
  * Get statistics for a specific receiver.
  *
- * @param receiver RTPReceiver handle
- * @param out_stats Pre-allocated stats structure
+ * @param params Output parameters (receiver + stats)
  * @return SHIM_OK on success
  */
+/* Stats parameters. Caller-owned buffers; shim uses them only during the call. */
+typedef struct {
+    ShimRTPReceiver* receiver;
+    ShimRTCStats out_stats;
+} ShimRTPReceiverGetStatsParams;
+
 SHIM_EXPORT int shim_rtp_receiver_get_stats(
-    ShimRTPReceiver* receiver,
-    ShimRTCStats* out_stats
+    ShimRTPReceiverGetStatsParams* params
 );
 
 /* ============================================================================
@@ -1000,7 +1177,6 @@ SHIM_EXPORT int shim_rtp_receiver_get_stats(
  * @param receiver RTPReceiver handle
  * @return SHIM_OK on success
  */
-SHIM_EXPORT int shim_rtp_receiver_request_keyframe(ShimRTPReceiver* receiver);
 
 /*
  * Callback for RTCP feedback events.
@@ -1014,14 +1190,16 @@ typedef void (*ShimOnRTCPFeedback)(void* ctx, int type, uint32_t ssrc);
 /*
  * Set RTCP feedback callback on a sender.
  *
- * @param sender RTPSender handle
- * @param callback Callback function
- * @param ctx User context
+ * @param params Input parameters (sender + callback + ctx)
  */
+typedef struct {
+    ShimRTPSender* sender;
+    ShimOnRTCPFeedback callback;
+    void* ctx;
+} ShimRTPSenderSetOnRTCPFeedbackParams;
+
 SHIM_EXPORT void shim_rtp_sender_set_on_rtcp_feedback(
-    ShimRTPSender* sender,
-    ShimOnRTCPFeedback callback,
-    void* ctx
+    ShimRTPSenderSetOnRTCPFeedbackParams* params
 );
 
 /* ============================================================================
@@ -1031,72 +1209,83 @@ SHIM_EXPORT void shim_rtp_sender_set_on_rtcp_feedback(
 /*
  * Enable or disable a specific simulcast layer.
  *
- * @param sender RTPSender handle
- * @param rid RID of the layer (e.g., "low", "mid", "high")
- * @param active 1 to enable, 0 to disable
+ * @param params Input parameters (sender + rid + active)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPSender* sender;
+    const char* rid;
+    int active;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimRTPSenderSetLayerActiveParams;
+
 SHIM_EXPORT int shim_rtp_sender_set_layer_active(
-    ShimRTPSender* sender,
-    const char* rid,
-    int active,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimRTPSenderSetLayerActiveParams* params
 );
 
 /*
  * Set the maximum bitrate for a specific layer.
  *
- * @param sender RTPSender handle
- * @param rid RID of the layer
- * @param max_bitrate_bps Maximum bitrate in bps
+ * @param params Input parameters (sender + rid + max bitrate)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPSender* sender;
+    const char* rid;
+    uint32_t max_bitrate_bps;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimRTPSenderSetLayerBitrateParams;
+
 SHIM_EXPORT int shim_rtp_sender_set_layer_bitrate(
-    ShimRTPSender* sender,
-    const char* rid,
-    uint32_t max_bitrate_bps,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimRTPSenderSetLayerBitrateParams* params
 );
 
 /*
  * Get the number of active layers.
  *
- * @param sender RTPSender handle
- * @param out_spatial Output: number of spatial layers
- * @param out_temporal Output: number of temporal layers
+ * @param params Output parameters (sender + counts)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPSender* sender;
+    int out_spatial;
+    int out_temporal;
+} ShimRTPSenderGetActiveLayersParams;
+
 SHIM_EXPORT int shim_rtp_sender_get_active_layers(
-    ShimRTPSender* sender,
-    int* out_spatial,
-    int* out_temporal
+    ShimRTPSenderGetActiveLayersParams* params
 );
 
 /*
  * Set the scalability mode for a sender (e.g., "L3T3_KEY", "L1T2").
  *
- * @param sender RTPSender handle
- * @param scalability_mode Scalability mode string
+ * @param params Input parameters (sender + mode)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPSender* sender;
+    const char* scalability_mode;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimRTPSenderSetScalabilityModeParams;
+
 SHIM_EXPORT int shim_rtp_sender_set_scalability_mode(
-    ShimRTPSender* sender,
-    const char* scalability_mode,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimRTPSenderSetScalabilityModeParams* params
 );
 
 /*
  * Get the current scalability mode for a sender.
  *
- * @param sender RTPSender handle
- * @param mode_out Pre-allocated buffer for mode string
- * @param mode_out_size Size of output buffer
+ * @param params Output parameters (mode buffer + size)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPSender* sender;
+    char* mode_out;
+    int mode_out_size;
+} ShimRTPSenderGetScalabilityModeParams;
+
 SHIM_EXPORT int shim_rtp_sender_get_scalability_mode(
-    ShimRTPSender* sender,
-    char* mode_out,
-    int mode_out_size
+    ShimRTPSenderGetScalabilityModeParams* params
 );
 
 /* ============================================================================
@@ -1114,10 +1303,14 @@ typedef struct ShimVideoTrackSource ShimVideoTrackSource;
  * @param height Video height
  * @return Track source handle, or NULL on failure
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    int width;
+    int height;
+} ShimVideoTrackSourceCreateParams;
+
 SHIM_EXPORT ShimVideoTrackSource* shim_video_track_source_create(
-    ShimPeerConnection* pc,
-    int width,
-    int height
+    ShimVideoTrackSourceCreateParams* params
 );
 
 /*
@@ -1134,15 +1327,19 @@ SHIM_EXPORT ShimVideoTrackSource* shim_video_track_source_create(
  * @param timestamp_us Timestamp in microseconds
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimVideoTrackSource* source;
+    const uint8_t* y_plane;
+    const uint8_t* u_plane;
+    const uint8_t* v_plane;
+    int y_stride;
+    int u_stride;
+    int v_stride;
+    int64_t timestamp_us;
+} ShimVideoTrackSourcePushFrameParams;
+
 SHIM_EXPORT int shim_video_track_source_push_frame(
-    ShimVideoTrackSource* source,
-    const uint8_t* y_plane,
-    const uint8_t* u_plane,
-    const uint8_t* v_plane,
-    int y_stride,
-    int u_stride,
-    int v_stride,
-    int64_t timestamp_us
+    ShimVideoTrackSourcePushFrameParams* params
 );
 
 /*
@@ -1154,12 +1351,16 @@ SHIM_EXPORT int shim_video_track_source_push_frame(
  * @param stream_id Stream ID
  * @return RTPSender handle, or NULL on failure
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimVideoTrackSource* source;
+    const char* track_id;
+    const char* stream_id;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimPeerConnectionAddVideoTrackFromSourceParams;
+
 SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_video_track_from_source(
-    ShimPeerConnection* pc,
-    ShimVideoTrackSource* source,
-    const char* track_id,
-    const char* stream_id,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionAddVideoTrackFromSourceParams* params
 );
 
 SHIM_EXPORT void shim_video_track_source_destroy(ShimVideoTrackSource* source);
@@ -1178,10 +1379,14 @@ typedef struct ShimAudioTrackSource ShimAudioTrackSource;
  * @param channels Number of channels (1 or 2)
  * @return Track source handle, or NULL on failure
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    int sample_rate;
+    int channels;
+} ShimAudioTrackSourceCreateParams;
+
 SHIM_EXPORT ShimAudioTrackSource* shim_audio_track_source_create(
-    ShimPeerConnection* pc,
-    int sample_rate,
-    int channels
+    ShimAudioTrackSourceCreateParams* params
 );
 
 /*
@@ -1193,11 +1398,15 @@ SHIM_EXPORT ShimAudioTrackSource* shim_audio_track_source_create(
  * @param timestamp_us Timestamp in microseconds
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimAudioTrackSource* source;
+    const int16_t* samples;
+    int num_samples;
+    int64_t timestamp_us;
+} ShimAudioTrackSourcePushFrameParams;
+
 SHIM_EXPORT int shim_audio_track_source_push_frame(
-    ShimAudioTrackSource* source,
-    const int16_t* samples,
-    int num_samples,
-    int64_t timestamp_us
+    ShimAudioTrackSourcePushFrameParams* params
 );
 
 /*
@@ -1209,12 +1418,16 @@ SHIM_EXPORT int shim_audio_track_source_push_frame(
  * @param stream_id Stream ID
  * @return RTPSender handle, or NULL on failure
  */
+typedef struct {
+    ShimPeerConnection* pc;
+    ShimAudioTrackSource* source;
+    const char* track_id;
+    const char* stream_id;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimPeerConnectionAddAudioTrackFromSourceParams;
+
 SHIM_EXPORT ShimRTPSender* shim_peer_connection_add_audio_track_from_source(
-    ShimPeerConnection* pc,
-    ShimAudioTrackSource* source,
-    const char* track_id,
-    const char* stream_id,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimPeerConnectionAddAudioTrackFromSourceParams* params
 );
 
 SHIM_EXPORT void shim_audio_track_source_destroy(ShimAudioTrackSource* source);
@@ -1280,10 +1493,14 @@ typedef void (*ShimOnAudioFrame)(
  * @param ctx User context passed to callback
  * @return SHIM_OK on success
  */
+typedef struct {
+    void* track;
+    ShimOnVideoFrame callback;
+    void* ctx;
+} ShimTrackSetVideoSinkParams;
+
 SHIM_EXPORT int shim_track_set_video_sink(
-    void* track,
-    ShimOnVideoFrame callback,
-    void* ctx
+    ShimTrackSetVideoSinkParams* params
 );
 
 /*
@@ -1295,10 +1512,14 @@ SHIM_EXPORT int shim_track_set_video_sink(
  * @param ctx User context passed to callback
  * @return SHIM_OK on success
  */
+typedef struct {
+    void* track;
+    ShimOnAudioFrame callback;
+    void* ctx;
+} ShimTrackSetAudioSinkParams;
+
 SHIM_EXPORT int shim_track_set_audio_sink(
-    void* track,
-    ShimOnAudioFrame callback,
-    void* ctx
+    ShimTrackSetAudioSinkParams* params
 );
 
 /*
@@ -1329,28 +1550,46 @@ typedef void (*ShimOnDataChannelMessage)(void* ctx, const uint8_t* data, int siz
 typedef void (*ShimOnDataChannelOpen)(void* ctx);
 typedef void (*ShimOnDataChannelClose)(void* ctx);
 
+typedef struct {
+    ShimDataChannel* dc;
+    ShimOnDataChannelMessage callback;
+    void* ctx;
+} ShimDataChannelSetOnMessageParams;
+
 SHIM_EXPORT void shim_data_channel_set_on_message(
-    ShimDataChannel* dc,
-    ShimOnDataChannelMessage callback,
-    void* ctx
-);
-SHIM_EXPORT void shim_data_channel_set_on_open(
-    ShimDataChannel* dc,
-    ShimOnDataChannelOpen callback,
-    void* ctx
-);
-SHIM_EXPORT void shim_data_channel_set_on_close(
-    ShimDataChannel* dc,
-    ShimOnDataChannelClose callback,
-    void* ctx
+    ShimDataChannelSetOnMessageParams* params
 );
 
+typedef struct {
+    ShimDataChannel* dc;
+    ShimOnDataChannelOpen callback;
+    void* ctx;
+} ShimDataChannelSetOnOpenParams;
+
+SHIM_EXPORT void shim_data_channel_set_on_open(
+    ShimDataChannelSetOnOpenParams* params
+);
+
+typedef struct {
+    ShimDataChannel* dc;
+    ShimOnDataChannelClose callback;
+    void* ctx;
+} ShimDataChannelSetOnCloseParams;
+
+SHIM_EXPORT void shim_data_channel_set_on_close(
+    ShimDataChannelSetOnCloseParams* params
+);
+
+typedef struct {
+    ShimDataChannel* dc;
+    const uint8_t* data;
+    int size;
+    int is_binary;
+    ShimErrorBuffer* error_out; /* Optional: buffer for error message */
+} ShimDataChannelSendParams;
+
 SHIM_EXPORT int shim_data_channel_send(
-    ShimDataChannel* dc,
-    const uint8_t* data,
-    int size,
-    int is_binary,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimDataChannelSendParams* params
 );
 SHIM_EXPORT const char* shim_data_channel_label(ShimDataChannel* dc);
 SHIM_EXPORT int shim_data_channel_ready_state(ShimDataChannel* dc);
@@ -1375,11 +1614,15 @@ typedef struct {
  * @param out_count Output: actual number of devices found
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimDeviceInfo* devices;
+    int max_devices;
+    int out_count;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimEnumerateDevicesParams;
+
 SHIM_EXPORT int shim_enumerate_devices(
-    ShimDeviceInfo* devices,
-    int max_devices,
-    int* out_count,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimEnumerateDevicesParams* params
 );
 
 /*
@@ -1442,12 +1685,16 @@ typedef void (*ShimVideoCaptureCallback)(
  * @param fps Desired framerate
  * @return Capture handle, or NULL on failure
  */
+typedef struct {
+    const char* device_id;
+    int width;
+    int height;
+    int fps;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimVideoCaptureCreateParams;
+
 SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
-    const char* device_id,
-    int width,
-    int height,
-    int fps,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimVideoCaptureCreateParams* params
 );
 
 /*
@@ -1458,11 +1705,15 @@ SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
  * @param ctx User context passed to callback
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimVideoCapture* cap;
+    ShimVideoCaptureCallback callback;
+    void* ctx;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimVideoCaptureStartParams;
+
 SHIM_EXPORT int shim_video_capture_start(
-    ShimVideoCapture* cap,
-    ShimVideoCaptureCallback callback,
-    void* ctx,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimVideoCaptureStartParams* params
 );
 
 SHIM_EXPORT void shim_video_capture_stop(ShimVideoCapture* cap);
@@ -1495,11 +1746,15 @@ typedef void (*ShimAudioCaptureCallback)(
  * @param channels Number of channels (1 or 2)
  * @return Capture handle, or NULL on failure
  */
+typedef struct {
+    const char* device_id;
+    int sample_rate;
+    int channels;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimAudioCaptureCreateParams;
+
 SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
-    const char* device_id,
-    int sample_rate,
-    int channels,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimAudioCaptureCreateParams* params
 );
 
 /*
@@ -1510,11 +1765,15 @@ SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
  * @param ctx User context passed to callback
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimAudioCapture* cap;
+    ShimAudioCaptureCallback callback;
+    void* ctx;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimAudioCaptureStartParams;
+
 SHIM_EXPORT int shim_audio_capture_start(
-    ShimAudioCapture* cap,
-    ShimAudioCaptureCallback callback,
-    void* ctx,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimAudioCaptureStartParams* params
 );
 
 SHIM_EXPORT void shim_audio_capture_stop(ShimAudioCapture* cap);
@@ -1540,11 +1799,15 @@ typedef struct {
  * @param out_count Output: actual count found
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimScreenInfo* screens;
+    int max_screens;
+    int out_count;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimEnumerateScreensParams;
+
 SHIM_EXPORT int shim_enumerate_screens(
-    ShimScreenInfo* screens,
-    int max_screens,
-    int* out_count,
-    ShimErrorBuffer* error_out  /* Optional: buffer for error message */
+    ShimEnumerateScreensParams* params
 );
 
 /*
@@ -1555,20 +1818,30 @@ SHIM_EXPORT int shim_enumerate_screens(
  * @param fps Desired capture framerate
  * @return Capture handle, or NULL on failure
  */
+typedef struct {
+    int64_t screen_or_window_id;
+    int is_window;
+    int fps;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimScreenCaptureCreateParams;
+
 SHIM_EXPORT ShimScreenCapture* shim_screen_capture_create(
-    int64_t screen_or_window_id,
-    int is_window,
-    int fps
+    ShimScreenCaptureCreateParams* params
 );
 
 /*
  * Start screen capture with callback.
  * Uses same callback type as video capture (I420 frames).
  */
+typedef struct {
+    ShimScreenCapture* cap;
+    ShimVideoCaptureCallback callback;
+    void* ctx;
+    ShimErrorBuffer* error_out;  /* Optional: buffer for error message */
+} ShimScreenCaptureStartParams;
+
 SHIM_EXPORT int shim_screen_capture_start(
-    ShimScreenCapture* cap,
-    ShimVideoCaptureCallback callback,
-    void* ctx
+    ShimScreenCaptureStartParams* params
 );
 
 SHIM_EXPORT void shim_screen_capture_stop(ShimScreenCapture* cap);
@@ -1594,13 +1867,16 @@ SHIM_EXPORT void shim_screen_capture_destroy(ShimScreenCapture* cap);
  * Note: This calls RtpReceiverInterface::SetJitterBufferMinimumDelay() internally.
  * There is no API to set a maximum delay or disable adaptive mode.
  *
- * @param receiver RTPReceiver handle
- * @param min_delay_ms Minimum delay in milliseconds (0 = let libwebrtc decide)
+ * @param params Input parameters (receiver + delay)
  * @return SHIM_OK on success
  */
+typedef struct {
+    ShimRTPReceiver* receiver;
+    int min_delay_ms;
+} ShimRTPReceiverSetJitterBufferMinDelayParams;
+
 SHIM_EXPORT int shim_rtp_receiver_set_jitter_buffer_min_delay(
-    ShimRTPReceiver* receiver,
-    int min_delay_ms
+    ShimRTPReceiverSetJitterBufferMinDelayParams* params
 );
 
 /* ============================================================================

@@ -1,5 +1,52 @@
 package ffi
 
+// shimVideoEncoderCreateParams matches ShimVideoEncoderCreateParams in shim.h.
+type shimVideoEncoderCreateParams struct {
+	Codec    int32
+	Config   uintptr
+	ErrorOut uintptr
+}
+
+// shimVideoEncoderSetBitrateParams matches ShimVideoEncoderSetBitrateParams in shim.h.
+type shimVideoEncoderSetBitrateParams struct {
+	Encoder    uintptr
+	BitrateBps uint32
+	ErrorOut   uintptr
+}
+
+// shimVideoEncoderSetFramerateParams matches ShimVideoEncoderSetFramerateParams in shim.h.
+type shimVideoEncoderSetFramerateParams struct {
+	Encoder   uintptr
+	Framerate float32
+	ErrorOut  uintptr
+}
+
+// shimVideoDecoderCreateParams matches ShimVideoDecoderCreateParams in shim.h.
+type shimVideoDecoderCreateParams struct {
+	Codec    int32
+	ErrorOut uintptr
+}
+
+// shimAudioEncoderCreateParams matches ShimAudioEncoderCreateParams in shim.h.
+type shimAudioEncoderCreateParams struct {
+	Config   uintptr
+	ErrorOut uintptr
+}
+
+// shimAudioEncoderSetBitrateParams matches ShimAudioEncoderSetBitrateParams in shim.h.
+type shimAudioEncoderSetBitrateParams struct {
+	Encoder    uintptr
+	BitrateBps uint32
+	ErrorOut   uintptr
+}
+
+// shimAudioDecoderCreateParams matches ShimAudioDecoderCreateParams in shim.h.
+type shimAudioDecoderCreateParams struct {
+	SampleRate int32
+	Channels   int32
+	ErrorOut   uintptr
+}
+
 // shimVideoEncoderEncodeParams matches ShimVideoEncoderEncodeParams in shim.h.
 type shimVideoEncoderEncodeParams struct {
 	YPlane        uintptr

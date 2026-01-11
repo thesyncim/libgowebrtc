@@ -100,7 +100,6 @@ func registerFunctions() error {
 	// RTPReceiver
 	registerLibFunc(&shimRTPReceiverGetTrack, libHandle, "shim_rtp_receiver_get_track")
 	registerLibFunc(&shimRTPReceiverGetStats, libHandle, "shim_rtp_receiver_get_stats")
-	registerLibFunc(&shimRTPReceiverRequestKeyframe, libHandle, "shim_rtp_receiver_request_keyframe")
 	registerLibFunc(&shimRTPReceiverSetJitterBufferMinDelay, libHandle, "shim_rtp_receiver_set_jitter_buffer_min_delay")
 
 	// RTPTransceiver

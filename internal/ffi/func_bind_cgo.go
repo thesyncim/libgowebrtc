@@ -90,7 +90,6 @@ static void* fn_shim_rtp_sender_set_layer_bitrate;
 static void* fn_shim_rtp_sender_get_active_layers;
 static void* fn_shim_rtp_receiver_get_track;
 static void* fn_shim_rtp_receiver_get_stats;
-static void* fn_shim_rtp_receiver_request_keyframe;
 static void* fn_shim_rtp_receiver_set_jitter_buffer_min_delay;
 static void* fn_shim_transceiver_get_direction;
 static void* fn_shim_transceiver_set_direction;
@@ -222,7 +221,6 @@ void set_fn_shim_rtp_sender_set_layer_bitrate(void* fn) { fn_shim_rtp_sender_set
 void set_fn_shim_rtp_sender_get_active_layers(void* fn) { fn_shim_rtp_sender_get_active_layers = fn; }
 void set_fn_shim_rtp_receiver_get_track(void* fn) { fn_shim_rtp_receiver_get_track = fn; }
 void set_fn_shim_rtp_receiver_get_stats(void* fn) { fn_shim_rtp_receiver_get_stats = fn; }
-void set_fn_shim_rtp_receiver_request_keyframe(void* fn) { fn_shim_rtp_receiver_request_keyframe = fn; }
 void set_fn_shim_rtp_receiver_set_jitter_buffer_min_delay(void* fn) { fn_shim_rtp_receiver_set_jitter_buffer_min_delay = fn; }
 void set_fn_shim_transceiver_get_direction(void* fn) { fn_shim_transceiver_get_direction = fn; }
 void set_fn_shim_transceiver_set_direction(void* fn) { fn_shim_transceiver_set_direction = fn; }
@@ -272,21 +270,21 @@ void set_fn_shim_request_camera_permission(void* fn) { fn_shim_request_camera_pe
 void set_fn_shim_request_microphone_permission(void* fn) { fn_shim_request_microphone_permission = fn; }
 
 // Trampoline functions
-uintptr_t call_shim_video_encoder_create(int32_t codec, uintptr_t configPtr, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_video_encoder_create)(codec, configPtr, errorOut);
+uintptr_t call_shim_video_encoder_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_video_encoder_create)(params);
 }
 int32_t call_shim_video_encoder_encode(uintptr_t encoder, uintptr_t params) {
     typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
     return ((fn_t)fn_shim_video_encoder_encode)(encoder, params);
 }
-int32_t call_shim_video_encoder_set_bitrate(uintptr_t encoder, uint32_t bitrate) {
-    typedef int32_t (*fn_t)(uintptr_t, uint32_t);
-    return ((fn_t)fn_shim_video_encoder_set_bitrate)(encoder, bitrate);
+int32_t call_shim_video_encoder_set_bitrate(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_video_encoder_set_bitrate)(params);
 }
-int32_t call_shim_video_encoder_set_framerate(uintptr_t encoder, float framerate) {
-    typedef int32_t (*fn_t)(uintptr_t, float);
-    return ((fn_t)fn_shim_video_encoder_set_framerate)(encoder, framerate);
+int32_t call_shim_video_encoder_set_framerate(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_video_encoder_set_framerate)(params);
 }
 int32_t call_shim_video_encoder_request_keyframe(uintptr_t encoder) {
     typedef int32_t (*fn_t)(uintptr_t);
@@ -296,9 +294,9 @@ void call_shim_video_encoder_destroy(uintptr_t encoder) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_video_encoder_destroy)(encoder);
 }
-uintptr_t call_shim_video_decoder_create(int32_t codec, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(int32_t, uintptr_t);
-    return ((fn_t)fn_shim_video_decoder_create)(codec, errorOut);
+uintptr_t call_shim_video_decoder_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_video_decoder_create)(params);
 }
 int32_t call_shim_video_decoder_decode(uintptr_t decoder, uintptr_t params) {
     typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
@@ -308,25 +306,25 @@ void call_shim_video_decoder_destroy(uintptr_t decoder) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_video_decoder_destroy)(decoder);
 }
-uintptr_t call_shim_audio_encoder_create(uintptr_t configPtr, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_audio_encoder_create)(configPtr, errorOut);
+uintptr_t call_shim_audio_encoder_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_audio_encoder_create)(params);
 }
 int32_t call_shim_audio_encoder_encode(uintptr_t encoder, uintptr_t params) {
     typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
     return ((fn_t)fn_shim_audio_encoder_encode)(encoder, params);
 }
-int32_t call_shim_audio_encoder_set_bitrate(uintptr_t encoder, uint32_t bitrate) {
-    typedef int32_t (*fn_t)(uintptr_t, uint32_t);
-    return ((fn_t)fn_shim_audio_encoder_set_bitrate)(encoder, bitrate);
+int32_t call_shim_audio_encoder_set_bitrate(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_audio_encoder_set_bitrate)(params);
 }
 void call_shim_audio_encoder_destroy(uintptr_t encoder) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_audio_encoder_destroy)(encoder);
 }
-uintptr_t call_shim_audio_decoder_create(int32_t sampleRate, int32_t channels, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(int32_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_audio_decoder_create)(sampleRate, channels, errorOut);
+uintptr_t call_shim_audio_decoder_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_audio_decoder_create)(params);
 }
 int32_t call_shim_audio_decoder_decode(uintptr_t decoder, uintptr_t params) {
     typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
@@ -340,9 +338,9 @@ uintptr_t call_shim_packetizer_create(uintptr_t configPtr) {
     typedef uintptr_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_packetizer_create)(configPtr);
 }
-int32_t call_shim_packetizer_packetize(uintptr_t packetizer, uintptr_t data, int32_t size, uint32_t timestamp, int32_t isKeyframe, uintptr_t dst, uintptr_t offsets, uintptr_t sizes, int32_t maxPackets, uintptr_t outCount) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uint32_t, int32_t, uintptr_t, uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_packetizer_packetize)(packetizer, data, size, timestamp, isKeyframe, dst, offsets, sizes, maxPackets, outCount);
+int32_t call_shim_packetizer_packetize(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_packetizer_packetize)(params);
 }
 uint16_t call_shim_packetizer_sequence_number(uintptr_t packetizer) {
     typedef uint16_t (*fn_t)(uintptr_t);
@@ -356,13 +354,13 @@ uintptr_t call_shim_depacketizer_create(int32_t codec) {
     typedef uintptr_t (*fn_t)(int32_t);
     return ((fn_t)fn_shim_depacketizer_create)(codec);
 }
-int32_t call_shim_depacketizer_push(uintptr_t depacketizer, uintptr_t data, int32_t size) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t);
-    return ((fn_t)fn_shim_depacketizer_push)(depacketizer, data, size);
+int32_t call_shim_depacketizer_push(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_depacketizer_push)(params);
 }
-int32_t call_shim_depacketizer_pop(uintptr_t depacketizer, uintptr_t outData, uintptr_t outSize, uintptr_t outTimestamp, uintptr_t outIsKeyframe) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_depacketizer_pop)(depacketizer, outData, outSize, outTimestamp, outIsKeyframe);
+int32_t call_shim_depacketizer_pop(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_depacketizer_pop)(params);
 }
 void call_shim_depacketizer_destroy(uintptr_t depacketizer) {
     typedef void (*fn_t)(uintptr_t);
@@ -384,49 +382,49 @@ uintptr_t call_shim_version() {
     typedef uintptr_t (*fn_t)();
     return ((fn_t)fn_shim_version)();
 }
-uintptr_t call_shim_peer_connection_create(uintptr_t configPtr, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_create)(configPtr, errorOut);
+uintptr_t call_shim_peer_connection_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_create)(params);
 }
 void call_shim_peer_connection_destroy(uintptr_t pc) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_peer_connection_destroy)(pc);
 }
-void call_shim_peer_connection_set_on_ice_candidate(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_ice_candidate)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_ice_candidate(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_ice_candidate)(params);
 }
-void call_shim_peer_connection_set_on_connection_state_change(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_connection_state_change)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_connection_state_change(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_connection_state_change)(params);
 }
-void call_shim_peer_connection_set_on_track(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_track)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_track(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_track)(params);
 }
-void call_shim_peer_connection_set_on_data_channel(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_data_channel)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_data_channel(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_data_channel)(params);
 }
-int32_t call_shim_peer_connection_create_offer(uintptr_t pc, uintptr_t sdpOut, int32_t sdpOutSize, uintptr_t outSdpLen, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_create_offer)(pc, sdpOut, sdpOutSize, outSdpLen, errorOut);
+int32_t call_shim_peer_connection_create_offer(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_create_offer)(params);
 }
-int32_t call_shim_peer_connection_create_answer(uintptr_t pc, uintptr_t sdpOut, int32_t sdpOutSize, uintptr_t outSdpLen, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_create_answer)(pc, sdpOut, sdpOutSize, outSdpLen, errorOut);
+int32_t call_shim_peer_connection_create_answer(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_create_answer)(params);
 }
-int32_t call_shim_peer_connection_set_local_description(uintptr_t pc, int32_t sdpType, uintptr_t sdp, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_set_local_description)(pc, sdpType, sdp, errorOut);
+int32_t call_shim_peer_connection_set_local_description(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_set_local_description)(params);
 }
-int32_t call_shim_peer_connection_set_remote_description(uintptr_t pc, int32_t sdpType, uintptr_t sdp, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_set_remote_description)(pc, sdpType, sdp, errorOut);
+int32_t call_shim_peer_connection_set_remote_description(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_set_remote_description)(params);
 }
-int32_t call_shim_peer_connection_add_ice_candidate(uintptr_t pc, uintptr_t candidate, uintptr_t sdpMid, int32_t sdpMLineIndex, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_add_ice_candidate)(pc, candidate, sdpMid, sdpMLineIndex, errorOut);
+int32_t call_shim_peer_connection_add_ice_candidate(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_add_ice_candidate)(params);
 }
 int32_t call_shim_peer_connection_signaling_state(uintptr_t pc) {
     typedef int32_t (*fn_t)(uintptr_t);
@@ -444,49 +442,49 @@ int32_t call_shim_peer_connection_connection_state(uintptr_t pc) {
     typedef int32_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_peer_connection_connection_state)(pc);
 }
-uintptr_t call_shim_peer_connection_add_track(uintptr_t pc, int32_t codec, uintptr_t trackID, uintptr_t streamID, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, int32_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_add_track)(pc, codec, trackID, streamID, errorOut);
+uintptr_t call_shim_peer_connection_add_track(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_add_track)(params);
 }
-int32_t call_shim_peer_connection_remove_track(uintptr_t pc, uintptr_t sender, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_remove_track)(pc, sender, errorOut);
+int32_t call_shim_peer_connection_remove_track(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_remove_track)(params);
 }
-uintptr_t call_shim_peer_connection_create_data_channel(uintptr_t pc, uintptr_t label, int32_t ordered, int32_t maxRetransmits, uintptr_t protocol, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, uintptr_t, int32_t, int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_create_data_channel)(pc, label, ordered, maxRetransmits, protocol, errorOut);
+uintptr_t call_shim_peer_connection_create_data_channel(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_create_data_channel)(params);
 }
 void call_shim_peer_connection_close(uintptr_t pc) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_peer_connection_close)(pc);
 }
-int32_t call_shim_rtp_sender_set_bitrate(uintptr_t sender, uint32_t bitrate, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uint32_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_set_bitrate)(sender, bitrate, errorOut);
+int32_t call_shim_rtp_sender_set_bitrate(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_set_bitrate)(params);
 }
-int32_t call_shim_rtp_sender_replace_track(uintptr_t sender, uintptr_t track) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_replace_track)(sender, track);
+int32_t call_shim_rtp_sender_replace_track(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_replace_track)(params);
 }
 void call_shim_rtp_sender_destroy(uintptr_t sender) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_rtp_sender_destroy)(sender);
 }
-void call_shim_data_channel_set_on_message(uintptr_t dc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_data_channel_set_on_message)(dc, callback, ctx);
+void call_shim_data_channel_set_on_message(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_data_channel_set_on_message)(params);
 }
-void call_shim_data_channel_set_on_open(uintptr_t dc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_data_channel_set_on_open)(dc, callback, ctx);
+void call_shim_data_channel_set_on_open(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_data_channel_set_on_open)(params);
 }
-void call_shim_data_channel_set_on_close(uintptr_t dc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_data_channel_set_on_close)(dc, callback, ctx);
+void call_shim_data_channel_set_on_close(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_data_channel_set_on_close)(params);
 }
-int32_t call_shim_data_channel_send(uintptr_t dc, uintptr_t data, int32_t size, int32_t isBinary, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_data_channel_send)(dc, data, size, isBinary, errorOut);
+int32_t call_shim_data_channel_send(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_data_channel_send)(params);
 }
 uintptr_t call_shim_data_channel_label(uintptr_t dc) {
     typedef uintptr_t (*fn_t)(uintptr_t);
@@ -504,45 +502,45 @@ void call_shim_data_channel_destroy(uintptr_t dc) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_data_channel_destroy)(dc);
 }
-uintptr_t call_shim_video_track_source_create(uintptr_t pc, int32_t width, int32_t height) {
-    typedef uintptr_t (*fn_t)(uintptr_t, int32_t, int32_t);
-    return ((fn_t)fn_shim_video_track_source_create)(pc, width, height);
+uintptr_t call_shim_video_track_source_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_video_track_source_create)(params);
 }
-int32_t call_shim_video_track_source_push_frame(uintptr_t source, uintptr_t yPlane, uintptr_t uPlane, uintptr_t vPlane, int32_t yStride, int32_t uStride, int32_t vStride, int64_t timestampUs) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, int32_t, int32_t, int32_t, int64_t);
-    return ((fn_t)fn_shim_video_track_source_push_frame)(source, yPlane, uPlane, vPlane, yStride, uStride, vStride, timestampUs);
+int32_t call_shim_video_track_source_push_frame(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_video_track_source_push_frame)(params);
 }
-uintptr_t call_shim_peer_connection_add_video_track_from_source(uintptr_t pc, uintptr_t source, uintptr_t trackID, uintptr_t streamID, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_add_video_track_from_source)(pc, source, trackID, streamID, errorOut);
+uintptr_t call_shim_peer_connection_add_video_track_from_source(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_add_video_track_from_source)(params);
 }
 void call_shim_video_track_source_destroy(uintptr_t source) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_video_track_source_destroy)(source);
 }
-uintptr_t call_shim_audio_track_source_create(uintptr_t pc, int32_t sampleRate, int32_t channels) {
-    typedef uintptr_t (*fn_t)(uintptr_t, int32_t, int32_t);
-    return ((fn_t)fn_shim_audio_track_source_create)(pc, sampleRate, channels);
+uintptr_t call_shim_audio_track_source_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_audio_track_source_create)(params);
 }
-int32_t call_shim_audio_track_source_push_frame(uintptr_t source, uintptr_t samples, int32_t numSamples, int64_t timestampUs) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, int64_t);
-    return ((fn_t)fn_shim_audio_track_source_push_frame)(source, samples, numSamples, timestampUs);
+int32_t call_shim_audio_track_source_push_frame(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_audio_track_source_push_frame)(params);
 }
-uintptr_t call_shim_peer_connection_add_audio_track_from_source(uintptr_t pc, uintptr_t source, uintptr_t trackID, uintptr_t streamID, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_add_audio_track_from_source)(pc, source, trackID, streamID, errorOut);
+uintptr_t call_shim_peer_connection_add_audio_track_from_source(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_add_audio_track_from_source)(params);
 }
 void call_shim_audio_track_source_destroy(uintptr_t source) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_audio_track_source_destroy)(source);
 }
-int32_t call_shim_track_set_video_sink(uintptr_t track, uintptr_t callback, uintptr_t ctx) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_track_set_video_sink)(track, callback, ctx);
+int32_t call_shim_track_set_video_sink(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_track_set_video_sink)(params);
 }
-int32_t call_shim_track_set_audio_sink(uintptr_t track, uintptr_t callback, uintptr_t ctx) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_track_set_audio_sink)(track, callback, ctx);
+int32_t call_shim_track_set_audio_sink(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_track_set_audio_sink)(params);
 }
 void call_shim_track_remove_video_sink(uintptr_t track) {
     typedef void (*fn_t)(uintptr_t);
@@ -560,69 +558,65 @@ uintptr_t call_shim_track_id(uintptr_t track) {
     typedef uintptr_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_track_id)(track);
 }
-int32_t call_shim_rtp_sender_get_parameters(uintptr_t sender, uintptr_t outParams, uintptr_t encodings, int32_t maxEncodings) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, int32_t);
-    return ((fn_t)fn_shim_rtp_sender_get_parameters)(sender, outParams, encodings, maxEncodings);
+int32_t call_shim_rtp_sender_get_parameters(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_get_parameters)(params);
 }
-int32_t call_shim_rtp_sender_set_parameters(uintptr_t sender, uintptr_t params, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_set_parameters)(sender, params, errorOut);
+int32_t call_shim_rtp_sender_set_parameters(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_set_parameters)(params);
 }
 uintptr_t call_shim_rtp_sender_get_track(uintptr_t sender) {
     typedef uintptr_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_rtp_sender_get_track)(sender);
 }
-int32_t call_shim_rtp_sender_get_stats(uintptr_t sender, uintptr_t outStats) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_get_stats)(sender, outStats);
+int32_t call_shim_rtp_sender_get_stats(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_get_stats)(params);
 }
-void call_shim_rtp_sender_set_on_rtcp_feedback(uintptr_t sender, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_rtp_sender_set_on_rtcp_feedback)(sender, callback, ctx);
+void call_shim_rtp_sender_set_on_rtcp_feedback(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_rtp_sender_set_on_rtcp_feedback)(params);
 }
-int32_t call_shim_rtp_sender_set_layer_active(uintptr_t sender, uintptr_t rid, int32_t active, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_set_layer_active)(sender, rid, active, errorOut);
+int32_t call_shim_rtp_sender_set_layer_active(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_set_layer_active)(params);
 }
-int32_t call_shim_rtp_sender_set_layer_bitrate(uintptr_t sender, uintptr_t rid, uint32_t maxBitrate, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uint32_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_set_layer_bitrate)(sender, rid, maxBitrate, errorOut);
+int32_t call_shim_rtp_sender_set_layer_bitrate(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_set_layer_bitrate)(params);
 }
-int32_t call_shim_rtp_sender_get_active_layers(uintptr_t sender, uintptr_t outSpatial, uintptr_t outTemporal) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_get_active_layers)(sender, outSpatial, outTemporal);
+int32_t call_shim_rtp_sender_get_active_layers(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_get_active_layers)(params);
 }
 uintptr_t call_shim_rtp_receiver_get_track(uintptr_t receiver) {
     typedef uintptr_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_rtp_receiver_get_track)(receiver);
 }
-int32_t call_shim_rtp_receiver_get_stats(uintptr_t receiver, uintptr_t outStats) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_receiver_get_stats)(receiver, outStats);
-}
-int32_t call_shim_rtp_receiver_request_keyframe(uintptr_t receiver) {
+int32_t call_shim_rtp_receiver_get_stats(uintptr_t params) {
     typedef int32_t (*fn_t)(uintptr_t);
-    return ((fn_t)fn_shim_rtp_receiver_request_keyframe)(receiver);
+    return ((fn_t)fn_shim_rtp_receiver_get_stats)(params);
 }
-int32_t call_shim_rtp_receiver_set_jitter_buffer_min_delay(uintptr_t receiver, int32_t minDelayMs) {
-    typedef int32_t (*fn_t)(uintptr_t, int32_t);
-    return ((fn_t)fn_shim_rtp_receiver_set_jitter_buffer_min_delay)(receiver, minDelayMs);
+int32_t call_shim_rtp_receiver_set_jitter_buffer_min_delay(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_receiver_set_jitter_buffer_min_delay)(params);
 }
 int32_t call_shim_transceiver_get_direction(uintptr_t transceiver) {
     typedef int32_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_transceiver_get_direction)(transceiver);
 }
-int32_t call_shim_transceiver_set_direction(uintptr_t transceiver, int32_t direction, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_transceiver_set_direction)(transceiver, direction, errorOut);
+int32_t call_shim_transceiver_set_direction(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_transceiver_set_direction)(params);
 }
 int32_t call_shim_transceiver_get_current_direction(uintptr_t transceiver) {
     typedef int32_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_transceiver_get_current_direction)(transceiver);
 }
-int32_t call_shim_transceiver_stop(uintptr_t transceiver, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_transceiver_stop)(transceiver, errorOut);
+int32_t call_shim_transceiver_stop(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_transceiver_stop)(params);
 }
 uintptr_t call_shim_transceiver_mid(uintptr_t transceiver) {
     typedef uintptr_t (*fn_t)(uintptr_t);
@@ -636,101 +630,101 @@ uintptr_t call_shim_transceiver_get_receiver(uintptr_t transceiver) {
     typedef uintptr_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_transceiver_get_receiver)(transceiver);
 }
-int32_t call_shim_transceiver_set_codec_preferences(uintptr_t transceiver, uintptr_t codecs, int32_t count, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_transceiver_set_codec_preferences)(transceiver, codecs, count, errorOut);
+int32_t call_shim_transceiver_set_codec_preferences(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_transceiver_set_codec_preferences)(params);
 }
-int32_t call_shim_transceiver_get_codec_preferences(uintptr_t transceiver, uintptr_t codecs, int32_t maxCodecs, uintptr_t outCount) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_transceiver_get_codec_preferences)(transceiver, codecs, maxCodecs, outCount);
+int32_t call_shim_transceiver_get_codec_preferences(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_transceiver_get_codec_preferences)(params);
 }
-uintptr_t call_shim_peer_connection_add_transceiver(uintptr_t pc, int32_t kind, int32_t direction, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, int32_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_add_transceiver)(pc, kind, direction, errorOut);
+uintptr_t call_shim_peer_connection_add_transceiver(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_add_transceiver)(params);
 }
-int32_t call_shim_peer_connection_get_senders(uintptr_t pc, uintptr_t senders, int32_t maxSenders, uintptr_t outCount) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_get_senders)(pc, senders, maxSenders, outCount);
+int32_t call_shim_peer_connection_get_senders(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_get_senders)(params);
 }
-int32_t call_shim_peer_connection_get_receivers(uintptr_t pc, uintptr_t receivers, int32_t maxReceivers, uintptr_t outCount) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_get_receivers)(pc, receivers, maxReceivers, outCount);
+int32_t call_shim_peer_connection_get_receivers(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_get_receivers)(params);
 }
-int32_t call_shim_peer_connection_get_transceivers(uintptr_t pc, uintptr_t transceivers, int32_t maxTransceivers, uintptr_t outCount) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_get_transceivers)(pc, transceivers, maxTransceivers, outCount);
+int32_t call_shim_peer_connection_get_transceivers(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_get_transceivers)(params);
 }
 int32_t call_shim_peer_connection_restart_ice(uintptr_t pc) {
     typedef int32_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_peer_connection_restart_ice)(pc);
 }
-int32_t call_shim_peer_connection_get_stats(uintptr_t pc, uintptr_t outStats) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_get_stats)(pc, outStats);
+int32_t call_shim_peer_connection_get_stats(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_get_stats)(params);
 }
-void call_shim_peer_connection_set_on_signaling_state_change(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_signaling_state_change)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_signaling_state_change(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_signaling_state_change)(params);
 }
-void call_shim_peer_connection_set_on_ice_connection_state_change(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_ice_connection_state_change)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_ice_connection_state_change(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_ice_connection_state_change)(params);
 }
-void call_shim_peer_connection_set_on_ice_gathering_state_change(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_ice_gathering_state_change)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_ice_gathering_state_change(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_ice_gathering_state_change)(params);
 }
-void call_shim_peer_connection_set_on_negotiation_needed(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_negotiation_needed)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_negotiation_needed(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_negotiation_needed)(params);
 }
-int32_t call_shim_rtp_sender_set_scalability_mode(uintptr_t sender, uintptr_t mode, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_set_scalability_mode)(sender, mode, errorOut);
+int32_t call_shim_rtp_sender_set_scalability_mode(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_set_scalability_mode)(params);
 }
-int32_t call_shim_rtp_sender_get_scalability_mode(uintptr_t sender, uintptr_t modeOut, int32_t modeOutSize) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t);
-    return ((fn_t)fn_shim_rtp_sender_get_scalability_mode)(sender, modeOut, modeOutSize);
+int32_t call_shim_rtp_sender_get_scalability_mode(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_get_scalability_mode)(params);
 }
-int32_t call_shim_get_supported_video_codecs(uintptr_t codecs, int32_t maxCodecs, uintptr_t outCount) {
-    typedef int32_t (*fn_t)(uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_get_supported_video_codecs)(codecs, maxCodecs, outCount);
+int32_t call_shim_get_supported_video_codecs(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_get_supported_video_codecs)(params);
 }
-int32_t call_shim_get_supported_audio_codecs(uintptr_t codecs, int32_t maxCodecs, uintptr_t outCount) {
-    typedef int32_t (*fn_t)(uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_get_supported_audio_codecs)(codecs, maxCodecs, outCount);
+int32_t call_shim_get_supported_audio_codecs(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_get_supported_audio_codecs)(params);
 }
 int32_t call_shim_is_codec_supported(uintptr_t mimeType) {
     typedef int32_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_is_codec_supported)(mimeType);
 }
-int32_t call_shim_rtp_sender_get_negotiated_codecs(uintptr_t sender, uintptr_t codecs, int32_t maxCodecs, uintptr_t outCount) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_get_negotiated_codecs)(sender, codecs, maxCodecs, outCount);
+int32_t call_shim_rtp_sender_get_negotiated_codecs(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_get_negotiated_codecs)(params);
 }
-int32_t call_shim_rtp_sender_set_preferred_codec(uintptr_t sender, uintptr_t mimeType, int32_t payloadType, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_rtp_sender_set_preferred_codec)(sender, mimeType, payloadType, errorOut);
+int32_t call_shim_rtp_sender_set_preferred_codec(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_rtp_sender_set_preferred_codec)(params);
 }
-void call_shim_peer_connection_set_on_bandwidth_estimate(uintptr_t pc, uintptr_t callback, uintptr_t ctx) {
-    typedef void (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    ((fn_t)fn_shim_peer_connection_set_on_bandwidth_estimate)(pc, callback, ctx);
+void call_shim_peer_connection_set_on_bandwidth_estimate(uintptr_t params) {
+    typedef void (*fn_t)(uintptr_t);
+    ((fn_t)fn_shim_peer_connection_set_on_bandwidth_estimate)(params);
 }
-int32_t call_shim_peer_connection_get_bandwidth_estimate(uintptr_t pc, uintptr_t outEstimate) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_peer_connection_get_bandwidth_estimate)(pc, outEstimate);
+int32_t call_shim_peer_connection_get_bandwidth_estimate(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_get_bandwidth_estimate)(params);
 }
-int32_t call_shim_enumerate_devices(uintptr_t devices, int32_t maxDevices, uintptr_t outCount, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_enumerate_devices)(devices, maxDevices, outCount, errorOut);
+int32_t call_shim_enumerate_devices(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_enumerate_devices)(params);
 }
-uintptr_t call_shim_video_capture_create(uintptr_t deviceID, int32_t width, int32_t height, int32_t fps, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, int32_t, int32_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_video_capture_create)(deviceID, width, height, fps, errorOut);
+uintptr_t call_shim_video_capture_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_video_capture_create)(params);
 }
-int32_t call_shim_video_capture_start(uintptr_t capturePtr, uintptr_t callback, uintptr_t ctx, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_video_capture_start)(capturePtr, callback, ctx, errorOut);
+int32_t call_shim_video_capture_start(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_video_capture_start)(params);
 }
 void call_shim_video_capture_stop(uintptr_t capturePtr) {
     typedef void (*fn_t)(uintptr_t);
@@ -740,13 +734,13 @@ void call_shim_video_capture_destroy(uintptr_t capturePtr) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_video_capture_destroy)(capturePtr);
 }
-uintptr_t call_shim_audio_capture_create(uintptr_t deviceID, int32_t sampleRate, int32_t channels, uintptr_t errorOut) {
-    typedef uintptr_t (*fn_t)(uintptr_t, int32_t, int32_t, uintptr_t);
-    return ((fn_t)fn_shim_audio_capture_create)(deviceID, sampleRate, channels, errorOut);
+uintptr_t call_shim_audio_capture_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_audio_capture_create)(params);
 }
-int32_t call_shim_audio_capture_start(uintptr_t capturePtr, uintptr_t callback, uintptr_t ctx, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_audio_capture_start)(capturePtr, callback, ctx, errorOut);
+int32_t call_shim_audio_capture_start(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_audio_capture_start)(params);
 }
 void call_shim_audio_capture_stop(uintptr_t capturePtr) {
     typedef void (*fn_t)(uintptr_t);
@@ -756,17 +750,17 @@ void call_shim_audio_capture_destroy(uintptr_t capturePtr) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_audio_capture_destroy)(capturePtr);
 }
-int32_t call_shim_enumerate_screens(uintptr_t screens, int32_t maxScreens, uintptr_t outCount, uintptr_t errorOut) {
-    typedef int32_t (*fn_t)(uintptr_t, int32_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_enumerate_screens)(screens, maxScreens, outCount, errorOut);
+int32_t call_shim_enumerate_screens(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_enumerate_screens)(params);
 }
-uintptr_t call_shim_screen_capture_create(int64_t id, int32_t isWindow, int32_t fps) {
-    typedef uintptr_t (*fn_t)(int64_t, int32_t, int32_t);
-    return ((fn_t)fn_shim_screen_capture_create)(id, isWindow, fps);
+uintptr_t call_shim_screen_capture_create(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_screen_capture_create)(params);
 }
-int32_t call_shim_screen_capture_start(uintptr_t capturePtr, uintptr_t callback, uintptr_t ctx) {
-    typedef int32_t (*fn_t)(uintptr_t, uintptr_t, uintptr_t);
-    return ((fn_t)fn_shim_screen_capture_start)(capturePtr, callback, ctx);
+int32_t call_shim_screen_capture_start(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_screen_capture_start)(params);
 }
 void call_shim_screen_capture_stop(uintptr_t capturePtr) {
     typedef void (*fn_t)(uintptr_t);
@@ -890,7 +884,6 @@ func registerFunctions() error {
 	// RTPReceiver
 	C.set_fn_shim_rtp_receiver_get_track(unsafe.Pointer(mustDlsym(libHandle, "shim_rtp_receiver_get_track")))
 	C.set_fn_shim_rtp_receiver_get_stats(unsafe.Pointer(mustDlsym(libHandle, "shim_rtp_receiver_get_stats")))
-	C.set_fn_shim_rtp_receiver_request_keyframe(unsafe.Pointer(mustDlsym(libHandle, "shim_rtp_receiver_request_keyframe")))
 	C.set_fn_shim_rtp_receiver_set_jitter_buffer_min_delay(unsafe.Pointer(mustDlsym(libHandle, "shim_rtp_receiver_set_jitter_buffer_min_delay")))
 
 	// RTPTransceiver
@@ -977,17 +970,17 @@ func registerFunctions() error {
 
 	// Assign Go wrapper functions
 	// VideoEncoder
-	shimVideoEncoderCreate = func(codec int32, configPtr uintptr, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_video_encoder_create(C.int32_t(codec), C.uintptr_t(configPtr), C.uintptr_t(errorOut)))
+	shimVideoEncoderCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_video_encoder_create(C.uintptr_t(params)))
 	}
 	shimVideoEncoderEncode = func(encoder uintptr, params uintptr) int32 {
 		return int32(C.call_shim_video_encoder_encode(C.uintptr_t(encoder), C.uintptr_t(params)))
 	}
-	shimVideoEncoderSetBitrate = func(encoder uintptr, bitrate uint32) int32 {
-		return int32(C.call_shim_video_encoder_set_bitrate(C.uintptr_t(encoder), C.uint32_t(bitrate)))
+	shimVideoEncoderSetBitrate = func(params uintptr) int32 {
+		return int32(C.call_shim_video_encoder_set_bitrate(C.uintptr_t(params)))
 	}
-	shimVideoEncoderSetFramerate = func(encoder uintptr, framerate float32) int32 {
-		return int32(C.call_shim_video_encoder_set_framerate(C.uintptr_t(encoder), C.float(framerate)))
+	shimVideoEncoderSetFramerate = func(params uintptr) int32 {
+		return int32(C.call_shim_video_encoder_set_framerate(C.uintptr_t(params)))
 	}
 	shimVideoEncoderRequestKeyframe = func(encoder uintptr) int32 {
 		return int32(C.call_shim_video_encoder_request_keyframe(C.uintptr_t(encoder)))
@@ -997,8 +990,8 @@ func registerFunctions() error {
 	}
 
 	// VideoDecoder
-	shimVideoDecoderCreate = func(codec int32, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_video_decoder_create(C.int32_t(codec), C.uintptr_t(errorOut)))
+	shimVideoDecoderCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_video_decoder_create(C.uintptr_t(params)))
 	}
 	shimVideoDecoderDecode = func(decoder uintptr, params uintptr) int32 {
 		return int32(C.call_shim_video_decoder_decode(C.uintptr_t(decoder), C.uintptr_t(params)))
@@ -1008,22 +1001,22 @@ func registerFunctions() error {
 	}
 
 	// AudioEncoder
-	shimAudioEncoderCreate = func(configPtr uintptr, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_audio_encoder_create(C.uintptr_t(configPtr), C.uintptr_t(errorOut)))
+	shimAudioEncoderCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_audio_encoder_create(C.uintptr_t(params)))
 	}
 	shimAudioEncoderEncode = func(encoder uintptr, params uintptr) int32 {
 		return int32(C.call_shim_audio_encoder_encode(C.uintptr_t(encoder), C.uintptr_t(params)))
 	}
-	shimAudioEncoderSetBitrate = func(encoder uintptr, bitrate uint32) int32 {
-		return int32(C.call_shim_audio_encoder_set_bitrate(C.uintptr_t(encoder), C.uint32_t(bitrate)))
+	shimAudioEncoderSetBitrate = func(params uintptr) int32 {
+		return int32(C.call_shim_audio_encoder_set_bitrate(C.uintptr_t(params)))
 	}
 	shimAudioEncoderDestroy = func(encoder uintptr) {
 		C.call_shim_audio_encoder_destroy(C.uintptr_t(encoder))
 	}
 
 	// AudioDecoder
-	shimAudioDecoderCreate = func(sampleRate int32, channels int32, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_audio_decoder_create(C.int32_t(sampleRate), C.int32_t(channels), C.uintptr_t(errorOut)))
+	shimAudioDecoderCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_audio_decoder_create(C.uintptr_t(params)))
 	}
 	shimAudioDecoderDecode = func(decoder uintptr, params uintptr) int32 {
 		return int32(C.call_shim_audio_decoder_decode(C.uintptr_t(decoder), C.uintptr_t(params)))
@@ -1036,8 +1029,8 @@ func registerFunctions() error {
 	shimPacketizerCreate = func(configPtr uintptr) uintptr {
 		return uintptr(C.call_shim_packetizer_create(C.uintptr_t(configPtr)))
 	}
-	shimPacketizerPacketize = func(packetizer uintptr, data uintptr, size int32, timestamp uint32, isKeyframe int32, dst uintptr, offsets uintptr, sizes uintptr, maxPackets int32, outCount uintptr) int32 {
-		return int32(C.call_shim_packetizer_packetize(C.uintptr_t(packetizer), C.uintptr_t(data), C.int32_t(size), C.uint32_t(timestamp), C.int32_t(isKeyframe), C.uintptr_t(dst), C.uintptr_t(offsets), C.uintptr_t(sizes), C.int32_t(maxPackets), C.uintptr_t(outCount)))
+	shimPacketizerPacketize = func(params uintptr) int32 {
+		return int32(C.call_shim_packetizer_packetize(C.uintptr_t(params)))
 	}
 	shimPacketizerSeqNum = func(packetizer uintptr) uint16 {
 		return uint16(C.call_shim_packetizer_sequence_number(C.uintptr_t(packetizer)))
@@ -1050,11 +1043,11 @@ func registerFunctions() error {
 	shimDepacketizerCreate = func(codec int32) uintptr {
 		return uintptr(C.call_shim_depacketizer_create(C.int32_t(codec)))
 	}
-	shimDepacketizerPush = func(depacketizer uintptr, data uintptr, size int32) int32 {
-		return int32(C.call_shim_depacketizer_push(C.uintptr_t(depacketizer), C.uintptr_t(data), C.int32_t(size)))
+	shimDepacketizerPush = func(params uintptr) int32 {
+		return int32(C.call_shim_depacketizer_push(C.uintptr_t(params)))
 	}
-	shimDepacketizerPop = func(depacketizer uintptr, outData uintptr, outSize uintptr, outTimestamp uintptr, outIsKeyframe uintptr) int32 {
-		return int32(C.call_shim_depacketizer_pop(C.uintptr_t(depacketizer), C.uintptr_t(outData), C.uintptr_t(outSize), C.uintptr_t(outTimestamp), C.uintptr_t(outIsKeyframe)))
+	shimDepacketizerPop = func(params uintptr) int32 {
+		return int32(C.call_shim_depacketizer_pop(C.uintptr_t(params)))
 	}
 	shimDepacketizerDestroy = func(depacketizer uintptr) {
 		C.call_shim_depacketizer_destroy(C.uintptr_t(depacketizer))
@@ -1077,38 +1070,38 @@ func registerFunctions() error {
 	}
 
 	// PeerConnection
-	shimPeerConnectionCreate = func(configPtr uintptr, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_peer_connection_create(C.uintptr_t(configPtr), C.uintptr_t(errorOut)))
+	shimPeerConnectionCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_peer_connection_create(C.uintptr_t(params)))
 	}
 	shimPeerConnectionDestroy = func(pc uintptr) {
 		C.call_shim_peer_connection_destroy(C.uintptr_t(pc))
 	}
-	shimPeerConnectionSetOnICECandidate = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_ice_candidate(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnICECandidate = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_ice_candidate(C.uintptr_t(params))
 	}
-	shimPeerConnectionSetOnConnectionStateChange = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_connection_state_change(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnConnectionStateChange = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_connection_state_change(C.uintptr_t(params))
 	}
-	shimPeerConnectionSetOnTrack = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_track(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnTrack = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_track(C.uintptr_t(params))
 	}
-	shimPeerConnectionSetOnDataChannel = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_data_channel(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnDataChannel = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_data_channel(C.uintptr_t(params))
 	}
-	shimPeerConnectionCreateOffer = func(pc uintptr, sdpOut uintptr, sdpOutSize int32, outSdpLen uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_peer_connection_create_offer(C.uintptr_t(pc), C.uintptr_t(sdpOut), C.int32_t(sdpOutSize), C.uintptr_t(outSdpLen), C.uintptr_t(errorOut)))
+	shimPeerConnectionCreateOffer = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_create_offer(C.uintptr_t(params)))
 	}
-	shimPeerConnectionCreateAnswer = func(pc uintptr, sdpOut uintptr, sdpOutSize int32, outSdpLen uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_peer_connection_create_answer(C.uintptr_t(pc), C.uintptr_t(sdpOut), C.int32_t(sdpOutSize), C.uintptr_t(outSdpLen), C.uintptr_t(errorOut)))
+	shimPeerConnectionCreateAnswer = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_create_answer(C.uintptr_t(params)))
 	}
-	shimPeerConnectionSetLocalDescription = func(pc uintptr, sdpType int32, sdp uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_peer_connection_set_local_description(C.uintptr_t(pc), C.int32_t(sdpType), C.uintptr_t(sdp), C.uintptr_t(errorOut)))
+	shimPeerConnectionSetLocalDescription = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_set_local_description(C.uintptr_t(params)))
 	}
-	shimPeerConnectionSetRemoteDescription = func(pc uintptr, sdpType int32, sdp uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_peer_connection_set_remote_description(C.uintptr_t(pc), C.int32_t(sdpType), C.uintptr_t(sdp), C.uintptr_t(errorOut)))
+	shimPeerConnectionSetRemoteDescription = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_set_remote_description(C.uintptr_t(params)))
 	}
-	shimPeerConnectionAddICECandidate = func(pc uintptr, candidate uintptr, sdpMid uintptr, sdpMLineIndex int32, errorOut uintptr) int32 {
-		return int32(C.call_shim_peer_connection_add_ice_candidate(C.uintptr_t(pc), C.uintptr_t(candidate), C.uintptr_t(sdpMid), C.int32_t(sdpMLineIndex), C.uintptr_t(errorOut)))
+	shimPeerConnectionAddICECandidate = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_add_ice_candidate(C.uintptr_t(params)))
 	}
 	shimPeerConnectionSignalingState = func(pc uintptr) int32 {
 		return int32(C.call_shim_peer_connection_signaling_state(C.uintptr_t(pc)))
@@ -1122,112 +1115,109 @@ func registerFunctions() error {
 	shimPeerConnectionConnectionState = func(pc uintptr) int32 {
 		return int32(C.call_shim_peer_connection_connection_state(C.uintptr_t(pc)))
 	}
-	shimPeerConnectionAddTrack = func(pc uintptr, codec int32, trackID uintptr, streamID uintptr, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_peer_connection_add_track(C.uintptr_t(pc), C.int32_t(codec), C.uintptr_t(trackID), C.uintptr_t(streamID), C.uintptr_t(errorOut)))
+	shimPeerConnectionAddTrack = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_peer_connection_add_track(C.uintptr_t(params)))
 	}
-	shimPeerConnectionRemoveTrack = func(pc uintptr, sender uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_peer_connection_remove_track(C.uintptr_t(pc), C.uintptr_t(sender), C.uintptr_t(errorOut)))
+	shimPeerConnectionRemoveTrack = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_remove_track(C.uintptr_t(params)))
 	}
-	shimPeerConnectionCreateDataChannel = func(pc uintptr, label uintptr, ordered int32, maxRetransmits int32, protocol uintptr, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_peer_connection_create_data_channel(C.uintptr_t(pc), C.uintptr_t(label), C.int32_t(ordered), C.int32_t(maxRetransmits), C.uintptr_t(protocol), C.uintptr_t(errorOut)))
+	shimPeerConnectionCreateDataChannel = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_peer_connection_create_data_channel(C.uintptr_t(params)))
 	}
 	shimPeerConnectionClose = func(pc uintptr) {
 		C.call_shim_peer_connection_close(C.uintptr_t(pc))
 	}
 
 	// PeerConnectionExtended
-	shimPeerConnectionAddTransceiver = func(pc uintptr, kind int32, direction int32, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_peer_connection_add_transceiver(C.uintptr_t(pc), C.int32_t(kind), C.int32_t(direction), C.uintptr_t(errorOut)))
+	shimPeerConnectionAddTransceiver = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_peer_connection_add_transceiver(C.uintptr_t(params)))
 	}
-	shimPeerConnectionGetSenders = func(pc uintptr, senders uintptr, maxSenders int32, outCount uintptr) int32 {
-		return int32(C.call_shim_peer_connection_get_senders(C.uintptr_t(pc), C.uintptr_t(senders), C.int32_t(maxSenders), C.uintptr_t(outCount)))
+	shimPeerConnectionGetSenders = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_get_senders(C.uintptr_t(params)))
 	}
-	shimPeerConnectionGetReceivers = func(pc uintptr, receivers uintptr, maxReceivers int32, outCount uintptr) int32 {
-		return int32(C.call_shim_peer_connection_get_receivers(C.uintptr_t(pc), C.uintptr_t(receivers), C.int32_t(maxReceivers), C.uintptr_t(outCount)))
+	shimPeerConnectionGetReceivers = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_get_receivers(C.uintptr_t(params)))
 	}
-	shimPeerConnectionGetTransceivers = func(pc uintptr, transceivers uintptr, maxTransceivers int32, outCount uintptr) int32 {
-		return int32(C.call_shim_peer_connection_get_transceivers(C.uintptr_t(pc), C.uintptr_t(transceivers), C.int32_t(maxTransceivers), C.uintptr_t(outCount)))
+	shimPeerConnectionGetTransceivers = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_get_transceivers(C.uintptr_t(params)))
 	}
 	shimPeerConnectionRestartICE = func(pc uintptr) int32 {
 		return int32(C.call_shim_peer_connection_restart_ice(C.uintptr_t(pc)))
 	}
-	shimPeerConnectionGetStats = func(pc uintptr, outStats uintptr) int32 {
-		return int32(C.call_shim_peer_connection_get_stats(C.uintptr_t(pc), C.uintptr_t(outStats)))
+	shimPeerConnectionGetStats = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_get_stats(C.uintptr_t(params)))
 	}
-	shimPeerConnectionSetOnSignalingStateChange = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_signaling_state_change(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnSignalingStateChange = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_signaling_state_change(C.uintptr_t(params))
 	}
-	shimPeerConnectionSetOnICEConnectionStateChange = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_ice_connection_state_change(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnICEConnectionStateChange = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_ice_connection_state_change(C.uintptr_t(params))
 	}
-	shimPeerConnectionSetOnICEGatheringStateChange = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_ice_gathering_state_change(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnICEGatheringStateChange = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_ice_gathering_state_change(C.uintptr_t(params))
 	}
-	shimPeerConnectionSetOnNegotiationNeeded = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_negotiation_needed(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnNegotiationNeeded = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_negotiation_needed(C.uintptr_t(params))
 	}
 
 	// RTPSender
-	shimRTPSenderSetBitrate = func(sender uintptr, bitrate uint32, errorOut uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_set_bitrate(C.uintptr_t(sender), C.uint32_t(bitrate), C.uintptr_t(errorOut)))
+	shimRTPSenderSetBitrate = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_set_bitrate(C.uintptr_t(params)))
 	}
-	shimRTPSenderReplaceTrack = func(sender uintptr, track uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_replace_track(C.uintptr_t(sender), C.uintptr_t(track)))
+	shimRTPSenderReplaceTrack = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_replace_track(C.uintptr_t(params)))
 	}
 	shimRTPSenderDestroy = func(sender uintptr) {
 		C.call_shim_rtp_sender_destroy(C.uintptr_t(sender))
 	}
-	shimRTPSenderGetParameters = func(sender uintptr, outParams uintptr, encodings uintptr, maxEncodings int32) int32 {
-		return int32(C.call_shim_rtp_sender_get_parameters(C.uintptr_t(sender), C.uintptr_t(outParams), C.uintptr_t(encodings), C.int32_t(maxEncodings)))
+	shimRTPSenderGetParameters = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_get_parameters(C.uintptr_t(params)))
 	}
-	shimRTPSenderSetParameters = func(sender uintptr, params uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_set_parameters(C.uintptr_t(sender), C.uintptr_t(params), C.uintptr_t(errorOut)))
+	shimRTPSenderSetParameters = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_set_parameters(C.uintptr_t(params)))
 	}
 	shimRTPSenderGetTrack = func(sender uintptr) uintptr {
 		return uintptr(C.call_shim_rtp_sender_get_track(C.uintptr_t(sender)))
 	}
-	shimRTPSenderGetStats = func(sender uintptr, outStats uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_get_stats(C.uintptr_t(sender), C.uintptr_t(outStats)))
+	shimRTPSenderGetStats = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_get_stats(C.uintptr_t(params)))
 	}
-	shimRTPSenderSetOnRTCPFeedback = func(sender uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_rtp_sender_set_on_rtcp_feedback(C.uintptr_t(sender), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimRTPSenderSetOnRTCPFeedback = func(params uintptr) {
+		C.call_shim_rtp_sender_set_on_rtcp_feedback(C.uintptr_t(params))
 	}
-	shimRTPSenderSetLayerActive = func(sender uintptr, rid uintptr, active int32, errorOut uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_set_layer_active(C.uintptr_t(sender), C.uintptr_t(rid), C.int32_t(active), C.uintptr_t(errorOut)))
+	shimRTPSenderSetLayerActive = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_set_layer_active(C.uintptr_t(params)))
 	}
-	shimRTPSenderSetLayerBitrate = func(sender uintptr, rid uintptr, maxBitrate uint32, errorOut uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_set_layer_bitrate(C.uintptr_t(sender), C.uintptr_t(rid), C.uint32_t(maxBitrate), C.uintptr_t(errorOut)))
+	shimRTPSenderSetLayerBitrate = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_set_layer_bitrate(C.uintptr_t(params)))
 	}
-	shimRTPSenderGetActiveLayers = func(sender uintptr, outSpatial uintptr, outTemporal uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_get_active_layers(C.uintptr_t(sender), C.uintptr_t(outSpatial), C.uintptr_t(outTemporal)))
+	shimRTPSenderGetActiveLayers = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_get_active_layers(C.uintptr_t(params)))
 	}
 
 	// RTPReceiver
 	shimRTPReceiverGetTrack = func(receiver uintptr) uintptr {
 		return uintptr(C.call_shim_rtp_receiver_get_track(C.uintptr_t(receiver)))
 	}
-	shimRTPReceiverGetStats = func(receiver uintptr, outStats uintptr) int32 {
-		return int32(C.call_shim_rtp_receiver_get_stats(C.uintptr_t(receiver), C.uintptr_t(outStats)))
+	shimRTPReceiverGetStats = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_receiver_get_stats(C.uintptr_t(params)))
 	}
-	shimRTPReceiverRequestKeyframe = func(receiver uintptr) int32 {
-		return int32(C.call_shim_rtp_receiver_request_keyframe(C.uintptr_t(receiver)))
-	}
-	shimRTPReceiverSetJitterBufferMinDelay = func(receiver uintptr, minDelayMs int32) int32 {
-		return int32(C.call_shim_rtp_receiver_set_jitter_buffer_min_delay(C.uintptr_t(receiver), C.int32_t(minDelayMs)))
+	shimRTPReceiverSetJitterBufferMinDelay = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_receiver_set_jitter_buffer_min_delay(C.uintptr_t(params)))
 	}
 
 	// RTPTransceiver
 	shimTransceiverGetDirection = func(transceiver uintptr) int32 {
 		return int32(C.call_shim_transceiver_get_direction(C.uintptr_t(transceiver)))
 	}
-	shimTransceiverSetDirection = func(transceiver uintptr, direction int32, errorOut uintptr) int32 {
-		return int32(C.call_shim_transceiver_set_direction(C.uintptr_t(transceiver), C.int32_t(direction), C.uintptr_t(errorOut)))
+	shimTransceiverSetDirection = func(params uintptr) int32 {
+		return int32(C.call_shim_transceiver_set_direction(C.uintptr_t(params)))
 	}
 	shimTransceiverGetCurrentDirection = func(transceiver uintptr) int32 {
 		return int32(C.call_shim_transceiver_get_current_direction(C.uintptr_t(transceiver)))
 	}
-	shimTransceiverStop = func(transceiver uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_transceiver_stop(C.uintptr_t(transceiver), C.uintptr_t(errorOut)))
+	shimTransceiverStop = func(params uintptr) int32 {
+		return int32(C.call_shim_transceiver_stop(C.uintptr_t(params)))
 	}
 	shimTransceiverMid = func(transceiver uintptr) uintptr {
 		return uintptr(C.call_shim_transceiver_mid(C.uintptr_t(transceiver)))
@@ -1238,25 +1228,25 @@ func registerFunctions() error {
 	shimTransceiverGetReceiver = func(transceiver uintptr) uintptr {
 		return uintptr(C.call_shim_transceiver_get_receiver(C.uintptr_t(transceiver)))
 	}
-	shimTransceiverSetCodecPreferences = func(transceiver uintptr, codecs uintptr, count int32, errorOut uintptr) int32 {
-		return int32(C.call_shim_transceiver_set_codec_preferences(C.uintptr_t(transceiver), C.uintptr_t(codecs), C.int32_t(count), C.uintptr_t(errorOut)))
+	shimTransceiverSetCodecPreferences = func(params uintptr) int32 {
+		return int32(C.call_shim_transceiver_set_codec_preferences(C.uintptr_t(params)))
 	}
-	shimTransceiverGetCodecPreferences = func(transceiver uintptr, codecs uintptr, maxCodecs int32, outCount uintptr) int32 {
-		return int32(C.call_shim_transceiver_get_codec_preferences(C.uintptr_t(transceiver), C.uintptr_t(codecs), C.int32_t(maxCodecs), C.uintptr_t(outCount)))
+	shimTransceiverGetCodecPreferences = func(params uintptr) int32 {
+		return int32(C.call_shim_transceiver_get_codec_preferences(C.uintptr_t(params)))
 	}
 
 	// DataChannel
-	shimDataChannelSetOnMessage = func(dc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_data_channel_set_on_message(C.uintptr_t(dc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimDataChannelSetOnMessage = func(params uintptr) {
+		C.call_shim_data_channel_set_on_message(C.uintptr_t(params))
 	}
-	shimDataChannelSetOnOpen = func(dc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_data_channel_set_on_open(C.uintptr_t(dc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimDataChannelSetOnOpen = func(params uintptr) {
+		C.call_shim_data_channel_set_on_open(C.uintptr_t(params))
 	}
-	shimDataChannelSetOnClose = func(dc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_data_channel_set_on_close(C.uintptr_t(dc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimDataChannelSetOnClose = func(params uintptr) {
+		C.call_shim_data_channel_set_on_close(C.uintptr_t(params))
 	}
-	shimDataChannelSend = func(dc uintptr, data uintptr, size int32, isBinary int32, errorOut uintptr) int32 {
-		return int32(C.call_shim_data_channel_send(C.uintptr_t(dc), C.uintptr_t(data), C.int32_t(size), C.int32_t(isBinary), C.uintptr_t(errorOut)))
+	shimDataChannelSend = func(params uintptr) int32 {
+		return int32(C.call_shim_data_channel_send(C.uintptr_t(params)))
 	}
 	shimDataChannelLabel = func(dc uintptr) uintptr {
 		return uintptr(C.call_shim_data_channel_label(C.uintptr_t(dc)))
@@ -1272,39 +1262,39 @@ func registerFunctions() error {
 	}
 
 	// VideoTrackSource
-	shimVideoTrackSourceCreate = func(pc uintptr, width int32, height int32) uintptr {
-		return uintptr(C.call_shim_video_track_source_create(C.uintptr_t(pc), C.int32_t(width), C.int32_t(height)))
+	shimVideoTrackSourceCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_video_track_source_create(C.uintptr_t(params)))
 	}
-	shimVideoTrackSourcePushFrame = func(source uintptr, yPlane uintptr, uPlane uintptr, vPlane uintptr, yStride int32, uStride int32, vStride int32, timestampUs int64) int32 {
-		return int32(C.call_shim_video_track_source_push_frame(C.uintptr_t(source), C.uintptr_t(yPlane), C.uintptr_t(uPlane), C.uintptr_t(vPlane), C.int32_t(yStride), C.int32_t(uStride), C.int32_t(vStride), C.int64_t(timestampUs)))
+	shimVideoTrackSourcePushFrame = func(params uintptr) int32 {
+		return int32(C.call_shim_video_track_source_push_frame(C.uintptr_t(params)))
 	}
-	shimPeerConnectionAddVideoTrackFromSource = func(pc uintptr, source uintptr, trackID uintptr, streamID uintptr, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_peer_connection_add_video_track_from_source(C.uintptr_t(pc), C.uintptr_t(source), C.uintptr_t(trackID), C.uintptr_t(streamID), C.uintptr_t(errorOut)))
+	shimPeerConnectionAddVideoTrackFromSource = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_peer_connection_add_video_track_from_source(C.uintptr_t(params)))
 	}
 	shimVideoTrackSourceDestroy = func(source uintptr) {
 		C.call_shim_video_track_source_destroy(C.uintptr_t(source))
 	}
 
 	// AudioTrackSource
-	shimAudioTrackSourceCreate = func(pc uintptr, sampleRate int32, channels int32) uintptr {
-		return uintptr(C.call_shim_audio_track_source_create(C.uintptr_t(pc), C.int32_t(sampleRate), C.int32_t(channels)))
+	shimAudioTrackSourceCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_audio_track_source_create(C.uintptr_t(params)))
 	}
-	shimAudioTrackSourcePushFrame = func(source uintptr, samples uintptr, numSamples int32, timestampUs int64) int32 {
-		return int32(C.call_shim_audio_track_source_push_frame(C.uintptr_t(source), C.uintptr_t(samples), C.int32_t(numSamples), C.int64_t(timestampUs)))
+	shimAudioTrackSourcePushFrame = func(params uintptr) int32 {
+		return int32(C.call_shim_audio_track_source_push_frame(C.uintptr_t(params)))
 	}
-	shimPeerConnectionAddAudioTrackFromSource = func(pc uintptr, source uintptr, trackID uintptr, streamID uintptr, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_peer_connection_add_audio_track_from_source(C.uintptr_t(pc), C.uintptr_t(source), C.uintptr_t(trackID), C.uintptr_t(streamID), C.uintptr_t(errorOut)))
+	shimPeerConnectionAddAudioTrackFromSource = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_peer_connection_add_audio_track_from_source(C.uintptr_t(params)))
 	}
 	shimAudioTrackSourceDestroy = func(source uintptr) {
 		C.call_shim_audio_track_source_destroy(C.uintptr_t(source))
 	}
 
 	// RemoteTrack
-	shimTrackSetVideoSink = func(track uintptr, callback uintptr, ctx uintptr) int32 {
-		return int32(C.call_shim_track_set_video_sink(C.uintptr_t(track), C.uintptr_t(callback), C.uintptr_t(ctx)))
+	shimTrackSetVideoSink = func(params uintptr) int32 {
+		return int32(C.call_shim_track_set_video_sink(C.uintptr_t(params)))
 	}
-	shimTrackSetAudioSink = func(track uintptr, callback uintptr, ctx uintptr) int32 {
-		return int32(C.call_shim_track_set_audio_sink(C.uintptr_t(track), C.uintptr_t(callback), C.uintptr_t(ctx)))
+	shimTrackSetAudioSink = func(params uintptr) int32 {
+		return int32(C.call_shim_track_set_audio_sink(C.uintptr_t(params)))
 	}
 	shimTrackRemoveVideoSink = func(track uintptr) {
 		C.call_shim_track_remove_video_sink(C.uintptr_t(track))
@@ -1320,49 +1310,49 @@ func registerFunctions() error {
 	}
 
 	// ScalabilityMode
-	shimRTPSenderSetScalabilityMode = func(sender uintptr, mode uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_set_scalability_mode(C.uintptr_t(sender), C.uintptr_t(mode), C.uintptr_t(errorOut)))
+	shimRTPSenderSetScalabilityMode = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_set_scalability_mode(C.uintptr_t(params)))
 	}
-	shimRTPSenderGetScalabilityMode = func(sender uintptr, modeOut uintptr, modeOutSize int32) int32 {
-		return int32(C.call_shim_rtp_sender_get_scalability_mode(C.uintptr_t(sender), C.uintptr_t(modeOut), C.int32_t(modeOutSize)))
+	shimRTPSenderGetScalabilityMode = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_get_scalability_mode(C.uintptr_t(params)))
 	}
 
 	// CodecCapabilities
-	shimGetSupportedVideoCodecs = func(codecs uintptr, maxCodecs int32, outCount uintptr) int32 {
-		return int32(C.call_shim_get_supported_video_codecs(C.uintptr_t(codecs), C.int32_t(maxCodecs), C.uintptr_t(outCount)))
+	shimGetSupportedVideoCodecs = func(params uintptr) int32 {
+		return int32(C.call_shim_get_supported_video_codecs(C.uintptr_t(params)))
 	}
-	shimGetSupportedAudioCodecs = func(codecs uintptr, maxCodecs int32, outCount uintptr) int32 {
-		return int32(C.call_shim_get_supported_audio_codecs(C.uintptr_t(codecs), C.int32_t(maxCodecs), C.uintptr_t(outCount)))
+	shimGetSupportedAudioCodecs = func(params uintptr) int32 {
+		return int32(C.call_shim_get_supported_audio_codecs(C.uintptr_t(params)))
 	}
 	shimIsCodecSupported = func(mimeType uintptr) int32 {
 		return int32(C.call_shim_is_codec_supported(C.uintptr_t(mimeType)))
 	}
 
 	// RTPSenderCodec
-	shimRTPSenderGetNegotiatedCodecs = func(sender uintptr, codecs uintptr, maxCodecs int32, outCount uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_get_negotiated_codecs(C.uintptr_t(sender), C.uintptr_t(codecs), C.int32_t(maxCodecs), C.uintptr_t(outCount)))
+	shimRTPSenderGetNegotiatedCodecs = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_get_negotiated_codecs(C.uintptr_t(params)))
 	}
-	shimRTPSenderSetPreferredCodec = func(sender uintptr, mimeType uintptr, payloadType int32, errorOut uintptr) int32 {
-		return int32(C.call_shim_rtp_sender_set_preferred_codec(C.uintptr_t(sender), C.uintptr_t(mimeType), C.int32_t(payloadType), C.uintptr_t(errorOut)))
+	shimRTPSenderSetPreferredCodec = func(params uintptr) int32 {
+		return int32(C.call_shim_rtp_sender_set_preferred_codec(C.uintptr_t(params)))
 	}
 
 	// BandwidthEstimation
-	shimPeerConnectionSetOnBandwidthEstimate = func(pc uintptr, callback uintptr, ctx uintptr) {
-		C.call_shim_peer_connection_set_on_bandwidth_estimate(C.uintptr_t(pc), C.uintptr_t(callback), C.uintptr_t(ctx))
+	shimPeerConnectionSetOnBandwidthEstimate = func(params uintptr) {
+		C.call_shim_peer_connection_set_on_bandwidth_estimate(C.uintptr_t(params))
 	}
-	shimPeerConnectionGetBandwidthEstimate = func(pc uintptr, outEstimate uintptr) int32 {
-		return int32(C.call_shim_peer_connection_get_bandwidth_estimate(C.uintptr_t(pc), C.uintptr_t(outEstimate)))
+	shimPeerConnectionGetBandwidthEstimate = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_get_bandwidth_estimate(C.uintptr_t(params)))
 	}
 
 	// DeviceCapture
-	shimEnumerateDevices = func(devices uintptr, maxDevices int32, outCount uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_enumerate_devices(C.uintptr_t(devices), C.int32_t(maxDevices), C.uintptr_t(outCount), C.uintptr_t(errorOut)))
+	shimEnumerateDevices = func(params uintptr) int32 {
+		return int32(C.call_shim_enumerate_devices(C.uintptr_t(params)))
 	}
-	shimVideoCaptureCreate = func(deviceID uintptr, width int32, height int32, fps int32, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_video_capture_create(C.uintptr_t(deviceID), C.int32_t(width), C.int32_t(height), C.int32_t(fps), C.uintptr_t(errorOut)))
+	shimVideoCaptureCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_video_capture_create(C.uintptr_t(params)))
 	}
-	shimVideoCaptureStart = func(capturePtr uintptr, callback uintptr, ctx uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_video_capture_start(C.uintptr_t(capturePtr), C.uintptr_t(callback), C.uintptr_t(ctx), C.uintptr_t(errorOut)))
+	shimVideoCaptureStart = func(params uintptr) int32 {
+		return int32(C.call_shim_video_capture_start(C.uintptr_t(params)))
 	}
 	shimVideoCaptureStop = func(capturePtr uintptr) {
 		C.call_shim_video_capture_stop(C.uintptr_t(capturePtr))
@@ -1370,11 +1360,11 @@ func registerFunctions() error {
 	shimVideoCaptureDestroy = func(capturePtr uintptr) {
 		C.call_shim_video_capture_destroy(C.uintptr_t(capturePtr))
 	}
-	shimAudioCaptureCreate = func(deviceID uintptr, sampleRate int32, channels int32, errorOut uintptr) uintptr {
-		return uintptr(C.call_shim_audio_capture_create(C.uintptr_t(deviceID), C.int32_t(sampleRate), C.int32_t(channels), C.uintptr_t(errorOut)))
+	shimAudioCaptureCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_audio_capture_create(C.uintptr_t(params)))
 	}
-	shimAudioCaptureStart = func(capturePtr uintptr, callback uintptr, ctx uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_audio_capture_start(C.uintptr_t(capturePtr), C.uintptr_t(callback), C.uintptr_t(ctx), C.uintptr_t(errorOut)))
+	shimAudioCaptureStart = func(params uintptr) int32 {
+		return int32(C.call_shim_audio_capture_start(C.uintptr_t(params)))
 	}
 	shimAudioCaptureStop = func(capturePtr uintptr) {
 		C.call_shim_audio_capture_stop(C.uintptr_t(capturePtr))
@@ -1384,14 +1374,14 @@ func registerFunctions() error {
 	}
 
 	// ScreenCapture
-	shimEnumerateScreens = func(screens uintptr, maxScreens int32, outCount uintptr, errorOut uintptr) int32 {
-		return int32(C.call_shim_enumerate_screens(C.uintptr_t(screens), C.int32_t(maxScreens), C.uintptr_t(outCount), C.uintptr_t(errorOut)))
+	shimEnumerateScreens = func(params uintptr) int32 {
+		return int32(C.call_shim_enumerate_screens(C.uintptr_t(params)))
 	}
-	shimScreenCaptureCreate = func(id int64, isWindow int32, fps int32) uintptr {
-		return uintptr(C.call_shim_screen_capture_create(C.int64_t(id), C.int32_t(isWindow), C.int32_t(fps)))
+	shimScreenCaptureCreate = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_screen_capture_create(C.uintptr_t(params)))
 	}
-	shimScreenCaptureStart = func(capturePtr uintptr, callback uintptr, ctx uintptr) int32 {
-		return int32(C.call_shim_screen_capture_start(C.uintptr_t(capturePtr), C.uintptr_t(callback), C.uintptr_t(ctx)))
+	shimScreenCaptureStart = func(params uintptr) int32 {
+		return int32(C.call_shim_screen_capture_start(C.uintptr_t(params)))
 	}
 	shimScreenCaptureStop = func(capturePtr uintptr) {
 		C.call_shim_screen_capture_stop(C.uintptr_t(capturePtr))

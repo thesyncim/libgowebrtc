@@ -66,6 +66,7 @@ var initialisms = map[string]string{
 	"ice":  "ICE",
 	"ssrc": "SSRC",
 	"mtu":  "MTU",
+	"fps":  "FPS",
 	"h264": "H264",
 	"vp8":  "VP8",
 	"vp9":  "VP9",
@@ -76,6 +77,8 @@ var initialisms = map[string]string{
 	"fir":  "FIR",
 	"qp":   "QP",
 	"hw":   "HW",
+	"pc":   "PC",
+	"dc":   "DC",
 }
 
 var specialTokens = map[string]string{

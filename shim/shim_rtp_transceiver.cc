@@ -29,31 +29,27 @@ SHIM_EXPORT int shim_transceiver_get_direction(ShimRTPTransceiver* transceiver) 
     }
 }
 
-SHIM_EXPORT int shim_transceiver_set_direction(
-    ShimRTPTransceiver* transceiver,
-    int direction,
-    ShimErrorBuffer* error_out
-) {
-    if (!transceiver) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_transceiver_set_direction(ShimTransceiverSetDirectionParams* params) {
+    if (!params || !params->transceiver) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
-    auto t = reinterpret_cast<webrtc::RtpTransceiverInterface*>(transceiver);
+    auto t = reinterpret_cast<webrtc::RtpTransceiverInterface*>(params->transceiver);
 
     webrtc::RtpTransceiverDirection dir;
-    switch (direction) {
+    switch (params->direction) {
         case SHIM_TRANSCEIVER_DIRECTION_SENDRECV: dir = webrtc::RtpTransceiverDirection::kSendRecv; break;
         case SHIM_TRANSCEIVER_DIRECTION_SENDONLY: dir = webrtc::RtpTransceiverDirection::kSendOnly; break;
         case SHIM_TRANSCEIVER_DIRECTION_RECVONLY: dir = webrtc::RtpTransceiverDirection::kRecvOnly; break;
         case SHIM_TRANSCEIVER_DIRECTION_INACTIVE: dir = webrtc::RtpTransceiverDirection::kInactive; break;
         default:
-            shim::SetErrorMessage(error_out, "invalid direction", SHIM_ERROR_INVALID_PARAM);
+            shim::SetErrorMessage(params->error_out, "invalid direction", SHIM_ERROR_INVALID_PARAM);
             return SHIM_ERROR_INVALID_PARAM;
     }
 
     auto result = t->SetDirectionWithError(dir);
     if (!result.ok()) {
-        shim::SetErrorFromRTCError(error_out, result, SHIM_ERROR_INVALID_PARAM);
+        shim::SetErrorFromRTCError(params->error_out, result, SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
     return SHIM_OK;
@@ -76,18 +72,15 @@ SHIM_EXPORT int shim_transceiver_get_current_direction(ShimRTPTransceiver* trans
     }
 }
 
-SHIM_EXPORT int shim_transceiver_stop(
-    ShimRTPTransceiver* transceiver,
-    ShimErrorBuffer* error_out
-) {
-    if (!transceiver) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_transceiver_stop(ShimTransceiverStopParams* params) {
+    if (!params || !params->transceiver) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
-    auto t = reinterpret_cast<webrtc::RtpTransceiverInterface*>(transceiver);
+    auto t = reinterpret_cast<webrtc::RtpTransceiverInterface*>(params->transceiver);
     auto result = t->StopStandard();
     if (!result.ok()) {
-        shim::SetErrorFromRTCError(error_out, result);
+        shim::SetErrorFromRTCError(params->error_out, result);
         return SHIM_ERROR_INIT_FAILED;
     }
     return SHIM_OK;
@@ -118,27 +111,22 @@ SHIM_EXPORT ShimRTPReceiver* shim_transceiver_get_receiver(ShimRTPTransceiver* t
     return reinterpret_cast<ShimRTPReceiver*>(t->receiver().get());
 }
 
-SHIM_EXPORT int shim_transceiver_set_codec_preferences(
-    ShimRTPTransceiver* transceiver,
-    const ShimCodecCapability* codecs,
-    int count,
-    ShimErrorBuffer* error_out
-) {
-    if (!transceiver || (!codecs && count > 0)) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+SHIM_EXPORT int shim_transceiver_set_codec_preferences(ShimTransceiverSetCodecPreferencesParams* params) {
+    if (!params || !params->transceiver || (!params->codecs && params->count > 0)) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    auto t = reinterpret_cast<webrtc::RtpTransceiverInterface*>(transceiver);
+    auto t = reinterpret_cast<webrtc::RtpTransceiverInterface*>(params->transceiver);
 
     std::vector<webrtc::RtpCodecCapability> prefs;
-    prefs.reserve(count);
+    prefs.reserve(params->count);
 
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < params->count; i++) {
         webrtc::RtpCodecCapability cap;
 
         // Parse mime_type "video/VP8" or "audio/opus" into kind and name
-        std::string mime = codecs[i].mime_type;
+        std::string mime = params->codecs[i].mime_type;
         size_t slash = mime.find('/');
         if (slash != std::string::npos) {
             std::string kind_str = mime.substr(0, slash);
@@ -158,18 +146,18 @@ SHIM_EXPORT int shim_transceiver_set_codec_preferences(
             cap.kind = t->media_type();
         }
 
-        if (codecs[i].clock_rate > 0) {
-            cap.clock_rate = codecs[i].clock_rate;
+        if (params->codecs[i].clock_rate > 0) {
+            cap.clock_rate = params->codecs[i].clock_rate;
         }
 
-        if (codecs[i].channels > 0) {
-            cap.num_channels = codecs[i].channels;
+        if (params->codecs[i].channels > 0) {
+            cap.num_channels = params->codecs[i].channels;
         }
 
         // Parse sdp_fmtp_line if present
-        if (codecs[i].sdp_fmtp_line[0] != '\0') {
+        if (params->codecs[i].sdp_fmtp_line[0] != '\0') {
             // Simple parsing: split on ; and =
-            std::string fmtp = codecs[i].sdp_fmtp_line;
+            std::string fmtp = params->codecs[i].sdp_fmtp_line;
             size_t pos = 0;
             while (pos < fmtp.size()) {
                 size_t eq = fmtp.find('=', pos);
@@ -191,27 +179,22 @@ SHIM_EXPORT int shim_transceiver_set_codec_preferences(
 
     auto result = t->SetCodecPreferences(prefs);
     if (!result.ok()) {
-        shim::SetErrorFromRTCError(error_out, result);
+        shim::SetErrorFromRTCError(params->error_out, result);
         return SHIM_ERROR_INIT_FAILED;
     }
     return SHIM_OK;
 }
 
-SHIM_EXPORT int shim_transceiver_get_codec_preferences(
-    ShimRTPTransceiver* transceiver,
-    ShimCodecCapability* codecs,
-    int max_codecs,
-    int* out_count
-) {
-    if (!transceiver || !codecs || !out_count) return SHIM_ERROR_INVALID_PARAM;
-
-    auto t = reinterpret_cast<webrtc::RtpTransceiverInterface*>(transceiver);
+SHIM_EXPORT int shim_transceiver_get_codec_preferences(ShimTransceiverGetCodecPreferencesParams* params) {
+    if (!params || !params->transceiver || !params->codecs || params->max_codecs <= 0) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
 
     // Note: libwebrtc doesn't expose a direct "get codec preferences" method
     // We can get the header extensions and codecs via the sender's parameters
     // For now, return the codec from the first encoding's codec info
 
-    *out_count = 0;
+    params->out_count = 0;
     return SHIM_OK;
 }
 

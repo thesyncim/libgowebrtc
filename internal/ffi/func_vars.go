@@ -6,39 +6,39 @@ package ffi
 // NOTE: All int/uint types are explicitly sized to match C ABI
 var (
 	// VideoEncoder
-	shimVideoEncoderCreate          func(codec int32, configPtr uintptr, errorOut uintptr) uintptr
+	shimVideoEncoderCreate          func(params uintptr) uintptr
 	shimVideoEncoderEncode          func(encoder uintptr, params uintptr) int32
-	shimVideoEncoderSetBitrate      func(encoder uintptr, bitrate uint32) int32
-	shimVideoEncoderSetFramerate    func(encoder uintptr, framerate float32) int32
+	shimVideoEncoderSetBitrate      func(params uintptr) int32
+	shimVideoEncoderSetFramerate    func(params uintptr) int32
 	shimVideoEncoderRequestKeyframe func(encoder uintptr) int32
 	shimVideoEncoderDestroy         func(encoder uintptr)
 
 	// VideoDecoder
-	shimVideoDecoderCreate  func(codec int32, errorOut uintptr) uintptr
+	shimVideoDecoderCreate  func(params uintptr) uintptr
 	shimVideoDecoderDecode  func(decoder uintptr, params uintptr) int32
 	shimVideoDecoderDestroy func(decoder uintptr)
 
 	// AudioEncoder
-	shimAudioEncoderCreate     func(configPtr uintptr, errorOut uintptr) uintptr
+	shimAudioEncoderCreate     func(params uintptr) uintptr
 	shimAudioEncoderEncode     func(encoder uintptr, params uintptr) int32
-	shimAudioEncoderSetBitrate func(encoder uintptr, bitrate uint32) int32
+	shimAudioEncoderSetBitrate func(params uintptr) int32
 	shimAudioEncoderDestroy    func(encoder uintptr)
 
 	// AudioDecoder
-	shimAudioDecoderCreate  func(sampleRate int32, channels int32, errorOut uintptr) uintptr
+	shimAudioDecoderCreate  func(params uintptr) uintptr
 	shimAudioDecoderDecode  func(decoder uintptr, params uintptr) int32
 	shimAudioDecoderDestroy func(decoder uintptr)
 
 	// Packetizer
 	shimPacketizerCreate    func(configPtr uintptr) uintptr
-	shimPacketizerPacketize func(packetizer uintptr, data uintptr, size int32, timestamp uint32, isKeyframe int32, dst uintptr, offsets uintptr, sizes uintptr, maxPackets int32, outCount uintptr) int32
+	shimPacketizerPacketize func(params uintptr) int32
 	shimPacketizerSeqNum    func(packetizer uintptr) uint16
 	shimPacketizerDestroy   func(packetizer uintptr)
 
 	// Depacketizer
 	shimDepacketizerCreate  func(codec int32) uintptr
-	shimDepacketizerPush    func(depacketizer uintptr, data uintptr, size int32) int32
-	shimDepacketizerPop     func(depacketizer uintptr, outData uintptr, outSize uintptr, outTimestamp uintptr, outIsKeyframe uintptr) int32
+	shimDepacketizerPush    func(params uintptr) int32
+	shimDepacketizerPop     func(params uintptr) int32
 	shimDepacketizerDestroy func(depacketizer uintptr)
 
 	// Memory
@@ -50,130 +50,129 @@ var (
 	shimVersion          func() uintptr
 
 	// PeerConnection
-	shimPeerConnectionCreate                     func(configPtr uintptr, errorOut uintptr) uintptr
+	shimPeerConnectionCreate                     func(params uintptr) uintptr
 	shimPeerConnectionDestroy                    func(pc uintptr)
-	shimPeerConnectionSetOnICECandidate          func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnConnectionStateChange func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnTrack                 func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnDataChannel           func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionCreateOffer                func(pc uintptr, sdpOut uintptr, sdpOutSize int32, outSdpLen uintptr, errorOut uintptr) int32
-	shimPeerConnectionCreateAnswer               func(pc uintptr, sdpOut uintptr, sdpOutSize int32, outSdpLen uintptr, errorOut uintptr) int32
-	shimPeerConnectionSetLocalDescription        func(pc uintptr, sdpType int32, sdp uintptr, errorOut uintptr) int32
-	shimPeerConnectionSetRemoteDescription       func(pc uintptr, sdpType int32, sdp uintptr, errorOut uintptr) int32
-	shimPeerConnectionAddICECandidate            func(pc uintptr, candidate uintptr, sdpMid uintptr, sdpMLineIndex int32, errorOut uintptr) int32
+	shimPeerConnectionSetOnICECandidate          func(params uintptr)
+	shimPeerConnectionSetOnConnectionStateChange func(params uintptr)
+	shimPeerConnectionSetOnTrack                 func(params uintptr)
+	shimPeerConnectionSetOnDataChannel           func(params uintptr)
+	shimPeerConnectionCreateOffer                func(params uintptr) int32
+	shimPeerConnectionCreateAnswer               func(params uintptr) int32
+	shimPeerConnectionSetLocalDescription        func(params uintptr) int32
+	shimPeerConnectionSetRemoteDescription       func(params uintptr) int32
+	shimPeerConnectionAddICECandidate            func(params uintptr) int32
 	shimPeerConnectionSignalingState             func(pc uintptr) int32
 	shimPeerConnectionICEConnectionState         func(pc uintptr) int32
 	shimPeerConnectionICEGatheringState          func(pc uintptr) int32
 	shimPeerConnectionConnectionState            func(pc uintptr) int32
-	shimPeerConnectionAddTrack                   func(pc uintptr, codec int32, trackID uintptr, streamID uintptr, errorOut uintptr) uintptr
-	shimPeerConnectionRemoveTrack                func(pc uintptr, sender uintptr, errorOut uintptr) int32
-	shimPeerConnectionCreateDataChannel          func(pc uintptr, label uintptr, ordered int32, maxRetransmits int32, protocol uintptr, errorOut uintptr) uintptr
+	shimPeerConnectionAddTrack                   func(params uintptr) uintptr
+	shimPeerConnectionRemoveTrack                func(params uintptr) int32
+	shimPeerConnectionCreateDataChannel          func(params uintptr) uintptr
 	shimPeerConnectionClose                      func(pc uintptr)
 
 	// PeerConnectionExtended
-	shimPeerConnectionAddTransceiver                func(pc uintptr, kind int32, direction int32, errorOut uintptr) uintptr
-	shimPeerConnectionGetSenders                    func(pc uintptr, senders uintptr, maxSenders int32, outCount uintptr) int32
-	shimPeerConnectionGetReceivers                  func(pc uintptr, receivers uintptr, maxReceivers int32, outCount uintptr) int32
-	shimPeerConnectionGetTransceivers               func(pc uintptr, transceivers uintptr, maxTransceivers int32, outCount uintptr) int32
+	shimPeerConnectionAddTransceiver                func(params uintptr) uintptr
+	shimPeerConnectionGetSenders                    func(params uintptr) int32
+	shimPeerConnectionGetReceivers                  func(params uintptr) int32
+	shimPeerConnectionGetTransceivers               func(params uintptr) int32
 	shimPeerConnectionRestartICE                    func(pc uintptr) int32
-	shimPeerConnectionGetStats                      func(pc uintptr, outStats uintptr) int32
-	shimPeerConnectionSetOnSignalingStateChange     func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnICEConnectionStateChange func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnICEGatheringStateChange  func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionSetOnNegotiationNeeded        func(pc uintptr, callback uintptr, ctx uintptr)
+	shimPeerConnectionGetStats                      func(params uintptr) int32
+	shimPeerConnectionSetOnSignalingStateChange     func(params uintptr)
+	shimPeerConnectionSetOnICEConnectionStateChange func(params uintptr)
+	shimPeerConnectionSetOnICEGatheringStateChange  func(params uintptr)
+	shimPeerConnectionSetOnNegotiationNeeded        func(params uintptr)
 
 	// RTPSender
-	shimRTPSenderSetBitrate        func(sender uintptr, bitrate uint32, errorOut uintptr) int32
-	shimRTPSenderReplaceTrack      func(sender uintptr, track uintptr) int32
+	shimRTPSenderSetBitrate        func(params uintptr) int32
+	shimRTPSenderReplaceTrack      func(params uintptr) int32
 	shimRTPSenderDestroy           func(sender uintptr)
-	shimRTPSenderGetParameters     func(sender uintptr, outParams uintptr, encodings uintptr, maxEncodings int32) int32
-	shimRTPSenderSetParameters     func(sender uintptr, params uintptr, errorOut uintptr) int32
+	shimRTPSenderGetParameters     func(params uintptr) int32
+	shimRTPSenderSetParameters     func(params uintptr) int32
 	shimRTPSenderGetTrack          func(sender uintptr) uintptr
-	shimRTPSenderGetStats          func(sender uintptr, outStats uintptr) int32
-	shimRTPSenderSetOnRTCPFeedback func(sender uintptr, callback uintptr, ctx uintptr)
-	shimRTPSenderSetLayerActive    func(sender uintptr, rid uintptr, active int32, errorOut uintptr) int32
-	shimRTPSenderSetLayerBitrate   func(sender uintptr, rid uintptr, maxBitrate uint32, errorOut uintptr) int32
-	shimRTPSenderGetActiveLayers   func(sender uintptr, outSpatial uintptr, outTemporal uintptr) int32
+	shimRTPSenderGetStats          func(params uintptr) int32
+	shimRTPSenderSetOnRTCPFeedback func(params uintptr)
+	shimRTPSenderSetLayerActive    func(params uintptr) int32
+	shimRTPSenderSetLayerBitrate   func(params uintptr) int32
+	shimRTPSenderGetActiveLayers   func(params uintptr) int32
 
 	// RTPReceiver
 	shimRTPReceiverGetTrack                func(receiver uintptr) uintptr
-	shimRTPReceiverGetStats                func(receiver uintptr, outStats uintptr) int32
-	shimRTPReceiverRequestKeyframe         func(receiver uintptr) int32
-	shimRTPReceiverSetJitterBufferMinDelay func(receiver uintptr, minDelayMs int32) int32
+	shimRTPReceiverGetStats                func(params uintptr) int32
+	shimRTPReceiverSetJitterBufferMinDelay func(params uintptr) int32
 
 	// RTPTransceiver
 	shimTransceiverGetDirection        func(transceiver uintptr) int32
-	shimTransceiverSetDirection        func(transceiver uintptr, direction int32, errorOut uintptr) int32
+	shimTransceiverSetDirection        func(params uintptr) int32
 	shimTransceiverGetCurrentDirection func(transceiver uintptr) int32
-	shimTransceiverStop                func(transceiver uintptr, errorOut uintptr) int32
+	shimTransceiverStop                func(params uintptr) int32
 	shimTransceiverMid                 func(transceiver uintptr) uintptr
 	shimTransceiverGetSender           func(transceiver uintptr) uintptr
 	shimTransceiverGetReceiver         func(transceiver uintptr) uintptr
-	shimTransceiverSetCodecPreferences func(transceiver uintptr, codecs uintptr, count int32, errorOut uintptr) int32
-	shimTransceiverGetCodecPreferences func(transceiver uintptr, codecs uintptr, maxCodecs int32, outCount uintptr) int32
+	shimTransceiverSetCodecPreferences func(params uintptr) int32
+	shimTransceiverGetCodecPreferences func(params uintptr) int32
 
 	// DataChannel
-	shimDataChannelSetOnMessage func(dc uintptr, callback uintptr, ctx uintptr)
-	shimDataChannelSetOnOpen    func(dc uintptr, callback uintptr, ctx uintptr)
-	shimDataChannelSetOnClose   func(dc uintptr, callback uintptr, ctx uintptr)
-	shimDataChannelSend         func(dc uintptr, data uintptr, size int32, isBinary int32, errorOut uintptr) int32
+	shimDataChannelSetOnMessage func(params uintptr)
+	shimDataChannelSetOnOpen    func(params uintptr)
+	shimDataChannelSetOnClose   func(params uintptr)
+	shimDataChannelSend         func(params uintptr) int32
 	shimDataChannelLabel        func(dc uintptr) uintptr
 	shimDataChannelReadyState   func(dc uintptr) int32
 	shimDataChannelClose        func(dc uintptr)
 	shimDataChannelDestroy      func(dc uintptr)
 
 	// VideoTrackSource
-	shimVideoTrackSourceCreate                func(pc uintptr, width int32, height int32) uintptr
-	shimVideoTrackSourcePushFrame             func(source uintptr, yPlane uintptr, uPlane uintptr, vPlane uintptr, yStride int32, uStride int32, vStride int32, timestampUs int64) int32
-	shimPeerConnectionAddVideoTrackFromSource func(pc uintptr, source uintptr, trackID uintptr, streamID uintptr, errorOut uintptr) uintptr
+	shimVideoTrackSourceCreate                func(params uintptr) uintptr
+	shimVideoTrackSourcePushFrame             func(params uintptr) int32
+	shimPeerConnectionAddVideoTrackFromSource func(params uintptr) uintptr
 	shimVideoTrackSourceDestroy               func(source uintptr)
 
 	// AudioTrackSource
-	shimAudioTrackSourceCreate                func(pc uintptr, sampleRate int32, channels int32) uintptr
-	shimAudioTrackSourcePushFrame             func(source uintptr, samples uintptr, numSamples int32, timestampUs int64) int32
-	shimPeerConnectionAddAudioTrackFromSource func(pc uintptr, source uintptr, trackID uintptr, streamID uintptr, errorOut uintptr) uintptr
+	shimAudioTrackSourceCreate                func(params uintptr) uintptr
+	shimAudioTrackSourcePushFrame             func(params uintptr) int32
+	shimPeerConnectionAddAudioTrackFromSource func(params uintptr) uintptr
 	shimAudioTrackSourceDestroy               func(source uintptr)
 
 	// RemoteTrack
-	shimTrackSetVideoSink    func(track uintptr, callback uintptr, ctx uintptr) int32
-	shimTrackSetAudioSink    func(track uintptr, callback uintptr, ctx uintptr) int32
+	shimTrackSetVideoSink    func(params uintptr) int32
+	shimTrackSetAudioSink    func(params uintptr) int32
 	shimTrackRemoveVideoSink func(track uintptr)
 	shimTrackRemoveAudioSink func(track uintptr)
 	shimTrackKind            func(track uintptr) uintptr
 	shimTrackID              func(track uintptr) uintptr
 
 	// ScalabilityMode
-	shimRTPSenderSetScalabilityMode func(sender uintptr, mode uintptr, errorOut uintptr) int32
-	shimRTPSenderGetScalabilityMode func(sender uintptr, modeOut uintptr, modeOutSize int32) int32
+	shimRTPSenderSetScalabilityMode func(params uintptr) int32
+	shimRTPSenderGetScalabilityMode func(params uintptr) int32
 
 	// CodecCapabilities
-	shimGetSupportedVideoCodecs func(codecs uintptr, maxCodecs int32, outCount uintptr) int32
-	shimGetSupportedAudioCodecs func(codecs uintptr, maxCodecs int32, outCount uintptr) int32
+	shimGetSupportedVideoCodecs func(params uintptr) int32
+	shimGetSupportedAudioCodecs func(params uintptr) int32
 	shimIsCodecSupported        func(mimeType uintptr) int32
 
 	// RTPSenderCodec
-	shimRTPSenderGetNegotiatedCodecs func(sender uintptr, codecs uintptr, maxCodecs int32, outCount uintptr) int32
-	shimRTPSenderSetPreferredCodec   func(sender uintptr, mimeType uintptr, payloadType int32, errorOut uintptr) int32
+	shimRTPSenderGetNegotiatedCodecs func(params uintptr) int32
+	shimRTPSenderSetPreferredCodec   func(params uintptr) int32
 
 	// BandwidthEstimation
-	shimPeerConnectionSetOnBandwidthEstimate func(pc uintptr, callback uintptr, ctx uintptr)
-	shimPeerConnectionGetBandwidthEstimate   func(pc uintptr, outEstimate uintptr) int32
+	shimPeerConnectionSetOnBandwidthEstimate func(params uintptr)
+	shimPeerConnectionGetBandwidthEstimate   func(params uintptr) int32
 
 	// DeviceCapture
-	shimEnumerateDevices    func(devices uintptr, maxDevices int32, outCount uintptr, errorOut uintptr) int32
-	shimVideoCaptureCreate  func(deviceID uintptr, width int32, height int32, fps int32, errorOut uintptr) uintptr
-	shimVideoCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr, errorOut uintptr) int32
+	shimEnumerateDevices    func(params uintptr) int32
+	shimVideoCaptureCreate  func(params uintptr) uintptr
+	shimVideoCaptureStart   func(params uintptr) int32
 	shimVideoCaptureStop    func(capturePtr uintptr)
 	shimVideoCaptureDestroy func(capturePtr uintptr)
-	shimAudioCaptureCreate  func(deviceID uintptr, sampleRate int32, channels int32, errorOut uintptr) uintptr
-	shimAudioCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr, errorOut uintptr) int32
+	shimAudioCaptureCreate  func(params uintptr) uintptr
+	shimAudioCaptureStart   func(params uintptr) int32
 	shimAudioCaptureStop    func(capturePtr uintptr)
 	shimAudioCaptureDestroy func(capturePtr uintptr)
 
 	// ScreenCapture
-	shimEnumerateScreens     func(screens uintptr, maxScreens int32, outCount uintptr, errorOut uintptr) int32
-	shimScreenCaptureCreate  func(id int64, isWindow int32, fps int32) uintptr
-	shimScreenCaptureStart   func(capturePtr uintptr, callback uintptr, ctx uintptr) int32
+	shimEnumerateScreens     func(params uintptr) int32
+	shimScreenCaptureCreate  func(params uintptr) uintptr
+	shimScreenCaptureStart   func(params uintptr) int32
 	shimScreenCaptureStop    func(capturePtr uintptr)
 	shimScreenCaptureDestroy func(capturePtr uintptr)
 

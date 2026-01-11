@@ -280,15 +280,15 @@ private:
 extern "C" {
 
 SHIM_EXPORT int shim_enumerate_devices(
-    ShimDeviceInfo* devices,
-    int max_devices,
-    int* out_count,
-    ShimErrorBuffer* error_out
+    ShimEnumerateDevicesParams* params
 ) {
-    if (!devices || max_devices <= 0 || !out_count) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+    if (!params || !params->devices || params->max_devices <= 0) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto devices = params->devices;
+    int max_devices = params->max_devices;
 
     int count = 0;
 
@@ -369,21 +369,23 @@ SHIM_EXPORT int shim_enumerate_devices(
     }
 #endif  // SHIM_ENABLE_DEVICE_CAPTURE
 
-    *out_count = count;
+    params->out_count = count;
     return SHIM_OK;
 }
 
 SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
-    const char* device_id,
-    int width,
-    int height,
-    int fps,
-    ShimErrorBuffer* error_out
+    ShimVideoCaptureCreateParams* params
 ) {
-    if (width <= 0 || height <= 0 || fps <= 0) {
-        shim::SetErrorMessage(error_out, "invalid capture dimensions or fps", SHIM_ERROR_INVALID_PARAM);
+    if (!params || params->width <= 0 || params->height <= 0 || params->fps <= 0) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid capture dimensions or fps", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
+
+    const char* device_id = params->device_id;
+    int width = params->width;
+    int height = params->height;
+    int fps = params->fps;
+    ShimErrorBuffer* error_out = params->error_out;
 
     auto capture = std::make_unique<ShimVideoCapture>();
     capture->device_id = device_id ? device_id : "";
@@ -419,15 +421,17 @@ SHIM_EXPORT ShimVideoCapture* shim_video_capture_create(
 }
 
 SHIM_EXPORT int shim_video_capture_start(
-    ShimVideoCapture* cap,
-    ShimVideoCaptureCallback callback,
-    void* ctx,
-    ShimErrorBuffer* error_out
+    ShimVideoCaptureStartParams* params
 ) {
-    if (!cap || !callback) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+    if (!params || !params->cap || !params->callback) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto cap = params->cap;
+    auto callback = params->callback;
+    void* ctx = params->ctx;
+    ShimErrorBuffer* error_out = params->error_out;
 
     std::lock_guard<std::mutex> lock(cap->mutex);
 
@@ -501,15 +505,17 @@ SHIM_EXPORT void shim_video_capture_destroy(ShimVideoCapture* cap) {
 }
 
 SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
-    const char* device_id,
-    int sample_rate,
-    int channels,
-    ShimErrorBuffer* error_out
+    ShimAudioCaptureCreateParams* params
 ) {
-    if (sample_rate <= 0 || channels <= 0 || channels > 2) {
-        shim::SetErrorMessage(error_out, "invalid sample rate or channels", SHIM_ERROR_INVALID_PARAM);
+    if (!params || params->sample_rate <= 0 || params->channels <= 0 || params->channels > 2) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid sample rate or channels", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
+
+    const char* device_id = params->device_id;
+    int sample_rate = params->sample_rate;
+    int channels = params->channels;
+    ShimErrorBuffer* error_out = params->error_out;
 
     auto capture = std::make_unique<ShimAudioCapture>();
     capture->device_id = device_id ? device_id : "";
@@ -561,15 +567,17 @@ SHIM_EXPORT ShimAudioCapture* shim_audio_capture_create(
 }
 
 SHIM_EXPORT int shim_audio_capture_start(
-    ShimAudioCapture* cap,
-    ShimAudioCaptureCallback callback,
-    void* ctx,
-    ShimErrorBuffer* error_out
+    ShimAudioCaptureStartParams* params
 ) {
-    if (!cap || !callback) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+    if (!params || !params->cap || !params->callback) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto cap = params->cap;
+    auto callback = params->callback;
+    void* ctx = params->ctx;
+    ShimErrorBuffer* error_out = params->error_out;
 
     std::lock_guard<std::mutex> lock(cap->mutex);
 
@@ -647,15 +655,15 @@ SHIM_EXPORT void shim_audio_capture_destroy(ShimAudioCapture* cap) {
 }
 
 SHIM_EXPORT int shim_enumerate_screens(
-    ShimScreenInfo* screens,
-    int max_screens,
-    int* out_count,
-    ShimErrorBuffer* error_out
+    ShimEnumerateScreensParams* params
 ) {
-    if (!screens || max_screens <= 0 || !out_count) {
-        shim::SetErrorMessage(error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+    if (!params || !params->screens || params->max_screens <= 0) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto screens = params->screens;
+    int max_screens = params->max_screens;
 
     int count = 0;
 
@@ -696,18 +704,22 @@ SHIM_EXPORT int shim_enumerate_screens(
     }
 #endif
 
-    *out_count = count;
+    params->out_count = count;
     return SHIM_OK;
 }
 
 SHIM_EXPORT ShimScreenCapture* shim_screen_capture_create(
-    int64_t screen_or_window_id,
-    int is_window,
-    int fps
+    ShimScreenCaptureCreateParams* params
 ) {
-    if (fps <= 0) {
+    if (!params || params->fps <= 0) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid capture fps", SHIM_ERROR_INVALID_PARAM);
         return nullptr;
     }
+
+    int64_t screen_or_window_id = params->screen_or_window_id;
+    int is_window = params->is_window;
+    int fps = params->fps;
+    ShimErrorBuffer* error_out = params->error_out;
 
     auto capture = std::make_unique<ShimScreenCapture>();
     capture->source_id = screen_or_window_id;
@@ -727,10 +739,12 @@ SHIM_EXPORT ShimScreenCapture* shim_screen_capture_create(
     }
 
     if (!capture->capturer) {
+        shim::SetErrorMessage(error_out, "screen capturer creation failed");
         return nullptr;
     }
 
     if (!capture->capturer->SelectSource(screen_or_window_id)) {
+        shim::SetErrorMessage(error_out, "SelectSource failed");
         return nullptr;
     }
 #endif
@@ -739,17 +753,22 @@ SHIM_EXPORT ShimScreenCapture* shim_screen_capture_create(
 }
 
 SHIM_EXPORT int shim_screen_capture_start(
-    ShimScreenCapture* cap,
-    ShimVideoCaptureCallback callback,
-    void* ctx
+    ShimScreenCaptureStartParams* params
 ) {
-    if (!cap || !callback) {
+    if (!params || !params->cap || !params->callback) {
+        shim::SetErrorMessage(params ? params->error_out : nullptr, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
+
+    auto cap = params->cap;
+    auto callback = params->callback;
+    void* ctx = params->ctx;
+    ShimErrorBuffer* error_out = params->error_out;
 
     std::lock_guard<std::mutex> lock(cap->mutex);
 
     if (cap->running) {
+        shim::SetErrorMessage(error_out, "screen capture already running", SHIM_ERROR_INIT_FAILED);
         return SHIM_ERROR_INIT_FAILED;
     }
 
