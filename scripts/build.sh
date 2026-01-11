@@ -236,7 +236,8 @@ build_shim() {
         log_info "Building for platform: $TARGET_PLATFORM"
     fi
 
-    bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM"
+    # On Windows Git Bash/MSYS, // gets converted to / - disable path conversion
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM"
 
     local ext="so"
     case "$TARGET_OS" in
