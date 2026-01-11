@@ -16,6 +16,8 @@ build:linux --host_cxxopt=-std=c++17
 # C++ settings (Windows MSVC)
 build:windows --cxxopt=/std:c++17
 build:windows --host_cxxopt=/std:c++17
+# Use static CRT (/MT) to match prebuilt webrtc.lib
+build:windows --features=static_link_msvcrt
 
 # Compiler settings (Unix only - fPIC not valid on Windows)
 build:macos --copt=-fPIC
