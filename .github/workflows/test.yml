@@ -81,6 +81,8 @@ jobs:
             # Create symlinks if needed
             sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${LLVM_VERSION} 100 || true
             sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${LLVM_VERSION} 100 || true
+            sudo update-alternatives --install /usr/bin/lld lld /usr/bin/lld-${LLVM_VERSION} 100 || true
+            sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-${LLVM_VERSION} 100 || true
           else
             echo "Installing unversioned clang and libc++..."
             sudo apt-get install -y clang libc++-dev libc++abi-dev lld || true
@@ -90,11 +92,11 @@ jobs:
             libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
             libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
             libglib2.0-dev libgbm-dev libdrm-dev
-          # Verify clang is available
+          # Verify clang and libc++ are available
           echo "=== Clang version ==="
           clang++ --version || echo "clang++ not found"
-          echo "=== libc++ check ==="
-          ls -la /usr/lib/*/libc++* 2>/dev/null | head -10 || echo "libc++ not found in /usr/lib"
+          echo "=== libc++ shared libraries ==="
+          find /usr -name 'libc++.so*' -o -name 'libc++abi.so*' 2>/dev/null | head -10 || echo "libc++ not found"
 
       - name: Build shim (Unix)
         if: runner.os != 'Windows' && steps.shim_changes.outputs.shim == 'true'
