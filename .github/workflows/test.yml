@@ -46,7 +46,8 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p lib/${{ matrix.platform }}
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
+          curl -fsSL --retry 10 --retry-delay 20 --retry-all-errors \
+            "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
             | tar -xz -C lib/${{ matrix.platform }}
           ls -la lib/${{ matrix.platform }}/
 
@@ -55,7 +56,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p lib/${{ matrix.platform }}
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
+          curl -fsSL --retry 10 --retry-delay 20 --retry-all-errors \
+            "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
             | tar -xz -C lib/${{ matrix.platform }}
           ls -la lib/${{ matrix.platform }}/
 
@@ -111,7 +113,8 @@ jobs:
       - name: Download pre-built shim
         run: |
           mkdir -p lib/darwin_amd64
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_darwin_amd64.tar.gz" \
+          curl -fsSL --retry 10 --retry-delay 20 --retry-all-errors \
+            "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_darwin_amd64.tar.gz" \
             | tar -xz -C lib/darwin_amd64
           ls -la lib/darwin_amd64/
           file lib/darwin_amd64/libwebrtc_shim.dylib

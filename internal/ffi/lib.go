@@ -2,8 +2,6 @@
 // It supports both purego (default) and CGO backends via build tags.
 package ffi
 
-//go:generate go run ./gen
-
 import (
 	"errors"
 	"fmt"
