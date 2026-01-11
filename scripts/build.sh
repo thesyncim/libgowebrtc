@@ -167,12 +167,48 @@ download_libwebrtc() {
     ls -la "$INSTALL_DIR/" 2>/dev/null || true
     ls -la "$INSTALL_DIR/lib/" 2>/dev/null || true
 
+    # Find the lib file - crow-misia may use different names/locations
+    local found_lib=""
     if [[ -f "$INSTALL_DIR/lib/$lib_file" ]]; then
-        log_success "Pre-compiled libwebrtc installed to $INSTALL_DIR"
+        found_lib="$INSTALL_DIR/lib/$lib_file"
+    elif [[ "$TARGET_OS" == "windows" ]]; then
+        # Try alternative Windows locations/names
+        for try_path in \
+            "$INSTALL_DIR/lib/webrtc.lib" \
+            "$INSTALL_DIR/webrtc.lib" \
+            "$INSTALL_DIR/lib/libwebrtc.lib" \
+            "$INSTALL_DIR/libwebrtc.lib" \
+            "$INSTALL_DIR/out/Release/obj/webrtc.lib" \
+            "$INSTALL_DIR/obj/webrtc.lib"; do
+            if [[ -f "$try_path" ]]; then
+                found_lib="$try_path"
+                break
+            fi
+        done
+        # If still not found, search for it
+        if [[ -z "$found_lib" ]]; then
+            found_lib=$(find "$INSTALL_DIR" -name "webrtc.lib" -type f 2>/dev/null | head -1)
+        fi
+        if [[ -z "$found_lib" ]]; then
+            found_lib=$(find "$INSTALL_DIR" -name "*.lib" -type f 2>/dev/null | grep -i webrtc | head -1)
+        fi
+    fi
+
+    if [[ -n "$found_lib" ]]; then
+        log_success "Pre-compiled libwebrtc found at: $found_lib"
+        # Make sure it's in the expected location for bazel
+        if [[ "$found_lib" != "$INSTALL_DIR/lib/$lib_file" ]]; then
+            mkdir -p "$INSTALL_DIR/lib"
+            cp "$found_lib" "$INSTALL_DIR/lib/$lib_file"
+            log_info "Copied to $INSTALL_DIR/lib/$lib_file"
+        fi
     else
-        log_error "$lib_file not found after extraction at $INSTALL_DIR/lib/$lib_file"
-        log_error "Available files:"
-        find "$INSTALL_DIR" -name "*.lib" -o -name "*.a" 2>/dev/null | head -20 || true
+        log_error "$lib_file not found after extraction"
+        log_error "Directory structure:"
+        find "$INSTALL_DIR" -type f -name "*.lib" 2>/dev/null | head -30 || true
+        find "$INSTALL_DIR" -type f -name "*.a" 2>/dev/null | head -30 || true
+        log_error "All directories:"
+        find "$INSTALL_DIR" -type d 2>/dev/null | head -50 || true
         exit 1
     fi
 }
