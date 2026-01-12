@@ -21,7 +21,11 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIBWEBRTC_VERSION="${LIBWEBRTC_VERSION:-141.7390.2.0}"
 
 # Download configuration
+# For Linux, use our own builds (with use_custom_libcxx=false for ABI compatibility)
+# For macOS/Windows, use crow-misia pre-built binaries
 LIBWEBRTC_BIN_REPO="${LIBWEBRTC_BIN_REPO:-crow-misia/libwebrtc-bin}"
+LIBWEBRTC_LINUX_REPO="${LIBWEBRTC_LINUX_REPO:-thesyncim/libgowebrtc}"
+LIBWEBRTC_LINUX_VERSION="${LIBWEBRTC_LINUX_VERSION:-libwebrtc-M141.7390.20250112}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/libwebrtc}"
 
 # Platform detection
@@ -109,25 +113,48 @@ download_libwebrtc() {
         return 0
     fi
 
-    log_step "Downloading pre-compiled libwebrtc v${LIBWEBRTC_VERSION} for ${TARGET_PLATFORM}"
-
-    local download_platform=$(get_download_platform_for_target "$TARGET_PLATFORM")
-    if [[ -z "$download_platform" ]]; then
-        log_error "Unsupported target platform: $TARGET_PLATFORM"
-        exit 1
-    fi
-
     local tmpdir=$(mktemp -d)
     local archive_ext="tar.xz"
-    [[ "$TARGET_OS" == "windows" ]] && archive_ext="7z"
+    local url=""
 
-    local url="https://github.com/${LIBWEBRTC_BIN_REPO}/releases/download/${LIBWEBRTC_VERSION}/libwebrtc-${download_platform}.${archive_ext}"
+    # For Linux, use our own builds with use_custom_libcxx=false for ABI compatibility
+    # crow-misia's builds use Chrome's libc++ with __Cr namespace which doesn't exist on Linux
+    if [[ "$TARGET_OS" == "linux" ]]; then
+        log_step "Downloading libwebrtc for Linux (built with libstdc++ compatibility)"
+        log_info "Using our own build: $LIBWEBRTC_LINUX_VERSION"
+        url="https://github.com/${LIBWEBRTC_LINUX_REPO}/releases/download/${LIBWEBRTC_LINUX_VERSION}/libwebrtc-${TARGET_PLATFORM}.tar.xz"
+    else
+        log_step "Downloading pre-compiled libwebrtc v${LIBWEBRTC_VERSION} for ${TARGET_PLATFORM}"
+        local download_platform=$(get_download_platform_for_target "$TARGET_PLATFORM")
+        if [[ -z "$download_platform" ]]; then
+            log_error "Unsupported target platform: $TARGET_PLATFORM"
+            exit 1
+        fi
+        [[ "$TARGET_OS" == "windows" ]] && archive_ext="7z"
+        url="https://github.com/${LIBWEBRTC_BIN_REPO}/releases/download/${LIBWEBRTC_VERSION}/libwebrtc-${download_platform}.${archive_ext}"
+    fi
 
     log_info "Downloading from: $url"
     if ! curl -fSL --progress-bar -o "$tmpdir/libwebrtc.${archive_ext}" "$url"; then
-        log_error "Download failed"
-        rm -rf "$tmpdir"
-        exit 1
+        # For Linux, fall back to crow-misia if our release isn't available
+        # Note: crow-misia builds may have ABI issues - prefer building from source
+        if [[ "$TARGET_OS" == "linux" ]]; then
+            log_info "Our libwebrtc release not available, falling back to crow-misia..."
+            log_info "WARNING: crow-misia builds may have libc++ ABI issues on some Linux systems"
+            log_info "For best compatibility, run: ./scripts/build_libwebrtc_linux.sh"
+            local download_platform=$(get_download_platform_for_target "$TARGET_PLATFORM")
+            url="https://github.com/${LIBWEBRTC_BIN_REPO}/releases/download/${LIBWEBRTC_VERSION}/libwebrtc-${download_platform}.${archive_ext}"
+            log_info "Downloading from: $url"
+            if ! curl -fSL --progress-bar -o "$tmpdir/libwebrtc.${archive_ext}" "$url"; then
+                log_error "Download failed"
+                rm -rf "$tmpdir"
+                exit 1
+            fi
+        else
+            log_error "Download failed"
+            rm -rf "$tmpdir"
+            exit 1
+        fi
     fi
 
     log_info "Extracting to $INSTALL_DIR..."
@@ -167,6 +194,12 @@ download_libwebrtc() {
         fi
     else
         tar -xf "$tmpdir/libwebrtc.tar.xz" -C "$INSTALL_DIR"
+        # Handle nested directory structure (our builds: libwebrtc-linux_amd64/lib/...)
+        if [[ -d "$INSTALL_DIR/libwebrtc-${TARGET_PLATFORM}" ]]; then
+            log_info "Flattening nested directory structure..."
+            mv "$INSTALL_DIR/libwebrtc-${TARGET_PLATFORM}"/* "$INSTALL_DIR/"
+            rmdir "$INSTALL_DIR/libwebrtc-${TARGET_PLATFORM}"
+        fi
     fi
     rm -rf "$tmpdir"
 
