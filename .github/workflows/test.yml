@@ -10,7 +10,7 @@ on:
 env:
   GO_VERSION: '1.25.x'
   GO_VERSION_FULL: '1.25.0'  # Full version for direct downloads (Rosetta job)
-  SHIM_VERSION: shim-v0.4.1
+  SHIM_VERSION: shim-v0.4.2
 
 jobs:
   # Native platform tests
