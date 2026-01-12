@@ -237,8 +237,15 @@ build_shim() {
         log_info "Building for platform: $TARGET_PLATFORM"
     fi
 
+    # On Linux, use clang for libc++ compatibility with pre-built libwebrtc
+    local bazel_env=""
+    if [[ "$TARGET_OS" == "linux" ]]; then
+        log_info "Using clang for libc++ ABI compatibility"
+        bazel_env="CC=clang CXX=clang++"
+    fi
+
     # On Windows Git Bash/MSYS, // gets converted to / - disable path conversion
-    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM"
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" env $bazel_env bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM"
 
     local ext="so"
     case "$TARGET_OS" in
