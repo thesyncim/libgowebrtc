@@ -15,7 +15,7 @@
 namespace shim {
 
 // Version strings
-const char* kShimVersion = "0.2.0";
+const char* kShimVersion = "0.2.3";  // Build custom libc++ with __Cr namespace for Linux
 const char* kLibWebRTCVersion = "M141";  // crow-misia/libwebrtc-bin 141.7390.2.0
 
 namespace {

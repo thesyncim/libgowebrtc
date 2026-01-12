@@ -10,8 +10,14 @@ build:macos --host_crosstool_top=@local_config_apple_cc//:toolchain
 # C++ settings (Unix)
 build:macos --cxxopt=-std=c++17
 build:macos --host_cxxopt=-std=c++17
+# Linux: use clang for building but link against libstdc++ for runtime compatibility
+# Note: libwebrtc from crow-misia uses Chromium's libc++ (__Cr ABI) which is
+# incompatible with Ubuntu's libc++ (__1 ABI), so we use libstdc++ instead
+build:linux --repo_env=CC=clang
+build:linux --repo_env=CXX=clang++
 build:linux --cxxopt=-std=c++17
 build:linux --host_cxxopt=-std=c++17
+build:linux --linkopt=-fuse-ld=lld
 
 # C++ settings (Windows MSVC)
 build:windows --cxxopt=/std:c++17

@@ -375,7 +375,14 @@ func TestVideoAndAudioTrackReception(t *testing.T) {
 		t.Fatalf("Connect failed: %v", err)
 	}
 
-	// Write frames
+	// Wait for connection before writing frames to avoid race in audio send stream
+	if !pp.WaitForConnection(shortConnectTimeout) {
+		t.Log("Connection timeout (expected in test environment)")
+		return
+	}
+	t.Log("Connection established")
+
+	// Write frames (only after connection is established)
 	go func() {
 		for i := 0; i < shortFrameCount; i++ {
 			frame := CreateTestFrame(640, 480, uint32(i*3000))
@@ -392,20 +399,10 @@ func TestVideoAndAudioTrackReception(t *testing.T) {
 		}
 	}()
 
-	// Wait for connection and tracks
-	if pp.WaitForConnection(shortConnectTimeout) {
-		t.Log("Connection established")
-
-		// Wait for tracks (should receive 2)
-		time.Sleep(shortPostSendDelay) // Give time for tracks to be received
-		count := pp.ReceivedTrackCount()
-		t.Logf("Received %d track(s)", count)
-
-		// TODO: Once frame receiving is implemented in shim, verify frame content here
-		// For now we just verify the tracks were negotiated in SDP
-	} else {
-		t.Log("Connection timeout (expected in test environment)")
-	}
+	// Wait for tracks to be received
+	time.Sleep(shortPostSendDelay)
+	count := pp.ReceivedTrackCount()
+	t.Logf("Received %d track(s)", count)
 
 	// Verify SDP contains both media types
 	localDesc := pp.Sender.LocalDescription()

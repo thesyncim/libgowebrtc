@@ -99,6 +99,32 @@ EOF
     exit 0
 }
 
+build_libcxx_cr() {
+    # Build libc++ with __Cr namespace for Linux
+    if [[ "$TARGET_OS" != "linux" ]]; then
+        return 0
+    fi
+
+    local libcxx_dir="${LIBCXX_CR_DIR:-$PROJECT_ROOT/libcxx-cr}"
+
+    # Check if already built
+    if [[ -f "$libcxx_dir/lib/libc++.so.1" ]]; then
+        log_info "libc++ with __Cr namespace already built at $libcxx_dir"
+        export LIBCXX_CR_DIR="$libcxx_dir"
+        return 0
+    fi
+
+    log_step "Building libc++ with __Cr namespace for Chromium ABI compatibility"
+
+    if [[ -f "$SCRIPT_DIR/build-libcxx.sh" ]]; then
+        LIBCXX_INSTALL_DIR="$libcxx_dir" "$SCRIPT_DIR/build-libcxx.sh"
+        export LIBCXX_CR_DIR="$libcxx_dir"
+    else
+        log_error "build-libcxx.sh not found"
+        exit 1
+    fi
+}
+
 download_libwebrtc() {
     # Check for existing installation
     local lib_file="libwebrtc.a"
@@ -237,8 +263,17 @@ build_shim() {
         log_info "Building for platform: $TARGET_PLATFORM"
     fi
 
+    # For Linux, add custom libc++ include and library paths
+    local extra_opts=""
+    if [[ "$TARGET_OS" == "linux" && -n "$LIBCXX_CR_DIR" ]]; then
+        log_info "Using libc++ from: $LIBCXX_CR_DIR"
+        # Add include path for libc++ headers and library path for linking
+        # Use --strategy=CppCompile=local to disable sandbox for C++ compilation
+        extra_opts="--copt=-isystem$LIBCXX_CR_DIR/include/c++/v1 --linkopt=-L$LIBCXX_CR_DIR/lib --strategy=CppCompile=local --strategy=CppLink=local"
+    fi
+
     # On Windows Git Bash/MSYS, // gets converted to / - disable path conversion
-    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM"
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM" $extra_opts
 
     local ext="so"
     case "$TARGET_OS" in
@@ -255,6 +290,15 @@ build_shim() {
     [[ "$TARGET_OS" == "windows" ]] && src_name="webrtc_shim.$ext"
 
     cp "bazel-bin/shim/$src_name" "$lib_dir/libwebrtc_shim.$ext"
+
+    # For Linux, copy libc++ libraries alongside the shim
+    if [[ "$TARGET_OS" == "linux" && -n "$LIBCXX_CR_DIR" ]]; then
+        log_info "Copying libc++ runtime libraries..."
+        cp "$LIBCXX_CR_DIR/lib/libc++.so"* "$lib_dir/" 2>/dev/null || true
+        cp "$LIBCXX_CR_DIR/lib/libc++abi.so"* "$lib_dir/" 2>/dev/null || true
+        log_info "Contents of $lib_dir:"
+        ls -la "$lib_dir/"
+    fi
 
     log_success "Shim built: $lib_dir/libwebrtc_shim.$ext"
 }
@@ -326,6 +370,9 @@ main() {
     log_info "Install dir: $INSTALL_DIR"
 
     $do_clean && clean_all
+
+    # For Linux, build libc++ with __Cr namespace first
+    build_libcxx_cr
 
     download_libwebrtc
     build_shim

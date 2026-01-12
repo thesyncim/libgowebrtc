@@ -20,7 +20,8 @@ func TestMain(m *testing.M) {
 
 func TestH264EncodeDecode(t *testing.T) {
 	// Create encoder
-	enc, err := encoder.NewH264Encoder(codec.H264Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.H264,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -69,7 +70,8 @@ func TestH264EncodeDecode(t *testing.T) {
 }
 
 func TestVP8EncodeDecode(t *testing.T) {
-	enc, err := encoder.NewVP8Encoder(codec.VP8Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP8,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -80,7 +82,7 @@ func TestVP8EncodeDecode(t *testing.T) {
 	}
 	defer enc.Close()
 
-	dec, err := NewVP8Decoder()
+	dec, err := NewVideoDecoder(codec.VP8)
 	if err != nil {
 		t.Fatalf("NewVP8Decoder: %v", err)
 	}
@@ -113,7 +115,8 @@ func TestVP8EncodeDecode(t *testing.T) {
 }
 
 func TestVP9EncodeDecode(t *testing.T) {
-	enc, err := encoder.NewVP9Encoder(codec.VP9Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.VP9,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -124,7 +127,7 @@ func TestVP9EncodeDecode(t *testing.T) {
 	}
 	defer enc.Close()
 
-	dec, err := NewVP9Decoder()
+	dec, err := NewVideoDecoder(codec.VP9)
 	if err != nil {
 		t.Fatalf("NewVP9Decoder: %v", err)
 	}
@@ -217,7 +220,8 @@ func TestMultiFrameEncodeDecode(t *testing.T) {
 	// This helps avoid resource exhaustion in the underlying libwebrtc/FFmpeg
 	runtime.GC()
 
-	enc, err := encoder.NewH264Encoder(codec.H264Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.H264,
 		Width:   640,
 		Height:  480,
 		Bitrate: 1_000_000,
@@ -270,7 +274,8 @@ func TestMultiFrameEncodeDecode(t *testing.T) {
 }
 
 func BenchmarkH264EncodeDecode(b *testing.B) {
-	enc, err := encoder.NewH264Encoder(codec.H264Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:   codec.H264,
 		Width:   1280,
 		Height:  720,
 		Bitrate: 2_000_000,

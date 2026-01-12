@@ -22,36 +22,36 @@ func videoDecoderFactories() []videoDecoderFactory {
 			name:       "H264",
 			newDecoder: NewH264Decoder,
 			newEncoder: func() (encoder.VideoEncoder, error) {
-				return encoder.NewH264Encoder(codec.H264Config{
-					Width: 320, Height: 240, Bitrate: 500_000, FPS: 30, KeyInterval: 30,
+				return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+					Codec: codec.H264, Width: 320, Height: 240, Bitrate: 500_000, FPS: 30, KeyInterval: 30,
 					Profile: codec.H264ProfileConstrainedBase,
 				})
 			},
 		},
 		{
 			name:       "VP8",
-			newDecoder: NewVP8Decoder,
+			newDecoder: func() (VideoDecoder, error) { return NewVideoDecoder(codec.VP8) },
 			newEncoder: func() (encoder.VideoEncoder, error) {
-				return encoder.NewVP8Encoder(codec.VP8Config{
-					Width: 320, Height: 240, Bitrate: 500_000, FPS: 30, KeyInterval: 30,
+				return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+					Codec: codec.VP8, Width: 320, Height: 240, Bitrate: 500_000, FPS: 30, KeyInterval: 30,
 				})
 			},
 		},
 		{
 			name:       "VP9",
-			newDecoder: NewVP9Decoder,
+			newDecoder: func() (VideoDecoder, error) { return NewVideoDecoder(codec.VP9) },
 			newEncoder: func() (encoder.VideoEncoder, error) {
-				return encoder.NewVP9Encoder(codec.VP9Config{
-					Width: 320, Height: 240, Bitrate: 500_000, FPS: 30, KeyInterval: 30,
+				return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+					Codec: codec.VP9, Width: 320, Height: 240, Bitrate: 500_000, FPS: 30, KeyInterval: 30,
 				})
 			},
 		},
 		{
 			name:       "AV1",
-			newDecoder: NewAV1Decoder,
+			newDecoder: func() (VideoDecoder, error) { return NewVideoDecoder(codec.AV1) },
 			newEncoder: func() (encoder.VideoEncoder, error) {
-				return encoder.NewAV1Encoder(codec.AV1Config{
-					Width: 320, Height: 240, Bitrate: 500_000, FPS: 30, KeyInterval: 30,
+				return encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+					Codec: codec.AV1, Width: 320, Height: 240, Bitrate: 500_000, FPS: 30, KeyInterval: 30,
 				})
 			},
 		},

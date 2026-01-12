@@ -3,6 +3,8 @@ package ffi
 import (
 	"fmt"
 	"unsafe"
+
+	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
 // MaxErrorMsgLen matches SHIM_MAX_ERROR_MSG_LEN in shim.h
@@ -389,4 +391,20 @@ func GoStringFromC(ptr uintptr) string {
 		return ""
 	}
 	return GoString(UnsafePointerFromC(ptr))
+}
+
+// CodecTypeToFFI converts a codec.Type to the FFI CodecType.
+func CodecTypeToFFI(t codec.Type) CodecType {
+	switch t {
+	case codec.H264:
+		return CodecH264
+	case codec.VP8:
+		return CodecVP8
+	case codec.VP9:
+		return CodecVP9
+	case codec.AV1:
+		return CodecAV1
+	default:
+		return CodecH264
+	}
 }

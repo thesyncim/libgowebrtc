@@ -129,18 +129,18 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 		cfg.MTU = 1200
 	}
 
-	// Default auto adaptation to true (browser-like behavior)
-	// Use explicit false to disable
-	if !cfg.AutoKeyframe && cfg.MinBitrate == 0 && cfg.MaxBitrate == 0 {
+	// Default auto adaptation to true for browser-like behavior.
+	// Users must set constraints (MinBitrate, MaxBitrate, etc.) to enable adaptation,
+	// or explicitly set Auto* fields to false to disable.
+	hasConstraints := cfg.MinBitrate != 0 || cfg.MaxBitrate != 0 ||
+		cfg.MinFramerate != 0 || cfg.MaxFramerate != 0 ||
+		cfg.MinWidth != 0 || cfg.MinHeight != 0
+
+	// If no constraints are set, enable all auto features by default
+	if !hasConstraints {
 		cfg.AutoKeyframe = true
-	}
-	if !cfg.AutoBitrate && cfg.MinBitrate == 0 && cfg.MaxBitrate == 0 {
 		cfg.AutoBitrate = true
-	}
-	if !cfg.AutoFramerate && cfg.MinFramerate == 0 && cfg.MaxFramerate == 0 {
 		cfg.AutoFramerate = true
-	}
-	if !cfg.AutoResolution && cfg.MinWidth == 0 && cfg.MinHeight == 0 {
 		cfg.AutoResolution = true
 	}
 
@@ -286,11 +286,8 @@ func (t *VideoTrack) Unbind(ctx webrtc.TrackLocalContext) error {
 
 // WriteFrame encodes a video frame and writes RTP packets to the bound peer connection.
 func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	// Check if track is paused (SetParameters with Active=false)
@@ -339,27 +336,27 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 		return err
 	}
 
-	// Write each RTP packet
+	return t.writePackets(numPackets)
+}
+
+// writePackets writes numPackets RTP packets from the pre-allocated buffers.
+// Must be called with t.mu held.
+func (t *VideoTrack) writePackets(numPackets int) error {
 	for i := 0; i < numPackets; i++ {
 		info := t.packetInfo[i]
 		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
-
 		if _, err := t.writer.Write(pktData); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
 // WriteEncodedData writes pre-encoded data as RTP packets.
 // Useful when you already have encoded H.264/VP8/etc data.
 func (t *VideoTrack) WriteEncodedData(data []byte, timestamp uint32, isKeyframe bool) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	t.mu.Lock()
@@ -381,26 +378,13 @@ func (t *VideoTrack) WriteEncodedData(data []byte, timestamp uint32, isKeyframe 
 		return err
 	}
 
-	// Write each RTP packet
-	for i := 0; i < numPackets; i++ {
-		info := t.packetInfo[i]
-		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
-
-		if _, err := t.writer.Write(pktData); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return t.writePackets(numPackets)
 }
 
 // WriteRTP writes an already-formed RTP packet.
 func (t *VideoTrack) WriteRTP(pkt *rtp.Packet) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	t.mu.Lock()
@@ -535,6 +519,15 @@ func (t *VideoTrack) stopAdaptLoop() {
 }
 
 func (t *VideoTrack) adaptLoop() {
+	// Capture stop channel once at start to avoid race with stopAdaptLoop
+	t.mu.Lock()
+	stopChan := t.adaptStop
+	t.mu.Unlock()
+
+	if stopChan == nil {
+		return
+	}
+
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -559,7 +552,7 @@ func (t *VideoTrack) adaptLoop() {
 
 			t.adapt(bwe)
 
-		case <-t.adaptStop:
+		case <-stopChan:
 			return
 		}
 	}
@@ -726,6 +719,17 @@ func (t *VideoTrack) setScaleFactorLocked(scale float64) {
 	}
 }
 
+// checkReady returns nil if the track is open and bound, otherwise returns the appropriate error.
+func (t *VideoTrack) checkReady() error {
+	if t.closed.Load() {
+		return ErrTrackClosed
+	}
+	if !t.bound.Load() {
+		return ErrNotBound
+	}
+	return nil
+}
+
 // Close releases all resources.
 func (t *VideoTrack) Close() error {
 	if !t.closed.CompareAndSwap(false, true) {
@@ -751,46 +755,14 @@ func (t *VideoTrack) Close() error {
 }
 
 func (t *VideoTrack) createEncoder() (encoder.VideoEncoder, error) {
-	switch t.codec {
-	case codec.H264:
-		cfg := codec.DefaultH264Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		return encoder.NewH264Encoder(cfg)
-	case codec.VP8:
-		cfg := codec.DefaultVP8Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		return encoder.NewVP8Encoder(cfg)
-	case codec.VP9:
-		cfg := codec.DefaultVP9Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		return encoder.NewVP9Encoder(cfg)
-	case codec.AV1:
-		cfg := codec.DefaultAV1Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		return encoder.NewAV1Encoder(cfg)
-	default:
-		return nil, ErrInvalidConfig
+	cfg := codec.DefaultVideoEncoderConfig(t.codec, t.config.Width, t.config.Height)
+	if t.config.Bitrate != 0 {
+		cfg.Bitrate = t.config.Bitrate
 	}
+	if t.config.FPS != 0 {
+		cfg.FPS = t.config.FPS
+	}
+	return encoder.NewVideoEncoder(cfg)
 }
 
 // AudioTrackConfig configures an audio track.
@@ -973,11 +945,8 @@ func (t *AudioTrack) Unbind(ctx webrtc.TrackLocalContext) error {
 
 // WriteFrame encodes an audio frame and writes RTP packets.
 func (t *AudioTrack) WriteFrame(f *frame.AudioFrame) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	t.mu.Lock()
@@ -1008,26 +977,26 @@ func (t *AudioTrack) WriteFrame(f *frame.AudioFrame) error {
 		return err
 	}
 
-	// Write packets
+	return t.writePackets(numPackets)
+}
+
+// writePackets writes numPackets RTP packets from the pre-allocated buffers.
+// Must be called with t.mu held.
+func (t *AudioTrack) writePackets(numPackets int) error {
 	for i := 0; i < numPackets; i++ {
 		info := t.packetInfo[i]
 		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
-
 		if _, err := t.writer.Write(pktData); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
 // WriteEncodedData writes pre-encoded Opus data as RTP packets.
 func (t *AudioTrack) WriteEncodedData(data []byte, timestamp uint32) error {
-	if t.closed.Load() {
-		return ErrTrackClosed
-	}
-	if !t.bound.Load() {
-		return ErrNotBound
+	if err := t.checkReady(); err != nil {
+		return err
 	}
 
 	t.mu.Lock()
@@ -1048,15 +1017,17 @@ func (t *AudioTrack) WriteEncodedData(data []byte, timestamp uint32) error {
 		return err
 	}
 
-	for i := 0; i < numPackets; i++ {
-		info := t.packetInfo[i]
-		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
+	return t.writePackets(numPackets)
+}
 
-		if _, err := t.writer.Write(pktData); err != nil {
-			return err
-		}
+// checkReady returns nil if the track is open and bound, otherwise returns the appropriate error.
+func (t *AudioTrack) checkReady() error {
+	if t.closed.Load() {
+		return ErrTrackClosed
 	}
-
+	if !t.bound.Load() {
+		return ErrNotBound
+	}
 	return nil
 }
 

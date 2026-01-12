@@ -32,7 +32,8 @@ func main() {
 
 	// Create H264 encoder
 	fmt.Println("\n1. Creating H264 encoder...")
-	enc, err := encoder.NewH264Encoder(codec.H264Config{
+	enc, err := encoder.NewVideoEncoder(codec.VideoEncoderConfig{
+		Codec:       codec.H264,
 		Width:       width,
 		Height:      height,
 		Bitrate:     bitrate,

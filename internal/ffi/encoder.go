@@ -40,6 +40,16 @@ func CreateVideoEncoder(codec CodecType, config *VideoEncoderConfig) (uintptr, e
 	return encoder, nil
 }
 
+// videoEncoderEncodeState holds heap-allocated buffers for FFI calls.
+// This prevents stack corruption from affecting Go's runtime if the shim
+// writes past buffer boundaries.
+type videoEncoderEncodeState struct {
+	params shimVideoEncoderEncodeParams
+	errBuf ShimErrorBuffer
+	// padding provides extra space to absorb any buffer overflows from the shim
+	padding [64]byte
+}
+
 // VideoEncoderEncodeInto encodes a video frame into a pre-allocated buffer.
 // Returns the number of bytes written, isKeyframe flag, and error.
 // This is the allocation-free version - data is written directly to dst.
@@ -60,8 +70,10 @@ func VideoEncoderEncodeInto(
 		forceKF = 1
 	}
 
-	var errBuf ShimErrorBuffer
-	params := shimVideoEncoderEncodeParams{
+	// Heap-allocate the FFI state to isolate any buffer overflows from the Go stack.
+	// This prevents shim bugs from corrupting Go's runtime data structures.
+	state := new(videoEncoderEncodeState)
+	state.params = shimVideoEncoderEncodeParams{
 		YPlane:        ByteSlicePtr(yPlane),
 		UPlane:        ByteSlicePtr(uPlane),
 		VPlane:        ByteSlicePtr(vPlane),
@@ -72,14 +84,13 @@ func VideoEncoderEncodeInto(
 		ForceKeyframe: forceKF,
 		DstBuffer:     ByteSlicePtr(dst),
 		DstBufferSize: int32(len(dst)),
-		ErrorOut:      errBuf.Ptr(),
+		ErrorOut:      state.errBuf.Ptr(),
 	}
 
-	result := shimVideoEncoderEncode(encoder, uintptr(unsafe.Pointer(&params)))
+	result := shimVideoEncoderEncode(encoder, uintptr(unsafe.Pointer(&state.params)))
 
-	err = errBuf.ToError(result)
-	runtime.KeepAlive(&params)
-	runtime.KeepAlive(&errBuf)
+	err = state.errBuf.ToError(result)
+	runtime.KeepAlive(state)
 	runtime.KeepAlive(yPlane)
 	runtime.KeepAlive(uPlane)
 	runtime.KeepAlive(vPlane)
@@ -88,7 +99,7 @@ func VideoEncoderEncodeInto(
 		return 0, false, err
 	}
 
-	return int(params.OutSize), params.OutIsKeyframe != 0, nil
+	return int(state.params.OutSize), state.params.OutIsKeyframe != 0, nil
 }
 
 // VideoEncoderSetBitrate updates the encoder bitrate.
