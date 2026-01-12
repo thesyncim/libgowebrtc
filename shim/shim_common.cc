@@ -15,7 +15,7 @@
 namespace shim {
 
 // Version strings
-const char* kShimVersion = "0.2.1";  // Force rebuild for libc++ linking fix
+const char* kShimVersion = "0.2.2";  // Force rebuild with --whole-archive for Linux
 const char* kLibWebRTCVersion = "M141";  // crow-misia/libwebrtc-bin 141.7390.2.0
 
 namespace {

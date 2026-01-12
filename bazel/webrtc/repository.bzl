@@ -9,7 +9,12 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "libwebrtc",
     hdrs = glob(["include/**/*.h", "include/**/*.inc"]),
-    srcs = glob(["lib/*.a", "lib/*.lib"]),  # Unix (.a) and Windows (.lib)
+    # On Linux, we use --whole-archive via linkopts to include all objects
+    # from the static library (may contain libc++ runtime symbols)
+    srcs = select({
+        "@platforms//os:linux": [],  # Linked via linkopts with --whole-archive
+        "//conditions:default": glob(["lib/*.a", "lib/*.lib"]),
+    }),
     includes = [
         "include",
         "include/third_party/abseil-cpp",
@@ -40,12 +45,18 @@ cc_library(
             "-framework ApplicationServices",
         ],
         "@platforms//os:linux": [
+            # Force include all objects from libwebrtc.a - this includes
+            # any statically linked C++ runtime symbols from Chromium's build.
+            "-Wl,--whole-archive",
+            "external/libwebrtc/lib/libwebrtc.a",
+            "-Wl,--no-whole-archive",
             "-lpthread",
             "-ldl",
             "-lrt",
         ],
         "//conditions:default": [],
     }),
+    alwayslink = True,  # Ensure symbols are exported
 )
 """
 

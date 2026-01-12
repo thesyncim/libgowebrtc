@@ -71,10 +71,11 @@ _MACOS_LINKOPTS = [
 
 # Linux libraries
 # Note: libwebrtc from crow-misia is built with Chromium's libc++ (__Cr ABI)
-# which is incompatible with Ubuntu's libc++ (__1 ABI). We use libstdc++ instead
-# and rely on the static libwebrtc.a containing all needed C++ runtime code.
+# which is incompatible with Ubuntu's libc++ (__1 ABI). We link with libstdc++
+# which provides basic C++ runtime support, but vtables for std::__Cr::* classes
+# may be missing. Using RTLD_LAZY via dlopen flag is set in the Go FFI code.
 _LINUX_LINKOPTS = [
-    # Use libstdc++ - the GNU C++ standard library (widely available)
+    # Use libstdc++ for basic C++ runtime
     "-lstdc++",
     # System libraries
     "-lpthread",
