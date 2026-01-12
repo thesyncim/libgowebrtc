@@ -83,6 +83,7 @@ log_step "Configuring libc++ build"
 # - _LIBCPP_ABI_NAMESPACE=__Cr : Use Chromium's namespace
 # - LIBCXX_ABI_VERSION=1 : Standard ABI version
 # - BUILD_SHARED_LIBS=ON : Build shared library
+# - LIBCXXABI_USE_LLVM_UNWINDER=OFF : Use system unwinder, not LLVM's
 cmake ../runtimes \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
@@ -94,6 +95,7 @@ cmake ../runtimes \
     -DLIBCXX_ENABLE_STATIC=OFF \
     -DLIBCXXABI_ENABLE_SHARED=ON \
     -DLIBCXXABI_ENABLE_STATIC=OFF \
+    -DLIBCXXABI_USE_LLVM_UNWINDER=OFF \
     -DLIBCXX_INCLUDE_TESTS=OFF \
     -DLIBCXX_INCLUDE_BENCHMARKS=OFF \
     -DLIBCXXABI_INCLUDE_TESTS=OFF \
