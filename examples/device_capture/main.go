@@ -80,25 +80,6 @@ type Session struct {
 func main() {
 	flag.Parse()
 
-	// Request camera and microphone permissions (required on macOS)
-	log.Println("Checking/requesting camera permission...")
-	if ffi.RequestCameraPermission() {
-		log.Println("Camera permission: granted")
-	} else {
-		log.Println("Camera permission: denied")
-		log.Println("  On macOS, grant camera access to Terminal.app or your IDE in:")
-		log.Println("  System Preferences > Privacy & Security > Camera")
-	}
-
-	log.Println("Checking/requesting microphone permission...")
-	if ffi.RequestMicrophonePermission() {
-		log.Println("Microphone permission: granted")
-	} else {
-		log.Println("Microphone permission: denied")
-		log.Println("  On macOS, grant microphone access to Terminal.app or your IDE in:")
-		log.Println("  System Preferences > Privacy & Security > Microphone")
-	}
-
 	http.HandleFunc("/", serveIndex)
 	http.HandleFunc("/ws", handleWebSocket)
 
@@ -109,6 +90,29 @@ func main() {
 
 	if err := http.ListenAndServe(*addr, nil); err != nil {
 		log.Fatal(err)
+	}
+}
+
+var permissionsChecked bool
+
+func checkPermissions() {
+	if permissionsChecked {
+		return
+	}
+	permissionsChecked = true
+
+	log.Println("Checking/requesting camera permission...")
+	if ffi.RequestCameraPermission() {
+		log.Println("Camera permission: granted")
+	} else {
+		log.Println("Camera permission: denied")
+	}
+
+	log.Println("Checking/requesting microphone permission...")
+	if ffi.RequestMicrophonePermission() {
+		log.Println("Microphone permission: granted")
+	} else {
+		log.Println("Microphone permission: denied")
 	}
 }
 
@@ -126,6 +130,9 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	log.Printf("New browser connection from %s", r.RemoteAddr)
+
+	// Check permissions on first connection (loads FFI)
+	checkPermissions()
 
 	session := &Session{conn: conn}
 	if err := session.run(); err != nil {
