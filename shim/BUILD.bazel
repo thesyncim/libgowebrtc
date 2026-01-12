@@ -43,6 +43,11 @@ _WINDOWS_COPTS = [
 # Common defines for all platforms
 _COMMON_DEFINES = [
     "WEBRTC_LIBRARY_IMPL",
+]
+
+# Device capture is only supported on macOS and Windows
+# Linux pre-built libwebrtc doesn't include desktop capture symbols
+_DEVICE_CAPTURE_DEFINES = [
     "SHIM_ENABLE_DEVICE_CAPTURE",
 ]
 
@@ -131,9 +136,9 @@ cc_library(
         "//conditions:default": _UNIX_COPTS,
     }),
     defines = _COMMON_DEFINES + select({
-        "@platforms//os:macos": _UNIX_DEFINES + ["WEBRTC_MAC"],
-        "@platforms//os:linux": _UNIX_DEFINES + ["WEBRTC_LINUX"],
-        "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"],
+        "@platforms//os:macos": _UNIX_DEFINES + ["WEBRTC_MAC"] + _DEVICE_CAPTURE_DEFINES,
+        "@platforms//os:linux": _UNIX_DEFINES + ["WEBRTC_LINUX"],  # No device capture - missing symbols in pre-built libwebrtc
+        "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"] + _DEVICE_CAPTURE_DEFINES,
         "//conditions:default": _UNIX_DEFINES,
     }),
     visibility = ["//visibility:private"],

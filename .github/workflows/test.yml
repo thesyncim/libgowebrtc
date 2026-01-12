@@ -139,6 +139,39 @@ jobs:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
+      - name: Build and smoke-test examples
+        shell: bash
+        run: |
+          echo "=== Building and smoke-testing examples ==="
+          for dir in examples/*/; do
+            if [ -f "${dir}main.go" ]; then
+              name=$(basename "$dir")
+              echo "Building ${name}..."
+              go build -o "/tmp/${name}" "./${dir}"
+
+              echo "Smoke-testing ${name} (3s timeout)..."
+              "/tmp/${name}" &
+              PID=$!
+              sleep 3
+              if kill -0 $PID 2>/dev/null; then
+                echo "  ${name}: OK (still running, stopping)"
+                kill $PID 2>/dev/null || true
+                wait $PID 2>/dev/null || true
+              else
+                wait $PID
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -ne 0 ]; then
+                  echo "  ${name}: FAILED (exit code $EXIT_CODE)"
+                  exit 1
+                fi
+                echo "  ${name}: OK (exited cleanly)"
+              fi
+            fi
+          done
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
   # darwin_amd64 via Rosetta emulation on ARM64 runner
   test-darwin-amd64-rosetta:
     name: darwin_amd64 (Rosetta)
@@ -207,6 +240,38 @@ jobs:
           arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
           arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./internal/ffi/...
           arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+      - name: Build and smoke-test examples (via Rosetta)
+        run: |
+          echo "=== Building and smoke-testing examples ==="
+          for dir in examples/*/; do
+            if [ -f "${dir}main.go" ]; then
+              name=$(basename "$dir")
+              echo "Building ${name}..."
+              arch -x86_64 /usr/local/go-amd64/bin/go build -o "/tmp/${name}" "./${dir}"
+
+              echo "Smoke-testing ${name} (3s timeout)..."
+              arch -x86_64 "/tmp/${name}" &
+              PID=$!
+              sleep 3
+              if kill -0 $PID 2>/dev/null; then
+                echo "  ${name}: OK (still running, stopping)"
+                kill $PID 2>/dev/null || true
+                wait $PID 2>/dev/null || true
+              else
+                wait $PID
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -ne 0 ]; then
+                  echo "  ${name}: FAILED (exit code $EXIT_CODE)"
+                  exit 1
+                fi
+                echo "  ${name}: OK (exited cleanly)"
+              fi
+            fi
+          done
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
