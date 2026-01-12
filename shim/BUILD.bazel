@@ -34,15 +34,14 @@ _UNIX_COPTS = [
     "-Wno-deprecated-declarations",
 ]
 
-# Linux compiler options - use libc++ to match libwebrtc ABI
-# Force _LIBCPP_ABI_VERSION=1 to use std::__1 namespace matching crow-misia binary
+# Linux compiler options - use libstdc++ to match crow-misia libwebrtc ABI
+# crow-misia pre-built binaries are compiled with GCC/libstdc++ (not clang/libc++)
 _LINUX_COPTS = [
     "-std=c++17",
     "-fPIC",
     "-fvisibility=hidden",
     "-Wno-deprecated-declarations",
-    "-stdlib=libc++",
-    "-D_LIBCPP_ABI_VERSION=1",
+    # Do NOT use -stdlib=libc++ - crow-misia uses libstdc++
 ]
 
 # Windows MSVC compiler options
@@ -85,13 +84,10 @@ _MACOS_LINKOPTS = [
 ]
 
 # Linux libraries
-# Link against libc++ to match the ABI used by pre-built libwebrtc
-# Note: --whole-archive is applied in bazel/webrtc/repository.bzl
+# Link against libstdc++ to match crow-misia pre-built libwebrtc ABI
 _LINUX_LINKOPTS = [
     "-Wl,--start-group",
-    "-stdlib=libc++",
-    "-lc++",
-    "-lc++abi",
+    "-lstdc++",
     "-lpthread",
     "-ldl",
     "-lrt",

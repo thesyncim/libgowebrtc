@@ -237,12 +237,12 @@ build_shim() {
         log_info "Building for platform: $TARGET_PLATFORM"
     fi
 
-    # On Linux, use clang for libc++ compatibility with pre-built libwebrtc
+    # On Linux, use GCC/libstdc++ to match crow-misia pre-built libwebrtc ABI
+    # (crow-misia builds use GCC, not clang/libc++)
     local bazel_env=""
     local extra_opts=""
     if [[ "$TARGET_OS" == "linux" ]]; then
-        log_info "Using clang for libc++ ABI compatibility"
-        bazel_env="CC=clang CXX=clang++"
+        log_info "Using GCC for libstdc++ ABI compatibility with crow-misia binaries"
         # Force whole-archive at the start of the link line to include all libwebrtc symbols
         extra_opts="--linkopt=-Wl,--whole-archive --linkopt=-Wl,--allow-multiple-definition"
     fi

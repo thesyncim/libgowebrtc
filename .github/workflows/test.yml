@@ -72,7 +72,7 @@ jobs:
             libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
             libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
             libglib2.0-dev libgbm-dev libdrm-dev \
-            clang libc++-dev libc++abi-dev
+            g++
 
       - name: Build shim (Unix)
         if: runner.os != 'Windows' && steps.shim_changes.outputs.shim == 'true'
