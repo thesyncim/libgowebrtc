@@ -182,7 +182,10 @@ cc_binary(
     }),
     linkopts = select({
         "@platforms//os:macos": _MACOS_LINKOPTS,
-        "@platforms//os:linux": _LINUX_LINKOPTS,
+        # On Linux, use --whole-archive to include ALL symbols from libwebrtc.a
+        # This is needed because some symbols (like Thread::SetName) are only
+        # called internally by libwebrtc, not directly from shim code
+        "@platforms//os:linux": ["-Wl,--whole-archive"] + _LINUX_LINKOPTS + ["-Wl,--no-whole-archive"],
         "@platforms//os:windows": _WINDOWS_LINKOPTS,
         "//conditions:default": [],
     }),
