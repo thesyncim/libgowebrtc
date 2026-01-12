@@ -82,8 +82,11 @@ _MACOS_LINKOPTS = [
 # libc++ with __Cr namespace and bundle it with the shim.
 _LINUX_LINKOPTS = [
     # Link against libc++ with __Cr namespace (built separately)
+    # Note: LIBCXX_CR_DIR env var must be set to the custom libc++ install path
     "-lc++",
     "-lc++abi",
+    # Use libc++ stdlib (not libstdc++)
+    "-stdlib=libc++",
     # Set RPATH to look for libc++ in:
     # 1. Same directory as the shim ($ORIGIN)
     # 2. lib subdirectory
@@ -104,6 +107,17 @@ _LINUX_LINKOPTS = [
     "-lgio-2.0",
     "-lgobject-2.0",
     "-lglib-2.0",
+]
+
+# Linux compiler options - use libc++ headers with __Cr namespace
+# LIBCXX_CR_DIR env var must be set to the custom libc++ install path
+_LINUX_COPTS = [
+    "-std=c++17",
+    "-fPIC",
+    "-fvisibility=hidden",
+    "-Wno-deprecated-declarations",
+    # Use libc++ stdlib headers instead of libstdc++
+    "-stdlib=libc++",
 ]
 
 # Windows libraries
@@ -143,7 +157,7 @@ cc_library(
     alwayslink = True,  # Ensure all symbols are exported to shared lib
     copts = select({
         "@platforms//os:macos": _UNIX_COPTS,
-        "@platforms//os:linux": _UNIX_COPTS,
+        "@platforms//os:linux": _LINUX_COPTS,
         "@platforms//os:windows": _WINDOWS_COPTS,
         "//conditions:default": _UNIX_COPTS,
     }),
