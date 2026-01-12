@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
@@ -41,21 +40,6 @@ const (
 )
 
 func main() {
-	// Load FFI library
-	if err := ffi.LoadLibrary(); err != nil {
-		log.Fatalf("Failed to load library: %v", err)
-	}
-
-	// Show supported codecs
-	videoCodecs, err := pc.GetSupportedVideoCodecs()
-	if err != nil {
-		log.Fatalf("Failed to get supported codecs: %v", err)
-	}
-	log.Println("Supported video codecs:")
-	for _, c := range videoCodecs {
-		log.Printf("  - %s (clock: %d, PT: %d)", c.MimeType, c.ClockRate, c.PayloadType)
-	}
-
 	// HTTP handlers
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		data, _ := staticFiles.ReadFile("index.html")

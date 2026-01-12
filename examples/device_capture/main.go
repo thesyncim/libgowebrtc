@@ -80,7 +80,28 @@ type Session struct {
 func main() {
 	flag.Parse()
 
-	// Request camera and microphone permissions (required on macOS)
+	http.HandleFunc("/", serveIndex)
+	http.HandleFunc("/ws", handleWebSocket)
+
+	log.Printf("Starting Device Capture Example")
+	log.Printf("   Address: http://localhost%s", *addr)
+	log.Printf("")
+	log.Printf("Open your browser to http://localhost%s", *addr)
+
+	if err := http.ListenAndServe(*addr, nil); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// requestPermissions requests camera and microphone permissions (called on first connection)
+var permissionsRequested bool
+
+func requestPermissions() {
+	if permissionsRequested {
+		return
+	}
+	permissionsRequested = true
+
 	log.Println("Checking/requesting camera permission...")
 	if ffi.RequestCameraPermission() {
 		log.Println("Camera permission: granted")
@@ -98,18 +119,6 @@ func main() {
 		log.Println("  On macOS, grant microphone access to Terminal.app or your IDE in:")
 		log.Println("  System Preferences > Privacy & Security > Microphone")
 	}
-
-	http.HandleFunc("/", serveIndex)
-	http.HandleFunc("/ws", handleWebSocket)
-
-	log.Printf("Starting Device Capture Example")
-	log.Printf("   Address: http://localhost%s", *addr)
-	log.Printf("")
-	log.Printf("Open your browser to http://localhost%s", *addr)
-
-	if err := http.ListenAndServe(*addr, nil); err != nil {
-		log.Fatal(err)
-	}
 }
 
 func serveIndex(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +135,9 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	log.Printf("New browser connection from %s", r.RemoteAddr)
+
+	// Request permissions on first connection (loads FFI library)
+	requestPermissions()
 
 	session := &Session{conn: conn}
 	if err := session.run(); err != nil {
