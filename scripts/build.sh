@@ -268,7 +268,8 @@ build_shim() {
     if [[ "$TARGET_OS" == "linux" && -n "$LIBCXX_CR_DIR" ]]; then
         log_info "Using libc++ from: $LIBCXX_CR_DIR"
         # Add include path for libc++ headers and library path for linking
-        extra_opts="--copt=-isystem$LIBCXX_CR_DIR/include/c++/v1 --linkopt=-L$LIBCXX_CR_DIR/lib"
+        # Use --spawn_strategy=standalone to allow Bazel to access paths outside the sandbox
+        extra_opts="--copt=-isystem$LIBCXX_CR_DIR/include/c++/v1 --linkopt=-L$LIBCXX_CR_DIR/lib --spawn_strategy=standalone"
     fi
 
     # On Windows Git Bash/MSYS, // gets converted to / - disable path conversion
