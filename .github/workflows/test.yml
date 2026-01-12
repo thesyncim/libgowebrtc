@@ -144,20 +144,11 @@ jobs:
         shell: bash
         run: |
           echo "=== Building and smoke-testing examples ==="
-          # Skip examples that require immediate FFI on Linux (missing symbols in prebuilt libwebrtc)
-          SKIP_ON_LINUX="encode_decode pion_interop"
-
           for dir in examples/*/; do
             if [ -f "${dir}main.go" ]; then
               name=$(basename "$dir")
               echo "Building ${name}..."
               go build -o "/tmp/${name}" "./${dir}"
-
-              # Skip certain examples on Linux
-              if [[ "$OSTYPE" == "linux-gnu"* ]] && [[ " $SKIP_ON_LINUX " =~ " $name " ]]; then
-                echo "  ${name}: SKIPPED (requires immediate FFI on Linux)"
-                continue
-              fi
 
               echo "Smoke-testing ${name} (3s timeout)..."
               "/tmp/${name}" &

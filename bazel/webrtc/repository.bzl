@@ -22,6 +22,7 @@ cc_library(
         "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"],
         "//conditions:default": ["WEBRTC_POSIX"],
     }),
+    alwayslink = True,  # Ensure all symbols from libwebrtc.a are included
     linkopts = select({
         "@platforms//os:macos": [
             "-framework Foundation",
