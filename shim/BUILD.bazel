@@ -35,12 +35,14 @@ _UNIX_COPTS = [
 ]
 
 # Linux compiler options - use libc++ to match libwebrtc ABI
+# Force _LIBCPP_ABI_VERSION=1 to use std::__1 namespace matching crow-misia binary
 _LINUX_COPTS = [
     "-std=c++17",
     "-fPIC",
     "-fvisibility=hidden",
     "-Wno-deprecated-declarations",
     "-stdlib=libc++",
+    "-D_LIBCPP_ABI_VERSION=1",
 ]
 
 # Windows MSVC compiler options
