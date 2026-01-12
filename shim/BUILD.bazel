@@ -81,14 +81,9 @@ _MACOS_LINKOPTS = [
 ]
 
 # Linux libraries
-# Use --whole-archive to include all symbols from libwebrtc.a (needed for symbols
-# referenced internally during H264 encoder initialization)
-# Use --allow-multiple-definition to handle multiple main() symbols from tools
-# compiled into the libwebrtc.a archive (nasm, protozero_plugin, etc.)
 # Link against libc++ to match the ABI used by pre-built libwebrtc
+# Note: --whole-archive is applied in bazel/webrtc/repository.bzl
 _LINUX_LINKOPTS = [
-    "-Wl,--whole-archive",
-    "-Wl,--allow-multiple-definition",
     "-Wl,--start-group",
     "-stdlib=libc++",
     "-lc++",
@@ -108,7 +103,6 @@ _LINUX_LINKOPTS = [
     "-lgobject-2.0",
     "-lglib-2.0",
     "-Wl,--end-group",
-    "-Wl,--no-whole-archive",
 ]
 
 # Windows libraries
