@@ -75,6 +75,8 @@ _MACOS_LINKOPTS = [
     "-framework CoreGraphics",
     "-framework IOSurface",
     "-framework Metal",
+    "-framework MetalKit",
+    "-framework QuartzCore",
     "-framework AppKit",
     "-framework ScreenCaptureKit",
     "-framework ApplicationServices",
