@@ -1,6 +1,8 @@
 package benchmark
 
 import (
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -15,10 +17,10 @@ import (
 // TestMain initializes the libwebrtc library for benchmarks.
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
-		// Skip if library not available
-		return
+		fmt.Fprintf(os.Stderr, "FATAL: shim library required but not available: %v\n", err)
+		os.Exit(1)
 	}
-	m.Run()
+	os.Exit(m.Run())
 }
 
 // ============================================================================

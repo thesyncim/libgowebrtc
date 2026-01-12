@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"testing"
@@ -13,7 +14,8 @@ import (
 
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
-		os.Exit(0) // Skip all tests if shim unavailable
+		fmt.Fprintf(os.Stderr, "FATAL: shim library required but not available: %v\n", err)
+		os.Exit(1)
 	}
 	os.Exit(m.Run())
 }

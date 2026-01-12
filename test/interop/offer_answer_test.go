@@ -1,6 +1,7 @@
 package interop
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -12,8 +13,8 @@ import (
 
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
-		// Skip if shim library not available
-		os.Exit(0)
+		fmt.Fprintf(os.Stderr, "FATAL: shim library required but not available: %v\n", err)
+		os.Exit(1)
 	}
 	os.Exit(m.Run())
 }

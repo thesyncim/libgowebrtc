@@ -10,14 +10,10 @@ import (
 // Set LIBWEBRTC_SHIM_PATH environment variable to the path of the shim library.
 
 func TestMain(m *testing.M) {
-	// Attempt to load library
+	// Shim library is always required for tests
 	if err := LoadLibrary(); err != nil {
-		if os.Getenv("LIBWEBRTC_TEST_REQUIRE_SHIM") != "" {
-			fmt.Fprintf(os.Stderr, "shim library required: %v\n", err)
-			os.Exit(1)
-		}
-		// Skip all integration tests if library not available
-		os.Exit(0)
+		fmt.Fprintf(os.Stderr, "FATAL: shim library required but not available: %v\n", err)
+		os.Exit(1)
 	}
 	os.Exit(m.Run())
 }
