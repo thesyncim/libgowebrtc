@@ -117,7 +117,10 @@ webrtc::SdpVideoFormat CreateSdpVideoFormat(ShimCodecType codec, const char* h26
         return webrtc::SdpVideoFormat::AV1Profile0();
     }
 
-    webrtc::SdpVideoFormat format(CodecTypeToString(codec));
+    // Create codec name as explicit std::string to ensure the
+    // SdpVideoFormat(const std::string&) constructor is linked
+    std::string codec_name = CodecTypeToString(codec);
+    webrtc::SdpVideoFormat format(codec_name);
 
     if (codec == SHIM_CODEC_H264) {
         // H264 requires profile-level-id and packetization-mode

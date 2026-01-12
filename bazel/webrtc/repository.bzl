@@ -6,22 +6,10 @@ Uses pre-built libwebrtc if LIBWEBRTC_DIR is set, otherwise builds from source.
 _BUILD_FILE_CONTENT = """
 package(default_visibility = ["//visibility:public"])
 
-# On Linux, we need special handling to include all symbols from libwebrtc.a
-# Using cc_import with alwayslink for the static library
-cc_import(
-    name = "libwebrtc_archive",
-    static_library = select({
-        "@platforms//os:linux": "lib/libwebrtc.a",
-        "@platforms//os:macos": "lib/libwebrtc.a",
-        "@platforms//os:windows": "lib/webrtc.lib",
-        "//conditions:default": "lib/libwebrtc.a",
-    }),
-    alwayslink = True,
-)
-
 cc_library(
     name = "libwebrtc",
     hdrs = glob(["include/**/*.h", "include/**/*.inc"]),
+    srcs = glob(["lib/*.a", "lib/*.lib"]),  # Unix (.a) and Windows (.lib)
     includes = [
         "include",
         "include/third_party/abseil-cpp",
@@ -34,6 +22,7 @@ cc_library(
         "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"],
         "//conditions:default": ["WEBRTC_POSIX"],
     }),
+    alwayslink = True,
     linkopts = select({
         "@platforms//os:macos": [
             "-framework Foundation",
@@ -60,7 +49,6 @@ cc_library(
         ],
         "//conditions:default": [],
     }),
-    deps = [":libwebrtc_archive"],
 )
 """
 
