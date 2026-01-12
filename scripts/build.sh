@@ -263,15 +263,16 @@ build_shim() {
         log_info "Building for platform: $TARGET_PLATFORM"
     fi
 
-    # For Linux, add custom libc++ library path
-    local extra_linkopts=""
+    # For Linux, add custom libc++ include and library paths
+    local extra_opts=""
     if [[ "$TARGET_OS" == "linux" && -n "$LIBCXX_CR_DIR" ]]; then
         log_info "Using libc++ from: $LIBCXX_CR_DIR"
-        extra_linkopts="--linkopt=-L$LIBCXX_CR_DIR/lib"
+        # Add include path for libc++ headers and library path for linking
+        extra_opts="--copt=-isystem$LIBCXX_CR_DIR/include/c++/v1 --linkopt=-L$LIBCXX_CR_DIR/lib"
     fi
 
     # On Windows Git Bash/MSYS, // gets converted to / - disable path conversion
-    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM" $extra_linkopts
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM" $extra_opts
 
     local ext="so"
     case "$TARGET_OS" in
