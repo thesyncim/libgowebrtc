@@ -43,8 +43,15 @@ _WINDOWS_COPTS = [
 # Common defines for all platforms
 _COMMON_DEFINES = [
     "WEBRTC_LIBRARY_IMPL",
-    "SHIM_ENABLE_DEVICE_CAPTURE",
 ]
+
+# Platform-specific defines for device capture
+# Note: Linux libwebrtc from crow-misia may not include desktop capture module
+_DEVICE_CAPTURE_DEFINES = select({
+    "@platforms//os:macos": ["SHIM_ENABLE_DEVICE_CAPTURE"],
+    "@platforms//os:windows": ["SHIM_ENABLE_DEVICE_CAPTURE"],
+    "//conditions:default": [],  # Disabled on Linux
+})
 
 # Unix-specific defines
 _UNIX_DEFINES = [
@@ -140,7 +147,7 @@ cc_library(
         "@platforms//os:windows": _WINDOWS_COPTS,
         "//conditions:default": _UNIX_COPTS,
     }),
-    defines = _COMMON_DEFINES + select({
+    defines = _COMMON_DEFINES + _DEVICE_CAPTURE_DEFINES + select({
         "@platforms//os:macos": _UNIX_DEFINES + ["WEBRTC_MAC"],
         "@platforms//os:linux": _UNIX_DEFINES + ["WEBRTC_LINUX"],
         "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"],
