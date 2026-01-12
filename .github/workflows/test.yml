@@ -68,7 +68,7 @@ jobs:
         if: runner.os == 'Linux' && steps.shim_changes.outputs.shim == 'true'
         run: |
           sudo apt-get update
-          # Install clang and lld for building (using libstdc++ for runtime)
+          # Install clang and lld for building
           LLVM_VERSION=$(apt-cache search '^clang-[0-9]+$' | sort -V | tail -1 | grep -oP 'clang-\K[0-9]+' || echo "")
           if [ -n "$LLVM_VERSION" ]; then
             echo "Installing clang-${LLVM_VERSION}..."
@@ -81,6 +81,8 @@ jobs:
             echo "Installing unversioned clang..."
             sudo apt-get install -y clang lld || true
           fi
+          # Install cmake for building libc++ with __Cr namespace
+          sudo apt-get install -y cmake ninja-build
           # Install X11 and other dependencies
           sudo apt-get install -y \
             libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
@@ -89,6 +91,8 @@ jobs:
           # Verify clang is available
           echo "=== Clang version ==="
           clang++ --version || echo "clang++ not found"
+          echo "=== CMake version ==="
+          cmake --version || echo "cmake not found"
 
       - name: Build shim (Unix)
         if: runner.os != 'Windows' && steps.shim_changes.outputs.shim == 'true'
@@ -133,6 +137,12 @@ jobs:
         shell: bash
         run: |
           echo "=== Testing with purego (default) ==="
+          # On Linux, add the shim directory to LD_LIBRARY_PATH for libc++ runtime
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export LD_LIBRARY_PATH="${{ github.workspace }}/lib/${{ matrix.platform }}:$LD_LIBRARY_PATH"
+            echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+            ls -la "${{ github.workspace }}/lib/${{ matrix.platform }}/" || true
+          fi
           go test -v ./pkg/frame/... ./pkg/codec/...
           go test -v ./internal/ffi/...
           go test -v ./pkg/encoder/... ./pkg/decoder/...
@@ -143,8 +153,13 @@ jobs:
 
       - name: Run tests (CGO variant)
         if: runner.os != 'Windows'  # CGO tests need extra setup on Windows
+        shell: bash
         run: |
           echo "=== Testing with CGO (ffigo_cgo tag) ==="
+          # On Linux, add the shim directory to LD_LIBRARY_PATH for libc++ runtime
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export LD_LIBRARY_PATH="${{ github.workspace }}/lib/${{ matrix.platform }}:$LD_LIBRARY_PATH"
+          fi
           go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
           go test -tags ffigo_cgo -v ./internal/ffi/...
           go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
@@ -155,7 +170,12 @@ jobs:
 
       - name: Run benchmarks (comparison)
         if: runner.os != 'Windows'
+        shell: bash
         run: |
+          # On Linux, add the shim directory to LD_LIBRARY_PATH for libc++ runtime
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export LD_LIBRARY_PATH="${{ github.workspace }}/lib/${{ matrix.platform }}:$LD_LIBRARY_PATH"
+          fi
           echo "=== Benchmark: purego ==="
           go test -bench=BenchmarkShimVersion -benchmem -run=^$ ./internal/ffi/ || true
           echo ""

@@ -71,12 +71,17 @@ _MACOS_LINKOPTS = [
 
 # Linux libraries
 # Note: libwebrtc from crow-misia is built with Chromium's libc++ (__Cr ABI)
-# which is incompatible with Ubuntu's libc++ (__1 ABI). We link with libstdc++
-# which provides basic C++ runtime support, but vtables for std::__Cr::* classes
-# may be missing. Using RTLD_LAZY via dlopen flag is set in the Go FFI code.
+# which is incompatible with Ubuntu's libc++ (__1 ABI). We build a custom
+# libc++ with __Cr namespace and bundle it with the shim.
 _LINUX_LINKOPTS = [
-    # Use libstdc++ for basic C++ runtime
-    "-lstdc++",
+    # Link against libc++ with __Cr namespace (built separately)
+    "-lc++",
+    "-lc++abi",
+    # Set RPATH to look for libc++ in:
+    # 1. Same directory as the shim ($ORIGIN)
+    # 2. lib subdirectory
+    "-Wl,-rpath,$ORIGIN",
+    "-Wl,-rpath,$ORIGIN/lib",
     # System libraries
     "-lpthread",
     "-ldl",
