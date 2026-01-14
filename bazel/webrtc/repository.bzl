@@ -22,6 +22,7 @@ cc_library(
         "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"],
         "//conditions:default": ["WEBRTC_POSIX"],
     }),
+    alwayslink = True,
     linkopts = select({
         "@platforms//os:macos": [
             "-framework Foundation",
@@ -35,6 +36,8 @@ cc_library(
             "-framework CoreGraphics",
             "-framework IOSurface",
             "-framework Metal",
+            "-framework MetalKit",
+            "-framework QuartzCore",
             "-framework AppKit",
             "-framework ScreenCaptureKit",
             "-framework ApplicationServices",

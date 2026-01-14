@@ -9,11 +9,13 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
 
-// SkipIfNoShim skips the test if the shim library is not available.
+// SkipIfNoShim fails the test if the shim library is not available.
+// Note: Despite the name, this function now fails instead of skipping.
+// The shim is always required for tests to be meaningful.
 func SkipIfNoShim(t *testing.T) {
 	t.Helper()
 	if err := ffi.LoadLibrary(); err != nil {
-		t.Skipf("shim library not available: %v", err)
+		t.Fatalf("shim library required but not available: %v", err)
 	}
 }
 

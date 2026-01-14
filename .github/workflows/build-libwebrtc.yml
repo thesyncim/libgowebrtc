@@ -1,0 +1,205 @@
+name: Build libwebrtc for Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      webrtc_branch:
+        description: 'WebRTC branch (e.g., branch-heads/7390 for M141)'
+        default: 'branch-heads/7390'
+        required: true
+  schedule:
+    # Build weekly on Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+
+env:
+  # Match crow-misia version - M141 = branch-heads/7390
+  WEBRTC_BRANCH: ${{ github.event.inputs.webrtc_branch || 'branch-heads/7390' }}
+
+jobs:
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            platform: linux_amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            platform: linux_arm64
+            runner: ubuntu-24.04-arm
+
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git python3 python3-pip curl wget \
+            lsb-release sudo \
+            libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
+            libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
+            libglib2.0-dev libgbm-dev libdrm-dev \
+            libpulse-dev libasound2-dev \
+            libgtk-3-dev libcups2-dev libnss3-dev \
+            libpci-dev libdbus-1-dev \
+            ninja-build
+
+      - name: Setup depot_tools
+        run: |
+          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools
+          echo "$HOME/depot_tools" >> $GITHUB_PATH
+
+      - name: Fetch WebRTC
+        run: |
+          mkdir -p $HOME/webrtc
+          cd $HOME/webrtc
+          fetch --nohooks webrtc
+          cd src
+          git checkout ${{ env.WEBRTC_BRANCH }}
+          gclient sync -D --force --reset
+
+      - name: Install build dependencies
+        run: |
+          cd $HOME/webrtc/src
+          ./build/install-build-deps.sh --no-prompt
+
+      - name: Generate build files
+        run: |
+          cd $HOME/webrtc/src
+          gn gen out/Release --args='
+            target_os="linux"
+            target_cpu="${{ matrix.arch }}"
+            is_debug=false
+            is_component_build=false
+            rtc_include_tests=false
+            rtc_use_h264=true
+            ffmpeg_branding="Chrome"
+            use_rtti=true
+            use_custom_libcxx=false
+            use_glib=false
+            rtc_enable_protobuf=false
+            treat_warnings_as_errors=false
+            symbol_level=0
+          '
+
+      - name: Build libwebrtc
+        run: |
+          cd $HOME/webrtc/src
+          ninja -C out/Release webrtc
+
+      - name: Create archive with explicit ar
+        run: |
+          cd $HOME/webrtc/src
+
+          # Find all .o files and create a unified archive
+          mkdir -p out/Release/pkg
+
+          # Create libwebrtc.a from the built objects
+          if [ -f out/Release/obj/libwebrtc.a ]; then
+            cp out/Release/obj/libwebrtc.a out/Release/pkg/
+          else
+            # Fallback: use the thin archive or create from objects
+            find out/Release/obj -name "*.o" | head -10000 > /tmp/objs.txt
+            ar rcs out/Release/pkg/libwebrtc.a $(cat /tmp/objs.txt)
+          fi
+
+          ls -lh out/Release/pkg/libwebrtc.a
+
+      - name: Package release
+        run: |
+          cd $HOME/webrtc/src
+          mkdir -p $HOME/libwebrtc-${{ matrix.platform }}
+
+          # Copy library
+          mkdir -p $HOME/libwebrtc-${{ matrix.platform }}/lib
+          cp out/Release/pkg/libwebrtc.a $HOME/libwebrtc-${{ matrix.platform }}/lib/
+
+          # Copy headers (selective - key WebRTC headers)
+          mkdir -p $HOME/libwebrtc-${{ matrix.platform }}/include
+          rsync -av --include='*/' --include='*.h' --include='*.inc' --exclude='*' \
+            api/ modules/ rtc_base/ call/ media/ pc/ p2p/ \
+            $HOME/libwebrtc-${{ matrix.platform }}/include/
+
+          # Also copy third_party headers we need
+          mkdir -p $HOME/libwebrtc-${{ matrix.platform }}/include/third_party
+          rsync -av --include='*/' --include='*.h' --include='*.inc' --exclude='*' \
+            third_party/abseil-cpp/ \
+            $HOME/libwebrtc-${{ matrix.platform }}/include/third_party/abseil-cpp/
+
+          # Create archive
+          cd $HOME
+          tar -cJf libwebrtc-${{ matrix.platform }}.tar.xz libwebrtc-${{ matrix.platform }}
+
+          ls -lh libwebrtc-${{ matrix.platform }}.tar.xz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwebrtc-${{ matrix.platform }}
+          path: ~/libwebrtc-${{ matrix.platform }}.tar.xz
+
+  release:
+    name: Create Release
+    needs: build-linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Get version info
+        id: version
+        run: |
+          # Extract version from branch (e.g., branch-heads/7390 -> 141.7390)
+          BRANCH="${{ env.WEBRTC_BRANCH }}"
+          MILESTONE=$(echo $BRANCH | sed 's/branch-heads\///')
+          VERSION="M141.${MILESTONE}.$(date +%Y%m%d)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -name "*.tar.xz" -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: libwebrtc-${{ steps.version.outputs.version }}
+          name: libwebrtc ${{ steps.version.outputs.version }}
+          files: release/*
+          body: |
+            ## libwebrtc for Linux (built from source)
+
+            This release contains libwebrtc built with `use_custom_libcxx=false` for ABI compatibility with system libstdc++.
+
+            - WebRTC branch: ${{ env.WEBRTC_BRANCH }}
+            - Built on: ${{ github.run_id }}
+
+            ### Platforms
+            - `linux_amd64` - Linux x86_64
+            - `linux_arm64` - Linux ARM64
+
+            ### Build flags
+            ```
+            use_custom_libcxx=false
+            use_rtti=true
+            rtc_use_h264=true
+            ```

@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <mutex>
+#include <string_view>
 
 namespace shim {
 
@@ -48,15 +49,16 @@ bool IsTruthyEnv(const char* value) {
 void InitializeGlobals() {
     std::call_once(g_init_flag, []() {
         g_signaling_thread = webrtc::Thread::Create();
-        g_signaling_thread->SetName("signaling_thread", nullptr);
+        // Use std::string_view explicitly to ensure the overload is linked
+        g_signaling_thread->SetName(std::string_view("signaling_thread"), nullptr);
         g_signaling_thread->Start();
 
         g_worker_thread = webrtc::Thread::Create();
-        g_worker_thread->SetName("worker_thread", nullptr);
+        g_worker_thread->SetName(std::string_view("worker_thread"), nullptr);
         g_worker_thread->Start();
 
         g_network_thread = webrtc::Thread::CreateWithSocketServer();
-        g_network_thread->SetName("network_thread", nullptr);
+        g_network_thread->SetName(std::string_view("network_thread"), nullptr);
         g_network_thread->Start();
     });
 }
@@ -115,7 +117,10 @@ webrtc::SdpVideoFormat CreateSdpVideoFormat(ShimCodecType codec, const char* h26
         return webrtc::SdpVideoFormat::AV1Profile0();
     }
 
-    webrtc::SdpVideoFormat format(CodecTypeToString(codec));
+    // Create codec name as explicit std::string to ensure the
+    // SdpVideoFormat(const std::string&) constructor is linked
+    std::string codec_name = CodecTypeToString(codec);
+    webrtc::SdpVideoFormat format(codec_name);
 
     if (codec == SHIM_CODEC_H264) {
         // H264 requires profile-level-id and packetization-mode

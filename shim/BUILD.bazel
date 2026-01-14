@@ -26,12 +26,22 @@ _SHIM_HDRS = [
     "shim_internal.h",
 ]
 
-# Unix compiler options
+# Unix compiler options (common for macOS)
 _UNIX_COPTS = [
     "-std=c++17",
     "-fPIC",
     "-fvisibility=hidden",
     "-Wno-deprecated-declarations",
+]
+
+# Linux compiler options - use libstdc++ to match crow-misia libwebrtc ABI
+# crow-misia pre-built binaries are compiled with GCC/libstdc++ (not clang/libc++)
+_LINUX_COPTS = [
+    "-std=c++17",
+    "-fPIC",
+    "-fvisibility=hidden",
+    "-Wno-deprecated-declarations",
+    # Do NOT use -stdlib=libc++ - crow-misia uses libstdc++
 ]
 
 # Windows MSVC compiler options
@@ -43,8 +53,10 @@ _WINDOWS_COPTS = [
 # Common defines for all platforms
 _COMMON_DEFINES = [
     "WEBRTC_LIBRARY_IMPL",
-    "SHIM_ENABLE_DEVICE_CAPTURE",
 ]
+
+# Device capture only on macOS/Windows - Linux pre-built libwebrtc lacks desktop capture symbols
+_DEVICE_CAPTURE_DEFINES = ["SHIM_ENABLE_DEVICE_CAPTURE"]
 
 # Unix-specific defines
 _UNIX_DEFINES = [
@@ -64,14 +76,18 @@ _MACOS_LINKOPTS = [
     "-framework CoreGraphics",
     "-framework IOSurface",
     "-framework Metal",
+    "-framework MetalKit",
+    "-framework QuartzCore",
     "-framework AppKit",
     "-framework ScreenCaptureKit",
     "-framework ApplicationServices",
 ]
 
 # Linux libraries
+# Link against libstdc++ to match crow-misia pre-built libwebrtc ABI
 _LINUX_LINKOPTS = [
     "-Wl,--start-group",
+    "-lstdc++",
     "-lpthread",
     "-ldl",
     "-lrt",
@@ -126,14 +142,14 @@ cc_library(
     alwayslink = True,  # Ensure all symbols are exported to shared lib
     copts = select({
         "@platforms//os:macos": _UNIX_COPTS,
-        "@platforms//os:linux": _UNIX_COPTS,
+        "@platforms//os:linux": _LINUX_COPTS,
         "@platforms//os:windows": _WINDOWS_COPTS,
         "//conditions:default": _UNIX_COPTS,
     }),
     defines = _COMMON_DEFINES + select({
-        "@platforms//os:macos": _UNIX_DEFINES + ["WEBRTC_MAC"],
-        "@platforms//os:linux": _UNIX_DEFINES + ["WEBRTC_LINUX"],
-        "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"],
+        "@platforms//os:macos": _UNIX_DEFINES + ["WEBRTC_MAC"] + _DEVICE_CAPTURE_DEFINES,
+        "@platforms//os:linux": _UNIX_DEFINES + ["WEBRTC_LINUX"],  # No device capture - missing symbols
+        "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"] + _DEVICE_CAPTURE_DEFINES,
         "//conditions:default": _UNIX_DEFINES,
     }),
     visibility = ["//visibility:private"],

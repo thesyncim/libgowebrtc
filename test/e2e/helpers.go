@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -282,8 +283,8 @@ func (pp *LibPeerPair) WaitForConnection(timeout time.Duration) bool {
 // TestMain handles library loading for all e2e tests.
 func TestMain(m *testing.M) {
 	if err := ffi.LoadLibrary(); err != nil {
-		// Skip tests if library not available
-		os.Exit(0)
+		fmt.Fprintf(os.Stderr, "FATAL: shim library required but not available: %v\n", err)
+		os.Exit(1)
 	}
 	os.Exit(m.Run())
 }
