@@ -436,7 +436,7 @@ func CreateVideoTrack(constraints VideoConstraints) (MediaStreamTrack, error) {
 		constraints.Codec = codec.H264
 	}
 	if constraints.Bitrate == 0 {
-		constraints.Bitrate = codec.DefaultH264Config(constraints.Width, constraints.Height).Bitrate
+		constraints.Bitrate = codec.DefaultVideoEncoderConfig(codec.H264, constraints.Width, constraints.Height).Bitrate
 	}
 
 	vt, err := track.NewVideoTrack(track.VideoTrackConfig{

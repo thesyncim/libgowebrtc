@@ -68,10 +68,31 @@ jobs:
         if: runner.os == 'Linux' && steps.shim_changes.outputs.shim == 'true'
         run: |
           sudo apt-get update
+          # Install clang and lld for building
+          LLVM_VERSION=$(apt-cache search '^clang-[0-9]+$' | sort -V | tail -1 | grep -oP 'clang-\K[0-9]+' || echo "")
+          if [ -n "$LLVM_VERSION" ]; then
+            echo "Installing clang-${LLVM_VERSION}..."
+            sudo apt-get install -y clang-${LLVM_VERSION} lld-${LLVM_VERSION} || true
+            sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${LLVM_VERSION} 100 || true
+            sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${LLVM_VERSION} 100 || true
+            sudo update-alternatives --install /usr/bin/lld lld /usr/bin/lld-${LLVM_VERSION} 100 || true
+            sudo update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-${LLVM_VERSION} 100 || true
+          else
+            echo "Installing unversioned clang..."
+            sudo apt-get install -y clang lld || true
+          fi
+          # Install cmake for building libc++ with __Cr namespace
+          sudo apt-get install -y cmake ninja-build
+          # Install X11 and other dependencies
           sudo apt-get install -y \
             libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
             libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
             libglib2.0-dev libgbm-dev libdrm-dev
+          # Verify clang is available
+          echo "=== Clang version ==="
+          clang++ --version || echo "clang++ not found"
+          echo "=== CMake version ==="
+          cmake --version || echo "cmake not found"
 
       - name: Build shim (Unix)
         if: runner.os != 'Windows' && steps.shim_changes.outputs.shim == 'true'
@@ -94,6 +115,13 @@ jobs:
             "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
             | tar -xz -C lib/${{ matrix.platform }}
           ls -la lib/${{ matrix.platform }}/
+          # Debug: check library dependencies on Linux
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            echo "=== Checking shim dependencies ==="
+            ldd lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }} || true
+            echo "=== Checking for undefined symbols ==="
+            nm -u lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }} | head -50 || true
+          fi
 
       - name: Download pre-built shim (Windows)
         if: runner.os == 'Windows' && steps.shim_changes.outputs.shim != 'true'
@@ -109,27 +137,45 @@ jobs:
         shell: bash
         run: |
           echo "=== Testing with purego (default) ==="
+          # On Linux, add the shim directory to LD_LIBRARY_PATH for libc++ runtime
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export LD_LIBRARY_PATH="${{ github.workspace }}/lib/${{ matrix.platform }}:$LD_LIBRARY_PATH"
+            echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+            ls -la "${{ github.workspace }}/lib/${{ matrix.platform }}/" || true
+          fi
           go test -v ./pkg/frame/... ./pkg/codec/...
           go test -v ./internal/ffi/...
           go test -v ./pkg/encoder/... ./pkg/decoder/...
+          go test -v ./test/...
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
       - name: Run tests (CGO variant)
         if: runner.os != 'Windows'  # CGO tests need extra setup on Windows
+        shell: bash
         run: |
           echo "=== Testing with CGO (ffigo_cgo tag) ==="
+          # On Linux, add the shim directory to LD_LIBRARY_PATH for libc++ runtime
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export LD_LIBRARY_PATH="${{ github.workspace }}/lib/${{ matrix.platform }}:$LD_LIBRARY_PATH"
+          fi
           go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
           go test -tags ffigo_cgo -v ./internal/ffi/...
           go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
+          go test -tags ffigo_cgo -v ./test/...
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
       - name: Run benchmarks (comparison)
         if: runner.os != 'Windows'
+        shell: bash
         run: |
+          # On Linux, add the shim directory to LD_LIBRARY_PATH for libc++ runtime
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export LD_LIBRARY_PATH="${{ github.workspace }}/lib/${{ matrix.platform }}:$LD_LIBRARY_PATH"
+          fi
           echo "=== Benchmark: purego ==="
           go test -bench=BenchmarkShimVersion -benchmem -run=^$ ./internal/ffi/ || true
           echo ""
@@ -197,6 +243,7 @@ jobs:
           arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/frame/... ./pkg/codec/...
           arch -x86_64 /usr/local/go-amd64/bin/go test -v ./internal/ffi/...
           arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/encoder/... ./pkg/decoder/...
+          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./test/...
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
@@ -207,6 +254,7 @@ jobs:
           arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
           arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./internal/ffi/...
           arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
+          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./test/...
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"

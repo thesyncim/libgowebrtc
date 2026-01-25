@@ -4,7 +4,6 @@ import (
 	"log"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -737,19 +736,23 @@ func VideoTrackSourceCreate(pc uintptr, width, height int) uintptr {
 	return result
 }
 
+// videoTrackSourcePushState holds heap-allocated params for FFI calls.
+// This prevents stack corruption from affecting Go's runtime if the shim
+// writes past buffer boundaries.
+type videoTrackSourcePushState struct {
+	params  shimVideoTrackSourcePushFrameParams
+	padding [64]byte
+}
+
 // VideoTrackSourcePushFrame pushes an I420 frame to the video track source.
 func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) error {
 	if !libLoaded.Load() || shimVideoTrackSourcePushFrame == nil {
 		return ErrLibraryNotLoaded
 	}
 
-	// DEBUG: Log every 100th call
-	count := atomic.AddUint64(&videoTrackSourcePushCount, 1)
-	if count%100 == 0 {
-		println("DEBUG FFI: VideoTrackSourcePushFrame source=", source, "yLen=", len(yPlane), "ts=", timestampUs)
-	}
-
-	params := shimVideoTrackSourcePushFrameParams{
+	// Heap-allocate the FFI state to isolate any buffer overflows from the Go stack.
+	state := new(videoTrackSourcePushState)
+	state.params = shimVideoTrackSourcePushFrameParams{
 		Source:      source,
 		YPlane:      ByteSlicePtr(yPlane),
 		UPlane:      ByteSlicePtr(uPlane),
@@ -759,15 +762,13 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 		VStride:     int32(vStride),
 		TimestampUs: timestampUs,
 	}
-	result := shimVideoTrackSourcePushFrame(uintptr(unsafe.Pointer(&params)))
+	result := shimVideoTrackSourcePushFrame(uintptr(unsafe.Pointer(&state.params)))
+	runtime.KeepAlive(state)
 	runtime.KeepAlive(yPlane)
 	runtime.KeepAlive(uPlane)
 	runtime.KeepAlive(vPlane)
-	runtime.KeepAlive(&params)
 	return ShimError(result)
 }
-
-var videoTrackSourcePushCount uint64
 
 // PeerConnectionAddVideoTrackFromSource adds a video track using a source.
 func PeerConnectionAddVideoTrackFromSource(pc, source uintptr, trackID, streamID string) uintptr {

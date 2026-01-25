@@ -3,7 +3,10 @@ package decoder
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
@@ -55,18 +58,11 @@ type AudioDecoder interface {
 
 // NewVideoDecoder creates a video decoder for the specified codec.
 func NewVideoDecoder(codecType codec.Type) (VideoDecoder, error) {
-	switch codecType {
-	case codec.H264:
+	// H264 has special handling for AVCC/AnnexB conversion
+	if codecType == codec.H264 {
 		return NewH264Decoder()
-	case codec.VP8:
-		return NewVP8Decoder()
-	case codec.VP9:
-		return NewVP9Decoder()
-	case codec.AV1:
-		return NewAV1Decoder()
-	default:
-		return nil, ErrUnsupportedCodec
 	}
+	return newVideoDecoder(codecType)
 }
 
 // NewAudioDecoder creates an audio decoder for the specified codec.
@@ -78,3 +74,104 @@ func NewAudioDecoder(codecType codec.Type, sampleRate, channels int) (AudioDecod
 		return nil, ErrUnsupportedCodec
 	}
 }
+
+// videoDecoder is the generic video decoder implementation.
+type videoDecoder struct {
+	handle    uintptr
+	codecType codec.Type
+	closed    atomic.Bool
+	mu        sync.Mutex
+}
+
+// newVideoDecoder creates a generic video decoder.
+func newVideoDecoder(codecType codec.Type) (*videoDecoder, error) {
+	// Validate codec type
+	switch codecType {
+	case codec.VP8, codec.VP9, codec.AV1:
+		// Valid video codecs
+	default:
+		return nil, ErrUnsupportedCodec
+	}
+
+	if err := ffi.LoadLibrary(); err != nil {
+		return nil, err
+	}
+
+	dec := &videoDecoder{codecType: codecType}
+	if err := dec.init(); err != nil {
+		return nil, err
+	}
+
+	return dec, nil
+}
+
+func (d *videoDecoder) init() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	handle, err := ffi.CreateVideoDecoder(ffi.CodecTypeToFFI(d.codecType))
+	if err != nil {
+		return err
+	}
+
+	d.handle = handle
+	return nil
+}
+
+func (d *videoDecoder) DecodeInto(src []byte, dst *frame.VideoFrame, timestamp uint32, isKeyframe bool) error {
+	if d.closed.Load() {
+		return ErrDecoderClosed
+	}
+	if len(src) == 0 {
+		return ErrInvalidData
+	}
+	if dst == nil || len(dst.Data) < 3 || len(dst.Stride) < 3 {
+		return ErrBufferTooSmall
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.handle == 0 {
+		return ErrDecoderClosed
+	}
+
+	width, height, yStride, uStride, vStride, err := ffi.VideoDecoderDecodeInto(
+		d.handle, src, timestamp, isKeyframe,
+		dst.Data[0], dst.Data[1], dst.Data[2],
+	)
+	if err != nil {
+		if errors.Is(err, ffi.ErrNeedMoreData) {
+			return ErrNeedMoreData
+		}
+		return err
+	}
+
+	dst.Width = width
+	dst.Height = height
+	dst.Stride[0] = yStride
+	dst.Stride[1] = uStride
+	dst.Stride[2] = vStride
+	dst.PTS = timestamp
+	dst.Format = frame.PixelFormatI420
+
+	return nil
+}
+
+func (d *videoDecoder) Codec() codec.Type {
+	return d.codecType
+}
+
+func (d *videoDecoder) Close() error {
+	if !d.closed.CompareAndSwap(false, true) {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.handle != 0 {
+		ffi.VideoDecoderDestroy(d.handle)
+		d.handle = 0
+	}
+	return nil
+}
+

@@ -3,7 +3,11 @@ package encoder
 
 import (
 	"errors"
+	"fmt"
+	"sync"
+	"sync/atomic"
 
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
@@ -165,11 +169,177 @@ type AudioEncoderAdvanced interface {
 	SetBandwidth(bw codec.OpusBandwidth) error
 }
 
-// Video encoder constructors - use these directly:
-//   - NewH264Encoder(codec.H264Config)
-//   - NewVP8Encoder(codec.VP8Config)
-//   - NewVP9Encoder(codec.VP9Config)
-//   - NewAV1Encoder(codec.AV1Config)
-//
-// Audio encoder constructors:
-//   - NewOpusEncoder(codec.OpusConfig)
+// videoEncoder is the generic video encoder implementation.
+type videoEncoder struct {
+	handle        uintptr
+	codecType     codec.Type
+	width, height int
+	closed        atomic.Bool
+	forceKeyframe atomic.Bool
+	mu            sync.Mutex
+}
+
+// NewVideoEncoder creates a video encoder for any supported codec.
+func NewVideoEncoder(cfg codec.VideoEncoderConfig) (VideoEncoder, error) {
+	if err := validateVideoEncoderConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	if err := ffi.LoadLibrary(); err != nil {
+		return nil, err
+	}
+
+	enc := &videoEncoder{
+		codecType: cfg.Codec,
+		width:     cfg.Width,
+		height:    cfg.Height,
+	}
+
+	if err := enc.init(cfg); err != nil {
+		return nil, err
+	}
+
+	return enc, nil
+}
+
+func validateVideoEncoderConfig(cfg codec.VideoEncoderConfig) error {
+	if cfg.Width <= 0 || cfg.Height <= 0 {
+		return ErrInvalidConfig
+	}
+	if cfg.Bitrate == 0 {
+		return ErrInvalidConfig
+	}
+	if cfg.FPS <= 0 {
+		return ErrInvalidConfig
+	}
+	return nil
+}
+
+func (e *videoEncoder) init(cfg codec.VideoEncoderConfig) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	ffiConfig := &ffi.VideoEncoderConfig{
+		Width:            int32(cfg.Width),
+		Height:           int32(cfg.Height),
+		BitrateBps:       cfg.Bitrate,
+		Framerate:        float32(cfg.FPS),
+		KeyframeInterval: int32(cfg.KeyInterval),
+		PreferHW:         boolToInt32(cfg.PreferHW),
+	}
+
+	// Codec-specific configuration
+	switch cfg.Codec {
+	case codec.H264:
+		profile := string(cfg.Profile)
+		if profile == "" {
+			profile = string(codec.H264ProfileConstrainedBase)
+		}
+		profileBytes := ffi.CString(profile)
+		ffiConfig.H264Profile = &profileBytes[0]
+	case codec.VP9:
+		ffiConfig.VP9Profile = int32(cfg.VP9Profile)
+	}
+
+	ffiCodec := ffi.CodecTypeToFFI(cfg.Codec)
+	handle, err := ffi.CreateVideoEncoder(ffiCodec, ffiConfig)
+	if err != nil {
+		return fmt.Errorf("create %s encoder: %w", cfg.Codec, err)
+	}
+
+	e.handle = handle
+	return nil
+}
+
+func (e *videoEncoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyframe bool) (EncodeResult, error) {
+	if e.closed.Load() {
+		return EncodeResult{}, ErrEncoderClosed
+	}
+	if src == nil {
+		return EncodeResult{}, ErrInvalidFrame
+	}
+	if len(dst) < e.MaxEncodedSize() {
+		return EncodeResult{}, ErrBufferTooSmall
+	}
+
+	if e.forceKeyframe.Swap(false) {
+		forceKeyframe = true
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.handle == 0 {
+		return EncodeResult{}, ErrEncoderClosed
+	}
+
+	n, isKeyframe, err := ffi.VideoEncoderEncodeInto(
+		e.handle,
+		src.Data[0], src.Data[1], src.Data[2],
+		src.Stride[0], src.Stride[1], src.Stride[2],
+		src.PTS, forceKeyframe, dst,
+	)
+	if err != nil {
+		return EncodeResult{}, err
+	}
+
+	return EncodeResult{N: n, IsKeyframe: isKeyframe}, nil
+}
+
+func (e *videoEncoder) MaxEncodedSize() int {
+	return e.width * e.height * 3 / 2
+}
+
+func (e *videoEncoder) SetBitrate(bps uint32) error {
+	if e.closed.Load() {
+		return ErrEncoderClosed
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.handle == 0 {
+		return ErrEncoderClosed
+	}
+	return ffi.VideoEncoderSetBitrate(e.handle, bps)
+}
+
+func (e *videoEncoder) SetFramerate(fps float64) error {
+	if e.closed.Load() {
+		return ErrEncoderClosed
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.handle == 0 {
+		return ErrEncoderClosed
+	}
+	return ffi.VideoEncoderSetFramerate(e.handle, float32(fps))
+}
+
+func (e *videoEncoder) RequestKeyFrame() {
+	e.forceKeyframe.Store(true)
+}
+
+func (e *videoEncoder) Codec() codec.Type {
+	return e.codecType
+}
+
+func (e *videoEncoder) Close() error {
+	if !e.closed.CompareAndSwap(false, true) {
+		return nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.handle != 0 {
+		ffi.VideoEncoderDestroy(e.handle)
+		e.handle = 0
+	}
+	return nil
+}
+
+// boolToInt32 converts bool to int32 for FFI.
+func boolToInt32(b bool) int32 {
+	if b {
+		return 1
+	}
+	return 0
+}
+

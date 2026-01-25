@@ -34,6 +34,16 @@ func CreateVideoDecoder(codec CodecType) (uintptr, error) {
 	return decoder, nil
 }
 
+// videoDecoderDecodeState holds heap-allocated buffers for FFI calls.
+// This prevents stack corruption from affecting Go's runtime if the shim
+// writes past buffer boundaries.
+type videoDecoderDecodeState struct {
+	params shimVideoDecoderDecodeParams
+	errBuf ShimErrorBuffer
+	// padding provides extra space to absorb any buffer overflows from the shim
+	padding [64]byte
+}
+
 // VideoDecoderDecodeInto decodes encoded video data into pre-allocated buffers.
 // yDst, uDst, vDst must be pre-allocated with sufficient space.
 // Returns the actual dimensions decoded.
@@ -53,8 +63,10 @@ func VideoDecoderDecodeInto(
 		keyframe = 1
 	}
 
-	var errBuf ShimErrorBuffer
-	params := shimVideoDecoderDecodeParams{
+	// Heap-allocate the FFI state to isolate any buffer overflows from the Go stack.
+	// This prevents shim bugs from corrupting Go's runtime data structures.
+	state := new(videoDecoderDecodeState)
+	state.params = shimVideoDecoderDecodeParams{
 		Data:       ByteSlicePtr(src),
 		Size:       int32(len(src)),
 		Timestamp:  timestamp,
@@ -62,14 +74,13 @@ func VideoDecoderDecodeInto(
 		YDst:       ByteSlicePtr(yDst),
 		UDst:       ByteSlicePtr(uDst),
 		VDst:       ByteSlicePtr(vDst),
-		ErrorOut:   errBuf.Ptr(),
+		ErrorOut:   state.errBuf.Ptr(),
 	}
 
-	result := shimVideoDecoderDecode(decoder, uintptr(unsafe.Pointer(&params)))
+	result := shimVideoDecoderDecode(decoder, uintptr(unsafe.Pointer(&state.params)))
 
-	err = errBuf.ToError(result)
-	runtime.KeepAlive(&params)
-	runtime.KeepAlive(&errBuf)
+	err = state.errBuf.ToError(result)
+	runtime.KeepAlive(state)
 	runtime.KeepAlive(src)
 	runtime.KeepAlive(yDst)
 	runtime.KeepAlive(uDst)
@@ -78,7 +89,7 @@ func VideoDecoderDecodeInto(
 		return 0, 0, 0, 0, 0, err
 	}
 
-	return int(params.OutWidth), int(params.OutHeight), int(params.OutYStride), int(params.OutUStride), int(params.OutVStride), nil
+	return int(state.params.OutWidth), int(state.params.OutHeight), int(state.params.OutYStride), int(state.params.OutUStride), int(state.params.OutVStride), nil
 }
 
 // VideoDecoderDestroy destroys a video decoder.
