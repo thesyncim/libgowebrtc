@@ -43,6 +43,36 @@ func TestCodecType(t *testing.T) {
 	}
 }
 
+func TestParseMimeType(t *testing.T) {
+	tests := []struct {
+		input string
+		want  Type
+		ok    bool
+	}{
+		{input: "video/H264", want: H264, ok: true},
+		{input: " video/vp8 ", want: VP8, ok: true},
+		{input: "VP9", want: VP9, ok: true},
+		{input: "av1", want: AV1, ok: true},
+		{input: "audio/opus", want: Opus, ok: true},
+		{input: "PCMU", want: PCMU, ok: true},
+		{input: "audio/pcma", want: PCMA, ok: true},
+		{input: "video/red", ok: false},
+		{input: "", ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, ok := ParseMimeType(tt.input)
+			if ok != tt.ok {
+				t.Fatalf("ParseMimeType(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && got != tt.want {
+				t.Fatalf("ParseMimeType(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSVCMode(t *testing.T) {
 	tests := []struct {
 		mode           SVCMode
