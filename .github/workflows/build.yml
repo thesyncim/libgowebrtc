@@ -64,7 +64,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
+          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/encoder" GO_TEST_ARGS="-run TestH264EncoderEncode" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/decoder" GO_TEST_ARGS="-run TestH264EncodeDecode" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/pc" GO_TEST_ARGS="-run TestGetSupportedVideoCodecs" ./scripts/test_clean_env.sh
@@ -114,7 +114,7 @@ jobs:
       - name: Run auto-download smoke tests via Rosetta
         shell: bash
         run: |
-          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
+          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/encoder" GO_TEST_ARGS="-run TestH264EncoderEncode" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/decoder" GO_TEST_ARGS="-run TestH264EncodeDecode" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/pc" GO_TEST_ARGS="-run TestGetSupportedVideoCodecs" ./scripts/test_clean_env.sh

@@ -3,7 +3,7 @@
   "base_url": "https://github.com/thesyncim/libgowebrtc/releases/download",
   "flavors": {
     "basic": {
-      "release_tag": "shim-v0.4.3",
+      "release_tag": "shim-v0.4.4",
       "assets": {
         "darwin_arm64": {
           "file": "libwebrtc_shim_darwin_arm64.tar.gz",
@@ -15,11 +15,11 @@
         },
         "linux_amd64": {
           "file": "libwebrtc_shim_linux_amd64.tar.gz",
-          "sha256": "ce93df4a4401d05c102cc822bd742675f5524aeb0c2f6c46db0ffd859e1b5f5e"
+          "sha256": "34cab1c0fd8aa63489133874521d6afd5d35a09c349e1bff6e607277b91eced1"
         },
         "linux_386": {
           "file": "libwebrtc_shim_linux_386.tar.gz",
-          "sha256": "0629c470a6d4408fe432155cbb9bbc8ab5bfb47c54e0cf555763775ba403d8a4"
+          "sha256": "da4921b4e45810c07094d9f59ce596d575a8ae8343b9e24d5ff3fd7b955f85b8"
         },
         "windows_amd64": {
           "file": "libwebrtc_shim_windows_amd64.tar.gz",

@@ -16,9 +16,12 @@
 
 // libwebrtc includes
 #include "rtc_base/thread.h"
+#include "api/audio/audio_device.h"
+#include "api/audio/create_audio_device_module.h"
 #include "api/environment/environment.h"
 #include "api/environment/environment_factory.h"
 #include "api/rtc_error.h"
+#include "api/scoped_refptr.h"
 #include "api/video_codecs/video_encoder.h"
 #include "api/video_codecs/video_decoder.h"
 #include "api/video_codecs/sdp_video_format.h"
@@ -43,6 +46,9 @@ webrtc::Thread* GetNetworkThread();
 
 // Software codec preference
 bool ShouldUseSoftwareCodecs();
+
+// Audio device selection for headless-friendly peer connection factories.
+webrtc::scoped_refptr<webrtc::AudioDeviceModule> CreatePeerConnectionAudioDeviceModule();
 
 // Codec type conversions
 webrtc::VideoCodecType ToWebRTCCodecType(ShimCodecType codec);

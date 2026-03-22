@@ -176,12 +176,14 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(ShimPeerConnectionCr
         video_decoder_factory = std::move(builtin_video_decoder_factory);
     }
 
+    auto default_adm = shim::CreatePeerConnectionAudioDeviceModule();
+
     // Create PeerConnectionFactory
     pc->factory = webrtc::CreatePeerConnectionFactory(
         shim::GetNetworkThread(),
         shim::GetWorkerThread(),
         shim::GetSignalingThread(),
-        nullptr,  // default_adm
+        default_adm,
         webrtc::CreateBuiltinAudioEncoderFactory(),
         webrtc::CreateBuiltinAudioDecoderFactory(),
         std::move(video_encoder_factory),

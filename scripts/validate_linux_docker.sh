@@ -208,22 +208,22 @@ VALIDATION_STEPS_PLACEHOLDER
 
 ENV LIBWEBRTC_SHIM_PATH=/workspace/lib/TARGET_PLACEHOLDER/libwebrtc_shim.so
 
-RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 go test -count=1 -run 'TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
+RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 go test -count=1 -run 'TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
 RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 go test -count=1 -run TestH264EncoderEncode ./pkg/encoder
 RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 go test -count=1 -run TestH264EncodeDecode ./pkg/decoder
 RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 go test -count=1 -run TestGetSupportedVideoCodecs ./pkg/pc
 RUN mkdir -p /tmp/relocated-shim && cp lib/TARGET_PLACEHOLDER/libwebrtc_shim.so /tmp/relocated-shim/libwebrtc_shim.so
-RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 LIBWEBRTC_SHIM_PATH=/tmp/relocated-shim/libwebrtc_shim.so go test -count=1 -run 'TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
+RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 LIBWEBRTC_SHIM_PATH=/tmp/relocated-shim/libwebrtc_shim.so go test -count=1 -run 'TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
 RUN mkdir -p /tmp/release-extract && tar -xzf /workspace/release/*/libwebrtc_shim_TARGET_PLACEHOLDER.tar.gz -C /tmp/release-extract
 RUN cmp /workspace/lib/TARGET_PLACEHOLDER/libwebrtc_shim.so /tmp/release-extract/libwebrtc_shim.so
-RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 LIBWEBRTC_SHIM_PATH=/tmp/release-extract/libwebrtc_shim.so go test -count=1 -run 'TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
+RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 LIBWEBRTC_SHIM_PATH=/tmp/release-extract/libwebrtc_shim.so go test -count=1 -run 'TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
 RUN mkdir -p /tmp/synthetic-cache/shim/basic/SHIM_RELEASE_TAG_PLACEHOLDER/TARGET_PLACEHOLDER && cp /workspace/lib/TARGET_PLACEHOLDER/libwebrtc_shim.so /tmp/synthetic-cache/shim/basic/SHIM_RELEASE_TAG_PLACEHOLDER/TARGET_PLACEHOLDER/libwebrtc_shim.so
-RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 LIBWEBRTC_SHIM_PATH=/tmp/synthetic-cache/shim/basic/SHIM_RELEASE_TAG_PLACEHOLDER/TARGET_PLACEHOLDER/libwebrtc_shim.so go test -count=1 -run 'TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
+RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 LIBWEBRTC_SHIM_PATH=/tmp/synthetic-cache/shim/basic/SHIM_RELEASE_TAG_PLACEHOLDER/TARGET_PLACEHOLDER/libwebrtc_shim.so go test -count=1 -run 'TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
 RUN tmp_home=$(mktemp -d) && tmp_gocache=$(mktemp -d) && tmp_gomodcache=$(mktemp -d) && \
     HOME="$tmp_home" GOCACHE="$tmp_gocache" GOMODCACHE="$tmp_gomodcache" CGO_ENABLED=1 \
     GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 \
     LIBWEBRTC_SHIM_PATH=/tmp/synthetic-cache/shim/basic/SHIM_RELEASE_TAG_PLACEHOLDER/TARGET_PLACEHOLDER/libwebrtc_shim.so \
-    go test -count=1 -run 'TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
+    go test -count=1 -run 'TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
 
 RUN set -eux; \
     python3 -m http.server 18080 --bind 127.0.0.1 --directory /workspace/release >/tmp/libgowebrtc-http.log 2>&1 & \
@@ -235,7 +235,7 @@ RUN set -eux; \
     GO_TEST_EXPORTS_PLACEHOLDER \
     export LIBWEBRTC_SHIM_BASE_URL=http://127.0.0.1:18080; \
     export LIBWEBRTC_PREFER_SOFTWARE_CODECS=1; \
-    TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh; \
+    TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh; \
     TEST_PACKAGES="./pkg/encoder" GO_TEST_ARGS="-run TestH264EncoderEncode" ./scripts/test_clean_env.sh; \
     TEST_PACKAGES="./pkg/decoder" GO_TEST_ARGS="-run TestH264EncodeDecode" ./scripts/test_clean_env.sh; \
     TEST_PACKAGES="./pkg/pc" GO_TEST_ARGS="-run TestGetSupportedVideoCodecs" ./scripts/test_clean_env.sh; \
@@ -285,10 +285,12 @@ import pathlib
 import tarfile
 
 workspace = pathlib.Path("/workspace")
-manifest = json.loads((workspace / "internal/ffi/shim_manifest.json").read_text())
+manifest_path = workspace / "internal/ffi/shim_manifest.json"
+manifest = json.loads(manifest_path.read_text())
 flavor = manifest["flavors"]["basic"]
-release_tag = flavor["release_tag"]
-asset_name = flavor["assets"]["TARGET_PLACEHOLDER"]["file"]
+release_tag = "SHIM_RELEASE_TAG_PLACEHOLDER"
+asset = flavor["assets"]["TARGET_PLACEHOLDER"]
+asset_name = asset["file"]
 release_dir = workspace / "release" / release_tag
 dist_dir = workspace / "dist-release"
 release_dir.mkdir(parents=True, exist_ok=True)
@@ -312,6 +314,9 @@ with tarfile.open(tar_path, "w:gz") as tar:
 
 digest = hashlib.sha256(tar_path.read_bytes()).hexdigest()
 (release_dir / f"{asset_name}.sha256").write_text(f"{digest}  {asset_name}\n")
+flavor["release_tag"] = release_tag
+asset["sha256"] = digest
+manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 PY
 EOF
 )

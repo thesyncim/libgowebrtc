@@ -164,7 +164,7 @@ Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 |------------|---------|--------|
 | libwebrtc (pre-compiled) | 141.7390.2.0 | [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) |
 | libwebrtc (Linux source build) | branch-heads/7390 @ `d2eaa5570fc9959f8dbde32912a16366b8ee75f4` | [webrtc.googlesource.com/src](https://webrtc.googlesource.com/src) |
-| libwebrtc_shim | shim-v0.4.3 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
+| libwebrtc_shim | shim-v0.4.4 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
 | OpenH264 | 2.5.1 | [Cisco OpenH264](https://github.com/cisco/openh264/releases) |
 
 ### Building the Shim
@@ -186,7 +186,7 @@ The shim is built using Bazel.
 ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 
 # Publish a prepared local release directory
-./scripts/release.sh 0.4.3 --release-dir release/shim-v0.4.3
+./scripts/release.sh 0.4.4 --release-dir release/shim-v0.4.4
 ```
 
 Environment variables:
