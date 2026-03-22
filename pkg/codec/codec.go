@@ -1,6 +1,8 @@
 // Package codec defines codec types and configurations for libgowebrtc.
 package codec
 
+import "strings"
+
 // Type represents a video or audio codec type.
 type Type int
 
@@ -59,6 +61,34 @@ func (t Type) MimeType() string {
 	default:
 		return ""
 	}
+}
+
+// ParseMimeType converts a MIME type string into a codec type.
+// The parser is case-insensitive and accepts values with or without the
+// "audio/" or "video/" prefix.
+func ParseMimeType(mimeType string) (Type, bool) {
+	switch normalizedMimeType(mimeType) {
+	case "video/h264", "h264":
+		return H264, true
+	case "video/vp8", "vp8":
+		return VP8, true
+	case "video/vp9", "vp9":
+		return VP9, true
+	case "video/av1", "av1":
+		return AV1, true
+	case "audio/opus", "opus":
+		return Opus, true
+	case "audio/pcmu", "pcmu":
+		return PCMU, true
+	case "audio/pcma", "pcma":
+		return PCMA, true
+	default:
+		return 0, false
+	}
+}
+
+func normalizedMimeType(mimeType string) string {
+	return strings.ToLower(strings.TrimSpace(mimeType))
 }
 
 // IsVideo returns true if this is a video codec.
