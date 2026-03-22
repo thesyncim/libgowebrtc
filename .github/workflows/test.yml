@@ -33,89 +33,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve shim release tag
-        shell: bash
-        run: |
-          python - <<'PY' >> "$GITHUB_ENV"
-          import json
-          manifest = json.load(open("internal/ffi/shim_manifest.json", "r", encoding="utf-8"))
-          print(f"SHIM_VERSION={manifest['flavors']['basic']['release_tag']}")
-          PY
-
-      - name: Detect shim changes
-        id: shim_changes
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            shim:
-              - 'shim/**'
-              - 'scripts/build.sh'
-              - 'scripts/build_libwebrtc_source.sh'
-              - 'scripts/validate_linux_docker.sh'
-              - 'scripts/test_clean_env.sh'
-              - 'BUILD.bazel'
-              - 'MODULE.bazel'
-              - 'MODULE.bazel.lock'
-              - 'bazel/**'
-              - '.bazelrc'
-              - 'internal/ffi/**'
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Setup Bazelisk
-        if: steps.shim_changes.outputs.shim == 'true'
-        uses: bazel-contrib/setup-bazel@0.9.0
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          bazelisk-cache: true
-          disk-cache: ${{ matrix.platform }}
-          repository-cache: true
+          python-version: '3.x'
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux' && steps.shim_changes.outputs.shim == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gawk lsb-release ninja-build pkg-config rsync sudo \
-            libasound2-dev libpulse-dev \
-            libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
-            libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
-            libglib2.0-dev libgbm-dev libdrm-dev
-
-      - name: Build shim (Unix)
-        if: runner.os != 'Windows' && steps.shim_changes.outputs.shim == 'true'
-        run: ./scripts/build.sh
-        env:
-          INSTALL_DIR: ${{ runner.temp }}/libwebrtc
-          WEBRTC_INSTALL_BUILD_DEPS: '0'
-          WEBRTC_GCLIENT_JOBS: '1'
-
-      - name: Build shim (Windows)
-        if: runner.os == 'Windows' && steps.shim_changes.outputs.shim == 'true'
-        shell: bash
-        run: ./scripts/build.sh
-        env:
-          INSTALL_DIR: ${{ runner.temp }}/libwebrtc
-
-      - name: Download pre-built shim (Unix)
-        if: runner.os != 'Windows' && steps.shim_changes.outputs.shim != 'true'
-        run: |
-          mkdir -p lib/${{ matrix.platform }}
-          curl -fsSL --retry 10 --retry-delay 20 --retry-all-errors \
-            "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
-            | tar -xz -C lib/${{ matrix.platform }}
-          ls -la lib/${{ matrix.platform }}/
-
-      - name: Download pre-built shim (Windows)
-        if: runner.os == 'Windows' && steps.shim_changes.outputs.shim != 'true'
+      - name: Download published shim
         shell: bash
         run: |
-          mkdir -p lib/${{ matrix.platform }}
-          curl -fsSL --retry 10 --retry-delay 20 --retry-all-errors \
-            "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_${{ matrix.platform }}.tar.gz" \
-            | tar -xz -C lib/${{ matrix.platform }}
+          python scripts/download_shim_release.py \
+            --platform ${{ matrix.platform }} \
+            --output-dir lib/${{ matrix.platform }}
           ls -la lib/${{ matrix.platform }}/
 
       - name: Run tests (purego - default)
@@ -140,6 +73,17 @@ jobs:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
+      - name: Run auto-download smoke tests
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
+          TEST_PACKAGES="./pkg/encoder" GO_TEST_ARGS="-run TestH264EncoderEncode" ./scripts/test_clean_env.sh
+          TEST_PACKAGES="./pkg/decoder" GO_TEST_ARGS="-run TestH264EncodeDecode" ./scripts/test_clean_env.sh
+          TEST_PACKAGES="./pkg/pc" GO_TEST_ARGS="-run TestGetSupportedVideoCodecs" ./scripts/test_clean_env.sh
+        env:
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
       - name: Run benchmarks (comparison)
         if: runner.os != 'Windows'
         run: |
@@ -159,33 +103,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve shim release tag
-        shell: bash
-        run: |
-          python - <<'PY' >> "$GITHUB_ENV"
-          import json
-          manifest = json.load(open("internal/ffi/shim_manifest.json", "r", encoding="utf-8"))
-          print(f"SHIM_VERSION={manifest['flavors']['basic']['release_tag']}")
-          PY
-
-      - name: Detect shim changes
-        id: shim_changes
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            shim:
-              - 'shim/**'
-              - 'scripts/build.sh'
-              - 'scripts/build_libwebrtc_source.sh'
-              - 'scripts/validate_linux_docker.sh'
-              - 'scripts/test_clean_env.sh'
-              - 'BUILD.bazel'
-              - 'MODULE.bazel'
-              - 'MODULE.bazel.lock'
-              - 'bazel/**'
-              - '.bazelrc'
-              - 'internal/ffi/**'
-
       - name: Setup Go (x86_64 via Rosetta)
         run: |
           curl -fsSL "https://go.dev/dl/go${{ env.GO_VERSION_FULL }}.darwin-amd64.tar.gz" -o go.tar.gz
@@ -194,27 +111,16 @@ jobs:
           sudo tar -C /usr/local/go-amd64 -xzf go.tar.gz --strip-components=1
           rm go.tar.gz
 
-      - name: Setup Bazelisk
-        if: steps.shim_changes.outputs.shim == 'true'
-        uses: bazel-contrib/setup-bazel@0.9.0
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          bazelisk-cache: true
-          disk-cache: darwin_amd64
-          repository-cache: true
+          python-version: '3.x'
 
-      - name: Build shim (darwin_amd64)
-        if: steps.shim_changes.outputs.shim == 'true'
-        run: ./scripts/build.sh --target darwin_amd64
-        env:
-          INSTALL_DIR: ${{ runner.temp }}/libwebrtc
-
-      - name: Download pre-built shim
-        if: steps.shim_changes.outputs.shim != 'true'
+      - name: Download published shim
         run: |
-          mkdir -p lib/darwin_amd64
-          curl -fsSL --retry 10 --retry-delay 20 --retry-all-errors \
-            "https://github.com/${{ github.repository }}/releases/download/${{ env.SHIM_VERSION }}/libwebrtc_shim_darwin_amd64.tar.gz" \
-            | tar -xz -C lib/darwin_amd64
+          python scripts/download_shim_release.py \
+            --platform darwin_amd64 \
+            --output-dir lib/darwin_amd64
           ls -la lib/darwin_amd64/
           file lib/darwin_amd64/libwebrtc_shim.dylib
 
@@ -238,6 +144,20 @@ jobs:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
+      - name: Run auto-download smoke tests via Rosetta
+        shell: bash
+        run: |
+          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
+          TEST_PACKAGES="./pkg/encoder" GO_TEST_ARGS="-run TestH264EncoderEncode" ./scripts/test_clean_env.sh
+          TEST_PACKAGES="./pkg/decoder" GO_TEST_ARGS="-run TestH264EncodeDecode" ./scripts/test_clean_env.sh
+          TEST_PACKAGES="./pkg/pc" GO_TEST_ARGS="-run TestGetSupportedVideoCodecs" ./scripts/test_clean_env.sh
+        env:
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+          TEST_CLEAN_ENV_GO_PREFIX: "arch -x86_64"
+          TEST_CLEAN_ENV_GO_BIN: "/usr/local/go-amd64/bin/go"
+          GOARCH: amd64
+          GOOS: darwin
+
   validate-linux-386-docker:
     name: linux_386 (Docker)
     runs-on: ubuntu-latest
@@ -245,5 +165,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Validate linux_386 in Docker
-        run: ./scripts/validate_linux_docker.sh --target linux_386
+        run: ./scripts/validate_linux_docker.sh --target linux_386 --download-only

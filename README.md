@@ -181,8 +181,12 @@ The shim is built using Bazel.
 # Build for current platform
 ./scripts/build.sh
 
-# Create a release tag and let CI build/upload the shim artifacts
-./scripts/release.sh
+# Validate published Linux release artifacts in Docker
+./scripts/validate_linux_docker.sh --target linux_amd64 --download-only
+./scripts/validate_linux_docker.sh --target linux_386 --download-only
+
+# Publish a prepared local release directory
+./scripts/release.sh 0.4.3 --release-dir release/shim-v0.4.3
 ```
 
 Environment variables:
@@ -191,6 +195,11 @@ Environment variables:
 - `LIBWEBRTC_SOURCE_BUILD` - `auto` (default), `true`, or `false`
 
 Local build targets: `darwin_arm64`, `darwin_amd64`, `linux_386`, `linux_arm`, `linux_amd64`, `linux_arm64`, `windows_amd64`
+
+Release flow:
+- Build or validate the platform artifacts locally
+- Upload the prepared `release/shim-vX.Y.Z/` directory with `./scripts/release.sh`
+- CI downloads the published artifacts and runs the smoke tests; it does not rebuild the shim
 
 ## Quick Start
 

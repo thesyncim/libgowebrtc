@@ -49,6 +49,13 @@ export GOMODCACHE="$GOMODCACHE_DIR"
 export CGO_ENABLED=1
 export GOWORK=off
 
+declare -a go_command=()
+if [[ -n "${TEST_CLEAN_ENV_GO_PREFIX:-}" ]]; then
+    # shellcheck disable=SC2206
+    go_command=(${TEST_CLEAN_ENV_GO_PREFIX})
+fi
+go_command+=("${TEST_CLEAN_ENV_GO_BIN:-go}")
+
 if [[ "${GOOS:-$(go env GOOS)}" == "linux" && "${GOARCH:-$(go env GOARCH)}" == "386" ]]; then
     export CC="${CC:-gcc -m32}"
     export CXX="${CXX:-g++ -m32}"
@@ -71,4 +78,4 @@ if [[ -n "${GO_TEST_ARGS:-}" ]]; then
     extra_args=(${GO_TEST_ARGS})
 fi
 
-go test "${test_packages[@]}" "${extra_args[@]}" -count=1
+"${go_command[@]}" test "${test_packages[@]}" "${extra_args[@]}" -count=1

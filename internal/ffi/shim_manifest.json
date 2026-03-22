@@ -7,23 +7,23 @@
       "assets": {
         "darwin_arm64": {
           "file": "libwebrtc_shim_darwin_arm64.tar.gz",
-          "sha256": ""
+          "sha256": "171f53f104556ee42f9bcf20dc851f0953a28b286ec795836e79c8674192a2fb"
         },
         "darwin_amd64": {
           "file": "libwebrtc_shim_darwin_amd64.tar.gz",
-          "sha256": ""
+          "sha256": "f11f93b3add794d11c4a59a293f826d746cdd377b5b1f61d74b10119b0f3961b"
         },
         "linux_amd64": {
           "file": "libwebrtc_shim_linux_amd64.tar.gz",
-          "sha256": ""
+          "sha256": "ce93df4a4401d05c102cc822bd742675f5524aeb0c2f6c46db0ffd859e1b5f5e"
         },
         "linux_386": {
           "file": "libwebrtc_shim_linux_386.tar.gz",
-          "sha256": ""
+          "sha256": "0629c470a6d4408fe432155cbb9bbc8ab5bfb47c54e0cf555763775ba403d8a4"
         },
         "windows_amd64": {
           "file": "libwebrtc_shim_windows_amd64.tar.gz",
-          "sha256": ""
+          "sha256": "553dde28890e871b6206c85a5b4ff796f0e54302ed88b4b29a2c422e95fe3547"
         }
       }
     }

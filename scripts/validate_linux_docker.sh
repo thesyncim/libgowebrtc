@@ -1,19 +1,19 @@
 #!/bin/bash
 #
-# Build and validate the shim inside a clean Linux Docker image.
+# Build or download and validate the shim inside a clean Linux Docker image.
 #
 # This exercises the real Linux runtime path end-to-end:
-#   1. build or fetch libwebrtc for the requested target
-#   2. build the shim with Bazel
-#   3. verify the Linux shim is portable (no host libstdc++/libgcc_s dependency)
-#   4. package a release-shaped shim tarball
-#   5. run both direct-path and zero-config smoke tests against the built shim
+#   1. build the shim locally or download the published release artifact
+#   2. verify the Linux shim is portable (no host libstdc++/libgcc_s dependency)
+#   3. package a release-shaped shim tarball when building locally
+#   4. run both direct-path and zero-config smoke tests against the shim
 #
 # Usage:
 #   ./scripts/validate_linux_docker.sh
 #   ./scripts/validate_linux_docker.sh --target linux_386
 #   ./scripts/validate_linux_docker.sh --target linux_arm
 #   ./scripts/validate_linux_docker.sh --target linux_arm64
+#   ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 #
 
 set -euo pipefail
@@ -26,6 +26,7 @@ GO_VERSION="${GO_VERSION:-1.25}"
 IMAGE_NAME="${IMAGE_NAME:-libgowebrtc-validate}"
 DOCKER_PROGRESS="${DOCKER_PROGRESS:-plain}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
+VALIDATION_MODE="${VALIDATION_MODE:-build}"
 CONTAINER_NAME=""
 SHIM_RELEASE_TAG="${SHIM_RELEASE_TAG:-$(cd "$REPO_ROOT" && python3 - <<'PY'
 import json
@@ -56,6 +57,7 @@ Usage: ./scripts/validate_linux_docker.sh [OPTIONS]
 Options:
   --target PLATFORM  linux_amd64 (default), linux_386, linux_arm64, or linux_arm
   --go VERSION       Go toolchain version for the validator image (default: $GO_VERSION)
+  --download-only    Validate the published shim artifact instead of building it
   --artifact-dir DIR Copy the built shim and public headers to DIR after validation
   --help             Show this help
 EOF
@@ -70,6 +72,10 @@ while [[ $# -gt 0 ]]; do
         --go)
             GO_VERSION="$2"
             shift 2
+            ;;
+        --download-only)
+            VALIDATION_MODE="download"
+            shift
             ;;
         --artifact-dir)
             ARTIFACT_DIR="$2"
@@ -86,6 +92,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+case "$VALIDATION_MODE" in
+    build|download)
+        ;;
+    *)
+        echo "Unsupported validation mode: $VALIDATION_MODE" >&2
+        exit 1
+        ;;
+esac
 
 case "$TARGET_PLATFORM" in
     linux_amd64)
@@ -123,6 +138,7 @@ case "$TARGET_PLATFORM" in
 esac
 
 echo "==> Validating $TARGET_PLATFORM in Docker"
+echo "    Mode:            $VALIDATION_MODE"
 echo "    Docker platform: $DOCKER_PLATFORM"
 echo "    Go version:      $GO_VERSION"
 echo ""
@@ -188,50 +204,7 @@ ENV GOWORK=off
 ENV WEBRTC_INSTALL_BUILD_DEPS=0
 ENV WEBRTC_GCLIENT_JOBS=1
 
-RUN --mount=type=cache,target=/root/.cache/libgowebrtc \
-    --mount=type=cache,target=/root/.cache/bazel \
-    TARGET_PLATFORM=TARGET_PLACEHOLDER INSTALL_DIR=/tmp/libwebrtc ./scripts/build.sh
-RUN ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so
-RUN if ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so | grep -E 'libstdc\+\+|libgcc_s'; then \
-        echo "Linux shim should not depend on host libstdc++ or libgcc_s"; \
-        exit 1; \
-    fi
-
-RUN python3 - <<'PY'
-import hashlib
-import json
-import pathlib
-import tarfile
-
-workspace = pathlib.Path("/workspace")
-manifest = json.loads((workspace / "internal/ffi/shim_manifest.json").read_text())
-flavor = manifest["flavors"]["basic"]
-release_tag = flavor["release_tag"]
-asset_name = flavor["assets"]["TARGET_PLACEHOLDER"]["file"]
-release_dir = workspace / "release" / release_tag
-dist_dir = workspace / "dist-release"
-release_dir.mkdir(parents=True, exist_ok=True)
-dist_dir.mkdir(parents=True, exist_ok=True)
-
-files = [
-    workspace / "lib/TARGET_PLACEHOLDER/libwebrtc_shim.so",
-    workspace / "shim/shim.h",
-]
-license_file = workspace / "LICENSE"
-if license_file.exists():
-    files.append(license_file)
-
-for src in files:
-    (dist_dir / src.name).write_bytes(src.read_bytes())
-
-tar_path = release_dir / asset_name
-with tarfile.open(tar_path, "w:gz") as tar:
-    for path in sorted(dist_dir.iterdir()):
-        tar.add(path, arcname=path.name)
-
-digest = hashlib.sha256(tar_path.read_bytes()).hexdigest()
-(release_dir / f"{asset_name}.sha256").write_text(f"{digest}  {asset_name}\n")
-PY
+VALIDATION_STEPS_PLACEHOLDER
 
 ENV LIBWEBRTC_SHIM_PATH=/workspace/lib/TARGET_PLACEHOLDER/libwebrtc_shim.so
 
@@ -294,6 +267,100 @@ text = text.replace("EXTRA_SETUP_PLACEHOLDER", extra)
 text = text.replace("GO_TEST_EXPORTS_PLACEHOLDER", go_test_exports)
 path.write_text(text)
 PY
+
+if [[ "$VALIDATION_MODE" == "build" ]]; then
+    VALIDATION_STEPS=$(cat <<'EOF'
+RUN --mount=type=cache,target=/root/.cache/libgowebrtc \
+    --mount=type=cache,target=/root/.cache/bazel \
+    TARGET_PLATFORM=TARGET_PLACEHOLDER INSTALL_DIR=/tmp/libwebrtc ./scripts/build.sh
+RUN ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so
+RUN if ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so | grep -E 'libstdc\+\+|libgcc_s'; then \
+        echo "Linux shim should not depend on host libstdc++ or libgcc_s"; \
+        exit 1; \
+    fi
+RUN python3 - <<'PY'
+import hashlib
+import json
+import pathlib
+import tarfile
+
+workspace = pathlib.Path("/workspace")
+manifest = json.loads((workspace / "internal/ffi/shim_manifest.json").read_text())
+flavor = manifest["flavors"]["basic"]
+release_tag = flavor["release_tag"]
+asset_name = flavor["assets"]["TARGET_PLACEHOLDER"]["file"]
+release_dir = workspace / "release" / release_tag
+dist_dir = workspace / "dist-release"
+release_dir.mkdir(parents=True, exist_ok=True)
+dist_dir.mkdir(parents=True, exist_ok=True)
+
+files = [
+    workspace / "lib/TARGET_PLACEHOLDER/libwebrtc_shim.so",
+    workspace / "shim/shim.h",
+]
+license_file = workspace / "LICENSE"
+if license_file.exists():
+    files.append(license_file)
+
+for src in files:
+    (dist_dir / src.name).write_bytes(src.read_bytes())
+
+tar_path = release_dir / asset_name
+with tarfile.open(tar_path, "w:gz") as tar:
+    for path in sorted(dist_dir.iterdir()):
+        tar.add(path, arcname=path.name)
+
+digest = hashlib.sha256(tar_path.read_bytes()).hexdigest()
+(release_dir / f"{asset_name}.sha256").write_text(f"{digest}  {asset_name}\n")
+PY
+EOF
+)
+else
+    VALIDATION_STEPS=$(cat <<'EOF'
+RUN mkdir -p /workspace/lib/TARGET_PLACEHOLDER
+RUN python3 scripts/download_shim_release.py --platform TARGET_PLACEHOLDER --output-dir /workspace/lib/TARGET_PLACEHOLDER --archive-out /tmp/libwebrtc_shim_TARGET_PLACEHOLDER.tar.gz
+RUN ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so
+RUN if ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so | grep -E 'libstdc\+\+|libgcc_s'; then \
+        echo "Linux shim should not depend on host libstdc++ or libgcc_s"; \
+        exit 1; \
+    fi
+RUN python3 - <<'PY'
+import json
+import pathlib
+import shutil
+
+workspace = pathlib.Path("/workspace")
+manifest = json.loads((workspace / "internal/ffi/shim_manifest.json").read_text())
+flavor = manifest["flavors"]["basic"]
+release_tag = flavor["release_tag"]
+asset_name = flavor["assets"]["TARGET_PLACEHOLDER"]["file"]
+asset_sha256 = flavor["assets"]["TARGET_PLACEHOLDER"]["sha256"]
+release_dir = workspace / "release" / release_tag
+release_dir.mkdir(parents=True, exist_ok=True)
+archive_path = pathlib.Path("/tmp") / asset_name
+shutil.copyfile(archive_path, release_dir / asset_name)
+(release_dir / f"{asset_name}.sha256").write_text(f"{asset_sha256}  {asset_name}\n")
+PY
+EOF
+)
+fi
+
+python3 - "$DOCKERFILE_PATH" "$VALIDATION_STEPS" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+validation_steps = sys.argv[2]
+text = path.read_text()
+text = text.replace("VALIDATION_STEPS_PLACEHOLDER", validation_steps)
+path.write_text(text)
+PY
+
+sed -i.bak \
+    -e "s/SHIM_RELEASE_TAG_PLACEHOLDER/$SHIM_RELEASE_TAG/g" \
+    -e "s/TARGET_PLACEHOLDER/$TARGET_PLATFORM/g" \
+    "$DOCKERFILE_PATH"
+rm -f "$DOCKERFILE_PATH.bak"
 
 cleanup() {
     rm -f "$DOCKERIGNORE_PATH" "$DOCKERFILE_PATH"
