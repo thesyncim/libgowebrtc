@@ -65,8 +65,8 @@ type CodecChangeHandler func(CodecChange)
 // A typical implementation writes a PLI/FIR RTCP packet via Pion.
 type KeyframeRequester func(mediaSSRC uint32) error
 
-// WriteRTCPFunc matches callback-style RTCP writers such as videosdk's
-// OnTrackReceived.WriteRTCP hook.
+// WriteRTCPFunc matches callback-style RTCP writer hooks used by higher-level
+// receiver abstractions.
 type WriteRTCPFunc func([]rtcp.Packet) error
 
 // RTCPWriter is the subset of Pion's PeerConnection/DTLSTransport surface
@@ -142,7 +142,7 @@ func WithRTCPWriter(writer RTCPWriter) Option {
 }
 
 // WithWriteRTCP configures automatic PLI keyframe requests using a callback
-// such as videosdk.OnTrackReceived.WriteRTCP.
+// from a higher-level receiver wrapper.
 //
 // Automatic keyframe requests are best-effort. Explicit RequestKeyframe calls
 // still return callback errors directly.

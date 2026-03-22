@@ -301,16 +301,23 @@ pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 })
 ```
 
-### videosdk Receive Integration
+### Callback-Based Receive Integration
 
 ```go
 import (
+    "github.com/pion/rtcp"
+    "github.com/pion/webrtc/v4"
     "github.com/thesyncim/libgowebrtc/pkg/frame"
     "github.com/thesyncim/libgowebrtc/pkg/pionrecv"
-    "github.com/GetStream/video-sfu/videosdk"
 )
 
-func (h *subscriber) OnTrack(track videosdk.OnTrackReceived) {
+type receivedTrack struct {
+    Track       *webrtc.TrackRemote
+    RTPReceiver *webrtc.RTPReceiver
+    WriteRTCP   func([]rtcp.Packet) error
+}
+
+func (h *subscriber) OnTrack(track receivedTrack) {
     decoded, err := pionrecv.BindRemoteTrack(
         track.Track,
         track.RTPReceiver,
