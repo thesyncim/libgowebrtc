@@ -123,7 +123,7 @@ EOF
 
 cat > "$DOCKERFILE_PATH" <<'EOF'
 # syntax=docker/dockerfile:1.7
-FROM golang:DOCKER_GO_VERSION_PLACEHOLDER-bookworm
+FROM golang:DOCKER_IMAGE_GO_VERSION_PLACEHOLDER-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
@@ -189,8 +189,8 @@ CMD ["/bin/true"]
 EOF
 
 sed -i.bak \
+    -e "s/DOCKER_IMAGE_GO_VERSION_PLACEHOLDER/$DOCKER_GO_VERSION/g" \
     -e "s/GO_VERSION_PLACEHOLDER/$GO_VERSION/g" \
-    -e "s/DOCKER_GO_VERSION_PLACEHOLDER/$DOCKER_GO_VERSION/g" \
     -e "s/GOARCH_PLACEHOLDER/$TEST_GOARCH/g" \
     -e "s/TARGET_PLACEHOLDER/$TARGET_PLATFORM/g" \
     "$DOCKERFILE_PATH"
