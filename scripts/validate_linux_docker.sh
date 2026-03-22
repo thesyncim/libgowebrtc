@@ -27,6 +27,17 @@ DOCKER_PROGRESS="${DOCKER_PROGRESS:-plain}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 CONTAINER_NAME=""
 
+docker_go_version() {
+    local version="$1"
+    if [[ "$version" == *.x ]]; then
+        echo "${version%.x}"
+        return
+    fi
+    echo "$version"
+}
+
+DOCKER_GO_VERSION="$(docker_go_version "$GO_VERSION")"
+
 usage() {
     cat <<EOF
 Validate Linux shim build in Docker.
@@ -112,7 +123,7 @@ EOF
 
 cat > "$DOCKERFILE_PATH" <<'EOF'
 # syntax=docker/dockerfile:1.7
-FROM golang:GO_VERSION_PLACEHOLDER-bookworm
+FROM golang:DOCKER_GO_VERSION_PLACEHOLDER-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
@@ -179,6 +190,7 @@ EOF
 
 sed -i.bak \
     -e "s/GO_VERSION_PLACEHOLDER/$GO_VERSION/g" \
+    -e "s/DOCKER_GO_VERSION_PLACEHOLDER/$DOCKER_GO_VERSION/g" \
     -e "s/GOARCH_PLACEHOLDER/$TEST_GOARCH/g" \
     -e "s/TARGET_PLACEHOLDER/$TARGET_PLATFORM/g" \
     "$DOCKERFILE_PATH"
