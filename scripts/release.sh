@@ -46,9 +46,13 @@ Examples:
 Platforms built by CI:
   - darwin_arm64  (macOS Apple Silicon)
   - darwin_amd64  (macOS Intel, cross-compiled)
+  - linux_386     (Linux x86 32-bit, Docker-built)
   - linux_amd64   (Linux x86_64)
   - linux_arm64   (Linux ARM64)
   - windows_amd64 (Windows x64)
+
+Additional validated target:
+  - linux_arm     (Linux ARM 32-bit, validated via Docker/source build)
 EOF
     exit 0
 }
@@ -126,7 +130,8 @@ main() {
     echo ""
     log_info "Release summary:"
     echo "  Tag:       $tag"
-    echo "  Platforms: darwin_arm64, darwin_amd64, linux_amd64, linux_arm64, windows_amd64"
+    echo "  Platforms: darwin_arm64, darwin_amd64, linux_386, linux_amd64, linux_arm64, windows_amd64"
+    echo "  Extra validated target: linux_arm"
     echo "  Branch:    $(git branch --show-current)"
     echo "  Commit:    $(git rev-parse --short HEAD)"
     echo ""

@@ -26,6 +26,27 @@
 #include "api/task_queue/default_task_queue_factory.h"
 #endif
 
+#if defined(SHIM_ENABLE_DEVICE_CAPTURE)
+namespace {
+
+webrtc::DesktopCaptureOptions CreateDesktopCaptureOptions() {
+    webrtc::DesktopCaptureOptions options;
+
+#if defined(WEBRTC_USE_X11)
+    options.set_x_display(webrtc::SharedXDisplay::CreateDefault());
+#endif
+
+#if defined(WEBRTC_USE_PIPEWIRE)
+    options.set_allow_pipewire(true);
+    options.set_screencast_stream(webrtc::SharedScreenCastStream::CreateDefault());
+#endif
+
+    return options;
+}
+
+}  // namespace
+#endif
+
 /* ============================================================================
  * Video Capture Implementation
  * ========================================================================== */
@@ -668,8 +689,7 @@ SHIM_EXPORT int shim_enumerate_screens(
     int count = 0;
 
 #if defined(SHIM_ENABLE_DEVICE_CAPTURE)
-    webrtc::DesktopCaptureOptions options =
-        webrtc::DesktopCaptureOptions::CreateDefault();
+    webrtc::DesktopCaptureOptions options = CreateDesktopCaptureOptions();
 
     // Enumerate screens
     auto screen_capturer = webrtc::DesktopCapturer::CreateScreenCapturer(options);
@@ -729,8 +749,7 @@ SHIM_EXPORT ShimScreenCapture* shim_screen_capture_create(
     capture->callback_ctx = nullptr;
 
 #if defined(SHIM_ENABLE_DEVICE_CAPTURE)
-    webrtc::DesktopCaptureOptions options =
-        webrtc::DesktopCaptureOptions::CreateDefault();
+    webrtc::DesktopCaptureOptions options = CreateDesktopCaptureOptions();
 
     if (is_window) {
         capture->capturer = webrtc::DesktopCapturer::CreateWindowCapturer(options);

@@ -163,30 +163,34 @@ Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 | Dependency | Version | Source |
 |------------|---------|--------|
 | libwebrtc (pre-compiled) | 141.7390.2.0 | [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) |
-| libwebrtc_shim | shim-v0.4.0 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
+| libwebrtc (Linux source build) | branch-heads/7390 @ `d2eaa5570fc9959f8dbde32912a16366b8ee75f4` | [webrtc.googlesource.com/src](https://webrtc.googlesource.com/src) |
+| libwebrtc_shim | shim-v0.4.2 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
 | OpenH264 | 2.5.1 | [Cisco OpenH264](https://github.com/cisco/openh264/releases) |
 
 ### Building the Shim
 
-The shim is built using Bazel with pre-compiled libwebrtc from
-[crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) (~165MB).
+The shim is built using Bazel.
+
+- macOS and Windows use pre-built libwebrtc archives from
+  [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin)
+- Linux local builds use a pinned WebRTC source checkout by default because the
+  upstream Linux prebuilt archive is built against Chromium's custom libc++
+  runtime and does not link cleanly with the shim toolchain
 
 ```bash
 # Build for current platform
 ./scripts/build.sh
 
-# Cross-compile all platforms via Docker and create release
+# Create a release tag and let CI build/upload the shim artifacts
 ./scripts/release.sh
-
-# Build all and upload to GitHub release
-./scripts/release.sh --upload shim-v0.4.0
 ```
 
 Environment variables:
 - `LIBWEBRTC_VERSION` - Pre-compiled version (default: 141.7390.2.0)
 - `INSTALL_DIR` - Where to cache libwebrtc (default: ~/libwebrtc)
+- `LIBWEBRTC_SOURCE_BUILD` - `auto` (default), `true`, or `false`
 
-Supported platforms: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`
+Local build targets: `darwin_arm64`, `darwin_amd64`, `linux_386`, `linux_arm`, `linux_amd64`, `linux_arm64`, `windows_amd64`
 
 ## Quick Start
 
@@ -488,8 +492,10 @@ The Go layer and FFI bindings are complete for all WebRTC functionality. Bazel b
 |----------|--------|
 | darwin_arm64 (macOS Apple Silicon) | ✅ Working |
 | darwin_amd64 (macOS Intel) | ✅ Working |
-| linux_amd64 (Linux x86_64) | ✅ Working |
-| linux_arm64 (Linux ARM64) | ✅ Working |
+| linux_386 (Linux x86) | Source build path |
+| linux_amd64 (Linux x86_64) | Source build path |
+| linux_arm64 (Linux ARM64) | Source build path |
+| linux_arm (Linux ARM32) | Source build path |
 | windows_amd64 (Windows x64) | ✅ Working |
 
 ## SVC & Simulcast
@@ -531,16 +537,22 @@ go test -v ./...
 ### Prerequisites
 
 - Bazel 7.4.1+ (via Bazelisk recommended)
-- curl (for downloading pre-compiled libwebrtc)
+- curl
+- macOS shim builds: full Xcode (Command Line Tools alone are not enough for Bazel's Apple toolchain)
+- Linux only: enough disk space and time for a pinned WebRTC source checkout on
+  the first build
 
 ### Build Commands
 
 ```bash
-# Build shim (downloads pre-compiled libwebrtc automatically)
+# Build shim for the current platform
 ./scripts/build.sh
 
 # Cross-compile for Intel Mac (from ARM64 Mac)
 ./scripts/build.sh --target darwin_amd64
+
+# Force the source-build path explicitly
+./scripts/build.sh --source-libwebrtc
 
 # Create release tarball
 ./scripts/build.sh --release
@@ -549,9 +561,13 @@ go test -v ./...
 ./scripts/build.sh --clean
 ```
 
-The build script automatically downloads pre-compiled libwebrtc from
-[crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) and
-caches it under `~/libwebrtc`.
+Build behavior:
+
+- Linux defaults to a pinned WebRTC source build and caches it under
+  `~/libwebrtc_source_<target>`
+- macOS and Windows default to the prebuilt libwebrtc download path
+- `LIBWEBRTC_SOURCE_BUILD=false` forces the prebuilt path
+- `LIBWEBRTC_SOURCE_BUILD=true` forces the source-build path
 
 ### Manual Bazel Build
 
@@ -598,7 +614,8 @@ Notes:
 **Solutions:**
 1. Let auto-download work (default behavior downloads from GitHub releases)
 2. Set explicit path: `export LIBWEBRTC_SHIM_PATH=/path/to/libwebrtc_shim.dylib`
-3. Check platform is supported: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`
+3. Check platform is supported for auto-download: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`
+4. For unsupported platforms, build the shim locally and point `LIBWEBRTC_SHIM_PATH` at it
 
 </details>
 

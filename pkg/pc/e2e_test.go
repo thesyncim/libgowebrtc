@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
@@ -12,11 +12,7 @@ import (
 // Run with: go test -tags=integration ./pkg/pc/...
 
 func TestMain(m *testing.M) {
-	if err := ffi.LoadLibrary(); err != nil {
-		// Skip if library not available
-		os.Exit(0)
-	}
-	os.Exit(m.Run())
+	os.Exit(testutil.RunWithShim(m))
 }
 
 func TestNewPeerConnection(t *testing.T) {

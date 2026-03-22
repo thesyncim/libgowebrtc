@@ -4,17 +4,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
 
 func TestMain(m *testing.M) {
-	if err := ffi.LoadLibrary(); err != nil {
-		// Skip if library not available
-		os.Exit(0)
-	}
-	os.Exit(m.Run())
+	os.Exit(testutil.RunWithShim(m))
 }
 
 func TestVideoTrackFullPipeline(t *testing.T) {

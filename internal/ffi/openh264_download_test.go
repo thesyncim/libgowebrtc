@@ -8,11 +8,8 @@ import (
 )
 
 func TestOpenH264AutoDownload(t *testing.T) {
-	if os.Getenv("LIBWEBRTC_TEST_OPENH264_DOWNLOAD") == "" {
-		t.Skip("set LIBWEBRTC_TEST_OPENH264_DOWNLOAD=1 to enable")
-	}
 	if isOpenH264DownloadDisabled() {
-		t.Skip("OpenH264 download disabled")
+		t.Fatal("OpenH264 auto-download must be enabled for zero-config tests")
 	}
 	if os.Getenv(envOpenH264Path) == "" && os.Getenv(envOpenH264URL) == "" {
 		if _, err := openh264ArchiveName(defaultOpenH264Version); errors.Is(err, errOpenH264Unsupported) {
@@ -21,9 +18,6 @@ func TestOpenH264AutoDownload(t *testing.T) {
 	}
 
 	if err := LoadLibrary(); err != nil {
-		if isDownloadDisabled() {
-			t.Skipf("shim auto-download disabled: %v", err)
-		}
 		t.Fatalf("load shim: %v", err)
 	}
 

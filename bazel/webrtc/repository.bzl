@@ -9,7 +9,13 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "libwebrtc",
     hdrs = glob(["include/**/*.h", "include/**/*.inc"]),
-    srcs = glob(["lib/*.a", "lib/*.lib"]),  # Unix (.a) and Windows (.lib)
+    srcs = glob([
+        "lib/*.a",
+        "lib/*.lib",
+        "lib/**/*.a",
+        "lib/**/*.lib",
+    ]),  # Unix (.a) and Windows (.lib)
+    alwayslink = True,
     includes = [
         "include",
         "include/third_party/abseil-cpp",

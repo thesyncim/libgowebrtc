@@ -1,5 +1,37 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 
+config_setting(
+    name = "linux_amd64_config",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "linux_arm64_config",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "linux_386_config",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_32",
+    ],
+)
+
+config_setting(
+    name = "linux_arm_config",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:arm",
+    ],
+)
+
 # Source files
 _SHIM_SRCS_COMMON = [
     "openh264_codec.cc",
@@ -69,8 +101,8 @@ _MACOS_LINKOPTS = [
     "-framework ApplicationServices",
 ]
 
-# Linux libraries
-_LINUX_LINKOPTS = [
+_LINUX_COMMON_LINKOPTS = [
+    "-Wl,-z,defs",
     "-Wl,--start-group",
     "-lpthread",
     "-ldl",
@@ -88,6 +120,28 @@ _LINUX_LINKOPTS = [
     "-lglib-2.0",
     "-Wl,--end-group",
 ]
+
+_LINUX_AMD64_LINKOPTS = [
+    # The upstream x86_64 libwebrtc archive already contains some libstdc++
+    # runtime objects. Allow those known duplicate definitions while still
+    # forcing a portable static libstdc++/libgcc runtime for the final shim.
+    "-Wl,--allow-multiple-definition",
+    "-Wl,--push-state,-Bstatic",
+    "-lstdc++",
+    "-lgcc",
+    "-lgcc_eh",
+    "-Wl,--pop-state",
+] + _LINUX_COMMON_LINKOPTS
+
+_LINUX_ARM_LINKOPTS = [
+    # ARM builds still need an explicitly static libstdc++/libgcc runtime to
+    # avoid depending on host distro versions.
+    "-Wl,--push-state,-Bstatic",
+    "-lstdc++",
+    "-lgcc",
+    "-lgcc_eh",
+    "-Wl,--pop-state",
+] + _LINUX_COMMON_LINKOPTS
 
 # Windows libraries
 _WINDOWS_LINKOPTS = [
@@ -180,7 +234,10 @@ cc_binary(
     }),
     linkopts = select({
         "@platforms//os:macos": _MACOS_LINKOPTS,
-        "@platforms//os:linux": _LINUX_LINKOPTS,
+        ":linux_386_config": _LINUX_ARM_LINKOPTS,
+        ":linux_amd64_config": _LINUX_AMD64_LINKOPTS,
+        ":linux_arm64_config": _LINUX_ARM_LINKOPTS,
+        ":linux_arm_config": _LINUX_ARM_LINKOPTS,
         "@platforms//os:windows": _WINDOWS_LINKOPTS,
         "//conditions:default": [],
     }),

@@ -1,24 +1,21 @@
 package benchmark
 
 import (
+	"os"
 	"testing"
 	"time"
 
 	pionwebrtc "github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
 // TestMain initializes the libwebrtc library for benchmarks.
 func TestMain(m *testing.M) {
-	if err := ffi.LoadLibrary(); err != nil {
-		// Skip if library not available
-		return
-	}
-	m.Run()
+	os.Exit(testutil.RunWithShim(m))
 }
 
 // ============================================================================

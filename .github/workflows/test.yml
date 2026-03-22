@@ -10,7 +10,7 @@ on:
 env:
   GO_VERSION: '1.25.x'
   GO_VERSION_FULL: '1.25.0'  # Full version for direct downloads (Rosetta job)
-  SHIM_VERSION: shim-v0.4.1
+  SHIM_VERSION: shim-v0.4.2
 
 jobs:
   # Native platform tests
@@ -69,6 +69,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            gawk lsb-release ninja-build pkg-config rsync sudo \
             libx11-dev libxcomposite-dev libxdamage-dev libxext-dev \
             libxfixes-dev libxrandr-dev libxrender-dev libxtst-dev \
             libglib2.0-dev libgbm-dev libdrm-dev
@@ -78,6 +79,8 @@ jobs:
         run: ./scripts/build.sh
         env:
           INSTALL_DIR: ${{ runner.temp }}/libwebrtc
+          WEBRTC_INSTALL_BUILD_DEPS: ${{ runner.os == 'Linux' && '1' || '0' }}
+          WEBRTC_GCLIENT_JOBS: '1'
 
       - name: Build shim (Windows)
         if: runner.os == 'Windows' && steps.shim_changes.outputs.shim == 'true'
@@ -210,3 +213,13 @@ jobs:
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+  validate-linux-386-docker:
+    name: linux_386 (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate linux_386 in Docker
+        run: ./scripts/validate_linux_docker.sh --target linux_386

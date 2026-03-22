@@ -15,9 +15,6 @@ const (
 
 // TestEnumerateDevices tests device enumeration with the real shim library.
 func TestEnumerateDevices(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	devices, err := ffi.EnumerateDevices()
 	if err != nil {
@@ -38,9 +35,6 @@ func TestEnumerateDevices(t *testing.T) {
 
 // TestEnumerateScreens tests screen enumeration with the real shim library.
 func TestEnumerateScreens(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	screens, err := ffi.EnumerateScreens()
 	if err != nil {
@@ -65,9 +59,6 @@ func TestEnumerateScreens(t *testing.T) {
 // TestScreenCapture tests actual screen capture functionality.
 // This test requires a display to be available.
 func TestScreenCapture(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	screens, err := ffi.EnumerateScreens()
 	if err != nil {
@@ -118,9 +109,6 @@ func TestScreenCapture(t *testing.T) {
 // TestVideoCaptureWithDevice tests video capture from a camera device.
 // This test requires a camera to be available.
 func TestVideoCaptureWithDevice(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	devices, err := ffi.EnumerateDevices()
 	if err != nil {
@@ -176,9 +164,6 @@ func TestVideoCaptureWithDevice(t *testing.T) {
 // TestAudioCaptureWithDevice tests audio capture from a microphone device.
 // This test requires a microphone to be available.
 func TestAudioCaptureWithDevice(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	devices, err := ffi.EnumerateDevices()
 	if err != nil {
@@ -232,9 +217,6 @@ func TestAudioCaptureWithDevice(t *testing.T) {
 
 // TestDefaultVideoCapture tests video capture with default device (empty deviceID).
 func TestDefaultVideoCapture(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	// Use empty string for default device
 	capture, err := ffi.NewVideoCapture("", 320, 240, 10)

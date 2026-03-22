@@ -86,6 +86,10 @@ func LoadLibrary() error {
 		if err := ensureOpenH264(true); err != nil {
 			return err
 		}
+	} else {
+		if err := preloadOpenH264Optional(); err != nil {
+			return fmt.Errorf("preload openh264: %w", err)
+		}
 	}
 
 	// On Linux, preload system libraries that the shim depends on

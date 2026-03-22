@@ -17,9 +17,6 @@ func init() {
 
 // TestVideoTrackCreation tests that video tracks can be created and added.
 func TestVideoTrackCreation(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
@@ -55,9 +52,6 @@ func TestVideoTrackCreation(t *testing.T) {
 
 // TestAudioTrackCreation tests that audio tracks can be created and added.
 func TestAudioTrackCreation(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
@@ -93,9 +87,6 @@ func TestAudioTrackCreation(t *testing.T) {
 
 // TestVideoFrameWrite tests that video frames can be written to tracks.
 func TestVideoFrameWrite(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
@@ -137,9 +128,6 @@ func TestVideoFrameWrite(t *testing.T) {
 
 // TestAudioFrameWrite tests that audio frames can be written to tracks.
 func TestAudioFrameWrite(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
@@ -181,9 +169,6 @@ func TestAudioFrameWrite(t *testing.T) {
 
 // TestOfferAnswerWithTracks tests offer/answer exchange with media tracks.
 func TestOfferAnswerWithTracks(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
@@ -222,9 +207,6 @@ func TestOfferAnswerWithTracks(t *testing.T) {
 // TestTrackReception tests that tracks are received by the remote peer.
 // This is the real e2e test - it verifies the OnTrack callback fires.
 func TestTrackReception(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
@@ -282,9 +264,6 @@ func TestTrackReception(t *testing.T) {
 // This is the full e2e test that verifies the complete pipeline:
 // sender -> encode -> RTP -> network -> RTP -> decode -> receiver callback
 func TestVideoFrameReceiving(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
@@ -348,9 +327,6 @@ func TestVideoFrameReceiving(t *testing.T) {
 
 // TestVideoAndAudioTrackReception tests receiving both video and audio tracks.
 func TestVideoAndAudioTrackReception(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
@@ -429,9 +405,6 @@ func containsString(s, substr string) bool {
 
 // TestMultipleCodecs tests track creation with different codecs.
 func TestMultipleCodecs(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	codecs := []codec.Type{codec.H264, codec.VP8, codec.VP9}
 
@@ -467,9 +440,6 @@ func TestMultipleCodecs(t *testing.T) {
 
 // TestTrackDisable tests that disabled tracks don't write frames.
 func TestTrackDisable(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
@@ -509,9 +479,6 @@ func TestTrackDisable(t *testing.T) {
 
 // BenchmarkVideoFrameWrite benchmarks video frame writing performance.
 func BenchmarkVideoFrameWrite(b *testing.B) {
-	if !ffi.IsLoaded() {
-		b.Skip("shim library not available")
-	}
 
 	p, _ := pc.NewPeerConnection(defaultTestConfig())
 	defer p.Close()
@@ -530,9 +497,6 @@ func BenchmarkVideoFrameWrite(b *testing.B) {
 
 // BenchmarkAudioFrameWrite benchmarks audio frame writing performance.
 func BenchmarkAudioFrameWrite(b *testing.B) {
-	if !ffi.IsLoaded() {
-		b.Skip("shim library not available")
-	}
 
 	p, _ := pc.NewPeerConnection(defaultTestConfig())
 	defer p.Close()
@@ -551,9 +515,6 @@ func BenchmarkAudioFrameWrite(b *testing.B) {
 
 // TestPeerConnectionLifecycle tests full lifecycle of a PeerConnection.
 func TestPeerConnectionLifecycle(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {
@@ -601,9 +562,6 @@ func TestPeerConnectionLifecycle(t *testing.T) {
 
 // TestConcurrentFrameWrites tests concurrent frame writing.
 func TestConcurrentFrameWrites(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	p, err := pc.NewPeerConnection(defaultTestConfig())
 	if err != nil {

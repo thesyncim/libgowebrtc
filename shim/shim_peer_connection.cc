@@ -7,6 +7,7 @@
  */
 
 #include "shim_common.h"
+#include "openh264_codec.h"
 
 #include <condition_variable>
 #include <cstring>
@@ -134,12 +135,34 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(ShimPeerConnectionCr
 
     // Create encoder/decoder factories.
     bool use_software = shim::ShouldUseSoftwareCodecs();
-    auto video_encoder_factory = use_software
-        ? std::make_unique<webrtc::InternalEncoderFactory>()
-        : webrtc::CreateBuiltinVideoEncoderFactory();
-    auto video_decoder_factory = use_software
-        ? std::make_unique<webrtc::InternalDecoderFactory>()
-        : webrtc::CreateBuiltinVideoDecoderFactory();
+    auto builtin_video_encoder_factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    auto builtin_video_decoder_factory = webrtc::CreateBuiltinVideoDecoderFactory();
+
+    bool builtin_supports_h264 = false;
+    if (builtin_video_encoder_factory) {
+        for (const auto& format : builtin_video_encoder_factory->GetSupportedFormats()) {
+            if (strcasecmp(format.name.c_str(), "H264") == 0) {
+                builtin_supports_h264 = true;
+                break;
+            }
+        }
+    }
+
+    bool use_internal_video_factories =
+        use_software || !builtin_video_encoder_factory || !builtin_video_decoder_factory;
+    if (!use_internal_video_factories && shim::openh264::IsAvailable() && !builtin_supports_h264) {
+        use_internal_video_factories = true;
+    }
+
+    std::unique_ptr<webrtc::VideoEncoderFactory> video_encoder_factory;
+    std::unique_ptr<webrtc::VideoDecoderFactory> video_decoder_factory;
+    if (use_internal_video_factories) {
+        video_encoder_factory = std::make_unique<webrtc::InternalEncoderFactory>();
+        video_decoder_factory = std::make_unique<webrtc::InternalDecoderFactory>();
+    } else {
+        video_encoder_factory = std::move(builtin_video_encoder_factory);
+        video_decoder_factory = std::move(builtin_video_decoder_factory);
+    }
 
     // Create PeerConnectionFactory
     pc->factory = webrtc::CreatePeerConnectionFactory(
