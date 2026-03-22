@@ -6,16 +6,12 @@ import (
 
 	pionwebrtc "github.com/pion/webrtc/v4"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
 func TestMain(m *testing.M) {
-	if err := ffi.LoadLibrary(); err != nil {
-		// Skip if shim library not available
-		os.Exit(0)
-	}
-	os.Exit(m.Run())
+	os.Exit(testutil.RunWithShim(m))
 }
 
 // TestOfferAnswerExchange tests basic offer/answer exchange between

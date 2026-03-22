@@ -109,9 +109,6 @@ func downloadShim() (string, error) {
 	if asset.File == "" {
 		return "", fmt.Errorf("shim manifest missing file for %s flavor %q", platform, flavor)
 	}
-	if !isValidSHA256(asset.SHA256) {
-		return "", fmt.Errorf("shim manifest has invalid sha256 for %s flavor %q: %q", platform, flavor, asset.SHA256)
-	}
 
 	baseURL := strings.TrimRight(manifest.BaseURL, "/")
 	if override := strings.TrimSpace(os.Getenv(envShimBaseURL)); override != "" {
@@ -140,6 +137,11 @@ func downloadShim() (string, error) {
 		return libPath, nil
 	}
 
+	expectedSHA256, err := resolveShimSHA256(baseURL, flavorInfo.ReleaseTag, asset)
+	if err != nil {
+		return "", err
+	}
+
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", fmt.Errorf("create shim cache dir: %w", err)
 	}
@@ -148,7 +150,7 @@ func downloadShim() (string, error) {
 		if _, err := os.Stat(libPath); err == nil {
 			return nil
 		}
-		return downloadAndInstallShim(url, asset.SHA256, destDir, libName)
+		return downloadAndInstallShim(url, expectedSHA256, destDir, libName)
 	}); err != nil {
 		return "", err
 	}
@@ -158,6 +160,36 @@ func downloadShim() (string, error) {
 	}
 
 	return libPath, nil
+}
+
+func resolveShimSHA256(baseURL, releaseTag string, asset shimAssetRef) (string, error) {
+	if isValidSHA256(asset.SHA256) {
+		return strings.ToLower(asset.SHA256), nil
+	}
+
+	shaURL := fmt.Sprintf("%s/%s/%s.sha256", baseURL, releaseTag, asset.File)
+	client := &http.Client{Timeout: downloadTimeout}
+	resp, err := client.Get(shaURL)
+	if err != nil {
+		return "", fmt.Errorf("download shim sha256: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("download shim sha256: unexpected HTTP %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return "", fmt.Errorf("read shim sha256: %w", err)
+	}
+
+	fields := strings.Fields(string(body))
+	if len(fields) == 0 || !isValidSHA256(fields[0]) {
+		return "", fmt.Errorf("parse shim sha256 for %s: %q", asset.File, strings.TrimSpace(string(body)))
+	}
+
+	return strings.ToLower(fields[0]), nil
 }
 
 func shimFlavor() string {
@@ -182,6 +214,10 @@ func shimPlatformKeyFor(goos, goarch string) (string, error) {
 		}
 	case "linux":
 		switch goarch {
+		case "386":
+			return "linux_386", nil
+		case "arm":
+			return "linux_arm", nil
 		case "arm64":
 			return "linux_arm64", nil
 		case "amd64":
@@ -289,7 +325,11 @@ func downloadAndInstallShim(url, expectedSHA256, destDir, libName string) error 
 	}
 
 	finalPath := filepath.Join(destDir, libName)
-	if err := moveFile(foundLib, finalPath); err != nil {
+	// Copy the extracted shim into place instead of renaming it out of the
+	// temporary extraction directory. This keeps the installed artifact
+	// independent from the extract tree lifecycle and avoids platform/filesystem
+	// quirks when the cache lives on overlay-backed temp storage.
+	if err := copyFile(foundLib, finalPath); err != nil {
 		return fmt.Errorf("install shim: %w", err)
 	}
 
@@ -404,16 +444,32 @@ func copyFile(src, dst string) error {
 		return mkdirErr
 	}
 
-	out, err := os.Create(dst)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
 		return err
 	}
-	return out.Sync()
+	if err := out.Sync(); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+
+	// Make the copied file visible to subsequent dlopen calls immediately,
+	// even on overlay-backed temp directories used in clean-environment tests.
+	dir, err := os.Open(filepath.Dir(dst))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+
+	return dir.Sync()
 }
 
 func copyOptionalFile(rootDir, name, destPath string) {

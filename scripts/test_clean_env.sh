@@ -14,33 +14,68 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-WORKDIR="$(mktemp -d)"
-SHIM_CACHE="$(mktemp -d)"
-GOCACHE_DIR="$(mktemp -d)"
-GOMODCACHE_DIR="$(mktemp -d)"
+GOCACHE_DIR="${TEST_CLEAN_ENV_GOCACHE_DIR:-$(mktemp -d)}"
+GOMODCACHE_DIR="${TEST_CLEAN_ENV_GOMODCACHE_DIR:-$(mktemp -d)}"
+HOME_DIR="${TEST_CLEAN_ENV_HOME_DIR:-$(mktemp -d)}"
+HIDDEN_LIB_DIR=""
+KEEP_DIRS="${TEST_CLEAN_ENV_KEEP_DIRS:-0}"
 
 cleanup() {
-    chmod -R u+w "$WORKDIR" "$SHIM_CACHE" "$GOCACHE_DIR" "$GOMODCACHE_DIR" 2>/dev/null || true
-    rm -rf "$WORKDIR" "$SHIM_CACHE" "$GOCACHE_DIR" "$GOMODCACHE_DIR"
+    if [[ -n "$HIDDEN_LIB_DIR" && -d "$HIDDEN_LIB_DIR" ]]; then
+        rm -rf "$REPO_ROOT/lib"
+        mv "$HIDDEN_LIB_DIR" "$REPO_ROOT/lib"
+    fi
+    if [[ "$KEEP_DIRS" == "1" ]]; then
+        printf 'test_clean_env kept dirs: HOME=%s GOCACHE=%s GOMODCACHE=%s\n' "$HOME_DIR" "$GOCACHE_DIR" "$GOMODCACHE_DIR" >&2
+        return
+    fi
+    chmod -R u+w "$GOCACHE_DIR" "$GOMODCACHE_DIR" "$HOME_DIR" 2>/dev/null || true
+    rm -rf "$GOCACHE_DIR" "$GOMODCACHE_DIR" "$HOME_DIR"
 }
 trap cleanup EXIT
 
-rsync -a \
-    --exclude '.git' \
-    --exclude 'lib/' \
-    --exclude 'shim/build/' \
-    --exclude '*.tar.gz' \
-    "$REPO_ROOT/" "$WORKDIR/"
+if [[ -d "$REPO_ROOT/lib" ]]; then
+    HIDDEN_LIB_DIR="$(mktemp -d "${REPO_ROOT}/.lib-hidden.XXXXXX")"
+    rm -rf "$HIDDEN_LIB_DIR"
+    mv "$REPO_ROOT/lib" "$HIDDEN_LIB_DIR"
+fi
 
-export HOME="$WORKDIR/home"
-mkdir -p "$HOME"
+export HOME="$HOME_DIR"
 
-export LIBWEBRTC_SHIM_CACHE_DIR="$SHIM_CACHE"
-unset LIBWEBRTC_SHIM_PATH LIBWEBRTC_DIR
+unset LIBWEBRTC_SHIM_CACHE_DIR LIBWEBRTC_SHIM_PATH LIBWEBRTC_DIR
 
 export GOCACHE="$GOCACHE_DIR"
 export GOMODCACHE="$GOMODCACHE_DIR"
 export CGO_ENABLED=1
+export GOWORK=off
 
-cd "$WORKDIR"
-go test "${TEST_PACKAGES:-./internal/ffi}" -count=1
+declare -a go_command=()
+if [[ -n "${TEST_CLEAN_ENV_GO_PREFIX:-}" ]]; then
+    # shellcheck disable=SC2206
+    go_command=(${TEST_CLEAN_ENV_GO_PREFIX})
+fi
+go_command+=("${TEST_CLEAN_ENV_GO_BIN:-go}")
+
+if [[ "${GOOS:-$(go env GOOS)}" == "linux" && "${GOARCH:-$(go env GOARCH)}" == "386" ]]; then
+    export CC="${CC:-gcc -m32}"
+    export CXX="${CXX:-g++ -m32}"
+fi
+
+cd "$REPO_ROOT"
+
+declare -a test_packages=()
+declare -a extra_args=()
+
+if [[ -n "${TEST_PACKAGES:-}" ]]; then
+    # shellcheck disable=SC2206
+    test_packages=(${TEST_PACKAGES})
+else
+    test_packages=(./internal/ffi)
+fi
+
+if [[ -n "${GO_TEST_ARGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    extra_args=(${GO_TEST_ARGS})
+fi
+
+"${go_command[@]}" test "${test_packages[@]}" "${extra_args[@]}" -count=1

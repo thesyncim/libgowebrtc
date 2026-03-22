@@ -4,7 +4,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/decoder"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
@@ -15,10 +14,6 @@ import (
 func TestVideoCodecRoundtrip(t *testing.T) {
 	// Force GC to clean up any lingering codec instances from previous tests
 	runtime.GC()
-
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	codecs := []struct {
 		name   string
@@ -64,10 +59,6 @@ func TestVideoCodecRoundtrip(t *testing.T) {
 			}
 
 			if err != nil {
-				// H264 may not be available on all platforms (needs VideoToolbox on macOS)
-				if tc.codec == codec.H264 {
-					t.Skipf("H264 encoder not available: %v", err)
-				}
 				t.Fatalf("Failed to create %s encoder: %v", tc.name, err)
 			}
 			defer enc.Close()
@@ -140,9 +131,6 @@ func TestVideoCodecRoundtrip(t *testing.T) {
 
 // TestOpusRoundtrip tests Opus audio encode/decode roundtrip.
 func TestOpusRoundtrip(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	sampleRate := 48000
 	channels := 2
@@ -197,9 +185,6 @@ func TestOpusRoundtrip(t *testing.T) {
 
 // TestEncoderBitrateControl tests runtime bitrate changes.
 func TestEncoderBitrateControl(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	enc, err := encoder.NewVP8Encoder(codec.VP8Config{
 		Width:   640,
@@ -227,9 +212,6 @@ func TestEncoderBitrateControl(t *testing.T) {
 
 // TestEncoderFramerateControl tests runtime framerate changes.
 func TestEncoderFramerateControl(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	// Use VP8 since H264 may not be available on all platforms
 	enc, err := encoder.NewVP8Encoder(codec.VP8Config{
@@ -258,9 +240,6 @@ func TestEncoderFramerateControl(t *testing.T) {
 
 // TestKeyframeRequest tests requesting keyframes from encoder.
 func TestKeyframeRequest(t *testing.T) {
-	if !ffi.IsLoaded() {
-		t.Skip("shim library not available")
-	}
 
 	enc, err := encoder.NewVP8Encoder(codec.VP8Config{
 		Width:   320,
@@ -335,9 +314,6 @@ func fillAudioTestPattern(f *frame.AudioFrame) {
 
 // BenchmarkH264Encode benchmarks H264 encoding performance with both backends.
 func BenchmarkH264Encode(b *testing.B) {
-	if !ffi.IsLoaded() {
-		b.Skip("shim library not available")
-	}
 
 	backends := []struct {
 		name     string
@@ -357,7 +333,7 @@ func BenchmarkH264Encode(b *testing.B) {
 				PreferHW: backend.preferHW,
 			})
 			if err != nil {
-				b.Skipf("H264 encoder (%s) not available: %v", backend.name, err)
+				b.Fatalf("H264 encoder (%s) unavailable: %v", backend.name, err)
 			}
 			defer enc.Close()
 
@@ -376,9 +352,6 @@ func BenchmarkH264Encode(b *testing.B) {
 
 // BenchmarkVP8Encode benchmarks VP8 encoding performance.
 func BenchmarkVP8Encode(b *testing.B) {
-	if !ffi.IsLoaded() {
-		b.Skip("shim library not available")
-	}
 
 	enc, _ := encoder.NewVP8Encoder(codec.VP8Config{
 		Width:   1280,
@@ -401,9 +374,6 @@ func BenchmarkVP8Encode(b *testing.B) {
 
 // BenchmarkVP9Encode benchmarks VP9 encoding performance.
 func BenchmarkVP9Encode(b *testing.B) {
-	if !ffi.IsLoaded() {
-		b.Skip("shim library not available")
-	}
 
 	enc, err := encoder.NewVP9Encoder(codec.VP9Config{
 		Width:   1280,
@@ -429,9 +399,6 @@ func BenchmarkVP9Encode(b *testing.B) {
 
 // BenchmarkAV1Encode benchmarks AV1 encoding performance.
 func BenchmarkAV1Encode(b *testing.B) {
-	if !ffi.IsLoaded() {
-		b.Skip("shim library not available")
-	}
 
 	enc, err := encoder.NewAV1Encoder(codec.AV1Config{
 		Width:   1280,
@@ -457,9 +424,6 @@ func BenchmarkAV1Encode(b *testing.B) {
 
 // BenchmarkOpusEncode benchmarks Opus encoding performance.
 func BenchmarkOpusEncode(b *testing.B) {
-	if !ffi.IsLoaded() {
-		b.Skip("shim library not available")
-	}
 
 	enc, err := encoder.NewOpusEncoder(codec.OpusConfig{
 		SampleRate: 48000,
@@ -484,9 +448,6 @@ func BenchmarkOpusEncode(b *testing.B) {
 
 // BenchmarkAllVideoCodecs runs a comparative benchmark of all video codecs.
 func BenchmarkAllVideoCodecs(b *testing.B) {
-	if !ffi.IsLoaded() {
-		b.Skip("shim library not available")
-	}
 
 	codecs := []struct {
 		name   string
@@ -526,7 +487,7 @@ func BenchmarkAllVideoCodecs(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			enc, err := tc.newEnc()
 			if err != nil {
-				b.Skipf("Encoder not available: %v", err)
+				b.Fatalf("Encoder unavailable: %v", err)
 			}
 			defer enc.Close()
 

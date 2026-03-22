@@ -23,6 +23,8 @@ extern "C" {
 
 #ifdef _WIN32
     #define SHIM_EXPORT __declspec(dllexport)
+#elif defined(__linux__) && defined(__i386__)
+    #define SHIM_EXPORT __attribute__((visibility("default"), force_align_arg_pointer))
 #else
     #define SHIM_EXPORT __attribute__((visibility("default")))
 #endif

@@ -2,8 +2,7 @@
 #
 # Build script for libgowebrtc shim
 #
-# Downloads pre-compiled libwebrtc from crow-misia/libwebrtc-bin
-# and builds the C++ shim library using Bazel.
+# Downloads or builds libwebrtc and builds the C++ shim library using Bazel.
 #
 # Usage:
 #   ./scripts/build.sh                        # Build for current platform
@@ -22,7 +21,13 @@ LIBWEBRTC_VERSION="${LIBWEBRTC_VERSION:-141.7390.2.0}"
 
 # Download configuration
 LIBWEBRTC_BIN_REPO="${LIBWEBRTC_BIN_REPO:-crow-misia/libwebrtc-bin}"
-INSTALL_DIR="${INSTALL_DIR:-$HOME/libwebrtc}"
+if [[ -n "${INSTALL_DIR+x}" ]]; then
+    INSTALL_DIR_USER_SET=true
+else
+    INSTALL_DIR_USER_SET=false
+    INSTALL_DIR="$HOME/libwebrtc"
+fi
+LIBWEBRTC_SOURCE_BUILD="${LIBWEBRTC_SOURCE_BUILD:-auto}"
 
 # Platform detection
 detect_platform() {
@@ -34,7 +39,9 @@ detect_platform() {
         *)      os="unknown" ;;
     esac
     case "$(uname -m)" in
+        i386|i486|i586|i686|x86) cpu="386" ;;
         arm64|aarch64) cpu="arm64" ;;
+        armv7l|armv7|armv6l|armv6|armhf) cpu="arm" ;;
         x86_64|amd64|AMD64)  cpu="amd64" ;;
         *)             cpu="unknown" ;;
     esac
@@ -47,6 +54,8 @@ get_download_platform_for_target() {
     case "$target" in
         darwin_arm64)  echo "macos-arm64" ;;
         darwin_amd64)  echo "macos-x64" ;;
+        linux_386)     echo "" ;;
+        linux_arm)     echo "linux-arm" ;;
         linux_arm64)   echo "linux-arm64" ;;
         linux_amd64)   echo "linux-x64" ;;
         windows_amd64) echo "win-x64" ;;
@@ -64,18 +73,53 @@ log_success() { echo -e "\033[0;32m[SUCCESS]\033[0m $1"; }
 log_error()   { echo -e "\033[0;31m[ERROR]\033[0m $1"; }
 log_step()    { echo -e "\n\033[0;32m==>\033[0m \033[0;34m$1\033[0m"; }
 
+find_bazel_cmd() {
+    if command -v bazel >/dev/null 2>&1; then
+        echo "bazel"
+        return
+    fi
+    if command -v bazelisk >/dev/null 2>&1; then
+        echo "bazelisk"
+        return
+    fi
+
+    log_error "bazel or bazelisk is required to build the shim"
+    log_error "Install Bazelisk (recommended) or Bazel and ensure it is on PATH"
+    exit 1
+}
+
+BAZEL_CMD="$(find_bazel_cmd)"
+
+require_macos_xcode() {
+    if [[ "$TARGET_OS" != "darwin" || "$HOST_PLATFORM" != darwin_* ]]; then
+        return
+    fi
+
+    if xcodebuild -version >/dev/null 2>&1; then
+        return
+    fi
+
+    log_error "Full Xcode is required to build macOS shim targets"
+    log_error "The active developer directory is using Command Line Tools only"
+    log_error "Install Xcode and switch with: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+    exit 1
+}
+
 show_help() {
     cat << EOF
 libgowebrtc Build Script
 ========================
 
-Downloads pre-compiled libwebrtc and builds the C++ shim.
+Downloads or builds libwebrtc and then builds the C++ shim.
 
 Usage: ./scripts/build.sh [OPTIONS]
 
 Options:
-  --target PLATFORM  Target platform (darwin_arm64, darwin_amd64, linux_amd64, linux_arm64)
+  --target PLATFORM  Target platform (darwin_arm64, darwin_amd64, linux_386, linux_amd64, linux_arm64, linux_arm)
                      Default: current platform ($HOST_PLATFORM)
+  --source-libwebrtc Build libwebrtc from source instead of downloading a prebuilt archive
+  --prebuilt-libwebrtc
+                     Force the prebuilt libwebrtc download path
   --clean            Clean build artifacts and rebuild
   --release          Create release tarball
   --help             Show this help
@@ -84,19 +128,53 @@ Environment:
   LIBWEBRTC_VERSION   Version to download (default: $LIBWEBRTC_VERSION)
   INSTALL_DIR         Where to install libwebrtc (default: ~/libwebrtc)
   TARGET_PLATFORM     Alternative way to set target platform
+  LIBWEBRTC_SOURCE_BUILD
+                      auto (default), true, or false. Linux defaults to source
+                      builds because the upstream prebuilt archive uses an
+                      incompatible Chromium libc++ runtime.
 
 Examples:
   ./scripts/build.sh                        # Build for current platform
   ./scripts/build.sh --target darwin_amd64  # Cross-compile for Intel Mac
+  ./scripts/build.sh --target linux_386     # Build for 32-bit Linux x86
+  ./scripts/build.sh --target linux_arm     # Build for 32-bit Linux ARM
+  ./scripts/build.sh --source-libwebrtc     # Force a pinned libwebrtc source build
   ./scripts/build.sh --release              # Create release tarball
 
 Cross-compilation:
   On Apple Silicon Mac, you can cross-compile for Intel Mac:
     ./scripts/build.sh --target darwin_amd64
 
-  The script will download the correct libwebrtc and build with Bazel.
+  The script will prepare the correct libwebrtc for the target and build with Bazel.
 EOF
     exit 0
+}
+
+should_build_libwebrtc_from_source() {
+    local mode="$(echo "$LIBWEBRTC_SOURCE_BUILD" | tr '[:upper:]' '[:lower:]')"
+    case "$mode" in
+        1|true|yes|source)
+            return 0
+            ;;
+        0|false|no|prebuilt)
+            return 1
+            ;;
+        auto|"")
+            [[ "$TARGET_OS" == "linux" ]]
+            return
+            ;;
+        *)
+            log_error "Invalid LIBWEBRTC_SOURCE_BUILD mode: $LIBWEBRTC_SOURCE_BUILD"
+            exit 1
+            ;;
+    esac
+}
+
+build_libwebrtc_from_source() {
+    log_step "Building libwebrtc from source"
+    "$SCRIPT_DIR/build_libwebrtc_source.sh" \
+        --target "$TARGET_PLATFORM" \
+        --install-dir "$INSTALL_DIR"
 }
 
 download_libwebrtc() {
@@ -238,7 +316,7 @@ build_shim() {
     fi
 
     # On Windows Git Bash/MSYS, // gets converted to / - disable path conversion
-    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" bazel build //shim:webrtc_shim --config="$TARGET_PLATFORM"
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" "$BAZEL_CMD" build //shim:webrtc_shim --config="$TARGET_PLATFORM"
 
     local ext="so"
     case "$TARGET_OS" in
@@ -292,7 +370,7 @@ create_release() {
 clean_all() {
     log_step "Cleaning build artifacts"
     cd "$PROJECT_ROOT"
-    bazel clean --expunge 2>/dev/null || true
+    "$BAZEL_CMD" clean --expunge 2>/dev/null || true
     rm -rf "$PROJECT_ROOT/lib" "$PROJECT_ROOT/dist" "$PROJECT_ROOT"/*.tar.gz*
     log_success "Cleaned"
 }
@@ -308,6 +386,14 @@ main() {
                 TARGET_OS=$(echo "$TARGET_PLATFORM" | cut -d_ -f1)
                 shift 2
                 ;;
+            --source-libwebrtc)
+                LIBWEBRTC_SOURCE_BUILD=true
+                shift
+                ;;
+            --prebuilt-libwebrtc)
+                LIBWEBRTC_SOURCE_BUILD=false
+                shift
+                ;;
             --clean)   do_clean=true; shift ;;
             --release) do_release=true; shift ;;
             --help)    show_help ;;
@@ -315,19 +401,30 @@ main() {
         esac
     done
 
-    # Update INSTALL_DIR to be platform-specific for cross-compilation
-    if [[ "$HOST_PLATFORM" != "$TARGET_PLATFORM" ]]; then
-        INSTALL_DIR="${INSTALL_DIR:-$HOME/libwebrtc}_${TARGET_PLATFORM}"
+    if should_build_libwebrtc_from_source; then
+        if [[ "$INSTALL_DIR_USER_SET" == false ]]; then
+            INSTALL_DIR="$HOME/libwebrtc_source_${TARGET_PLATFORM}"
+        fi
+    elif [[ "$HOST_PLATFORM" != "$TARGET_PLATFORM" && "$INSTALL_DIR_USER_SET" == false ]]; then
+        # Keep cross-compiled prebuilt installs separate.
+        INSTALL_DIR="${INSTALL_DIR}_${TARGET_PLATFORM}"
     fi
 
     log_info "Host platform: $HOST_PLATFORM"
     log_info "Target platform: $TARGET_PLATFORM"
     log_info "libwebrtc version: $LIBWEBRTC_VERSION"
     log_info "Install dir: $INSTALL_DIR"
+    log_info "libwebrtc source mode: $LIBWEBRTC_SOURCE_BUILD"
+
+    require_macos_xcode
 
     $do_clean && clean_all
 
-    download_libwebrtc
+    if should_build_libwebrtc_from_source; then
+        build_libwebrtc_from_source
+    else
+        download_libwebrtc
+    fi
     build_shim
 
     $do_release && create_release

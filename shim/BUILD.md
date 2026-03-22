@@ -7,7 +7,8 @@ This document describes how to build the `libwebrtc_shim` library that wraps Goo
 - CMake 3.16+
 - Ninja (recommended) or Make
 - C++17 compatible compiler (Clang 12+ or GCC 11+)
-- Pre-built libwebrtc static library
+- Bazelisk/Bazel for the shim build
+- libwebrtc, either from a pre-built archive or a pinned source build
 
 ### Installing Build Tools
 
@@ -135,7 +136,20 @@ sudo rsync -avm --include='*.h' --include='*/' --exclude='*' \
   third_party/libyuv/include/ $INSTALL_DIR/include/third_party/libyuv/include/
 ```
 
-### Option 2: Community Pre-built Binaries
+### Option 2: Pinned Source Build
+
+For Linux, this is the recommended local build path.
+
+```bash
+./scripts/build_libwebrtc_source.sh --target linux_amd64 --install-dir /opt/libwebrtc
+./scripts/build_libwebrtc_source.sh --target linux_386 --install-dir /opt/libwebrtc_x86
+```
+
+The script pins WebRTC to branch-head `7390` revision
+`d2eaa5570fc9959f8dbde32912a16366b8ee75f4` and builds Linux with
+`use_custom_libcxx=false` so the resulting archive links cleanly with the shim.
+
+### Option 3: Community Pre-built Binaries
 
 Some community projects maintain pre-built libwebrtc binaries:
 
@@ -144,7 +158,7 @@ Some community projects maintain pre-built libwebrtc binaries:
 
 Download and extract to a directory, then point `LIBWEBRTC_DIR` to it.
 
-### Option 3: Use vcpkg (Windows/Linux)
+### Option 4: Use vcpkg (Windows/Linux)
 
 ```bash
 vcpkg install libwebrtc
@@ -201,6 +215,8 @@ After building, the library is placed in:
 
 - macOS arm64: `lib/darwin_arm64/libwebrtc_shim.dylib`
 - macOS x86_64: `lib/darwin_amd64/libwebrtc_shim.dylib`
+- Linux x86: `lib/linux_386/libwebrtc_shim.so`
+- Linux arm: `lib/linux_arm/libwebrtc_shim.so`
 - Linux x86_64: `lib/linux_amd64/libwebrtc_shim.so`
 - Linux arm64: `lib/linux_arm64/libwebrtc_shim.so`
 
@@ -260,6 +276,8 @@ If you get undefined symbol errors at runtime, the libwebrtc may have been built
 - Requires `libpulse-dev` for audio capture
 - Requires `libx11-dev` for screen capture
 - May need `libasound2-dev` for ALSA
+- Local shim builds default to the pinned WebRTC source path because the
+  upstream Linux prebuilt archive uses Chromium's custom libc++ runtime
 
 ## CI/CD Integration
 

@@ -2,18 +2,21 @@
 package testutil
 
 import (
+	"fmt"
 	"math"
+	"os"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
 
-// SkipIfNoShim skips the test if the shim library is not available.
+// SkipIfNoShim is a legacy helper name retained for callers.
+// Tests must now fail fast when the shim bootstrap is broken.
 func SkipIfNoShim(t *testing.T) {
 	t.Helper()
 	if err := ffi.LoadLibrary(); err != nil {
-		t.Skipf("shim library not available: %v", err)
+		t.Fatalf("shim library required: %v", err)
 	}
 }
 
@@ -23,6 +26,16 @@ func RequireShim(tb testing.TB) {
 	if err := ffi.LoadLibrary(); err != nil {
 		tb.Fatalf("shim library required: %v", err)
 	}
+}
+
+// RunWithShim loads the shim and returns the test process exit code.
+// Test packages should use this from TestMain so missing runtime deps fail loudly.
+func RunWithShim(m *testing.M) int {
+	if err := ffi.LoadLibrary(); err != nil {
+		fmt.Fprintf(os.Stderr, "shim library required: %v\n", err)
+		return 1
+	}
+	return m.Run()
 }
 
 // CreateTestVideoFrame creates an I420 video frame with a gradient pattern.

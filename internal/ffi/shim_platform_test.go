@@ -10,6 +10,8 @@ func TestShimPlatformKeys(t *testing.T) {
 	}{
 		{"darwin", "amd64", "darwin_amd64"},
 		{"darwin", "arm64", "darwin_arm64"},
+		{"linux", "386", "linux_386"},
+		{"linux", "arm", "linux_arm"},
 		{"linux", "amd64", "linux_amd64"},
 		{"linux", "arm64", "linux_arm64"},
 	}
@@ -31,7 +33,6 @@ func TestShimPlatformKeys(t *testing.T) {
 		goarch string
 	}{
 		{"windows", "amd64"},
-		{"linux", "386"},
 		{"darwin", "386"},
 	}
 

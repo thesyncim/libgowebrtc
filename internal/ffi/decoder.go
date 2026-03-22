@@ -1,6 +1,7 @@
 package ffi
 
 import (
+	"fmt"
 	"runtime"
 	"unsafe"
 )
@@ -10,10 +11,14 @@ func CreateVideoDecoder(codec CodecType) (uintptr, error) {
 	if !libLoaded.Load() {
 		return 0, ErrLibraryNotLoaded
 	}
+	var openh264FallbackErr error
 	if codec == CodecH264 {
 		preferHW := runtime.GOOS == "darwin"
 		if err := ensureOpenH264(shouldRequireOpenH264(preferHW)); err != nil {
 			return 0, err
+		}
+		if preferHW {
+			openh264FallbackErr = preloadOpenH264Optional()
 		}
 	}
 	var errBuf ShimErrorBuffer
@@ -27,7 +32,13 @@ func CreateVideoDecoder(codec CodecType) (uintptr, error) {
 	if decoder == 0 {
 		msg := errBuf.String()
 		if msg != "" {
+			if openh264FallbackErr != nil {
+				msg = fmt.Sprintf("%s (OpenH264 fallback unavailable: %v)", msg, openh264FallbackErr)
+			}
 			return 0, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: msg}
+		}
+		if openh264FallbackErr != nil {
+			return 0, &ShimErrorWithMessage{Code: ShimErrInitFailed, Message: openh264FallbackErr.Error()}
 		}
 		return 0, ErrInitFailed
 	}

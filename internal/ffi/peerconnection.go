@@ -3,6 +3,7 @@ package ffi
 import (
 	"log"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -213,6 +214,9 @@ func (c *ICEServerConfig) Ptr() uintptr {
 func CreatePeerConnection(config *PeerConnectionConfig) (uintptr, error) {
 	if !libLoaded.Load() || shimPeerConnectionCreate == nil {
 		return 0, ErrLibraryNotLoaded
+	}
+	if err := preloadOpenH264Optional(); err != nil {
+		return 0, err
 	}
 	var errBuf ShimErrorBuffer
 	var configPtr uintptr
@@ -2178,6 +2182,9 @@ func GetSupportedVideoCodecs() ([]CodecCapability, error) {
 	if !libLoaded.Load() || shimGetSupportedVideoCodecs == nil {
 		return nil, ErrLibraryNotLoaded
 	}
+	if err := preloadOpenH264Optional(); err != nil {
+		return nil, err
+	}
 
 	codecs := make([]CodecCapability, 16)
 	params := &shimGetSupportedVideoCodecsParams{
@@ -2269,6 +2276,11 @@ func GetSupportedAudioCodecs() ([]CodecCapability, error) {
 func IsCodecSupported(mimeType string) bool {
 	if !libLoaded.Load() || shimIsCodecSupported == nil {
 		return false
+	}
+	if strings.EqualFold(mimeType, "video/H264") {
+		if err := preloadOpenH264Optional(); err != nil {
+			return false
+		}
 	}
 
 	cstr := CString(mimeType)

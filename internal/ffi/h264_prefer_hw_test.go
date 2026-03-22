@@ -1,7 +1,6 @@
 package ffi
 
 import (
-	"os"
 	"runtime"
 	"testing"
 )
@@ -10,11 +9,7 @@ func TestH264PreferHWMac(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("darwin only")
 	}
-	if os.Getenv("LIBWEBRTC_TEST_H264_PREFER_HW") == "" {
-		t.Skip("set LIBWEBRTC_TEST_H264_PREFER_HW=1 to enable")
-	}
 
-	t.Setenv(envOpenH264DisableDownload, "1")
 	t.Setenv(envPreferSoftwareCodecs, "0")
 
 	if err := LoadLibrary(); err != nil {
@@ -34,7 +29,7 @@ func TestH264PreferHWMac(t *testing.T) {
 		}
 	}
 	if !h264Available {
-		t.Fatal("H264 not available in codec list")
+		t.Fatal("H264 should be available in codec list")
 	}
 
 	profile := CString("42e01f") // Constrained Baseline
@@ -50,7 +45,7 @@ func TestH264PreferHWMac(t *testing.T) {
 
 	handle, err := CreateVideoEncoder(CodecH264, cfg)
 	if err != nil {
-		t.Fatalf("create H264 encoder with PreferHW=1: %v", err)
+		t.Fatalf("create H264 encoder with PreferHW=1 should fall back automatically: %v", err)
 	}
 	VideoEncoderDestroy(handle)
 }

@@ -64,6 +64,40 @@ static std::string VideoCodecErrorString(int code) {
 
 }  // namespace shim
 
+namespace {
+
+bool HasFormat(const std::vector<webrtc::SdpVideoFormat>& formats, const webrtc::SdpVideoFormat& candidate) {
+    for (const auto& format : formats) {
+        if (strcasecmp(format.name.c_str(), candidate.name.c_str()) != 0) {
+            continue;
+        }
+        if (format.parameters == candidate.parameters) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void AppendFormats(
+    std::vector<webrtc::SdpVideoFormat>* dst,
+    const std::vector<webrtc::SdpVideoFormat>& src
+) {
+    for (const auto& format : src) {
+        if (!HasFormat(*dst, format)) {
+            dst->push_back(format);
+        }
+    }
+}
+
+webrtc::SdpVideoFormat DefaultH264Format() {
+    webrtc::SdpVideoFormat format("H264");
+    format.parameters["profile-level-id"] = "42e01f";
+    format.parameters["packetization-mode"] = "1";
+    return format;
+}
+
+}  // namespace
+
 /* ============================================================================
  * Video Encoder Implementation
  * ========================================================================== */
@@ -137,6 +171,26 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
     auto shim_encoder = std::make_unique<ShimVideoEncoder>();
     shim_encoder->codec_type = codec;
 
+    auto try_openh264 = [&]() -> bool {
+        if (codec != SHIM_CODEC_H264 || !shim::openh264::IsAvailable()) {
+            return false;
+        }
+
+        auto openh264_enc = std::make_unique<shim::openh264::OpenH264Encoder>();
+        if (openh264_enc->Initialize(config, nullptr) != SHIM_OK) {
+            return false;
+        }
+
+        shim_encoder->openh264_encoder = std::move(openh264_enc);
+        shim_encoder->use_openh264 = true;
+
+        memset(&shim_encoder->codec_settings, 0, sizeof(shim_encoder->codec_settings));
+        shim_encoder->codec_settings.width = static_cast<uint16_t>(config->width);
+        shim_encoder->codec_settings.height = static_cast<uint16_t>(config->height);
+        shim_encoder->codec_settings.maxFramerate = static_cast<uint32_t>(config->framerate);
+        return true;
+    };
+
     // For H.264, try OpenH264 directly on Linux, or macOS with prefer_hw=0
     if (codec == SHIM_CODEC_H264) {
         bool use_openh264 = false;
@@ -148,19 +202,10 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
         use_openh264 = (config->prefer_hw == 0) || shim::ShouldUseSoftwareCodecs();
 #endif
 
-        if (use_openh264 && shim::openh264::IsAvailable()) {
-            auto openh264_enc = std::make_unique<shim::openh264::OpenH264Encoder>();
-            int result = openh264_enc->Initialize(config, error_out);
-            if (result == SHIM_OK) {
-                shim_encoder->openh264_encoder = std::move(openh264_enc);
-                shim_encoder->use_openh264 = true;
-                // Store dimensions in codec_settings for reference
-                memset(&shim_encoder->codec_settings, 0, sizeof(shim_encoder->codec_settings));
-                shim_encoder->codec_settings.width = static_cast<uint16_t>(config->width);
-                shim_encoder->codec_settings.height = static_cast<uint16_t>(config->height);
-                shim_encoder->codec_settings.maxFramerate = static_cast<uint32_t>(config->framerate);
-                return shim_encoder.release();
-            }
+        if (use_openh264 && try_openh264()) {
+            return shim_encoder.release();
+        }
+        if (use_openh264) {
             // OpenH264 init failed, fall through to try libwebrtc
         }
     }
@@ -183,6 +228,10 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
         tried_fallback = true;
         factory = make_factory(!use_software);
         encoder = factory ? factory->Create(shim::GetEnvironment(), format) : nullptr;
+    }
+
+    if (!encoder && try_openh264()) {
+        return shim_encoder.release();
     }
 
     if (!encoder) {
@@ -237,6 +286,9 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
             shim_encoder->encoder = std::move(fallback_encoder);
             init_result = shim_encoder->encoder->InitEncode(&settings, encoder_settings);
         }
+    }
+    if (init_result != WEBRTC_VIDEO_CODEC_OK && codec == SHIM_CODEC_H264 && try_openh264()) {
+        return shim_encoder.release();
     }
     if (init_result != WEBRTC_VIDEO_CODEC_OK) {
         shim::SetErrorMessage(error_out, shim::VideoCodecErrorString(init_result));
@@ -531,26 +583,36 @@ SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(
     auto shim_decoder = std::make_unique<ShimVideoDecoder>();
     shim_decoder->codec_type = codec;
 
-    // For H.264, try OpenH264 directly on Linux
+    auto try_openh264 = [&]() -> bool {
+        if (!shim::openh264::IsAvailable()) {
+            return false;
+        }
+
+        shim_decoder->decoder.reset();
+        shim_decoder->callback.reset();
+
+        auto openh264_dec = std::make_unique<shim::openh264::OpenH264Decoder>();
+        int result = openh264_dec->Initialize(error_out);
+        if (result != SHIM_OK) {
+            return false;
+        }
+
+        shim_decoder->openh264_decoder = std::move(openh264_dec);
+        shim_decoder->use_openh264 = true;
+        return true;
+    };
+
+    bool prefer_openh264 = false;
     if (codec == SHIM_CODEC_H264) {
-        bool use_openh264 = false;
 #ifdef __linux__
         // On Linux, always use OpenH264 (no VideoToolbox available)
-        use_openh264 = true;
+        prefer_openh264 = true;
 #else
-        // On macOS, use OpenH264 only if ShouldUseSoftwareCodecs()
-        use_openh264 = shim::ShouldUseSoftwareCodecs();
+        // On macOS, prefer libwebrtc/VideoToolbox, but allow OpenH264 fallback.
+        prefer_openh264 = shim::ShouldUseSoftwareCodecs();
 #endif
-
-        if (use_openh264 && shim::openh264::IsAvailable()) {
-            auto openh264_dec = std::make_unique<shim::openh264::OpenH264Decoder>();
-            int result = openh264_dec->Initialize(error_out);
-            if (result == SHIM_OK) {
-                shim_decoder->openh264_decoder = std::move(openh264_dec);
-                shim_decoder->use_openh264 = true;
-                return shim_decoder.release();
-            }
-            // OpenH264 init failed, fall through to try libwebrtc
+        if (prefer_openh264 && try_openh264()) {
+            return shim_decoder.release();
         }
     }
 
@@ -574,6 +636,9 @@ SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(
     }
 
     if (!decoder) {
+        if (codec == SHIM_CODEC_H264 && !prefer_openh264 && try_openh264()) {
+            return shim_decoder.release();
+        }
         shim::SetErrorMessage(error_out, "decoder factory returned null (codec may not be supported)");
         return nullptr;
     }
@@ -588,26 +653,23 @@ SHIM_EXPORT ShimVideoDecoder* shim_video_decoder_create(
 
     shim_decoder->callback = std::make_unique<DecoderCallback>(shim_decoder.get());
 
-    if (!shim_decoder->decoder->Configure(settings)) {
-        if (codec == SHIM_CODEC_H264 && !tried_fallback) {
-            auto fallback_factory = make_factory(!use_software);
-            auto fallback_decoder = fallback_factory
-                ? fallback_factory->Create(shim::GetEnvironment(), format)
-                : nullptr;
-            if (fallback_decoder) {
-                shim_decoder->decoder = std::move(fallback_decoder);
-                if (!shim_decoder->decoder->Configure(settings)) {
-                    shim::SetErrorMessage(error_out, "decoder Configure() failed");
-                    return nullptr;
-                }
-            } else {
-                shim::SetErrorMessage(error_out, "decoder Configure() failed");
-                return nullptr;
-            }
-        } else {
-            shim::SetErrorMessage(error_out, "decoder Configure() failed");
-            return nullptr;
+    bool configured = shim_decoder->decoder->Configure(settings);
+    if (!configured && codec == SHIM_CODEC_H264 && !tried_fallback) {
+        auto fallback_factory = make_factory(!use_software);
+        auto fallback_decoder = fallback_factory
+            ? fallback_factory->Create(shim::GetEnvironment(), format)
+            : nullptr;
+        if (fallback_decoder) {
+            shim_decoder->decoder = std::move(fallback_decoder);
+            configured = shim_decoder->decoder->Configure(settings);
         }
+    }
+    if (!configured) {
+        if (codec == SHIM_CODEC_H264 && !prefer_openh264 && try_openh264()) {
+            return shim_decoder.release();
+        }
+        shim::SetErrorMessage(error_out, "decoder Configure() failed");
+        return nullptr;
     }
 
     // Register callback (decoder doesn't own it, we do)
@@ -763,12 +825,28 @@ SHIM_EXPORT int shim_get_supported_video_codecs(ShimGetSupportedVideoCodecsParam
         return SHIM_ERROR_INVALID_PARAM;
     }
 
-    // Use CreateBuiltinVideoEncoderFactory for full codec support
-    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
-    if (!factory) {
+    std::vector<webrtc::SdpVideoFormat> formats;
+
+    auto builtin_factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    if (builtin_factory) {
+        AppendFormats(&formats, builtin_factory->GetSupportedFormats());
+    }
+
+    auto internal_factory = std::make_unique<webrtc::InternalEncoderFactory>();
+    if (internal_factory) {
+        AppendFormats(&formats, internal_factory->GetSupportedFormats());
+    }
+
+    if (shim::openh264::IsAvailable()) {
+        auto h264 = DefaultH264Format();
+        if (!HasFormat(formats, h264)) {
+            formats.push_back(std::move(h264));
+        }
+    }
+
+    if (formats.empty()) {
         return SHIM_ERROR_INVALID_PARAM;
     }
-    auto formats = factory->GetSupportedFormats();
     int count = 0;
     int payload_type = 96;
 
@@ -809,14 +887,27 @@ SHIM_EXPORT int shim_is_codec_supported(const char* mime_type) {
         }
     }
 
-    // Check video codecs against builtin factory
-    auto factory = webrtc::CreateBuiltinVideoEncoderFactory();
-    auto formats = factory->GetSupportedFormats();
+    std::vector<webrtc::SdpVideoFormat> formats;
+
+    auto builtin_factory = webrtc::CreateBuiltinVideoEncoderFactory();
+    if (builtin_factory) {
+        AppendFormats(&formats, builtin_factory->GetSupportedFormats());
+    }
+
+    auto internal_factory = std::make_unique<webrtc::InternalEncoderFactory>();
+    if (internal_factory) {
+        AppendFormats(&formats, internal_factory->GetSupportedFormats());
+    }
+
     for (const auto& format : formats) {
         std::string mime = "video/" + format.name;
         if (strcasecmp(mime_type, mime.c_str()) == 0) {
             return 1;
         }
+    }
+
+    if (strcasecmp(mime_type, "video/H264") == 0 && shim::openh264::IsAvailable()) {
+        return 1;
     }
     return 0;
 }

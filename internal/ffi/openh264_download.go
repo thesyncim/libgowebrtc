@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 var (
 	openh264Once           sync.Once
 	openh264Err            error
+	openh264Loaded         atomic.Bool
 	errOpenH264Unsupported = errors.New("openh264 binary not published for this platform")
 )
 
@@ -42,28 +44,62 @@ func ensureOpenH264(required bool) error {
 	if !required {
 		return nil
 	}
+	if openh264Loaded.Load() {
+		return nil
+	}
 
 	openh264Once.Do(func() {
-		path, err := resolveOpenH264()
-		if err != nil {
-			openh264Err = err
-			return
-		}
-		if path == "" {
-			openh264Err = errors.New("openh264 not available; set LIBWEBRTC_OPENH264_PATH or enable download")
-			return
-		}
-
-		addLibraryDirToEnv(filepath.Dir(path))
-
-		_, err = dlopenLibrary(path, RTLD_NOW|RTLD_GLOBAL)
-		if err != nil {
-			openh264Err = fmt.Errorf("load openh264: %w", err)
-			return
-		}
+		openh264Err = loadOpenH264()
 	})
 
 	return openh264Err
+}
+
+func preloadOpenH264Optional() error {
+	if openh264Loaded.Load() {
+		return nil
+	}
+
+	if strings.TrimSpace(os.Getenv(envOpenH264Path)) == "" &&
+		strings.TrimSpace(os.Getenv(envOpenH264URL)) == "" &&
+		isOpenH264DownloadDisabled() {
+		return nil
+	}
+
+	path, err := resolveOpenH264()
+	if err != nil {
+		if errors.Is(err, errOpenH264Unsupported) {
+			return nil
+		}
+		return err
+	}
+	if path == "" {
+		return nil
+	}
+
+	return loadOpenH264FromPath(path)
+}
+
+func loadOpenH264() error {
+	path, err := resolveOpenH264()
+	if err != nil {
+		return err
+	}
+	if path == "" {
+		return errors.New("openh264 not available; set LIBWEBRTC_OPENH264_PATH or enable download")
+	}
+	return loadOpenH264FromPath(path)
+}
+
+func loadOpenH264FromPath(path string) error {
+	addLibraryDirToEnv(filepath.Dir(path))
+
+	if _, err := dlopenLibrary(path, RTLD_NOW|RTLD_GLOBAL); err != nil {
+		return fmt.Errorf("load openh264: %w", err)
+	}
+
+	openh264Loaded.Store(true)
+	return nil
 }
 
 func shouldPreferSoftwareCodecs() bool {

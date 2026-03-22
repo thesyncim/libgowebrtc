@@ -5,17 +5,14 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
 
 func TestMain(m *testing.M) {
-	if err := ffi.LoadLibrary(); err != nil {
-		os.Exit(0) // Skip all tests if shim unavailable
-	}
-	os.Exit(m.Run())
+	os.Exit(testutil.RunWithShim(m))
 }
 
 func TestH264EncodeDecode(t *testing.T) {

@@ -43,6 +43,20 @@ bool IsTruthyEnv(const char* value) {
     return lowered != "0" && lowered != "false";
 }
 
+webrtc::scoped_refptr<webrtc::AudioDeviceModule> CreateInitializedAudioDeviceModule(
+    const webrtc::Environment& env,
+    webrtc::AudioDeviceModule::AudioLayer audio_layer) {
+    auto adm = webrtc::CreateAudioDeviceModule(env, audio_layer);
+    if (!adm) {
+        return nullptr;
+    }
+    if (adm->Init() != 0) {
+        return nullptr;
+    }
+    adm->Terminate();
+    return adm;
+}
+
 }  // namespace
 
 void InitializeGlobals() {
@@ -87,6 +101,27 @@ webrtc::Thread* GetNetworkThread() {
 
 bool ShouldUseSoftwareCodecs() {
     return IsTruthyEnv(std::getenv("LIBWEBRTC_PREFER_SOFTWARE_CODECS"));
+}
+
+webrtc::scoped_refptr<webrtc::AudioDeviceModule> CreatePeerConnectionAudioDeviceModule() {
+    const auto& env = GetEnvironment();
+    if (IsTruthyEnv(std::getenv("LIBWEBRTC_USE_DUMMY_AUDIO"))) {
+        return CreateInitializedAudioDeviceModule(env, webrtc::AudioDeviceModule::kDummyAudio);
+    }
+
+#if defined(WEBRTC_LINUX)
+    auto platform_adm = CreateInitializedAudioDeviceModule(
+        env,
+        webrtc::AudioDeviceModule::kPlatformDefaultAudio
+    );
+    if (platform_adm) {
+        return platform_adm;
+    }
+
+    return CreateInitializedAudioDeviceModule(env, webrtc::AudioDeviceModule::kDummyAudio);
+#else
+    return nullptr;
+#endif
 }
 
 webrtc::VideoCodecType ToWebRTCCodecType(ShimCodecType codec) {

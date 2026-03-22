@@ -3,7 +3,7 @@ module github.com/thesyncim/libgowebrtc
 go 1.25
 
 require (
-	github.com/ebitengine/purego v0.9.1
+	github.com/ebitengine/purego v0.10.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/pion/rtp v1.9.0
 	github.com/pion/webrtc/v4 v4.2.1

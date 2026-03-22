@@ -3,6 +3,7 @@ package ffi
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 )
 
@@ -10,14 +11,9 @@ import (
 // Set LIBWEBRTC_SHIM_PATH environment variable to the path of the shim library.
 
 func TestMain(m *testing.M) {
-	// Attempt to load library
 	if err := LoadLibrary(); err != nil {
-		if os.Getenv("LIBWEBRTC_TEST_REQUIRE_SHIM") != "" {
-			fmt.Fprintf(os.Stderr, "shim library required: %v\n", err)
-			os.Exit(1)
-		}
-		// Skip all integration tests if library not available
-		os.Exit(0)
+		fmt.Fprintf(os.Stderr, "shim library required: %v\n", err)
+		os.Exit(1)
 	}
 	os.Exit(m.Run())
 }
@@ -51,8 +47,7 @@ func TestListSupportedCodecs(t *testing.T) {
 		}
 	}
 	if !h264Available {
-		t.Log("WARNING: H264 is not available in this libwebrtc build")
-		t.Log("H264 requires either OpenH264 library or VideoToolbox (macOS)")
+		t.Fatalf("H264 should be available with zero-config dependencies on %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 }
 

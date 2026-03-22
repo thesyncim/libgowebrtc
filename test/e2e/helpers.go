@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
@@ -281,11 +281,7 @@ func (pp *LibPeerPair) WaitForConnection(timeout time.Duration) bool {
 
 // TestMain handles library loading for all e2e tests.
 func TestMain(m *testing.M) {
-	if err := ffi.LoadLibrary(); err != nil {
-		// Skip tests if library not available
-		os.Exit(0)
-	}
-	os.Exit(m.Run())
+	os.Exit(testutil.RunWithShim(m))
 }
 
 // FrameCounter tracks received frames with thread-safety.

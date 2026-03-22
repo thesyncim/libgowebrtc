@@ -30,6 +30,11 @@ build:release --copt=-O3
 # Platform configurations
 build:darwin_arm64 --platforms=//bazel/platforms:darwin_arm64
 build:darwin_amd64 --platforms=//bazel/platforms:darwin_amd64
+# Bazel doesn't auto-register an x86_32 C++ toolchain on typical x86_64 Linux
+# hosts. Keep toolchain resolution on the host linux_amd64 platform and force
+# 32-bit code generation/linking explicitly below.
+build:linux_386 --platforms=//bazel/platforms:linux_amd64
+build:linux_arm --platforms=//bazel/platforms:linux_arm
 build:linux_amd64 --platforms=//bazel/platforms:linux_amd64
 build:linux_arm64 --platforms=//bazel/platforms:linux_arm64
 build:windows_amd64 --platforms=//bazel/platforms:windows_amd64
@@ -41,9 +46,20 @@ test --test_verbose_timeout_warnings
 # Config inheritance - platform configs inherit base OS configs
 build:darwin_arm64 --config=macos
 build:darwin_amd64 --config=macos
+build:linux_386 --config=linux
+build:linux_arm --config=linux
 build:linux_amd64 --config=linux
 build:linux_arm64 --config=linux
 build:windows_amd64 --config=windows
+
+# 32-bit Linux builds run on an x86_64 host toolchain and need explicit target
+# flags so Bazel emits 32-bit objects and links against 32-bit runtimes.
+build:linux_386 --define=libgowebrtc_target=linux_386
+build:linux_386 --copt=-m32
+build:linux_386 --linkopt=-m32
+build:linux_arm --define=libgowebrtc_target=linux_arm
+build:linux_amd64 --define=libgowebrtc_target=linux_amd64
+build:linux_arm64 --define=libgowebrtc_target=linux_arm64
 
 # Convenience aliases
 build:macos_arm64 --config=darwin_arm64

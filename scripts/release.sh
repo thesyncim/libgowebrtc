@@ -2,13 +2,17 @@
 #
 # Release script for libgowebrtc shim
 #
-# Creates a new shim release by tagging and pushing to GitHub.
-# The CI will build all platforms and create the release.
+# Publishes a prebuilt shim release directory to GitHub.
 #
 # Usage:
 #   ./scripts/release.sh              # Interactive: prompts for version
-#   ./scripts/release.sh 0.4.0        # Release shim-v0.4.0
+#   ./scripts/release.sh 0.4.0        # Publish release/shim-v0.4.0
 #   ./scripts/release.sh --dry-run    # Show what would happen
+#
+# Before publishing, prepare a release directory that contains tarballs and
+# matching .sha256 files. After the release finishes, backfill the embedded
+# manifest checksums with:
+#   python3 scripts/update_shim_manifest_checksums.py --release-dir /path/to/release
 
 set -e
 
@@ -26,8 +30,7 @@ show_help() {
 Shim Release Script
 ===================
 
-Creates a new shim release by tagging and pushing to GitHub.
-CI will automatically build all platforms and create the release.
+Uploads a prepared local release directory to GitHub and creates the tag.
 
 Usage: ./scripts/release.sh [OPTIONS] [VERSION]
 
@@ -35,20 +38,25 @@ Arguments:
   VERSION     Version number (e.g., 0.4.0). Will create tag shim-v0.4.0
 
 Options:
-  --dry-run   Show what would happen without making changes
-  --help      Show this help
+  --release-dir DIR  Directory containing .tar.gz and .sha256 files
+  --target REF       Commit-ish for the release tag (default: HEAD)
+  --dry-run          Show what would happen without making changes
+  --help             Show this help
 
 Examples:
   ./scripts/release.sh              # Interactive mode
-  ./scripts/release.sh 0.4.0        # Release shim-v0.4.0
+  ./scripts/release.sh 0.4.0        # Publish release/shim-v0.4.0
   ./scripts/release.sh --dry-run    # Preview release
 
-Platforms built by CI:
+Platforms expected in the local release directory:
   - darwin_arm64  (macOS Apple Silicon)
   - darwin_amd64  (macOS Intel, cross-compiled)
+  - linux_386     (Linux x86 32-bit, Docker-built)
   - linux_amd64   (Linux x86_64)
-  - linux_arm64   (Linux ARM64)
   - windows_amd64 (Windows x64)
+
+Additional validated target:
+  - linux_arm     (Linux ARM 32-bit, validated via Docker/source build)
 EOF
     exit 0
 }
@@ -77,12 +85,16 @@ suggest_next_version() {
 main() {
     local dry_run=false
     local version=""
+    local release_dir=""
+    local target_ref="HEAD"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --dry-run) dry_run=true; shift ;;
-            --help)    show_help ;;
-            *)         version="$1"; shift ;;
+            --release-dir) release_dir="$2"; shift 2 ;;
+            --target)      target_ref="$2"; shift 2 ;;
+            --dry-run)     dry_run=true; shift ;;
+            --help)        show_help ;;
+            *)             version="$1"; shift ;;
         esac
     done
 
@@ -117,42 +129,63 @@ main() {
 
     local tag="shim-v${version}"
 
-    # Check if tag exists
-    if git rev-parse "$tag" &>/dev/null; then
-        log_error "Tag $tag already exists"
+    if [[ -z "$release_dir" ]]; then
+        release_dir="$PROJECT_ROOT/release/$tag"
+    fi
+
+    if [[ ! -d "$release_dir" ]]; then
+        log_error "Release directory not found: $release_dir"
+        exit 1
+    fi
+
+    if ! find "$release_dir" -maxdepth 1 -name '*.tar.gz' | grep -q .; then
+        log_error "No release archives found in $release_dir"
+        exit 1
+    fi
+
+    if ! find "$release_dir" -maxdepth 1 -name '*.sha256' | grep -q .; then
+        log_error "No checksum files found in $release_dir"
         exit 1
     fi
 
     echo ""
     log_info "Release summary:"
     echo "  Tag:       $tag"
-    echo "  Platforms: darwin_arm64, darwin_amd64, linux_amd64, linux_arm64, windows_amd64"
+    echo "  Source:    $release_dir"
+    echo "  Platforms: darwin_arm64, darwin_amd64, linux_386, linux_amd64, windows_amd64"
+    echo "  Extra validated target: linux_arm"
     echo "  Branch:    $(git branch --show-current)"
-    echo "  Commit:    $(git rev-parse --short HEAD)"
+    echo "  Target:    $target_ref"
+    echo "  Commit:    $(git rev-parse --short "$target_ref")"
     echo ""
 
     if [[ "$dry_run" == true ]]; then
         log_warn "Dry run - no changes made"
         echo "Would run:"
-        echo "  git tag -a $tag -m 'Release $tag'"
-        echo "  git push origin $tag"
+        echo "  gh release create $tag \"$release_dir\"/* --target $target_ref --title '$tag' --notes 'Prebuilt libwebrtc shim assets.'"
         exit 0
     fi
 
-    read -p "Create and push tag $tag? [y/N] " -n 1 -r
+    if gh release view "$tag" >/dev/null 2>&1; then
+        log_error "GitHub release $tag already exists"
+        exit 1
+    fi
+
+    read -p "Create GitHub release $tag from $release_dir? [y/N] " -n 1 -r
     echo
     [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
 
-    # Create and push tag
-    log_info "Creating tag $tag..."
-    git tag -a "$tag" -m "Release $tag"
+    log_info "Creating GitHub release $tag..."
+    gh release create \
+        "$tag" \
+        "$release_dir"/* \
+        --target "$target_ref" \
+        --title "$tag" \
+        --notes "Prebuilt libwebrtc shim assets for darwin_arm64, darwin_amd64, linux_386, linux_amd64, and windows_amd64."
 
-    log_info "Pushing tag to origin..."
-    git push origin "$tag"
-
-    log_success "Tag $tag pushed!"
+    log_success "GitHub release $tag created!"
     echo ""
-    echo "CI will now build all platforms. Monitor progress at:"
+    echo "CI will now validate the published assets. Monitor progress at:"
     echo "  https://github.com/thesyncim/libgowebrtc/actions"
     echo ""
     echo "Once complete, the release will be available at:"
