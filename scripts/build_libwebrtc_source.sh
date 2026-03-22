@@ -12,6 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 WEBRTC_GIT_REV="${WEBRTC_GIT_REV:-d2eaa5570fc9959f8dbde32912a16366b8ee75f4}"
 WEBRTC_BRANCH_HEAD="${WEBRTC_BRANCH_HEAD:-7390}"
+WEBRTC_SOURCE_URL="${WEBRTC_SOURCE_URL:-https://webrtc.googlesource.com/src.git}"
 WEBRTC_CACHE_DIR="${WEBRTC_CACHE_DIR:-$HOME/.cache/libgowebrtc/webrtc}"
 DEPOT_TOOLS_DIR="${DEPOT_TOOLS_DIR:-$HOME/.cache/libgowebrtc/depot_tools}"
 TARGET_PLATFORM="${TARGET_PLATFORM:-}"
@@ -127,6 +128,7 @@ is_component_build=false
 rtc_include_tests=false
 rtc_build_examples=false
 rtc_build_tools=false
+is_clang=false
 use_rtti=true
 treat_warnings_as_errors=false
 use_custom_libcxx=false
@@ -145,6 +147,7 @@ is_component_build=false
 rtc_include_tests=false
 rtc_build_examples=false
 rtc_build_tools=false
+is_clang=false
 use_rtti=true
 treat_warnings_as_errors=false
 use_custom_libcxx=false
@@ -163,6 +166,7 @@ is_component_build=false
 rtc_include_tests=false
 rtc_build_examples=false
 rtc_build_tools=false
+is_clang=false
 use_rtti=true
 treat_warnings_as_errors=false
 use_custom_libcxx=false
@@ -183,6 +187,7 @@ is_component_build=false
 rtc_include_tests=false
 rtc_build_examples=false
 rtc_build_tools=false
+is_clang=false
 use_rtti=true
 treat_warnings_as_errors=false
 use_custom_libcxx=false
@@ -245,6 +250,105 @@ retry_command() {
     done
 }
 
+cleanup_broken_git_checkouts() {
+    local checkout_root="$WEBRTC_CACHE_DIR/src"
+    local -a git_dirs=()
+    if [[ ! -d "$checkout_root" ]]; then
+        return
+    fi
+
+    # Recover from interrupted fetch/sync runs that leave stale Git lock files
+    # behind and poison future gclient sync attempts.
+    while IFS= read -r lock_file; do
+        rm -f "$lock_file"
+    done < <(find "$checkout_root" -type f -path '*/.git/index.lock' 2>/dev/null)
+
+    mapfile -t git_dirs < <(find "$checkout_root" -type d -name .git -prune 2>/dev/null)
+    for git_dir in "${git_dirs[@]}"; do
+        local repo_dir
+        [[ -d "$git_dir" ]] || continue
+        repo_dir="$(dirname "$git_dir")"
+        if [[ "$repo_dir" == "$checkout_root" ]]; then
+            continue
+        fi
+        if git -C "$repo_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
+            continue
+        fi
+        log_warn "Removing incomplete dependency checkout: $repo_dir"
+        rm -rf "$repo_dir"
+    done
+}
+
+configure_webrtc_checkout() {
+    local custom_deps_block
+    local custom_vars_block
+    custom_deps_block=$'    "custom_deps": {\n      "src/third_party/test_fonts/test_fonts": None,'
+    if [[ "$TARGET_PLATFORM" == linux_* ]]; then
+        custom_deps_block+=$'\n      "src/third_party/llvm-build/Release+Asserts": None,'
+    fi
+    custom_deps_block+=$'\n    },'
+    if [[ "$TARGET_PLATFORM" == linux_* ]]; then
+        custom_vars_block=$'    "custom_vars": {\n      "llvm_force_head_revision": True,\n    },'
+    fi
+
+    log_step "Configuring WebRTC checkout"
+    cat > "$WEBRTC_CACHE_DIR/.gclient" <<EOF
+solutions = [
+  {
+    "name": "src",
+    "url": "${WEBRTC_SOURCE_URL}",
+    "deps_file": "DEPS",
+    "managed": False,
+${custom_vars_block}
+${custom_deps_block}
+  },
+]
+EOF
+}
+
+clone_webrtc_checkout() {
+    log_step "Cloning WebRTC source"
+    retry_command 4 15 git clone --depth 1 "$WEBRTC_SOURCE_URL" "$WEBRTC_CACHE_DIR/src"
+}
+
+prepare_webrtc_download_dirs() {
+    # gclient writes bookkeeping files next to the LLVM toolchain download
+    # before extraction completes; pre-create the parent to avoid a fresh-cache
+    # bootstrap failure on clean Linux containers.
+    mkdir -p "$WEBRTC_CACHE_DIR/src/third_party/llvm-build/Release+Asserts"
+}
+
+gclient_sync_with_recovery() {
+    local attempts=4
+    local delay_seconds=30
+    local try=1
+
+    while true; do
+        cleanup_broken_git_checkouts
+        if gclient sync \
+            --revision "src@$WEBRTC_GIT_REV" \
+            --with_branch_heads \
+            --shallow \
+            --no-history \
+            --nohooks \
+            --jobs "$WEBRTC_GCLIENT_JOBS" \
+            --reset \
+            --force; then
+            return 0
+        fi
+
+        if (( try >= attempts )); then
+            return 1
+        fi
+
+        log_warn "gclient sync failed (attempt $try/$attempts)"
+        log_warn "Retrying in ${delay_seconds}s..."
+        sleep "$delay_seconds"
+        try=$((try + 1))
+        delay_seconds=$((delay_seconds * 2))
+    done
+}
+
 sync_webrtc_checkout() {
     export PATH="$DEPOT_TOOLS_DIR:$PATH"
     export GCLIENT_PY3=1
@@ -255,25 +359,26 @@ sync_webrtc_checkout() {
     mkdir -p "$WEBRTC_CACHE_DIR"
     cd "$WEBRTC_CACHE_DIR"
 
-    if [[ ! -d "$WEBRTC_CACHE_DIR/src/.git" ]]; then
-        log_step "Fetching WebRTC source"
-        fetch --nohooks --no-history webrtc
+    if [[ -d "$WEBRTC_CACHE_DIR/src/.git" ]] && ! git -C "$WEBRTC_CACHE_DIR/src" rev-parse --verify HEAD >/dev/null 2>&1; then
+        log_warn "Removing incomplete root WebRTC checkout: $WEBRTC_CACHE_DIR/src"
+        rm -rf "$WEBRTC_CACHE_DIR/src"
     fi
+
+    configure_webrtc_checkout
+
+    if [[ ! -d "$WEBRTC_CACHE_DIR/src/.git" ]]; then
+        clone_webrtc_checkout
+    fi
+
+    prepare_webrtc_download_dirs
 
     log_step "Syncing WebRTC source"
     cd "$WEBRTC_CACHE_DIR/src"
-    retry_command 4 15 git fetch https://webrtc.googlesource.com/src "$WEBRTC_GIT_REV" --depth 1
+    retry_command 4 15 git fetch "$WEBRTC_SOURCE_URL" "$WEBRTC_GIT_REV" --depth 1
     git checkout --detach "$WEBRTC_GIT_REV"
 
     cd "$WEBRTC_CACHE_DIR"
-    retry_command 4 30 gclient sync \
-        --revision "src@$WEBRTC_GIT_REV" \
-        --with_branch_heads \
-        --shallow \
-        --no-history \
-        --jobs "$WEBRTC_GCLIENT_JOBS" \
-        --reset \
-        --force
+    gclient_sync_with_recovery
 }
 
 maybe_install_linux_build_deps() {
@@ -311,6 +416,9 @@ maybe_install_linux_build_deps() {
     fi
 
     log_step "Installing Linux x86 multilib build dependencies"
+    local gxx_major libstdcxx_dev_pkg
+    gxx_major="$(g++ -dumpversion | cut -d. -f1)"
+    libstdcxx_dev_pkg="libstdc++-${gxx_major}-dev:i386"
     "${sudo_cmd[@]}" dpkg --add-architecture i386
     "${sudo_cmd[@]}" apt-get update
     "${sudo_cmd[@]}" apt-get install -y \
@@ -319,9 +427,12 @@ maybe_install_linux_build_deps() {
         libc6-dev-i386 \
         lib32gcc-s1 \
         lib32stdc++6 \
+        "$libstdcxx_dev_pkg" \
+        libasound2-dev:i386 \
         libdrm-dev:i386 \
         libgbm-dev:i386 \
         libglib2.0-dev:i386 \
+        libpulse-dev:i386 \
         libx11-dev:i386 \
         libxcomposite-dev:i386 \
         libxdamage-dev:i386 \
@@ -336,6 +447,12 @@ build_webrtc() {
     export PATH="$DEPOT_TOOLS_DIR:$PATH"
 
     local out_dir gn_args
+    local -a ninja_targets=(
+        "webrtc"
+        "api/video_codecs:builtin_video_decoder_factory"
+        "api/video_codecs:builtin_video_encoder_factory"
+        "media:rtc_internal_video_codecs"
+    )
     out_dir="$(out_dir_for "$TARGET_PLATFORM")"
     gn_args="$(gn_args_for "$TARGET_PLATFORM")"
 
@@ -344,7 +461,185 @@ build_webrtc() {
     gn gen "$out_dir" --args="$gn_args"
 
     log_step "Building libwebrtc"
-    ninja -C "$out_dir" webrtc
+    ninja -C "$out_dir" "${ninja_targets[@]}"
+}
+
+create_combined_linux_archive() {
+    local output_archive="$1"
+    local primary_archive="$2"
+    local obj_dir="$3"
+    local build_root checkout_root staging_dir archive index
+    local -a archives=()
+
+    build_root="$(dirname "$obj_dir")"
+    checkout_root="$(dirname "$(dirname "$build_root")")"
+    staging_dir="$(mktemp -d)"
+
+    log_step "Combining Linux WebRTC archives"
+
+    mapfile -t archives < <(
+        {
+            printf '%s\n' "$primary_archive"
+            find "$obj_dir" -type f -name '*.a' | sort
+        } | awk '!seen[$0]++'
+    )
+
+    index=0
+    for archive in "${archives[@]}"; do
+        local archive_stage member_dir member_index is_thin_archive
+        archive_stage="$staging_dir/archive_$index"
+        member_dir="$archive_stage/members"
+        mkdir -p "$member_dir"
+        member_index=0
+        is_thin_archive=0
+
+        if file -b "$archive" | grep -Fq "thin archive"; then
+            is_thin_archive=1
+        fi
+
+        while IFS= read -r member_path; do
+            local archive_dir source_path dest_path
+            archive_dir="$(cd "$(dirname "$archive")" && pwd)"
+
+            if [[ -z "$member_path" ]]; then
+                continue
+            fi
+
+            dest_path="$member_dir/$(printf '%06d' "$member_index")_$(basename "$member_path")"
+
+            if (( is_thin_archive )); then
+                if [[ "$member_path" == /* && -f "$member_path" ]]; then
+                    source_path="$member_path"
+                elif [[ -f "$checkout_root/$member_path" ]]; then
+                    source_path="$checkout_root/$member_path"
+                elif [[ -f "$build_root/$member_path" ]]; then
+                    source_path="$build_root/$member_path"
+                elif [[ -f "$obj_dir/$member_path" ]]; then
+                    source_path="$obj_dir/$member_path"
+                elif [[ -f "$archive_dir/$member_path" ]]; then
+                    source_path="$archive_dir/$member_path"
+                else
+                    log_error "Unable to resolve thin archive member $member_path from $archive"
+                    return 1
+                fi
+
+                cp "$source_path" "$dest_path"
+            else
+                ar p "$archive" "$member_path" > "$dest_path"
+            fi
+
+            member_index=$((member_index + 1))
+        done < <(ar t "$archive")
+
+        index=$((index + 1))
+    done
+
+    rm -f "$output_archive"
+    local -a object_batch=()
+    local object_file
+    while IFS= read -r -d '' object_file; do
+        object_batch+=("$object_file")
+        if (( ${#object_batch[@]} >= 200 )); then
+            ar qc "$output_archive" "${object_batch[@]}"
+            object_batch=()
+        fi
+    done < <(find "$staging_dir" -type f -name '*.o' -print0 | sort -z)
+
+    if (( ${#object_batch[@]} > 0 )); then
+        ar qc "$output_archive" "${object_batch[@]}"
+    fi
+
+    ranlib "$output_archive"
+    rm -rf "$staging_dir"
+}
+
+materialize_linux_archive() {
+    local source_archive="$1"
+    local output_archive="$2"
+    local obj_dir="$3"
+    local build_root checkout_root archive_dir staging_dir member_path source_path dest_path
+    local member_index=0
+    local -a object_batch=()
+
+    if ! file -b "$source_archive" | grep -Fq "thin archive"; then
+        cp "$source_archive" "$output_archive"
+        return 0
+    fi
+
+    build_root="$(dirname "$obj_dir")"
+    checkout_root="$(dirname "$(dirname "$build_root")")"
+    archive_dir="$(cd "$(dirname "$source_archive")" && pwd)"
+    staging_dir="$(mktemp -d)"
+
+    while IFS= read -r member_path; do
+        if [[ -z "$member_path" ]]; then
+            continue
+        fi
+
+        if [[ "$member_path" == /* && -f "$member_path" ]]; then
+            source_path="$member_path"
+        elif [[ -f "$checkout_root/$member_path" ]]; then
+            source_path="$checkout_root/$member_path"
+        elif [[ -f "$build_root/$member_path" ]]; then
+            source_path="$build_root/$member_path"
+        elif [[ -f "$obj_dir/$member_path" ]]; then
+            source_path="$obj_dir/$member_path"
+        elif [[ -f "$archive_dir/$member_path" ]]; then
+            source_path="$archive_dir/$member_path"
+        else
+            log_error "Unable to resolve thin archive member $member_path from $source_archive"
+            return 1
+        fi
+
+        dest_path="$staging_dir/$(printf '%06d' "$member_index")_$(basename "$member_path")"
+        cp "$source_path" "$dest_path"
+        member_index=$((member_index + 1))
+    done < <(ar t "$source_archive")
+
+    rm -f "$output_archive"
+    while IFS= read -r -d '' dest_path; do
+        object_batch+=("$dest_path")
+        if (( ${#object_batch[@]} >= 200 )); then
+            ar qc "$output_archive" "${object_batch[@]}"
+            object_batch=()
+        fi
+    done < <(find "$staging_dir" -type f -name '*.o' -print0 | sort -z)
+
+    if (( ${#object_batch[@]} > 0 )); then
+        ar qc "$output_archive" "${object_batch[@]}"
+    fi
+
+    ranlib "$output_archive"
+    rm -rf "$staging_dir"
+}
+
+verify_linux_archive_symbol() {
+    local archive="$1"
+    local symbol="$2"
+    local search_dir="${3:-}"
+    if bash -lc "set +o pipefail; nm -A \"$archive\" 2>/dev/null | grep -Fq \"$symbol\""; then
+        return 0
+    fi
+
+    if [[ -n "$search_dir" ]]; then
+        local matches=()
+        local path
+        while IFS= read -r -d '' path; do
+            if bash -lc "set +o pipefail; nm -A \"$path\" 2>/dev/null | grep -Fq \"$symbol\""; then
+                matches+=("$path")
+            fi
+        done < <(find "$search_dir" -type f \( -name '*.a' -o -name '*.o' \) -print0)
+
+        if (( ${#matches[@]} > 0 )); then
+            log_warn "Symbol $symbol exists in source-built outputs:"
+            printf '%s\n' "${matches[@]}"
+        else
+            log_warn "Symbol $symbol was not found in any output under $search_dir"
+        fi
+    fi
+
+    log_error "Installed Linux archive is missing required symbol: $symbol"
+    return 1
 }
 
 install_webrtc() {
@@ -360,18 +655,32 @@ install_webrtc() {
 
     log_step "Installing libwebrtc"
     mkdir -p "$INSTALL_DIR/include" "$INSTALL_DIR/lib"
-    cp "$archive" "$INSTALL_DIR/lib/libwebrtc.a"
+    if [[ "$TARGET_PLATFORM" == linux_* ]]; then
+        local encoder_factory_archive decoder_factory_archive internal_codecs_archive simulcast_encoder_archive
+        local software_fallback_wrappers_archive
+        encoder_factory_archive="$obj_dir/api/video_codecs/libbuiltin_video_encoder_factory.a"
+        decoder_factory_archive="$obj_dir/api/video_codecs/libbuiltin_video_decoder_factory.a"
+        internal_codecs_archive="$obj_dir/media/librtc_internal_video_codecs.a"
+        simulcast_encoder_archive="$obj_dir/media/librtc_simulcast_encoder_adapter.a"
+        software_fallback_wrappers_archive="$obj_dir/api/video_codecs/librtc_software_fallback_wrappers.a"
 
-    # The monolithic libwebrtc.a does not include every helper archive we need
-    # for the shim link (for example the builtin video factory archives), so
-    # install the full static-lib tree alongside it.
-    mkdir -p "$INSTALL_DIR/lib/obj"
-    rsync -a --delete --prune-empty-dirs \
-        --include='*/' \
-        --include='*.a' \
-        --exclude='*' \
-        "$obj_dir/" "$INSTALL_DIR/lib/obj/"
-    rm -f "$INSTALL_DIR/lib/obj/libwebrtc.a"
+        materialize_linux_archive "$archive" "$INSTALL_DIR/lib/libwebrtc.a" "$obj_dir"
+        materialize_linux_archive "$encoder_factory_archive" "$INSTALL_DIR/lib/libbuiltin_video_encoder_factory.a" "$obj_dir"
+        materialize_linux_archive "$decoder_factory_archive" "$INSTALL_DIR/lib/libbuiltin_video_decoder_factory.a" "$obj_dir"
+        materialize_linux_archive "$internal_codecs_archive" "$INSTALL_DIR/lib/librtc_internal_video_codecs.a" "$obj_dir"
+        materialize_linux_archive "$simulcast_encoder_archive" "$INSTALL_DIR/lib/librtc_simulcast_encoder_adapter.a" "$obj_dir"
+        materialize_linux_archive "$software_fallback_wrappers_archive" "$INSTALL_DIR/lib/librtc_software_fallback_wrappers.a" "$obj_dir"
+
+        verify_linux_archive_symbol "$INSTALL_DIR/lib/libbuiltin_video_encoder_factory.a" "CreateBuiltinVideoEncoderFactory" "$obj_dir" || exit 1
+        verify_linux_archive_symbol "$INSTALL_DIR/lib/libbuiltin_video_decoder_factory.a" "CreateBuiltinVideoDecoderFactory" "$obj_dir" || exit 1
+        verify_linux_archive_symbol "$INSTALL_DIR/lib/librtc_internal_video_codecs.a" "InternalEncoderFactory" "$obj_dir" || exit 1
+        verify_linux_archive_symbol "$INSTALL_DIR/lib/librtc_internal_video_codecs.a" "InternalDecoderFactory" "$obj_dir" || exit 1
+        verify_linux_archive_symbol "$INSTALL_DIR/lib/librtc_simulcast_encoder_adapter.a" "SimulcastEncoderAdapter" "$obj_dir" || exit 1
+        verify_linux_archive_symbol "$INSTALL_DIR/lib/librtc_software_fallback_wrappers.a" "CreateVideoEncoderSoftwareFallbackWrapper" "$obj_dir" || exit 1
+        verify_linux_archive_symbol "$INSTALL_DIR/lib/librtc_software_fallback_wrappers.a" "CreateVideoDecoderSoftwareFallbackWrapper" "$obj_dir" || exit 1
+    else
+        cp "$archive" "$INSTALL_DIR/lib/libwebrtc.a"
+    fi
 
     rsync -a --delete --prune-empty-dirs \
         --include='*/' \

@@ -325,7 +325,11 @@ func downloadAndInstallShim(url, expectedSHA256, destDir, libName string) error 
 	}
 
 	finalPath := filepath.Join(destDir, libName)
-	if err := moveFile(foundLib, finalPath); err != nil {
+	// Copy the extracted shim into place instead of renaming it out of the
+	// temporary extraction directory. This keeps the installed artifact
+	// independent from the extract tree lifecycle and avoids platform/filesystem
+	// quirks when the cache lives on overlay-backed temp storage.
+	if err := copyFile(foundLib, finalPath); err != nil {
 		return fmt.Errorf("install shim: %w", err)
 	}
 
@@ -440,16 +444,32 @@ func copyFile(src, dst string) error {
 		return mkdirErr
 	}
 
-	out, err := os.Create(dst)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
 		return err
 	}
-	return out.Sync()
+	if err := out.Sync(); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+
+	// Make the copied file visible to subsequent dlopen calls immediately,
+	// even on overlay-backed temp directories used in clean-environment tests.
+	dir, err := os.Open(filepath.Dir(dst))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+
+	return dir.Sync()
 }
 
 func copyOptionalFile(rootDir, name, destPath string) {

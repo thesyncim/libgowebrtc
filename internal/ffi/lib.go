@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -103,6 +104,13 @@ func LoadLibrary() error {
 	}
 
 	handle, err := dlopenLibrary(libPath, RTLD_NOW|RTLD_GLOBAL)
+	if err != nil {
+		if retryHandle, retryPath, retryErr := retryLoadLibrary(libPath); retryErr == nil {
+			handle = retryHandle
+			libPath = retryPath
+			err = nil
+		}
+	}
 	if err != nil {
 		if downloadErr != nil {
 			return fmt.Errorf("failed to load %s: %w (auto-download failed: %w)", libPath, err, downloadErr)
@@ -322,4 +330,45 @@ func preloadLinuxDeps() {
 		// Best effort - ignore errors as these may not be needed on all systems
 		_, _ = dlopenLibrary(lib, RTLD_NOW|RTLD_GLOBAL)
 	}
+}
+
+func retryLoadLibrary(libPath string) (uintptr, string, error) {
+	if libPath == "" || !filepath.IsAbs(libPath) {
+		return 0, libPath, ErrLibraryNotFound
+	}
+	if _, statErr := os.Stat(libPath); statErr != nil {
+		return 0, libPath, statErr
+	}
+
+	var lastErr error
+
+	// Freshly downloaded shared libraries on overlay-backed temp storage can
+	// transiently fail their first dlopen even though the bytes are correct.
+	for _, delay := range []time.Duration{250 * time.Millisecond, time.Second} {
+		time.Sleep(delay)
+		if handle, err := dlopenLibrary(libPath, RTLD_NOW|RTLD_GLOBAL); err == nil {
+			return handle, libPath, nil
+		} else {
+			lastErr = err
+		}
+	}
+
+	retryPath := libPath + ".retry"
+	if err := copyFile(libPath, retryPath); err != nil {
+		return 0, libPath, err
+	}
+	_ = os.Chmod(retryPath, 0o755)
+
+	for _, delay := range []time.Duration{250 * time.Millisecond, time.Second} {
+		time.Sleep(delay)
+		handle, err := dlopenLibrary(retryPath, RTLD_NOW|RTLD_GLOBAL)
+		if err == nil {
+			return handle, retryPath, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = ErrLibraryNotLoaded
+	}
+	return 0, libPath, lastErr
 }

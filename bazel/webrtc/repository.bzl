@@ -12,8 +12,6 @@ cc_library(
     srcs = glob([
         "lib/*.a",
         "lib/*.lib",
-        "lib/**/*.a",
-        "lib/**/*.lib",
     ]),  # Unix (.a) and Windows (.lib)
     alwayslink = True,
     includes = [

@@ -39,6 +39,18 @@
 // Include internal structure definition
 #include "shim_internal.h"
 
+namespace {
+
+bool EqualsIgnoreCase(const char* lhs, const char* rhs) {
+#if defined(_WIN32)
+    return _stricmp(lhs, rhs) == 0;
+#else
+    return strcasecmp(lhs, rhs) == 0;
+#endif
+}
+
+}  // namespace
+
 /* ============================================================================
  * PeerConnection Observer
  * ========================================================================== */
@@ -141,7 +153,7 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(ShimPeerConnectionCr
     bool builtin_supports_h264 = false;
     if (builtin_video_encoder_factory) {
         for (const auto& format : builtin_video_encoder_factory->GetSupportedFormats()) {
-            if (strcasecmp(format.name.c_str(), "H264") == 0) {
+            if (EqualsIgnoreCase(format.name.c_str(), "H264")) {
                 builtin_supports_h264 = true;
                 break;
             }
