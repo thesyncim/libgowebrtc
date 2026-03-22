@@ -214,7 +214,7 @@ RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_
 RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 go test -count=1 -run TestGetSupportedVideoCodecs ./pkg/pc
 RUN mkdir -p /tmp/relocated-shim && cp lib/TARGET_PLACEHOLDER/libwebrtc_shim.so /tmp/relocated-shim/libwebrtc_shim.so
 RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 LIBWEBRTC_SHIM_PATH=/tmp/relocated-shim/libwebrtc_shim.so go test -count=1 -run 'TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
-RUN mkdir -p /tmp/release-extract && tar -xzf /workspace/release/*/libwebrtc_shim_TARGET_PLACEHOLDER.tar.gz -C /tmp/release-extract
+RUN mkdir -p /tmp/release-extract && tar -xzf /workspace/release/SHIM_RELEASE_TAG_PLACEHOLDER/libwebrtc_shim_TARGET_PLACEHOLDER.tar.gz -C /tmp/release-extract
 RUN cmp /workspace/lib/TARGET_PLACEHOLDER/libwebrtc_shim.so /tmp/release-extract/libwebrtc_shim.so
 RUN GO_TEST_ENV_PLACEHOLDER GOARCH=GOARCH_PLACEHOLDER LIBWEBRTC_PREFER_SOFTWARE_CODECS=1 LIBWEBRTC_SHIM_PATH=/tmp/release-extract/libwebrtc_shim.so go test -count=1 -run 'TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI' ./internal/ffi
 RUN mkdir -p /tmp/synthetic-cache/shim/basic/SHIM_RELEASE_TAG_PLACEHOLDER/TARGET_PLACEHOLDER && cp /workspace/lib/TARGET_PLACEHOLDER/libwebrtc_shim.so /tmp/synthetic-cache/shim/basic/SHIM_RELEASE_TAG_PLACEHOLDER/TARGET_PLACEHOLDER/libwebrtc_shim.so
