@@ -21,10 +21,6 @@
           "file": "libwebrtc_shim_linux_386.tar.gz",
           "sha256": ""
         },
-        "linux_arm64": {
-          "file": "libwebrtc_shim_linux_arm64.tar.gz",
-          "sha256": ""
-        },
         "windows_amd64": {
           "file": "libwebrtc_shim_windows_amd64.tar.gz",
           "sha256": ""

@@ -23,9 +23,6 @@ jobs:
           - os: ubuntu-latest
             platform: linux_amd64
             extension: so
-          - os: ubuntu-24.04-arm
-            platform: linux_arm64
-            extension: so
           - os: windows-latest
             platform: windows_amd64
             extension: dll
@@ -250,7 +247,6 @@ jobs:
             - `darwin_amd64` - macOS Intel
             - `linux_386` - Linux x86
             - `linux_amd64` - Linux x86_64
-            - `linux_arm64` - Linux ARM64
             - `windows_amd64` - Windows x64
 
             ### Usage

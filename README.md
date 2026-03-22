@@ -84,7 +84,7 @@ go get github.com/thesyncim/libgowebrtc
 ```
 
 By default, the runtime will auto-download the prebuilt `libwebrtc_shim` for supported
-OS/arch combinations (`darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`)
+OS/arch combinations (`darwin_arm64`, `darwin_amd64`, `linux_386`, `linux_amd64`, `windows_amd64`)
 from GitHub Releases and cache it under `~/.libgowebrtc`. For other platforms, build the
 shim locally and set `LIBWEBRTC_SHIM_PATH`.
 
@@ -494,7 +494,7 @@ The Go layer and FFI bindings are complete for all WebRTC functionality. Bazel b
 | darwin_amd64 (macOS Intel) | ✅ Working |
 | linux_386 (Linux x86) | Source build path |
 | linux_amd64 (Linux x86_64) | Source build path |
-| linux_arm64 (Linux ARM64) | Source build path |
+| linux_arm64 (Linux ARM64) | Experimental local source build |
 | linux_arm (Linux ARM32) | Source build path |
 | windows_amd64 (Windows x64) | ✅ Working |
 
@@ -614,7 +614,7 @@ Notes:
 **Solutions:**
 1. Let auto-download work (default behavior downloads from GitHub releases)
 2. Set explicit path: `export LIBWEBRTC_SHIM_PATH=/path/to/libwebrtc_shim.dylib`
-3. Check platform is supported for auto-download: `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`, `windows_amd64`
+3. Check platform is supported for auto-download: `darwin_arm64`, `darwin_amd64`, `linux_386`, `linux_amd64`, `windows_amd64`
 4. For unsupported platforms, build the shim locally and point `LIBWEBRTC_SHIM_PATH` at it
 
 </details>

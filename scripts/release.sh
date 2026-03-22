@@ -9,6 +9,9 @@
 #   ./scripts/release.sh              # Interactive: prompts for version
 #   ./scripts/release.sh 0.4.0        # Release shim-v0.4.0
 #   ./scripts/release.sh --dry-run    # Show what would happen
+#
+# After the release finishes, backfill the embedded manifest checksums with:
+#   python3 scripts/update_shim_manifest_checksums.py --release-dir /path/to/release
 
 set -e
 
@@ -48,7 +51,6 @@ Platforms built by CI:
   - darwin_amd64  (macOS Intel, cross-compiled)
   - linux_386     (Linux x86 32-bit, Docker-built)
   - linux_amd64   (Linux x86_64)
-  - linux_arm64   (Linux ARM64)
   - windows_amd64 (Windows x64)
 
 Additional validated target:
@@ -130,7 +132,7 @@ main() {
     echo ""
     log_info "Release summary:"
     echo "  Tag:       $tag"
-    echo "  Platforms: darwin_arm64, darwin_amd64, linux_386, linux_amd64, linux_arm64, windows_amd64"
+    echo "  Platforms: darwin_arm64, darwin_amd64, linux_386, linux_amd64, windows_amd64"
     echo "  Extra validated target: linux_arm"
     echo "  Branch:    $(git branch --show-current)"
     echo "  Commit:    $(git rev-parse --short HEAD)"

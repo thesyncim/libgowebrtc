@@ -10,7 +10,6 @@ on:
 env:
   GO_VERSION: '1.25.x'
   GO_VERSION_FULL: '1.25.0'  # Full version for direct downloads (Rosetta job)
-  SHIM_VERSION: shim-v0.4.2
 
 jobs:
   # Native platform tests
@@ -27,15 +26,21 @@ jobs:
           - os: ubuntu-latest
             platform: linux_amd64
             extension: so
-          - os: ubuntu-24.04-arm
-            platform: linux_arm64
-            extension: so
           - os: windows-latest
             platform: windows_amd64
             extension: dll
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve shim release tag
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json
+          manifest = json.load(open("internal/ffi/shim_manifest.json", "r", encoding="utf-8"))
+          print(f"SHIM_VERSION={manifest['flavors']['basic']['release_tag']}")
+          PY
 
       - name: Detect shim changes
         id: shim_changes
@@ -153,6 +158,16 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve shim release tag
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json
+          manifest = json.load(open("internal/ffi/shim_manifest.json", "r", encoding="utf-8"))
+          print(f"SHIM_VERSION={manifest['flavors']['basic']['release_tag']}")
+          PY
+
       - name: Detect shim changes
         id: shim_changes
         uses: dorny/paths-filter@v3
