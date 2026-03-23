@@ -7,6 +7,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 func TestPeerConnectionWrapperStringers(t *testing.T) {
@@ -103,6 +104,7 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 		receiver:  receiver,
 		direction: TransceiverDirectionRecvOnly,
 		mid:       "mid-1",
+		kind:      "video",
 	}
 	if transceiver.IsValid() {
 		t.Fatal("zero-value transceiver should be invalid")
@@ -130,6 +132,9 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	}
 	if err := transceiver.SetCodecPreferences([]CodecCapability{{MimeType: "video/VP8", ClockRate: 90000}}); err == nil {
 		t.Fatal("SetCodecPreferences on uninitialized transceiver expected error")
+	}
+	if err := transceiver.SetCodecSet(pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionEncode, pioncodec.PresetModeSupported)); err == nil {
+		t.Fatal("SetCodecSet on uninitialized transceiver expected error")
 	}
 }
 

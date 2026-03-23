@@ -245,8 +245,8 @@ peerConnection.SetLocalDescription(offer)
 ```go
 import (
     "github.com/pion/webrtc/v4"
-    "github.com/thesyncim/libgowebrtc/pkg/track"
     "github.com/thesyncim/libgowebrtc/pkg/codec"
+    "github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
 // Create Pion PeerConnection
@@ -267,6 +267,48 @@ pionPC.AddTrack(videoTrack)
 // Feed raw frames
 frame := frame.NewI420Frame(1280, 720)
 videoTrack.WriteFrame(frame, false)
+```
+
+### Browser Codec Presets
+
+```go
+import (
+    "github.com/pion/webrtc/v4"
+    "github.com/thesyncim/libgowebrtc/pkg/pc"
+    "github.com/thesyncim/libgowebrtc/pkg/pioncodec"
+    "github.com/thesyncim/libgowebrtc/pkg/track"
+)
+
+// Chrome-shaped local encode preferences.
+preset := pioncodec.BrowserPreset(
+    pioncodec.BrowserChrome,
+    pioncodec.DirectionEncode,
+    pioncodec.PresetModeSupported,
+)
+
+videoTrack, _ := track.NewVideoTrackFromPreset(preset, track.VideoTrackConfig{
+    ID:      "video",
+    Width:   1280,
+    Height:  720,
+    Bitrate: 2_000_000,
+    FPS:     30,
+})
+
+// Apply the same supported subset to libgowebrtc's native PeerConnection wrapper.
+pc, _ := pc.NewPeerConnection(pc.DefaultConfiguration())
+transceiver, _ := pc.AddTransceiver("video", &pc.TransceiverInit{Direction: pc.TransceiverDirectionSendOnly})
+_ = transceiver.SetCodecSet(preset)
+
+// For direct Pion use, keep the full browser-shaped RTP codec list.
+pionPC, _ := webrtc.NewPeerConnection(webrtc.Configuration{})
+recv, _ := pionPC.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
+_ = recv.SetCodecPreferences(
+    pioncodec.BrowserPreset(
+        pioncodec.BrowserChrome,
+        pioncodec.DirectionDecode,
+        pioncodec.PresetModeNegotiation,
+    ).VideoCodecs(),
+)
 ```
 
 ### Pion Receive Integration

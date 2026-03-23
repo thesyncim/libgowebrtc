@@ -25,6 +25,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/decoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 var (
@@ -229,8 +230,6 @@ type pipeline struct {
 	clockRate    uint32
 	channels     int
 	builder      *samplebuilder.SampleBuilder
-	videoDecoder decoder.VideoDecoder
-	audioDecoder decoder.AudioDecoder
 	videoScratch *frame.VideoFrame
 	audioScratch *frame.AudioFrame
 }
@@ -265,6 +264,9 @@ type DecodedTrack struct {
 
 	started atomic.Bool
 	closed  atomic.Bool
+
+	videoDecoder *pioncodec.MultiVideoDecoder
+	audioDecoder *pioncodec.MultiAudioDecoder
 }
 
 // New creates a decoded bridge for a Pion remote track.
@@ -329,6 +331,12 @@ func newDecodedTrack(track trackReader, source *webrtc.TrackRemote, receiver *we
 		currentClockRate:   clockRate,
 		currentChannels:    channels,
 		awaitingKeyframe:   track.Kind() == webrtc.RTPCodecTypeVideo,
+	}
+	switch track.Kind() {
+	case webrtc.RTPCodecTypeVideo:
+		d.videoDecoder = pioncodec.NewMultiVideoDecoder()
+	case webrtc.RTPCodecTypeAudio:
+		d.audioDecoder = pioncodec.NewMultiAudioDecoder()
 	}
 	return d, nil
 }
@@ -441,6 +449,7 @@ func (d *DecodedTrack) Run() error {
 		return err
 	}
 	defer d.shutdownPipeline()
+	defer d.shutdownDecoders()
 	d.maybeRequestKeyframe(true)
 
 	for {
@@ -514,6 +523,7 @@ func (d *DecodedTrack) Close() error {
 	_ = d.track.SetReadDeadline(time.Now())
 	if !d.started.Load() {
 		d.shutdownPipeline()
+		d.shutdownDecoders()
 	}
 	return nil
 }
@@ -591,15 +601,18 @@ func (d *DecodedTrack) shutdownPipeline() {
 	closePipeline(pipe)
 }
 
+func (d *DecodedTrack) shutdownDecoders() {
+	if d.videoDecoder != nil {
+		_ = d.videoDecoder.Close()
+	}
+	if d.audioDecoder != nil {
+		_ = d.audioDecoder.Close()
+	}
+}
+
 func closePipeline(pipe *pipeline) {
 	if pipe == nil {
 		return
-	}
-	if pipe.videoDecoder != nil {
-		_ = pipe.videoDecoder.Close()
-	}
-	if pipe.audioDecoder != nil {
-		_ = pipe.audioDecoder.Close()
 	}
 }
 
@@ -613,7 +626,16 @@ func (d *DecodedTrack) handleSample(pipe *pipeline, sample *pionmedia.Sample) er
 func (d *DecodedTrack) handleVideoSample(pipe *pipeline, sample *pionmedia.Sample) error {
 	isKeyframe := isVideoSampleKeyframe(pipe.codec, sample)
 
-	err := pipe.videoDecoder.DecodeInto(sample.Data, pipe.videoScratch, sample.PacketTimestamp, isKeyframe)
+	err := d.videoDecoder.DecodeInto(pioncodec.EncodedVideoSample{
+		Data: sample.Data,
+		CodecParameters: webrtc.RTPCodecParameters{
+			RTPCodecCapability: d.CodecParameters().RTPCodecCapability,
+			PayloadType:        d.PayloadType(),
+		},
+		PayloadType: d.PayloadType(),
+		Timestamp:   sample.PacketTimestamp,
+		IsKeyframe:  isKeyframe,
+	}, pipe.videoScratch)
 	if err != nil {
 		if errors.Is(err, decoder.ErrNeedMoreData) {
 			if d.isAwaitingKeyframe() {
@@ -643,7 +665,14 @@ func (d *DecodedTrack) handleVideoSample(pipe *pipeline, sample *pionmedia.Sampl
 }
 
 func (d *DecodedTrack) handleAudioSample(pipe *pipeline, sample *pionmedia.Sample) error {
-	numSamples, err := pipe.audioDecoder.DecodeInto(sample.Data, pipe.audioScratch)
+	numSamples, err := d.audioDecoder.DecodeInto(pioncodec.EncodedAudioSample{
+		Data: sample.Data,
+		CodecParameters: webrtc.RTPCodecParameters{
+			RTPCodecCapability: d.CodecParameters().RTPCodecCapability,
+			PayloadType:        d.PayloadType(),
+		},
+		PayloadType: d.PayloadType(),
+	}, pipe.audioScratch)
 	if err != nil {
 		return err
 	}
@@ -792,15 +821,22 @@ func currentTrackState(track trackReader) (codec.Type, webrtc.RTPCodecParameters
 }
 
 func validateDecodedTrackSupport(kind webrtc.RTPCodecType, codecType codec.Type, clockRate uint32, channels int) error {
+	params := webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:  codecType.MimeType(),
+			ClockRate: clockRate,
+			Channels:  uint16(channels),
+		},
+	}
 	switch kind {
 	case webrtc.RTPCodecTypeVideo:
-		dec, err := decoder.NewVideoDecoder(codecType)
+		dec, err := pioncodec.NewVideoDecoder(params)
 		if err != nil {
 			return err
 		}
 		return dec.Close()
 	case webrtc.RTPCodecTypeAudio:
-		dec, err := decoder.NewAudioDecoder(codecType, int(clockRate), channels)
+		dec, err := pioncodec.NewAudioDecoder(params)
 		if err != nil {
 			return err
 		}
@@ -826,19 +862,9 @@ func newPipeline(cfg config, kind webrtc.RTPCodecType, codecType codec.Type, pay
 
 	switch kind {
 	case webrtc.RTPCodecTypeVideo:
-		dec, err := decoder.NewVideoDecoder(codecType)
-		if err != nil {
-			return nil, err
-		}
-		pipe.videoDecoder = dec
 		pipe.videoScratch = frame.NewI420Frame(cfg.maxVideoDecodeWidth, cfg.maxVideoDecodeHeight)
 	case webrtc.RTPCodecTypeAudio:
-		dec, err := decoder.NewAudioDecoder(codecType, int(clockRate), channels)
-		if err != nil {
-			return nil, err
-		}
-		pipe.audioDecoder = dec
-		pipe.audioScratch = frame.NewAudioFrameS16(int(clockRate), channels, dec.MaxSamplesPerFrame())
+		pipe.audioScratch = frame.NewAudioFrameS16(int(clockRate), channels, 5760)
 	default:
 		return nil, ErrUnsupportedTrackKind
 	}

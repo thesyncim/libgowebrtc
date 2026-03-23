@@ -12,6 +12,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
@@ -143,6 +144,8 @@ type DisplayVideoConstraints struct {
 	Bitrate uint32
 	// SVC configuration for screen sharing.
 	SVC *codec.SVCConfig
+	// CodecSet overrides Codec with browser-shaped codec preferences.
+	CodecSet *pioncodec.CodecSet
 }
 
 // VideoConstraints mirrors browser's MediaTrackConstraints for video.
@@ -155,6 +158,7 @@ type VideoConstraints struct {
 	Codec      codec.Type       // Preferred codec (default: H264)
 	Bitrate    uint32           // Target bitrate (0 = auto)
 	SVC        *codec.SVCConfig // SVC configuration (nil = none)
+	CodecSet   *pioncodec.CodecSet
 }
 
 // AudioConstraints mirrors browser's MediaTrackConstraints for audio.
@@ -439,14 +443,24 @@ func CreateVideoTrack(constraints VideoConstraints) (MediaStreamTrack, error) {
 		constraints.Bitrate = codec.DefaultH264Config(constraints.Width, constraints.Height).Bitrate
 	}
 
-	vt, err := track.NewVideoTrack(track.VideoTrackConfig{
+	trackCfg := track.VideoTrackConfig{
 		ID:      generateID(),
 		Codec:   constraints.Codec,
 		Width:   constraints.Width,
 		Height:  constraints.Height,
 		Bitrate: constraints.Bitrate,
 		FPS:     constraints.FrameRate,
-	})
+	}
+	if constraints.CodecSet != nil {
+		trackCfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), constraints.CodecSet.SupportedOnly().VideoCodecs()...)
+		if len(trackCfg.CodecPreferences) > 0 {
+			if codecType, ok := codec.ParseMimeType(trackCfg.CodecPreferences[0].MimeType); ok {
+				trackCfg.Codec = codecType
+			}
+		}
+	}
+
+	vt, err := track.NewVideoTrack(trackCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -580,14 +594,19 @@ func GetDisplayMedia(c DisplayConstraints) (*MediaStream, error) {
 		}
 
 		// Create video track with screen share optimizations
-		vt, err := CreateVideoTrack(VideoConstraints{
+		videoConstraints := VideoConstraints{
 			Width:     width,
 			Height:    height,
 			FrameRate: frameRate,
 			Codec:     codecType,
 			Bitrate:   bitrate,
 			SVC:       svc,
-		})
+		}
+		if c.Video.CodecSet != nil {
+			videoConstraints.CodecSet = c.Video.CodecSet
+		}
+
+		vt, err := CreateVideoTrack(videoConstraints)
 		if err != nil {
 			return nil, err
 		}
