@@ -616,8 +616,11 @@ typedef struct {
     ShimPeerConnection* pc;
     const char* label;
     int ordered;
+    int max_packet_lifetime;
     int max_retransmits;
     const char* protocol;
+    int negotiated;
+    int id;
     ShimErrorBuffer* error_out; /* Optional: buffer for error message */
 } ShimPeerConnectionCreateDataChannelParams;
 

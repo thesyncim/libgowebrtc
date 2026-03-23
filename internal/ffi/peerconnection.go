@@ -432,7 +432,16 @@ func PeerConnectionRemoveTrack(pc uintptr, sender uintptr) error {
 }
 
 // PeerConnectionCreateDataChannel creates a data channel.
-func PeerConnectionCreateDataChannel(pc uintptr, label string, ordered bool, maxRetransmits int, protocol string) uintptr {
+func PeerConnectionCreateDataChannel(
+	pc uintptr,
+	label string,
+	ordered bool,
+	maxPacketLifeTime int,
+	maxRetransmits int,
+	protocol string,
+	negotiated bool,
+	id int,
+) uintptr {
 	if !libLoaded.Load() || shimPeerConnectionCreateDataChannel == nil {
 		return 0
 	}
@@ -444,15 +453,22 @@ func PeerConnectionCreateDataChannel(pc uintptr, label string, ordered bool, max
 	if ordered {
 		orderedInt = 1
 	}
+	var negotiatedInt int32
+	if negotiated {
+		negotiatedInt = 1
+	}
 
 	var errBuf ShimErrorBuffer
 	params := shimPeerConnectionCreateDataChannelParams{
-		PC:             pc,
-		Label:          ByteSlicePtr(labelCStr),
-		Ordered:        orderedInt,
-		MaxRetransmits: int32(maxRetransmits),
-		Protocol:       ByteSlicePtr(protocolCStr),
-		ErrorOut:       errBuf.Ptr(),
+		PC:                pc,
+		Label:             ByteSlicePtr(labelCStr),
+		Ordered:           orderedInt,
+		MaxPacketLifeTime: int32(maxPacketLifeTime),
+		MaxRetransmits:    int32(maxRetransmits),
+		Protocol:          ByteSlicePtr(protocolCStr),
+		Negotiated:        negotiatedInt,
+		ID:                int32(id),
+		ErrorOut:          errBuf.Ptr(),
 	}
 	result := shimPeerConnectionCreateDataChannel(uintptr(unsafe.Pointer(&params)))
 	runtime.KeepAlive(labelCStr)

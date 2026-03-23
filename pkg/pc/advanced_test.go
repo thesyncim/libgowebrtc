@@ -40,6 +40,51 @@ func TestPeerConnectionWrapperStringers(t *testing.T) {
 	}
 }
 
+func TestSplitStreamIDs(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		expect []string
+	}{
+		{name: "empty", input: "", expect: nil},
+		{name: "single", input: "stream-1", expect: []string{"stream-1"}},
+		{name: "multiple", input: "stream-a,stream-b,stream-c", expect: []string{"stream-a", "stream-b", "stream-c"}},
+		{name: "trim and skip empty", input: " stream-a, ,stream-b ,, stream-c ", expect: []string{"stream-a", "stream-b", "stream-c"}},
+	}
+
+	for _, tt := range tests {
+		got := splitStreamIDs(tt.input)
+		if len(got) != len(tt.expect) {
+			t.Fatalf("%s len = %d, want %d", tt.name, len(got), len(tt.expect))
+		}
+		for i := range got {
+			if got[i] != tt.expect[i] {
+				t.Fatalf("%s[%d] = %q, want %q", tt.name, i, got[i], tt.expect[i])
+			}
+		}
+	}
+}
+
+func TestCreateDataChannelValidatesOptionCombinations(t *testing.T) {
+	pc := &PeerConnection{}
+
+	maxPacketLifeTime := uint16(100)
+	maxRetransmits := uint16(3)
+	if _, err := pc.CreateDataChannel("invalid", &DataChannelInit{
+		MaxPacketLifeTime: &maxPacketLifeTime,
+		MaxRetransmits:    &maxRetransmits,
+	}); err == nil {
+		t.Fatal("CreateDataChannel() with both lifetime and retransmits = nil, want error")
+	}
+
+	negotiated := true
+	if _, err := pc.CreateDataChannel("negotiated", &DataChannelInit{
+		Negotiated: negotiated,
+	}); err == nil {
+		t.Fatal("CreateDataChannel() negotiated without ID = nil, want error")
+	}
+}
+
 func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	track := &Track{id: "track-1", kind: "video", label: "camera"}
 

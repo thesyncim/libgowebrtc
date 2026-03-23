@@ -326,19 +326,19 @@ func (s *Session) sendStats(ctx context.Context) {
 }
 
 func (s *Session) setupCallbacks() {
-	s.peerConn.OnICECandidate = func(candidate *pc.ICECandidate) {
+	s.peerConn.SetOnICECandidate(func(candidate *pc.ICECandidate) {
 		if candidate != nil {
 			data, _ := json.Marshal(candidate)
 			s.sendMessage(SignalingMessage{Type: "candidate", Candidate: data})
 		}
-	}
+	})
 
-	s.peerConn.OnConnectionStateChange = func(state pc.PeerConnectionState) {
+	s.peerConn.SetOnConnectionStateChange(func(state pc.PeerConnectionState) {
 		log.Printf("Connection state: %s", state)
 		if state == pc.PeerConnectionStateFailed || state == pc.PeerConnectionStateClosed {
 			s.cancel()
 		}
-	}
+	})
 }
 
 func (s *Session) setupDataChannel(dc *pc.DataChannel) {

@@ -101,9 +101,9 @@ func handleOffer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	peerConn.OnConnectionStateChange = func(state pc.PeerConnectionState) {
+	peerConn.SetOnConnectionStateChange(func(state pc.PeerConnectionState) {
 		log.Printf("Connection state: %s", state.String())
-	}
+	})
 
 	// Create video track - uses libwebrtc's internal encoder
 	// The codec will be determined by SDP negotiation
@@ -174,12 +174,12 @@ func handleOffer(w http.ResponseWriter, r *http.Request) {
 	// Wait for ICE gathering to complete (has candidates in SDP)
 	gatheringDone := make(chan struct{})
 	var gatheringOnce sync.Once
-	peerConn.OnICEGatheringStateChange = func(state pc.ICEGatheringState) {
+	peerConn.SetOnICEGatheringStateChange(func(state pc.ICEGatheringState) {
 		log.Printf("ICE gathering state: %s", state.String())
 		if state == pc.ICEGatheringStateComplete {
 			gatheringOnce.Do(func() { close(gatheringDone) })
 		}
-	}
+	})
 
 	// Check if already complete
 	if peerConn.ICEGatheringState() == pc.ICEGatheringStateComplete {

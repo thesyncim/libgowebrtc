@@ -115,6 +115,7 @@ type VideoTrack struct {
 	scaledFrame  *frame.VideoFrame // Reusable scaled frame buffer
 	paused       atomic.Bool
 	adaptStop    chan struct{}
+	adaptDone    chan struct{}
 	keyframePend atomic.Bool // Pending keyframe request from RTCP
 
 	mu     sync.Mutex
@@ -490,12 +491,18 @@ func (t *VideoTrack) SetParameters(params Parameters) error {
 // This is typically wired up when the track is added to a PeerConnection.
 func (t *VideoTrack) SetBWESource(source BandwidthEstimateSource) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.bweSource = source
 
 	// Start adaptation loop if we have a BWE source and any auto feature enabled
 	if source != nil && (t.config.AutoBitrate || t.config.AutoFramerate || t.config.AutoResolution) {
 		t.startAdaptLoopLocked()
+		t.mu.Unlock()
+		return
+	}
+	done := t.stopAdaptLoopLocked()
+	t.mu.Unlock()
+	if done != nil {
+		<-done
 	}
 }
 
@@ -519,23 +526,35 @@ func (t *VideoTrack) startAdaptLoopLocked() {
 		return // Already running
 	}
 	t.adaptStop = make(chan struct{})
-	go t.adaptLoop()
+	t.adaptDone = make(chan struct{})
+	go t.adaptLoop(t.adaptStop, t.adaptDone)
 }
 
-func (t *VideoTrack) stopAdaptLoop() {
-	t.mu.Lock()
+func (t *VideoTrack) stopAdaptLoopLocked() <-chan struct{} {
 	stop := t.adaptStop
+	done := t.adaptDone
 	t.adaptStop = nil
-	t.mu.Unlock()
+	t.adaptDone = nil
 
 	if stop != nil {
 		close(stop)
 	}
+	return done
 }
 
-func (t *VideoTrack) adaptLoop() {
+func (t *VideoTrack) stopAdaptLoop() {
+	t.mu.Lock()
+	done := t.stopAdaptLoopLocked()
+	t.mu.Unlock()
+	if done != nil {
+		<-done
+	}
+}
+
+func (t *VideoTrack) adaptLoop(stop <-chan struct{}, done chan<- struct{}) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+	defer close(done)
 
 	for {
 		select {
@@ -558,7 +577,7 @@ func (t *VideoTrack) adaptLoop() {
 
 			t.adapt(bwe)
 
-		case <-t.adaptStop:
+		case <-stop:
 			return
 		}
 	}
@@ -732,7 +751,12 @@ func (t *VideoTrack) Close() error {
 	}
 
 	// Stop adaptation loop
-	t.stopAdaptLoop()
+	t.mu.Lock()
+	done := t.stopAdaptLoopLocked()
+	t.mu.Unlock()
+	if done != nil {
+		<-done
+	}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()

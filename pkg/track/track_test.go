@@ -2,6 +2,7 @@ package track
 
 import (
 	"testing"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 
@@ -513,6 +514,54 @@ func TestVideoTrackSetBWESource(t *testing.T) {
 	err = track.Close()
 	if err != nil {
 		t.Errorf("Close failed: %v", err)
+	}
+}
+
+func TestVideoTrackCloseImmediatelyAfterSetBWESource(t *testing.T) {
+	for i := 0; i < 3; i++ {
+		track, err := NewVideoTrack(VideoTrackConfig{
+			ID:          "video-close-immediate",
+			Codec:       codec.H264,
+			Width:       1280,
+			Height:      720,
+			AutoBitrate: true,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create track: %v", err)
+		}
+
+		track.SetBWESource(func() *BandwidthEstimate {
+			return &BandwidthEstimate{TargetBitrateBps: 750_000}
+		})
+
+		if err := track.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+	}
+}
+
+func TestVideoTrackSetBWESourceStartStopRepeatedly(t *testing.T) {
+	track, err := NewVideoTrack(VideoTrackConfig{
+		ID:             "video-bwe-restart",
+		Codec:          codec.H264,
+		Width:          1280,
+		Height:         720,
+		AutoBitrate:    true,
+		AutoFramerate:  true,
+		AutoResolution: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create track: %v", err)
+	}
+	defer track.Close()
+
+	for i := 0; i < 5; i++ {
+		bps := int64(1_000_000 - i*100_000)
+		track.SetBWESource(func() *BandwidthEstimate {
+			return &BandwidthEstimate{TargetBitrateBps: bps}
+		})
+		time.Sleep(20 * time.Millisecond)
+		track.SetBWESource(nil)
 	}
 }
 

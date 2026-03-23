@@ -172,12 +172,31 @@ func TestPeerConnectionCreateDataChannel(t *testing.T) {
 	defer PeerConnectionDestroy(handle)
 
 	// Create data channel
-	dcHandle := PeerConnectionCreateDataChannel(handle, "test-dc", true, -1, "")
+	dcHandle := PeerConnectionCreateDataChannel(handle, "test-dc", true, -1, -1, "", false, -1)
 	if dcHandle == 0 {
 		t.Fatal("CreateDataChannel returned 0 handle")
 	}
 
 	t.Logf("Created data channel: handle=%d", dcHandle)
+}
+
+func TestPeerConnectionCreateNegotiatedDataChannel(t *testing.T) {
+	cfg := &PeerConnectionConfig{}
+	handle, err := CreatePeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("CreatePeerConnection failed: %v", err)
+	}
+	defer PeerConnectionDestroy(handle)
+
+	dcHandle := PeerConnectionCreateDataChannel(handle, "test-negotiated", false, 250, -1, "chat", true, 42)
+	if dcHandle == 0 {
+		t.Fatal("CreateDataChannel returned 0 handle")
+	}
+	defer DataChannelDestroy(dcHandle)
+
+	if got := DataChannelLabel(dcHandle); got != "test-negotiated" {
+		t.Fatalf("DataChannelLabel() = %q, want %q", got, "test-negotiated")
+	}
 }
 
 func TestPeerConnectionClose(t *testing.T) {
@@ -264,7 +283,7 @@ func TestDataChannelSend(t *testing.T) {
 	defer PeerConnectionDestroy(handle)
 
 	// Create data channel
-	dcHandle := PeerConnectionCreateDataChannel(handle, "test-dc", true, -1, "")
+	dcHandle := PeerConnectionCreateDataChannel(handle, "test-dc", true, -1, -1, "", false, -1)
 	if dcHandle == 0 {
 		t.Fatal("CreateDataChannel failed")
 	}

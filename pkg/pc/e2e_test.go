@@ -300,13 +300,16 @@ func TestCreateDataChannelWithOptions(t *testing.T) {
 	}
 	defer pc.Close()
 
-	ordered := true
-	maxRetransmits := uint16(3)
+	ordered := false
+	maxPacketLifeTime := uint16(250)
+	id := uint16(17)
 
 	dc, err := pc.CreateDataChannel("ordered-channel", &DataChannelInit{
-		Ordered:        &ordered,
-		MaxRetransmits: &maxRetransmits,
-		Protocol:       "test-protocol",
+		Ordered:           &ordered,
+		MaxPacketLifeTime: &maxPacketLifeTime,
+		Protocol:          "test-protocol",
+		Negotiated:        true,
+		ID:                &id,
 	})
 	if err != nil {
 		t.Fatalf("CreateDataChannel with options failed: %v", err)
@@ -314,6 +317,9 @@ func TestCreateDataChannelWithOptions(t *testing.T) {
 
 	if dc.Label() != "ordered-channel" {
 		t.Errorf("Label = %v, want ordered-channel", dc.Label())
+	}
+	if dc.ID() != id {
+		t.Errorf("ID = %d, want %d", dc.ID(), id)
 	}
 
 	t.Log("CreateDataChannel with options succeeded")

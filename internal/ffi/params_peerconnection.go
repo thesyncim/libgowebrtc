@@ -123,12 +123,15 @@ type shimPeerConnectionRemoveTrackParams struct {
 
 // shimPeerConnectionCreateDataChannelParams matches ShimPeerConnectionCreateDataChannelParams in shim.h.
 type shimPeerConnectionCreateDataChannelParams struct {
-	PC            uintptr
-	Label         uintptr
-	Ordered       int32
-	MaxRetransmits int32
-	Protocol      uintptr
-	ErrorOut      uintptr
+	PC                uintptr
+	Label             uintptr
+	Ordered           int32
+	MaxPacketLifeTime int32
+	MaxRetransmits    int32
+	Protocol          uintptr
+	Negotiated        int32
+	ID                int32
+	ErrorOut          uintptr
 }
 
 // shimPeerConnectionAddTransceiverParams matches ShimPeerConnectionAddTransceiverParams in shim.h.
@@ -141,10 +144,10 @@ type shimPeerConnectionAddTransceiverParams struct {
 
 // shimPeerConnectionGetSendersParams matches ShimPeerConnectionGetSendersParams in shim.h.
 type shimPeerConnectionGetSendersParams struct {
-	PC        uintptr
-	Senders   uintptr
+	PC         uintptr
+	Senders    uintptr
 	MaxSenders int32
-	OutCount  int32
+	OutCount   int32
 }
 
 // shimPeerConnectionGetReceiversParams matches ShimPeerConnectionGetReceiversParams in shim.h.
@@ -157,10 +160,10 @@ type shimPeerConnectionGetReceiversParams struct {
 
 // shimPeerConnectionGetTransceiversParams matches ShimPeerConnectionGetTransceiversParams in shim.h.
 type shimPeerConnectionGetTransceiversParams struct {
-	PC             uintptr
-	Transceivers   uintptr
+	PC              uintptr
+	Transceivers    uintptr
 	MaxTransceivers int32
-	OutCount       int32
+	OutCount        int32
 }
 
 // shimPeerConnectionSetOnBandwidthEstimateParams matches ShimPeerConnectionSetOnBandwidthEstimateParams in shim.h.

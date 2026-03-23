@@ -116,7 +116,15 @@ public:
         if (pc_->on_track) {
             auto receiver = transceiver->receiver();
             auto track = receiver->track();
-            pc_->on_track(pc_->on_track_ctx, track.get(), receiver.get(), "");
+            std::string stream_ids;
+            const auto& ids = receiver->stream_ids();
+            for (size_t i = 0; i < ids.size(); ++i) {
+                if (i > 0) {
+                    stream_ids.push_back(',');
+                }
+                stream_ids += ids[i];
+            }
+            pc_->on_track(pc_->on_track_ctx, track.get(), receiver.get(), stream_ids.c_str());
         }
     }
 
@@ -709,11 +717,18 @@ SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(ShimPeerCo
 
     webrtc::DataChannelInit config;
     config.ordered = params->ordered != 0;
+    if (params->max_packet_lifetime >= 0) {
+        config.maxRetransmitTime = params->max_packet_lifetime;
+    }
     if (params->max_retransmits >= 0) {
         config.maxRetransmits = params->max_retransmits;
     }
     if (params->protocol) {
         config.protocol = params->protocol;
+    }
+    config.negotiated = params->negotiated != 0;
+    if (params->id >= 0) {
+        config.id = params->id;
     }
 
     auto result = params->pc->peer_connection->CreateDataChannelOrError(params->label, &config);

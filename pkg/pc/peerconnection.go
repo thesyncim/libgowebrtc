@@ -1129,15 +1129,16 @@ type PeerConnection struct {
 	transceivers []*RTPTransceiver
 	localTracks  []*Track
 
-	// Event handlers (browser-like callbacks)
-	OnICECandidate             func(candidate *ICECandidate)
-	OnICEConnectionStateChange func(state ICEConnectionState)
-	OnICEGatheringStateChange  func(state ICEGatheringState)
-	OnSignalingStateChange     func(state SignalingState)
-	OnConnectionStateChange    func(state PeerConnectionState)
-	OnTrack                    func(track *Track, receiver *RTPReceiver, streams []string)
-	OnNegotiationNeeded        func()
-	OnDataChannel              func(dc *DataChannel)
+	callbackMu sync.RWMutex
+
+	onICECandidate             func(candidate *ICECandidate)
+	onICEConnectionStateChange func(state ICEConnectionState)
+	onICEGatheringStateChange  func(state ICEGatheringState)
+	onSignalingStateChange     func(state SignalingState)
+	onConnectionStateChange    func(state PeerConnectionState)
+	onTrack                    func(track *Track, receiver *RTPReceiver, streams []string)
+	onNegotiationNeeded        func()
+	onDataChannel              func(dc *DataChannel)
 
 	mu     sync.RWMutex
 	closed atomic.Bool
@@ -1146,6 +1147,54 @@ type PeerConnection struct {
 // IsValid returns true if the PeerConnection has a valid native handle.
 func (pc *PeerConnection) IsValid() bool {
 	return pc.handle != 0
+}
+
+func (pc *PeerConnection) SetOnICECandidate(cb func(candidate *ICECandidate)) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+	pc.onICECandidate = cb
+}
+
+func (pc *PeerConnection) SetOnICEConnectionStateChange(cb func(state ICEConnectionState)) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+	pc.onICEConnectionStateChange = cb
+}
+
+func (pc *PeerConnection) SetOnICEGatheringStateChange(cb func(state ICEGatheringState)) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+	pc.onICEGatheringStateChange = cb
+}
+
+func (pc *PeerConnection) SetOnSignalingStateChange(cb func(state SignalingState)) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+	pc.onSignalingStateChange = cb
+}
+
+func (pc *PeerConnection) SetOnConnectionStateChange(cb func(state PeerConnectionState)) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+	pc.onConnectionStateChange = cb
+}
+
+func (pc *PeerConnection) SetOnTrack(cb func(track *Track, receiver *RTPReceiver, streams []string)) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+	pc.onTrack = cb
+}
+
+func (pc *PeerConnection) SetOnNegotiationNeeded(cb func()) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+	pc.onNegotiationNeeded = cb
+}
+
+func (pc *PeerConnection) SetOnDataChannel(cb func(dc *DataChannel)) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+	pc.onDataChannel = cb
 }
 
 // DataChannelState represents the state of a data channel.
@@ -1379,8 +1428,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		}
 		newState := PeerConnectionState(state)
 		pc.connectionState.Store(newState)
-		if pc.OnConnectionStateChange != nil {
-			pc.OnConnectionStateChange(newState)
+		pc.callbackMu.RLock()
+		cb := pc.onConnectionStateChange
+		pc.callbackMu.RUnlock()
+		if cb != nil {
+			cb(newState)
 		}
 	})
 
@@ -1389,8 +1441,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		if pc.closed.Load() {
 			return // Ignore if closed
 		}
-		if pc.OnICECandidate != nil {
-			pc.OnICECandidate(&ICECandidate{
+		pc.callbackMu.RLock()
+		cb := pc.onICECandidate
+		pc.callbackMu.RUnlock()
+		if cb != nil {
+			cb(&ICECandidate{
 				Candidate:     candidate,
 				SDPMid:        sdpMid,
 				SDPMLineIndex: uint16(sdpMLineIndex),
@@ -1403,7 +1458,10 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		if pc.closed.Load() {
 			return // Ignore if closed
 		}
-		if pc.OnTrack != nil {
+		pc.callbackMu.RLock()
+		cb := pc.onTrack
+		pc.callbackMu.RUnlock()
+		if cb != nil {
 			// Create track wrapper
 			kind := ffi.TrackKind(trackHandle)
 			trackID := ffi.TrackID(trackHandle)
@@ -1426,13 +1484,7 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 			pc.receivers = append(pc.receivers, receiver)
 			pc.mu.Unlock()
 
-			// Split streams by comma if multiple
-			var streamIDs []string
-			if streams != "" {
-				streamIDs = []string{streams}
-			}
-
-			pc.OnTrack(track, receiver, streamIDs)
+			cb(track, receiver, splitStreamIDs(streams))
 		}
 	})
 
@@ -1441,14 +1493,17 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		if pc.closed.Load() {
 			return // Ignore if closed
 		}
-		if pc.OnDataChannel != nil {
+		pc.callbackMu.RLock()
+		cb := pc.onDataChannel
+		pc.callbackMu.RUnlock()
+		if cb != nil {
 			label := ffi.DataChannelLabel(dcHandle)
 			dc := &DataChannel{
 				handle: dcHandle,
 				label:  label,
 				pc:     pc,
 			}
-			pc.OnDataChannel(dc)
+			cb(dc)
 		}
 	})
 
@@ -1459,8 +1514,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		}
 		newState := SignalingState(state)
 		pc.signalingState.Store(newState)
-		if pc.OnSignalingStateChange != nil {
-			pc.OnSignalingStateChange(newState)
+		pc.callbackMu.RLock()
+		cb := pc.onSignalingStateChange
+		pc.callbackMu.RUnlock()
+		if cb != nil {
+			cb(newState)
 		}
 	})
 
@@ -1471,8 +1529,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		}
 		newState := ICEConnectionState(state)
 		pc.iceConnectionState.Store(newState)
-		if pc.OnICEConnectionStateChange != nil {
-			pc.OnICEConnectionStateChange(newState)
+		pc.callbackMu.RLock()
+		cb := pc.onICEConnectionStateChange
+		pc.callbackMu.RUnlock()
+		if cb != nil {
+			cb(newState)
 		}
 	})
 
@@ -1483,8 +1544,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		}
 		newState := ICEGatheringState(state)
 		pc.iceGatheringState.Store(newState)
-		if pc.OnICEGatheringStateChange != nil {
-			pc.OnICEGatheringStateChange(newState)
+		pc.callbackMu.RLock()
+		cb := pc.onICEGatheringStateChange
+		pc.callbackMu.RUnlock()
+		if cb != nil {
+			cb(newState)
 		}
 	})
 
@@ -1493,8 +1557,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		if pc.closed.Load() {
 			return // Ignore if closed
 		}
-		if pc.OnNegotiationNeeded != nil {
-			pc.OnNegotiationNeeded()
+		pc.callbackMu.RLock()
+		cb := pc.onNegotiationNeeded
+		pc.callbackMu.RUnlock()
+		if cb != nil {
+			cb()
 		}
 	})
 
@@ -1688,8 +1755,11 @@ func (pc *PeerConnection) AddTrack(track *Track, streams ...string) (*RTPSender,
 	pc.localTracks = append(pc.localTracks, track)
 
 	// Trigger negotiation needed
-	if pc.OnNegotiationNeeded != nil {
-		go pc.OnNegotiationNeeded()
+	pc.callbackMu.RLock()
+	cb := pc.onNegotiationNeeded
+	pc.callbackMu.RUnlock()
+	if cb != nil {
+		go cb()
 	}
 
 	return sender, nil
@@ -1798,9 +1868,7 @@ func (pc *PeerConnection) AddTransceiver(kind string, init *TransceiverInit) (*R
 
 // TransceiverInit for AddTransceiver.
 type TransceiverInit struct {
-	Direction     TransceiverDirection
-	SendEncodings []RTPEncodingParameters
-	Streams       []string
+	Direction TransceiverDirection
 }
 
 // GetTransceivers returns all transceivers.
@@ -1895,21 +1963,47 @@ func (pc *PeerConnection) CreateDataChannel(label string, options *DataChannelIn
 
 	// Set defaults
 	ordered := true
-	maxRetransmits := -1 // -1 means unset/unlimited
+	maxPacketLifeTime := -1 // -1 means unset/unlimited
+	maxRetransmits := -1    // -1 means unset/unlimited
 	protocol := ""
+	negotiated := false
+	id := -1
 
 	if options != nil {
 		if options.Ordered != nil {
 			ordered = *options.Ordered
 		}
+		if options.MaxPacketLifeTime != nil {
+			maxPacketLifeTime = int(*options.MaxPacketLifeTime)
+		}
 		if options.MaxRetransmits != nil {
 			maxRetransmits = int(*options.MaxRetransmits)
 		}
 		protocol = options.Protocol
+		negotiated = options.Negotiated
+		if options.ID != nil {
+			id = int(*options.ID)
+		}
+	}
+
+	if maxPacketLifeTime >= 0 && maxRetransmits >= 0 {
+		return nil, errors.New("max packet lifetime and max retransmits are mutually exclusive")
+	}
+	if negotiated && id < 0 {
+		return nil, errors.New("negotiated data channel requires explicit ID")
 	}
 
 	// Call FFI to create data channel
-	handle := ffi.PeerConnectionCreateDataChannel(pc.handle, label, ordered, maxRetransmits, protocol)
+	handle := ffi.PeerConnectionCreateDataChannel(
+		pc.handle,
+		label,
+		ordered,
+		maxPacketLifeTime,
+		maxRetransmits,
+		protocol,
+		negotiated,
+		id,
+	)
 	if handle == 0 {
 		return nil, errors.New("failed to create data channel")
 	}
@@ -1918,6 +2012,9 @@ func (pc *PeerConnection) CreateDataChannel(label string, options *DataChannelIn
 		handle: handle,
 		label:  label,
 		pc:     pc,
+	}
+	if id >= 0 {
+		dc.id = uint16(id)
 	}
 
 	return dc, nil
@@ -1931,6 +2028,25 @@ type DataChannelInit struct {
 	Protocol          string
 	Negotiated        bool
 	ID                *uint16
+}
+
+func splitStreamIDs(streams string) []string {
+	if streams == "" {
+		return nil
+	}
+
+	rawStreamIDs := strings.Split(streams, ",")
+	streamIDs := make([]string, 0, len(rawStreamIDs))
+	for _, streamID := range rawStreamIDs {
+		streamID = strings.TrimSpace(streamID)
+		if streamID != "" {
+			streamIDs = append(streamIDs, streamID)
+		}
+	}
+	if len(streamIDs) == 0 {
+		return nil
+	}
+	return streamIDs
 }
 
 // Close closes the peer connection.

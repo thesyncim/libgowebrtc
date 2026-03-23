@@ -184,7 +184,7 @@ func TestPeerConnection_WithTracks_Destroy(t *testing.T) {
 	}
 
 	// Create data channel (PC destroy handles cleanup, so we just assign to _ to avoid unused warning)
-	_ = PeerConnectionCreateDataChannel(handle, "test-dc", true, -1, "")
+	_ = PeerConnectionCreateDataChannel(handle, "test-dc", true, -1, -1, "", false, -1)
 
 	// Destroy should clean up everything
 	PeerConnectionClose(handle)

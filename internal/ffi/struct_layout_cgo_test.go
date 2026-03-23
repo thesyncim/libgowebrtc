@@ -372,8 +372,11 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
 		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.Label", unsafe.Offsetof(goCfg.Label), layout.offsets["Label"])
 		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.Ordered", unsafe.Offsetof(goCfg.Ordered), layout.offsets["Ordered"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.MaxPacketLifeTime", unsafe.Offsetof(goCfg.MaxPacketLifeTime), layout.offsets["MaxPacketLifeTime"])
 		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.MaxRetransmits", unsafe.Offsetof(goCfg.MaxRetransmits), layout.offsets["MaxRetransmits"])
 		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.Protocol", unsafe.Offsetof(goCfg.Protocol), layout.offsets["Protocol"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.Negotiated", unsafe.Offsetof(goCfg.Negotiated), layout.offsets["Negotiated"])
+		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.ID", unsafe.Offsetof(goCfg.ID), layout.offsets["ID"])
 		checkOffsetEqual(t, "ShimPeerConnectionCreateDataChannelParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
 	})
 
