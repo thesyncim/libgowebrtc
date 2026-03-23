@@ -6,13 +6,27 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_extended:
+        description: Run tagged extended smoke and stress suites
+        required: false
+        default: false
+        type: boolean
+      run_hardware:
+        description: Run tagged hardware capture suites
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: '0 5 * * 1'
 
 env:
   GO_VERSION: '1.25.x'
   GO_VERSION_FULL: '1.25.0'  # Full version for direct downloads (Rosetta job)
+  CORE_TEST_PACKAGES: ./internal/ffi ./pkg/... ./test/e2e ./test/interop ./test/benchmark
 
 jobs:
-  # Native platform tests
+  # Native deterministic core tests
   test:
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
@@ -51,37 +65,32 @@ jobs:
             --output-dir lib/${{ matrix.platform }}
           ls -la lib/${{ matrix.platform }}/
 
-      - name: Run tests (purego - default)
+      - name: Run deterministic core tests (purego - default)
         shell: bash
         run: |
-          echo "=== Testing with purego (default) ==="
-          go test -v ./pkg/frame/... ./pkg/codec/...
-          go test -v ./internal/ffi/...
-          go test -v ./pkg/encoder/... ./pkg/decoder/...
+          echo "=== Testing deterministic core suites with purego ==="
+          go test -v $CORE_TEST_PACKAGES
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
-      - name: Run tests (CGO variant)
+      - name: Run deterministic core tests (CGO variant)
         if: runner.os != 'Windows'  # CGO tests need extra setup on Windows
+        shell: bash
         run: |
-          echo "=== Testing with CGO (ffigo_cgo tag) ==="
-          go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
-          go test -tags ffigo_cgo -v ./internal/ffi/...
-          go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
+          echo "=== Testing deterministic core suites with CGO ==="
+          go test -tags ffigo_cgo -v $CORE_TEST_PACKAGES
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
-      - name: Run auto-download smoke tests
-        if: runner.os != 'Windows'
+      - name: Enforce package coverage floors
+        if: matrix.platform == 'linux_amd64'
         shell: bash
         run: |
-          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
-          TEST_PACKAGES="./pkg/encoder" GO_TEST_ARGS="-run TestH264EncoderEncode" ./scripts/test_clean_env.sh
-          TEST_PACKAGES="./pkg/decoder" GO_TEST_ARGS="-run TestH264EncodeDecode" ./scripts/test_clean_env.sh
-          TEST_PACKAGES="./pkg/pc" GO_TEST_ARGS="-run TestGetSupportedVideoCodecs" ./scripts/test_clean_env.sh
+          bash ./scripts/check_coverage_floors.sh
         env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/${{ matrix.platform }}/libwebrtc_shim.${{ matrix.extension }}
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
       - name: Run benchmarks (comparison)
@@ -124,39 +133,97 @@ jobs:
           ls -la lib/darwin_amd64/
           file lib/darwin_amd64/libwebrtc_shim.dylib
 
-      - name: Run tests via Rosetta
+      - name: Run deterministic core tests via Rosetta
         run: |
-          echo "=== Testing darwin_amd64 via Rosetta ==="
-          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/frame/... ./pkg/codec/...
-          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./internal/ffi/...
-          arch -x86_64 /usr/local/go-amd64/bin/go test -v ./pkg/encoder/... ./pkg/decoder/...
+          echo "=== Testing darwin_amd64 deterministic core suites via Rosetta ==="
+          arch -x86_64 /usr/local/go-amd64/bin/go test -v $CORE_TEST_PACKAGES
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
-      - name: Run tests (CGO variant via Rosetta)
+      - name: Run deterministic core tests (CGO variant via Rosetta)
         run: |
-          echo "=== Testing with CGO via Rosetta ==="
-          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/frame/... ./pkg/codec/...
-          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./internal/ffi/...
-          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v ./pkg/encoder/... ./pkg/decoder/...
+          echo "=== Testing darwin_amd64 deterministic core suites with CGO via Rosetta ==="
+          arch -x86_64 /usr/local/go-amd64/bin/go test -tags ffigo_cgo -v $CORE_TEST_PACKAGES
         env:
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_amd64/libwebrtc_shim.dylib
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
-      - name: Run auto-download smoke tests via Rosetta
+  extended:
+    name: Extended Smoke And Stress
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_extended)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Download published shim
         shell: bash
         run: |
-          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-run TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
+          python scripts/download_shim_release.py \
+            --platform linux_amd64 \
+            --output-dir lib/linux_amd64
+          ls -la lib/linux_amd64/
+
+      - name: Run tagged extended suites
+        shell: bash
+        run: |
+          go test -tags extended -v ./internal/ffi ./test/e2e ./test/interop
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/linux_amd64/libwebrtc_shim.so
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
+
+      - name: Run real auto-download smoke tests
+        shell: bash
+        run: |
+          TEST_PACKAGES="./internal/ffi" GO_TEST_ARGS="-tags=extended -run TestOpenH264AutoDownload|TestCreatePeerConnection|TestCreateVideoDecoderH264|TestCreateVideoEncoderH264|TestGetSupportedVideoCodecsFFI" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/encoder" GO_TEST_ARGS="-run TestH264EncoderEncode" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/decoder" GO_TEST_ARGS="-run TestH264EncodeDecode" ./scripts/test_clean_env.sh
           TEST_PACKAGES="./pkg/pc" GO_TEST_ARGS="-run TestGetSupportedVideoCodecs" ./scripts/test_clean_env.sh
         env:
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
-          TEST_CLEAN_ENV_GO_PREFIX: "arch -x86_64"
-          TEST_CLEAN_ENV_GO_BIN: "/usr/local/go-amd64/bin/go"
-          GOARCH: amd64
-          GOOS: darwin
+
+  hardware:
+    name: Hardware Capture
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_hardware)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Download published shim
+        shell: bash
+        run: |
+          python scripts/download_shim_release.py \
+            --platform darwin_arm64 \
+            --output-dir lib/darwin_arm64
+          ls -la lib/darwin_arm64/
+
+      - name: Run tagged hardware suites
+        shell: bash
+        run: |
+          go test -tags hardware -v ./test/e2e
+        env:
+          LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/darwin_arm64/libwebrtc_shim.dylib
+          LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
   validate-linux-386-docker:
     name: linux_386 (Docker)

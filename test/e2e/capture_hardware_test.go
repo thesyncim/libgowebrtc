@@ -1,3 +1,5 @@
+//go:build hardware
+
 package e2e
 
 import (
@@ -15,7 +17,6 @@ const (
 
 // TestEnumerateDevices tests device enumeration with the real shim library.
 func TestEnumerateDevices(t *testing.T) {
-
 	devices, err := ffi.EnumerateDevices()
 	if err != nil {
 		t.Fatalf("EnumerateDevices failed: %v", err)
@@ -26,8 +27,6 @@ func TestEnumerateDevices(t *testing.T) {
 		t.Logf("  [%d] %s: %s (ID: %s)", i, d.Kind, d.Label, d.DeviceID)
 	}
 
-	// On most systems, at least one device should exist (even virtual)
-	// But don't fail if none - CI environments may not have devices
 	if len(devices) == 0 {
 		t.Log("No devices found (expected in headless CI environment)")
 	}
@@ -35,7 +34,6 @@ func TestEnumerateDevices(t *testing.T) {
 
 // TestEnumerateScreens tests screen enumeration with the real shim library.
 func TestEnumerateScreens(t *testing.T) {
-
 	screens, err := ffi.EnumerateScreens()
 	if err != nil {
 		t.Fatalf("EnumerateScreens failed: %v", err)
@@ -50,16 +48,13 @@ func TestEnumerateScreens(t *testing.T) {
 		t.Logf("  [%d] %s: %s (ID: %d)", i, windowType, s.Title, s.ID)
 	}
 
-	// Screen capture usually finds at least one screen
 	if len(screens) == 0 {
 		t.Log("No screens found (expected in headless CI environment)")
 	}
 }
 
 // TestScreenCapture tests actual screen capture functionality.
-// This test requires a display to be available.
 func TestScreenCapture(t *testing.T) {
-
 	screens, err := ffi.EnumerateScreens()
 	if err != nil {
 		t.Fatalf("EnumerateScreens failed: %v", err)
@@ -69,11 +64,10 @@ func TestScreenCapture(t *testing.T) {
 		t.Skip("no screens available for capture")
 	}
 
-	// Use first screen
 	screen := screens[0]
 	t.Logf("Capturing from screen: %s (ID: %d)", screen.Title, screen.ID)
 
-	capture, err := ffi.NewScreenCapture(screen.ID, screen.IsWindow, 10) // Low FPS for test
+	capture, err := ffi.NewScreenCapture(screen.ID, screen.IsWindow, 10)
 	if err != nil {
 		t.Fatalf("NewScreenCapture failed: %v", err)
 	}
@@ -91,9 +85,7 @@ func TestScreenCapture(t *testing.T) {
 		t.Skipf("Start failed (likely missing screen capture permission): %v", err)
 	}
 
-	// Capture briefly
 	time.Sleep(captureDuration)
-
 	capture.Stop()
 
 	count := frameCount.Load()
@@ -107,15 +99,12 @@ func TestScreenCapture(t *testing.T) {
 }
 
 // TestVideoCaptureWithDevice tests video capture from a camera device.
-// This test requires a camera to be available.
 func TestVideoCaptureWithDevice(t *testing.T) {
-
 	devices, err := ffi.EnumerateDevices()
 	if err != nil {
 		t.Fatalf("EnumerateDevices failed: %v", err)
 	}
 
-	// Find a video input device
 	var videoDevice *ffi.DeviceInfo
 	for i := range devices {
 		if devices[i].Kind == ffi.DeviceKindVideoInput {
@@ -148,9 +137,7 @@ func TestVideoCaptureWithDevice(t *testing.T) {
 		t.Skipf("Start failed (likely missing camera permission): %v", err)
 	}
 
-	// Capture briefly
 	time.Sleep(captureDuration)
-
 	capture.Stop()
 
 	count := frameCount.Load()
@@ -162,15 +149,12 @@ func TestVideoCaptureWithDevice(t *testing.T) {
 }
 
 // TestAudioCaptureWithDevice tests audio capture from a microphone device.
-// This test requires a microphone to be available.
 func TestAudioCaptureWithDevice(t *testing.T) {
-
 	devices, err := ffi.EnumerateDevices()
 	if err != nil {
 		t.Fatalf("EnumerateDevices failed: %v", err)
 	}
 
-	// Find an audio input device
 	var audioDevice *ffi.DeviceInfo
 	for i := range devices {
 		if devices[i].Kind == ffi.DeviceKindAudioInput {
@@ -202,9 +186,7 @@ func TestAudioCaptureWithDevice(t *testing.T) {
 		t.Skipf("Start failed (likely missing microphone permission): %v", err)
 	}
 
-	// Capture briefly
 	time.Sleep(shortCaptureDuration)
-
 	capture.Stop()
 
 	count := frameCount.Load()
@@ -215,13 +197,10 @@ func TestAudioCaptureWithDevice(t *testing.T) {
 	}
 }
 
-// TestDefaultVideoCapture tests video capture with default device (empty deviceID).
+// TestDefaultVideoCapture tests video capture with the default device.
 func TestDefaultVideoCapture(t *testing.T) {
-
-	// Use empty string for default device
 	capture, err := ffi.NewVideoCapture("", 320, 240, 10)
 	if err != nil {
-		// This is expected to fail if no camera is available
 		t.Logf("NewVideoCapture with default device failed (expected if no camera): %v", err)
 		return
 	}
@@ -240,6 +219,5 @@ func TestDefaultVideoCapture(t *testing.T) {
 	time.Sleep(shortCaptureDuration)
 	capture.Stop()
 
-	count := frameCount.Load()
-	t.Logf("Captured %d frames from default camera", count)
+	t.Logf("Captured %d frames from default camera", frameCount.Load())
 }
