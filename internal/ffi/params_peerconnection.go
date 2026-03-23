@@ -123,6 +123,16 @@ type shimPeerConnectionRemoveTrackParams struct {
 
 // shimPeerConnectionCreateDataChannelParams matches ShimPeerConnectionCreateDataChannelParams in shim.h.
 type shimPeerConnectionCreateDataChannelParams struct {
+	PC             uintptr
+	Label          uintptr
+	Ordered        int32
+	MaxRetransmits int32
+	Protocol       uintptr
+	ErrorOut       uintptr
+}
+
+// shimPeerConnectionCreateDataChannelExParams matches ShimPeerConnectionCreateDataChannelExParams in shim.h.
+type shimPeerConnectionCreateDataChannelExParams struct {
 	PC                uintptr
 	Label             uintptr
 	Ordered           int32

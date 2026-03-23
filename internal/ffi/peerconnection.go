@@ -459,16 +459,35 @@ func PeerConnectionCreateDataChannel(
 	}
 
 	var errBuf ShimErrorBuffer
+	labelPtr := ByteSlicePtr(labelCStr)
+	protocolPtr := ByteSlicePtr(protocolCStr)
+
+	if shimPeerConnectionCreateDataChannelEx != nil {
+		params := shimPeerConnectionCreateDataChannelExParams{
+			PC:                pc,
+			Label:             labelPtr,
+			Ordered:           orderedInt,
+			MaxPacketLifeTime: int32(maxPacketLifeTime),
+			MaxRetransmits:    int32(maxRetransmits),
+			Protocol:          protocolPtr,
+			Negotiated:        negotiatedInt,
+			ID:                int32(id),
+			ErrorOut:          errBuf.Ptr(),
+		}
+		result := shimPeerConnectionCreateDataChannelEx(uintptr(unsafe.Pointer(&params)))
+		runtime.KeepAlive(labelCStr)
+		runtime.KeepAlive(protocolCStr)
+		runtime.KeepAlive(&params)
+		return result
+	}
+
 	params := shimPeerConnectionCreateDataChannelParams{
-		PC:                pc,
-		Label:             ByteSlicePtr(labelCStr),
-		Ordered:           orderedInt,
-		MaxPacketLifeTime: int32(maxPacketLifeTime),
-		MaxRetransmits:    int32(maxRetransmits),
-		Protocol:          ByteSlicePtr(protocolCStr),
-		Negotiated:        negotiatedInt,
-		ID:                int32(id),
-		ErrorOut:          errBuf.Ptr(),
+		PC:             pc,
+		Label:          labelPtr,
+		Ordered:        orderedInt,
+		MaxRetransmits: int32(maxRetransmits),
+		Protocol:       protocolPtr,
+		ErrorOut:       errBuf.Ptr(),
 	}
 	result := shimPeerConnectionCreateDataChannel(uintptr(unsafe.Pointer(&params)))
 	runtime.KeepAlive(labelCStr)

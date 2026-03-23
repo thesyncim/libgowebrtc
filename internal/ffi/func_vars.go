@@ -68,6 +68,7 @@ var (
 	shimPeerConnectionAddTrack                   func(params uintptr) uintptr
 	shimPeerConnectionRemoveTrack                func(params uintptr) int32
 	shimPeerConnectionCreateDataChannel          func(params uintptr) uintptr
+	shimPeerConnectionCreateDataChannelEx        func(params uintptr) uintptr
 	shimPeerConnectionClose                      func(pc uintptr)
 
 	// PeerConnectionExtended

@@ -70,6 +70,8 @@ func registerFunctions() error {
 	registerLibFunc(&shimPeerConnectionAddTrack, libHandle, "shim_peer_connection_add_track")
 	registerLibFunc(&shimPeerConnectionRemoveTrack, libHandle, "shim_peer_connection_remove_track")
 	registerLibFunc(&shimPeerConnectionCreateDataChannel, libHandle, "shim_peer_connection_create_data_channel")
+	shimPeerConnectionCreateDataChannelEx = nil
+	registerOptionalLibFunc(&shimPeerConnectionCreateDataChannelEx, libHandle, "shim_peer_connection_create_data_channel_ex")
 	registerLibFunc(&shimPeerConnectionClose, libHandle, "shim_peer_connection_close")
 
 	// PeerConnectionExtended
@@ -191,6 +193,14 @@ func registerLibFunc(fptr any, handle uintptr, name string) {
 	sym, err := dlsymLibrary(handle, name)
 	if err != nil {
 		panic(err)
+	}
+	purego.RegisterFunc(fptr, sym)
+}
+
+func registerOptionalLibFunc(fptr any, handle uintptr, name string) {
+	sym, err := dlsymLibrary(handle, name)
+	if err != nil {
+		return
 	}
 	purego.RegisterFunc(fptr, sym)
 }
