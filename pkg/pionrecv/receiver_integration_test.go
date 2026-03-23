@@ -93,16 +93,7 @@ func TestBindRemoteTrackWithPionOnTrack(t *testing.T) {
 		t.Fatal("timed out waiting for decoded track from Pion OnTrack")
 	}
 
-	select {
-	case got := <-frames:
-		if got.Width != testVideoWidth || got.Height != testVideoHeight {
-			t.Fatalf("decoded frame size = %dx%d, want %dx%d", got.Width, got.Height, testVideoWidth, testVideoHeight)
-		}
-	case err := <-runErr:
-		t.Fatalf("decoded.Run: %v", err)
-	case <-time.After(integrationWaitTimeout):
-		t.Fatal("timed out waiting for decoded frame from Pion OnTrack")
-	}
+	waitForExpectedVideoFrame(t, frames, runErr, "Pion OnTrack")
 
 	if decoded == nil {
 		t.Fatal("expected decoded track")
@@ -195,9 +186,49 @@ func waitForConnectionState(t testing.TB, pc *webrtc.PeerConnection, want webrtc
 		}
 	})
 
+	if pc.ConnectionState() == want {
+		return
+	}
+
 	select {
 	case <-done:
 	case <-time.After(integrationWaitTimeout):
+		if pc.ConnectionState() == want {
+			return
+		}
 		t.Fatalf("timed out waiting for connection state %s, got %s", want, pc.ConnectionState())
+	}
+}
+
+func waitForExpectedVideoFrame(t testing.TB, frames <-chan *frame.VideoFrame, runErr <-chan error, context string) *frame.VideoFrame {
+	t.Helper()
+
+	timeout := time.NewTimer(integrationWaitTimeout)
+	defer timeout.Stop()
+
+	var placeholderFrames int
+
+	for {
+		select {
+		case got := <-frames:
+			if got == nil {
+				continue
+			}
+			if got.Width == 0 || got.Height == 0 {
+				placeholderFrames++
+				continue
+			}
+			if got.Width != testVideoWidth || got.Height != testVideoHeight {
+				t.Fatalf("%s decoded frame size = %dx%d, want %dx%d", context, got.Width, got.Height, testVideoWidth, testVideoHeight)
+			}
+			return got
+		case err := <-runErr:
+			t.Fatalf("decoded.Run: %v", err)
+		case <-timeout.C:
+			if placeholderFrames > 0 {
+				t.Fatalf("timed out waiting for decoded frame from %s after receiving %d placeholder frames", context, placeholderFrames)
+			}
+			t.Fatalf("timed out waiting for decoded frame from %s", context)
+		}
 	}
 }

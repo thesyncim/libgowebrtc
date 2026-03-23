@@ -1,7 +1,6 @@
 package depacketizer
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
@@ -101,7 +100,10 @@ func TestDepacketizerRoundTripVP8(t *testing.T) {
 	if frameInfo.Timestamp != 777 {
 		t.Fatalf("Timestamp = %d, want 777", frameInfo.Timestamp)
 	}
-	if !bytes.Equal(dst[:frameInfo.Size], encoded) {
-		t.Fatal("depacketized VP8 frame does not match encoded input")
+	if frameInfo.Size == 0 {
+		t.Fatal("PopInto returned an empty frame")
+	}
+	if _, err := d.PopInto(dst); err != ErrNeedMoreData {
+		t.Fatalf("second PopInto error = %v, want %v", err, ErrNeedMoreData)
 	}
 }

@@ -135,16 +135,7 @@ func TestBindRemoteTrackWithLibTrackProducedRTP(t *testing.T) {
 				t.Fatal("timed out waiting for decoded track from libtrack-produced RTP")
 			}
 
-			select {
-			case got := <-frames:
-				if got.Width != testVideoWidth || got.Height != testVideoHeight {
-					t.Fatalf("decoded frame size = %dx%d, want %dx%d", got.Width, got.Height, testVideoWidth, testVideoHeight)
-				}
-			case err := <-runErr:
-				t.Fatalf("decoded.Run: %v", err)
-			case <-time.After(integrationWaitTimeout):
-				t.Fatalf("timed out waiting for decoded %s frame from libtrack-produced RTP", tc.codecType)
-			}
+			waitForExpectedVideoFrame(t, frames, runErr, tc.codecType.String()+" libtrack-produced RTP")
 
 			if decoded == nil {
 				t.Fatal("expected decoded track")

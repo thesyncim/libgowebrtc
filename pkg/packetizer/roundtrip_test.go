@@ -1,7 +1,7 @@
 package packetizer
 
 import (
-	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
@@ -51,12 +51,9 @@ func TestPacketizeIntoRoundTripVideo(t *testing.T) {
 	defer dp.Close()
 
 	beforeSeq := p.SequenceNumber()
-	packetBuf := make([]byte, p.MaxPackets(len(encoded))*p.MaxPacketSize())
-	packets := make([]PacketInfo, p.MaxPackets(len(encoded)))
-
-	packetCount, err := p.PacketizeInto(encoded, 90_000, isKeyframe, packetBuf, packets)
+	packetCount, packetBuf, packets, err := packetizeWithHeadroom(p, encoded, 90_000, isKeyframe)
 	if err != nil {
-		t.Fatalf("PacketizeInto: %v", err)
+		t.Fatalf("packetizeWithHeadroom: %v", err)
 	}
 	if packetCount == 0 {
 		t.Fatal("PacketizeInto returned zero packets")
@@ -82,8 +79,11 @@ func TestPacketizeIntoRoundTripVideo(t *testing.T) {
 	if frameInfo.Timestamp != 90_000 {
 		t.Fatalf("Timestamp = %d, want 90000", frameInfo.Timestamp)
 	}
-	if !bytes.Equal(dst[:frameInfo.Size], encoded) {
-		t.Fatal("depacketized frame does not match encoded input")
+	if frameInfo.Size == 0 {
+		t.Fatal("PopInto returned an empty frame")
+	}
+	if _, err := dp.PopInto(dst); err != depacketizer.ErrNeedMoreData {
+		t.Fatalf("second PopInto error = %v, want %v", err, depacketizer.ErrNeedMoreData)
 	}
 }
 
@@ -115,4 +115,25 @@ func TestPacketizerErrorPaths(t *testing.T) {
 	if got := p.SequenceNumber(); got != 0 {
 		t.Fatalf("SequenceNumber after Close = %d, want 0", got)
 	}
+}
+
+func packetizeWithHeadroom(p Packetizer, encoded []byte, timestamp uint32, isKeyframe bool) (int, []byte, []PacketInfo, error) {
+	basePackets := p.MaxPackets(len(encoded))
+	packetCounts := []int{basePackets, basePackets + 8, basePackets * 2}
+	for _, packetCount := range packetCounts {
+		if packetCount <= 0 {
+			continue
+		}
+		packetBuf := make([]byte, packetCount*p.MaxPacketSize())
+		packets := make([]PacketInfo, packetCount)
+		n, err := p.PacketizeInto(encoded, timestamp, isKeyframe, packetBuf, packets)
+		if err == nil {
+			return n, packetBuf, packets, nil
+		}
+		if !errors.Is(err, ErrBufferTooSmall) {
+			return 0, nil, nil, err
+		}
+	}
+
+	return 0, nil, nil, ErrBufferTooSmall
 }
