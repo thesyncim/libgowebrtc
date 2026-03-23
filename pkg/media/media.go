@@ -216,8 +216,15 @@ type MediaStream struct {
 
 // NewMediaStream creates a new empty MediaStream.
 func NewMediaStream() *MediaStream {
+	return newMediaStreamWithID(generateID())
+}
+
+func newMediaStreamWithID(id string) *MediaStream {
+	if id == "" {
+		id = generateID()
+	}
 	return &MediaStream{
-		id:          generateID(),
+		id:          id,
 		videoTracks: make([]MediaStreamTrack, 0),
 		audioTracks: make([]MediaStreamTrack, 0),
 	}

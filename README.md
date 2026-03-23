@@ -389,6 +389,44 @@ func (h *subscriber) OnTrack(track receivedTrack) {
 }
 ```
 
+### Browser-Like Remote Streams
+
+When you want browser-style `ontrack` behavior on top of Pion, use
+`media.RemoteStreamRegistry`. It groups repeated `OnTrack` callbacks into
+stable `MediaStream` objects keyed by remote stream ID while still exposing the
+underlying decoded-track controls.
+
+```go
+import (
+    "github.com/pion/webrtc/v4"
+    "github.com/thesyncim/libgowebrtc/pkg/frame"
+    "github.com/thesyncim/libgowebrtc/pkg/media"
+    "github.com/thesyncim/libgowebrtc/pkg/pionrecv"
+)
+
+registry := media.NewRemoteStreamRegistry()
+
+pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+    remoteTrack, streams, err := registry.BindPionTrack(
+        track,
+        receiver,
+        pionrecv.WithRTCPWriter(receiver.Transport()),
+    )
+    if err != nil {
+        return
+    }
+
+    video, ok := remoteTrack.(media.RemoteVideoTrack)
+    if !ok {
+        return
+    }
+
+    _ = video.SetOnVideoFrame(func(f *frame.VideoFrame) {
+        println("decoded frame", f.Width, f.Height, "from stream", streams[0].ID())
+    })
+})
+```
+
 ### Low-Level Encoding (Allocation-Free)
 
 ```go
