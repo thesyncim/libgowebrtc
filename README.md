@@ -241,6 +241,9 @@ peerConnection.SetLocalDescription(offer)
 ```
 
 `pkg/media` is capture-only. For synthetic/manual frame production, use [`pkg/track`](./pkg/track).
+Use `media.GetSupportedConstraints()` and typed `GetCapabilities()` calls to
+inspect which browser-shaped knobs the library can actually honor for a given
+capture-backed track.
 
 ### Pion Integration
 
@@ -270,6 +273,10 @@ pionPC.AddTrack(videoTrack)
 frame := frame.NewI420Frame(1280, 720)
 videoTrack.WriteFrame(frame, false)
 ```
+
+When you want browser-like `MediaStream` semantics with manual Pion control,
+use `media.PionTrackLocalForStream(stream, track)` so the remote side sees the
+stream's `msid`. `media.PionTrackLocal(track)` remains the raw escape hatch.
 
 ### Browser Codec Presets
 
@@ -380,6 +387,44 @@ func (h *subscriber) OnTrack(track receivedTrack) {
 
     go decoded.Run()
 }
+```
+
+### Browser-Like Remote Streams
+
+When you want browser-style `ontrack` behavior on top of Pion, use
+`media.RemoteStreamRegistry`. It groups repeated `OnTrack` callbacks into
+stable `MediaStream` objects keyed by remote stream ID while still exposing the
+underlying decoded-track controls.
+
+```go
+import (
+    "github.com/pion/webrtc/v4"
+    "github.com/thesyncim/libgowebrtc/pkg/frame"
+    "github.com/thesyncim/libgowebrtc/pkg/media"
+    "github.com/thesyncim/libgowebrtc/pkg/pionrecv"
+)
+
+registry := media.NewRemoteStreamRegistry()
+
+pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+    remoteTrack, streams, err := registry.BindPionTrack(
+        track,
+        receiver,
+        pionrecv.WithRTCPWriter(receiver.Transport()),
+    )
+    if err != nil {
+        return
+    }
+
+    video, ok := remoteTrack.(media.RemoteVideoTrack)
+    if !ok {
+        return
+    }
+
+    _ = video.SetOnVideoFrame(func(f *frame.VideoFrame) {
+        println("decoded frame", f.Width, f.Height, "from stream", streams[0].ID())
+    })
+})
 ```
 
 ### Low-Level Encoding (Allocation-Free)
@@ -514,8 +559,9 @@ libgowebrtc/
 <summary><strong>Media Capture</strong></summary>
 
 - Capture-backed device/screen streams via `GetUserMedia`/`GetDisplayMedia`
+- Browser-style supported-constraint and per-track capability discovery
 - Manual frame injection lives in `pkg/track`
-- Pion interop (libwebrtc tracks work with Pion PC)
+- Pion interop, including MediaStream-aware `msid` preservation via `AddTracksToPC`
 </details>
 
 <details>
