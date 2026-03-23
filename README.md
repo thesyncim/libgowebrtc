@@ -269,6 +269,75 @@ frame := frame.NewI420Frame(1280, 720)
 videoTrack.WriteFrame(frame, false)
 ```
 
+### Pion Receive Integration
+
+`pionrecv.BindRemoteTrack(...)` is the preferred entrypoint inside a Pion `OnTrack` callback. Automatic PLI requests are best-effort; explicit `RequestKeyframe()` calls still return writer errors.
+
+```go
+import (
+    "github.com/pion/webrtc/v4"
+    "github.com/thesyncim/libgowebrtc/pkg/frame"
+    "github.com/thesyncim/libgowebrtc/pkg/pionrecv"
+)
+
+pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+    decoded, err := pionrecv.BindRemoteTrack(
+        track,
+        receiver,
+        pionrecv.WithRTCPWriter(receiver.Transport()),
+    )
+    if err != nil {
+        return
+    }
+
+    decoded.SetOnCodecChange(func(change pionrecv.CodecChange) {
+        println("codec switch", change.PreviousCodec.MimeType, "->", change.CurrentCodec.MimeType)
+    })
+    _ = decoded.SetOnVideoFrame(func(frame *frame.VideoFrame) {
+        // Use decoded I420 frame
+    })
+
+    go decoded.Run()
+})
+```
+
+### Callback-Based Receive Integration
+
+```go
+import (
+    "github.com/pion/rtcp"
+    "github.com/pion/webrtc/v4"
+    "github.com/thesyncim/libgowebrtc/pkg/frame"
+    "github.com/thesyncim/libgowebrtc/pkg/pionrecv"
+)
+
+type receivedTrack struct {
+    Track       *webrtc.TrackRemote
+    RTPReceiver *webrtc.RTPReceiver
+    WriteRTCP   func([]rtcp.Packet) error
+}
+
+func (h *subscriber) OnTrack(track receivedTrack) {
+    decoded, err := pionrecv.BindRemoteTrack(
+        track.Track,
+        track.RTPReceiver,
+        pionrecv.WithWriteRTCP(track.WriteRTCP),
+    )
+    if err != nil {
+        return
+    }
+
+    decoded.SetOnCodecChange(func(change pionrecv.CodecChange) {
+        // React to receiver-side codec switches
+    })
+    _ = decoded.SetOnVideoFrame(func(frame *frame.VideoFrame) {
+        // Render, forward, or transform decoded frames
+    })
+
+    go decoded.Run()
+}
+```
+
 ### Low-Level Encoding (Allocation-Free)
 
 ```go
@@ -305,6 +374,7 @@ libgowebrtc/
 │   ├── packetizer/     # RTP packetization
 │   ├── depacketizer/   # RTP depacketization
 │   ├── track/          # Pion-compatible TrackLocal
+│   ├── pionrecv/       # Pion TrackRemote -> decoded frame bridge
 │   ├── pc/             # PeerConnection (libwebrtc-backed)
 │   └── media/          # Browser-like API (GetUserMedia, etc.)
 ├── internal/ffi/       # FFI bindings (purego default, CGO optional)

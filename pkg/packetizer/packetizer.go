@@ -1,12 +1,15 @@
-// Package packetizer provides RTP packetization using libwebrtc.
+// Package packetizer provides RTP packetization for encoded media.
 package packetizer
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/pion/rtp"
+	pioncodecs "github.com/pion/rtp/codecs"
+
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
@@ -33,7 +36,8 @@ type PacketInfo struct {
 }
 
 // Packetizer converts encoded frames into RTP packets.
-// All operations are allocation-free - caller provides buffers.
+// All operations are allocation-free from the caller's perspective - caller
+// provides the output buffer and packet metadata slices.
 type Packetizer interface {
 	// PacketizeInto packetizes encoded data into RTP packets.
 	// dst is a pre-allocated buffer to hold all packets contiguously.
@@ -48,7 +52,7 @@ type Packetizer interface {
 	// MaxPacketSize returns the maximum size of a single RTP packet.
 	MaxPacketSize() int
 
-	// SequenceNumber returns the current sequence number.
+	// SequenceNumber returns the next sequence number that will be used.
 	SequenceNumber() uint16
 
 	// Close releases resources.
@@ -56,55 +60,37 @@ type Packetizer interface {
 }
 
 type packetizer struct {
-	handle uintptr
-	config Config
-	closed atomic.Bool
-	mu     sync.Mutex
+	config    Config
+	payloader rtp.Payloader
+	sequence  uint32
+	closed    atomic.Bool
+	mu        sync.Mutex
 }
 
 // New creates a new RTP packetizer.
 func New(cfg Config) (Packetizer, error) {
-	if err := ffi.LoadLibrary(); err != nil {
-		return nil, err
-	}
-
 	if cfg.MTU == 0 {
 		cfg.MTU = 1200
+	}
+	if cfg.MTU <= 12 {
+		return nil, ErrBufferTooSmall
 	}
 	if cfg.ClockRate == 0 {
 		cfg.ClockRate = cfg.Codec.ClockRate()
 	}
 
-	p := &packetizer{config: cfg}
-	if err := p.init(); err != nil {
+	payloader, err := newPayloader(cfg.Codec)
+	if err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return &packetizer{
+		config:    cfg,
+		payloader: payloader,
+	}, nil
 }
 
-func (p *packetizer) init() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	ffiConfig := &ffi.PacketizerConfig{
-		Codec:       int32(p.config.Codec),
-		SSRC:        p.config.SSRC,
-		PayloadType: p.config.PayloadType,
-		MTU:         p.config.MTU,
-		ClockRate:   p.config.ClockRate,
-	}
-
-	handle := ffi.CreatePacketizer(ffiConfig)
-	if handle == 0 {
-		return errors.New("failed to create packetizer")
-	}
-
-	p.handle = handle
-	return nil
-}
-
-func (p *packetizer) PacketizeInto(data []byte, timestamp uint32, isKeyframe bool, dst []byte, packets []PacketInfo) (int, error) {
+func (p *packetizer) PacketizeInto(data []byte, timestamp uint32, _ bool, dst []byte, packets []PacketInfo) (int, error) {
 	if p.closed.Load() {
 		return 0, ErrPacketizerClosed
 	}
@@ -115,37 +101,54 @@ func (p *packetizer) PacketizeInto(data []byte, timestamp uint32, isKeyframe boo
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.handle == 0 {
-		return 0, ErrPacketizerClosed
+	payloads := p.payloader.Payload(p.config.MTU-12, data)
+	if len(payloads) == 0 {
+		return 0, ErrInvalidData
+	}
+	if len(payloads) > len(packets) {
+		return 0, ErrBufferTooSmall
 	}
 
-	// Prepare output arrays for FFI
-	maxPackets := len(packets)
-	offsets := make([]int32, maxPackets)
-	sizes := make([]int32, maxPackets)
-
-	count, err := ffi.PacketizerPacketizeInto(
-		p.handle, data, timestamp, isKeyframe,
-		dst, offsets, sizes, maxPackets,
-	)
-	if err != nil {
-		return 0, err
-	}
-
-	// Copy results to PacketInfo slice
-	for i := 0; i < count; i++ {
-		packets[i] = PacketInfo{
-			Offset: int(offsets[i]),
-			Size:   int(sizes[i]),
+	offset := 0
+	sequence := uint16(p.sequence)
+	for i, payload := range payloads {
+		packet := rtp.Packet{
+			Header: rtp.Header{
+				Version:        2,
+				Marker:         i == len(payloads)-1,
+				PayloadType:    p.config.PayloadType,
+				SequenceNumber: sequence,
+				Timestamp:      timestamp,
+				SSRC:           p.config.SSRC,
+			},
+			Payload: payload,
 		}
+
+		size := packet.MarshalSize()
+		if len(dst[offset:]) < size {
+			return 0, ErrBufferTooSmall
+		}
+
+		n, err := packet.MarshalTo(dst[offset : offset+size])
+		if err != nil {
+			return 0, err
+		}
+		packets[i] = PacketInfo{
+			Offset: offset,
+			Size:   n,
+		}
+
+		offset += n
+		sequence++
 	}
 
-	return count, nil
+	p.sequence = uint32(sequence)
+	return len(payloads), nil
 }
 
 func (p *packetizer) MaxPackets(frameSize int) int {
-	// Worst case: each packet has MTU - RTP header (12 bytes) - payload header
-	// For safety, assume ~100 bytes overhead per packet
+	// Worst case: each packet carries about MTU - RTP header - codec payload header.
+	// Use a conservative header estimate so callers over-allocate.
 	payloadPerPacket := int(p.config.MTU) - 100
 	if payloadPerPacket <= 0 {
 		payloadPerPacket = 1000
@@ -160,21 +163,27 @@ func (p *packetizer) MaxPacketSize() int {
 func (p *packetizer) SequenceNumber() uint16 {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.handle == 0 {
-		return 0
-	}
-	return ffi.PacketizerSequenceNumber(p.handle)
+	return uint16(p.sequence)
 }
 
 func (p *packetizer) Close() error {
-	if !p.closed.CompareAndSwap(false, true) {
-		return nil
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.handle != 0 {
-		ffi.PacketizerDestroy(p.handle)
-		p.handle = 0
-	}
+	p.closed.Store(true)
 	return nil
+}
+
+func newPayloader(codecType codec.Type) (rtp.Payloader, error) {
+	switch codecType {
+	case codec.H264:
+		return &pioncodecs.H264Payloader{}, nil
+	case codec.VP8:
+		return &pioncodecs.VP8Payloader{}, nil
+	case codec.VP9:
+		return &pioncodecs.VP9Payloader{}, nil
+	case codec.AV1:
+		return &pioncodecs.AV1Payloader{}, nil
+	case codec.Opus:
+		return &pioncodecs.OpusPayloader{}, nil
+	default:
+		return nil, fmt.Errorf("unsupported packetizer codec %s", codecType)
+	}
 }
