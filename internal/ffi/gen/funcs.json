@@ -567,6 +567,18 @@
       "category": "PeerConnection"
     },
     {
+      "go_name": "shimPeerConnectionCreateDataChannelEx",
+      "c_name": "shim_peer_connection_create_data_channel_ex",
+      "params": [
+        {
+          "name": "params",
+          "type": "uintptr"
+        }
+      ],
+      "return": "uintptr",
+      "category": "PeerConnection"
+    },
+    {
       "go_name": "shimPeerConnectionClose",
       "c_name": "shim_peer_connection_close",
       "params": [

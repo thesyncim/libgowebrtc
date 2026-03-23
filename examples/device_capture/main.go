@@ -193,15 +193,15 @@ func (s *Session) cleanup() {
 }
 
 func (s *Session) setupCallbacks() {
-	s.peerConn.OnConnectionStateChange = func(state pc.PeerConnectionState) {
+	s.peerConn.SetOnConnectionStateChange(func(state pc.PeerConnectionState) {
 		log.Printf("Connection state: %s", state)
 		s.sendJSON(SignalingMessage{
 			Type:    "connection-state",
 			Message: state.String(),
 		})
-	}
+	})
 
-	s.peerConn.OnICECandidate = func(candidate *pc.ICECandidate) {
+	s.peerConn.SetOnICECandidate(func(candidate *pc.ICECandidate) {
 		if candidate == nil {
 			return
 		}
@@ -210,11 +210,11 @@ func (s *Session) setupCallbacks() {
 			Type:      "candidate",
 			Candidate: candidateJSON,
 		})
-	}
+	})
 
-	s.peerConn.OnICEConnectionStateChange = func(state pc.ICEConnectionState) {
+	s.peerConn.SetOnICEConnectionStateChange(func(state pc.ICEConnectionState) {
 		log.Printf("ICE connection state: %s", state)
-	}
+	})
 }
 
 func (s *Session) handleMessage(msg SignalingMessage) error {

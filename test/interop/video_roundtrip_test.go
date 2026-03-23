@@ -179,10 +179,10 @@ func TestPionToLibWebRTCVideo(t *testing.T) {
 
 	// Track received on libwebrtc side
 	trackReceived := make(chan struct{})
-	libPC.OnTrack = func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
+	libPC.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
 		t.Logf("libwebrtc received track: %s, kind: %s", track.ID(), track.Kind())
 		close(trackReceived)
-	}
+	})
 
 	// Do offer/answer exchange (Pion offers)
 	offer, err := pionPC.CreateOffer(nil)

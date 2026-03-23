@@ -81,26 +81,26 @@ func NewLibPeerPair(t *testing.T) *LibPeerPair {
 	}
 
 	// Set up ICE candidate handlers
-	sender.OnICECandidate = func(c *pc.ICECandidate) {
+	sender.SetOnICECandidate(func(c *pc.ICECandidate) {
 		if c == nil {
 			return
 		}
 		pp.candidatesMu.Lock()
 		pp.senderCandidates = append(pp.senderCandidates, c)
 		pp.candidatesMu.Unlock()
-	}
+	})
 
-	receiver.OnICECandidate = func(c *pc.ICECandidate) {
+	receiver.SetOnICECandidate(func(c *pc.ICECandidate) {
 		if c == nil {
 			return
 		}
 		pp.candidatesMu.Lock()
 		pp.receiverCandidates = append(pp.receiverCandidates, c)
 		pp.candidatesMu.Unlock()
-	}
+	})
 
 	// Set up OnTrack handler on receiver
-	receiver.OnTrack = func(track *pc.Track, recv *pc.RTPReceiver, streams []string) {
+	receiver.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streams []string) {
 		pp.receivedTracksMu.Lock()
 		pp.ReceivedTracks = append(pp.ReceivedTracks, track)
 		pp.receivedTracksMu.Unlock()
@@ -133,7 +133,7 @@ func NewLibPeerPair(t *testing.T) *LibPeerPair {
 		default:
 		}
 		t.Logf("Receiver got track: id=%s kind=%s", track.ID(), track.Kind())
-	}
+	})
 
 	return pp
 }

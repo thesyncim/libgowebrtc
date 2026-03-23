@@ -54,6 +54,7 @@ static void* fn_shim_peer_connection_connection_state;
 static void* fn_shim_peer_connection_add_track;
 static void* fn_shim_peer_connection_remove_track;
 static void* fn_shim_peer_connection_create_data_channel;
+static void* fn_shim_peer_connection_create_data_channel_ex;
 static void* fn_shim_peer_connection_close;
 static void* fn_shim_rtp_sender_set_bitrate;
 static void* fn_shim_rtp_sender_replace_track;
@@ -185,6 +186,7 @@ void set_fn_shim_peer_connection_connection_state(void* fn) { fn_shim_peer_conne
 void set_fn_shim_peer_connection_add_track(void* fn) { fn_shim_peer_connection_add_track = fn; }
 void set_fn_shim_peer_connection_remove_track(void* fn) { fn_shim_peer_connection_remove_track = fn; }
 void set_fn_shim_peer_connection_create_data_channel(void* fn) { fn_shim_peer_connection_create_data_channel = fn; }
+void set_fn_shim_peer_connection_create_data_channel_ex(void* fn) { fn_shim_peer_connection_create_data_channel_ex = fn; }
 void set_fn_shim_peer_connection_close(void* fn) { fn_shim_peer_connection_close = fn; }
 void set_fn_shim_rtp_sender_set_bitrate(void* fn) { fn_shim_rtp_sender_set_bitrate = fn; }
 void set_fn_shim_rtp_sender_replace_track(void* fn) { fn_shim_rtp_sender_replace_track = fn; }
@@ -453,6 +455,10 @@ int32_t call_shim_peer_connection_remove_track(uintptr_t params) {
 uintptr_t call_shim_peer_connection_create_data_channel(uintptr_t params) {
     typedef uintptr_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_peer_connection_create_data_channel)(params);
+}
+uintptr_t call_shim_peer_connection_create_data_channel_ex(uintptr_t params) {
+    typedef uintptr_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_create_data_channel_ex)(params);
 }
 void call_shim_peer_connection_close(uintptr_t pc) {
     typedef void (*fn_t)(uintptr_t);
@@ -854,6 +860,11 @@ func registerFunctions() error {
 	C.set_fn_shim_peer_connection_add_track(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_add_track")))
 	C.set_fn_shim_peer_connection_remove_track(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_remove_track")))
 	C.set_fn_shim_peer_connection_create_data_channel(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_create_data_channel")))
+	if sym := optionalDlsym(libHandle, "shim_peer_connection_create_data_channel_ex"); sym != 0 {
+		C.set_fn_shim_peer_connection_create_data_channel_ex(unsafe.Pointer(sym))
+	} else {
+		C.set_fn_shim_peer_connection_create_data_channel_ex(nil)
+	}
 	C.set_fn_shim_peer_connection_close(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_close")))
 
 	// PeerConnectionExtended
@@ -1123,6 +1134,13 @@ func registerFunctions() error {
 	}
 	shimPeerConnectionCreateDataChannel = func(params uintptr) uintptr {
 		return uintptr(C.call_shim_peer_connection_create_data_channel(C.uintptr_t(params)))
+	}
+	if optionalDlsym(libHandle, "shim_peer_connection_create_data_channel_ex") != 0 {
+		shimPeerConnectionCreateDataChannelEx = func(params uintptr) uintptr {
+			return uintptr(C.call_shim_peer_connection_create_data_channel_ex(C.uintptr_t(params)))
+		}
+	} else {
+		shimPeerConnectionCreateDataChannelEx = nil
 	}
 	shimPeerConnectionClose = func(pc uintptr) {
 		C.call_shim_peer_connection_close(C.uintptr_t(pc))
@@ -1411,6 +1429,14 @@ func mustDlsym(handle uintptr, name string) uintptr {
 	sym, err := dlsymLibrary(handle, name)
 	if err != nil {
 		panic(err)
+	}
+	return sym
+}
+
+func optionalDlsym(handle uintptr, name string) uintptr {
+	sym, err := dlsymLibrary(handle, name)
+	if err != nil {
+		return 0
 	}
 	return sym
 }

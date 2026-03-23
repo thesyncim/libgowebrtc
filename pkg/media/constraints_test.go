@@ -8,6 +8,9 @@ func TestIntConstraintValueAndValidate(t *testing.T) {
 		if got, ok := c.Value(); ok || got != 0 {
 			t.Fatalf("Value() = (%d, %v), want (0, false)", got, ok)
 		}
+		if c.IsSet() {
+			t.Fatal("IsSet() = true, want false")
+		}
 		if c.IsExact() {
 			t.Fatal("IsExact() = true, want false")
 		}
@@ -20,6 +23,9 @@ func TestIntConstraintValueAndValidate(t *testing.T) {
 		c := ExactInt(640)
 		if got, ok := c.Value(); !ok || got != 640 {
 			t.Fatalf("Value() = (%d, %v), want (640, true)", got, ok)
+		}
+		if !c.IsSet() {
+			t.Fatal("IsSet() = false, want true")
 		}
 		if !c.IsExact() {
 			t.Fatal("IsExact() = false, want true")
@@ -68,6 +74,9 @@ func TestFloatConstraintValueAndValidate(t *testing.T) {
 		if got, ok := c.Value(); ok || got != 0 {
 			t.Fatalf("Value() = (%v, %v), want (0, false)", got, ok)
 		}
+		if c.IsSet() {
+			t.Fatal("IsSet() = true, want false")
+		}
 		if c.IsExact() {
 			t.Fatal("IsExact() = true, want false")
 		}
@@ -80,6 +89,9 @@ func TestFloatConstraintValueAndValidate(t *testing.T) {
 		c := ExactFloat(29.97)
 		if got, ok := c.Value(); !ok || got != 29.97 {
 			t.Fatalf("Value() = (%v, %v), want (29.97, true)", got, ok)
+		}
+		if !c.IsSet() {
+			t.Fatal("IsSet() = false, want true")
 		}
 		if !c.IsExact() {
 			t.Fatal("IsExact() = false, want true")
@@ -118,6 +130,68 @@ func TestFloatConstraintValueAndValidate(t *testing.T) {
 		}
 		if err := c.Validate(3.0); err == nil {
 			t.Fatal("Validate(above-max) expected error")
+		}
+	})
+}
+
+func TestStringConstraintValueAndValidate(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		var c StringConstraint
+		if got, ok := c.Value(); ok || got != "" {
+			t.Fatalf("Value() = (%q, %v), want (\"\", false)", got, ok)
+		}
+		if c.IsSet() {
+			t.Fatal("IsSet() = true, want false")
+		}
+		if err := c.Validate("camera-1"); err != nil {
+			t.Fatalf("Validate() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("exact", func(t *testing.T) {
+		c := ExactString("camera-1")
+		if got, ok := c.Value(); !ok || got != "camera-1" {
+			t.Fatalf("Value() = (%q, %v), want (%q, true)", got, ok, "camera-1")
+		}
+		if !c.IsSet() {
+			t.Fatal("IsSet() = false, want true")
+		}
+		if err := c.Validate("camera-1"); err != nil {
+			t.Fatalf("Validate() unexpected error: %v", err)
+		}
+		if err := c.Validate("camera-2"); err == nil {
+			t.Fatal("Validate(non-matching exact) expected error")
+		}
+	})
+}
+
+func TestBoolConstraintValueAndValidate(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		var c BoolConstraint
+		if got, ok := c.Value(); ok || got {
+			t.Fatalf("Value() = (%v, %v), want (false, false)", got, ok)
+		}
+		if c.IsSet() {
+			t.Fatal("IsSet() = true, want false")
+		}
+		if err := c.Validate(true); err != nil {
+			t.Fatalf("Validate() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("exact", func(t *testing.T) {
+		c := ExactBool(true)
+		if got, ok := c.Value(); !ok || !got {
+			t.Fatalf("Value() = (%v, %v), want (true, true)", got, ok)
+		}
+		if !c.IsSet() {
+			t.Fatal("IsSet() = false, want true")
+		}
+		if err := c.Validate(true); err != nil {
+			t.Fatalf("Validate() unexpected error: %v", err)
+		}
+		if err := c.Validate(false); err == nil {
+			t.Fatal("Validate(non-matching exact) expected error")
 		}
 	})
 }

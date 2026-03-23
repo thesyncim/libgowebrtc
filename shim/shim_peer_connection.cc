@@ -116,7 +116,15 @@ public:
         if (pc_->on_track) {
             auto receiver = transceiver->receiver();
             auto track = receiver->track();
-            pc_->on_track(pc_->on_track_ctx, track.get(), receiver.get(), "");
+            std::string stream_ids;
+            const auto& ids = receiver->stream_ids();
+            for (size_t i = 0; i < ids.size(); ++i) {
+                if (i > 0) {
+                    stream_ids.push_back(',');
+                }
+                stream_ids += ids[i];
+            }
+            pc_->on_track(pc_->on_track_ctx, track.get(), receiver.get(), stream_ids.c_str());
         }
     }
 
@@ -698,36 +706,88 @@ SHIM_EXPORT int shim_peer_connection_remove_track(ShimPeerConnectionRemoveTrackP
     return SHIM_OK;
 }
 
-SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(ShimPeerConnectionCreateDataChannelParams* params) {
-    if (!params) {
-        return nullptr;
-    }
-    if (!params->pc || !params->pc->peer_connection || !params->label) {
-        shim::SetErrorMessage(params->error_out, "invalid parameter");
+namespace {
+
+ShimDataChannel* create_data_channel(
+    ShimPeerConnection* pc,
+    const char* label,
+    int ordered,
+    int max_packet_lifetime,
+    int max_retransmits,
+    const char* protocol,
+    int negotiated,
+    int id,
+    ShimErrorBuffer* error_out
+) {
+    if (!pc || !pc->peer_connection || !label) {
+        shim::SetErrorMessage(error_out, "invalid parameter");
         return nullptr;
     }
 
     webrtc::DataChannelInit config;
-    config.ordered = params->ordered != 0;
-    if (params->max_retransmits >= 0) {
-        config.maxRetransmits = params->max_retransmits;
+    config.ordered = ordered != 0;
+    if (max_packet_lifetime >= 0) {
+        config.maxRetransmitTime = max_packet_lifetime;
     }
-    if (params->protocol) {
-        config.protocol = params->protocol;
+    if (max_retransmits >= 0) {
+        config.maxRetransmits = max_retransmits;
+    }
+    if (protocol) {
+        config.protocol = protocol;
+    }
+    config.negotiated = negotiated != 0;
+    if (id >= 0) {
+        config.id = id;
     }
 
-    auto result = params->pc->peer_connection->CreateDataChannelOrError(params->label, &config);
+    auto result = pc->peer_connection->CreateDataChannelOrError(label, &config);
     if (!result.ok()) {
-        shim::SetErrorFromRTCError(params->error_out, result.error());
+        shim::SetErrorFromRTCError(error_out, result.error());
         return nullptr;
     }
 
     // Store in PC's data_channels vector to maintain proper reference count
     auto channel = result.MoveValue();
-    params->pc->data_channels.push_back(channel);
+    pc->data_channels.push_back(channel);
 
     // Return raw pointer (PC owns the reference)
     return reinterpret_cast<ShimDataChannel*>(channel.get());
+}
+
+}  // namespace
+
+SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel(ShimPeerConnectionCreateDataChannelParams* params) {
+    if (!params) {
+        return nullptr;
+    }
+    return create_data_channel(
+        params->pc,
+        params->label,
+        params->ordered,
+        -1,
+        params->max_retransmits,
+        params->protocol,
+        0,
+        -1,
+        params->error_out
+    );
+}
+
+SHIM_EXPORT ShimDataChannel* shim_peer_connection_create_data_channel_ex(ShimPeerConnectionCreateDataChannelExParams* params) {
+    if (!params) {
+        return nullptr;
+    }
+    return create_data_channel(
+        params->pc,
+        params->label,
+        params->ordered,
+        params->max_packet_lifetime,
+        params->max_retransmits,
+        params->protocol,
+        params->negotiated,
+        params->id,
+        params->error_out
+    );
 }
 
 SHIM_EXPORT void shim_peer_connection_close(ShimPeerConnection* pc) {

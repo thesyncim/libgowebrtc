@@ -359,7 +359,7 @@ func BenchmarkFFIDataChannelSend(b *testing.B) {
 	defer ffi.PeerConnectionDestroy(handle)
 
 	// Create data channel
-	dcHandle := ffi.PeerConnectionCreateDataChannel(handle, "bench", true, -1, "")
+	dcHandle := ffi.PeerConnectionCreateDataChannel(handle, "bench", true, -1, -1, "", false, -1)
 	if dcHandle == 0 {
 		b.Fatal("Failed to create data channel")
 	}

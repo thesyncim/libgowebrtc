@@ -146,11 +146,11 @@ func TestDataChannelPionToLib(t *testing.T) {
 	dcReceived := make(chan struct{})
 	var receivedLabel string
 
-	libPC.OnDataChannel = func(dc *pc.DataChannel) {
+	libPC.SetOnDataChannel(func(dc *pc.DataChannel) {
 		receivedLabel = dc.Label()
 		t.Logf("libwebrtc received data channel: %s", dc.Label())
 		close(dcReceived)
-	}
+	})
 
 	// Do offer/answer exchange (Pion offers since it created the DC)
 	offer, err := pionPC.CreateOffer(nil)
@@ -344,13 +344,13 @@ func TestDataChannelWithICE(t *testing.T) {
 	pionCandidates := make(chan *pionwebrtc.ICECandidate, 20)
 
 	// Set up ICE callbacks
-	libPC.OnICECandidate = func(candidate *pc.ICECandidate) {
+	libPC.SetOnICECandidate(func(candidate *pc.ICECandidate) {
 		if candidate != nil {
 			libCandidates <- candidate
 		} else {
 			close(libCandidates)
 		}
-	}
+	})
 
 	pionPC.OnICECandidate(func(candidate *pionwebrtc.ICECandidate) {
 		if candidate != nil {

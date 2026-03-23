@@ -3,7 +3,9 @@ package decoder
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
@@ -76,5 +78,20 @@ func NewAudioDecoder(codecType codec.Type, sampleRate, channels int) (AudioDecod
 		return NewOpusDecoder(sampleRate, channels)
 	default:
 		return nil, ErrUnsupportedCodec
+	}
+}
+
+func normalizeVideoDecodeError(err error, isKeyframe bool) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, ffi.ErrNeedMoreData):
+		return ErrNeedMoreData
+	case !isKeyframe && errors.Is(err, ffi.ErrDecodeFailed):
+		return ErrNeedMoreData
+	case errors.Is(err, ffi.ErrDecodeFailed):
+		return fmt.Errorf("%w: %v", ErrDecodeFailed, err)
+	default:
+		return err
 	}
 }

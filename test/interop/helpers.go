@@ -113,13 +113,13 @@ func NewPeerPair(t *testing.T, cfg PeerPairConfig) (*PeerPair, error) {
 
 // setupICECallbacks sets up ICE candidate exchange between peers.
 func (pp *PeerPair) setupICECallbacks() {
-	pp.Lib.OnICECandidate = func(candidate *pc.ICECandidate) {
+	pp.Lib.SetOnICECandidate(func(candidate *pc.ICECandidate) {
 		if candidate != nil {
 			pp.libCandidates <- candidate
 		} else {
 			close(pp.libCandidates)
 		}
-	}
+	})
 
 	pp.Pion.OnICECandidate(func(candidate *pionwebrtc.ICECandidate) {
 		if candidate != nil {
@@ -248,7 +248,7 @@ func (pp *PeerPair) WaitForConnection(timeout time.Duration) bool {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	pp.Lib.OnConnectionStateChange = func(state pc.PeerConnectionState) {
+	pp.Lib.SetOnConnectionStateChange(func(state pc.PeerConnectionState) {
 		pp.t.Logf("libwebrtc connection state: %v", state)
 		pp.mu.Lock()
 		if state == pc.PeerConnectionStateConnected && !pp.libConnected {
@@ -256,7 +256,7 @@ func (pp *PeerPair) WaitForConnection(timeout time.Duration) bool {
 			wg.Done()
 		}
 		pp.mu.Unlock()
-	}
+	})
 
 	pp.Pion.OnConnectionStateChange(func(state pionwebrtc.PeerConnectionState) {
 		pp.t.Logf("Pion connection state: %v", state)

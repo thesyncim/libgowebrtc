@@ -130,10 +130,10 @@ func TestPionToLibWebRTCAudio(t *testing.T) {
 
 	// Track received on libwebrtc side
 	trackReceived := make(chan struct{})
-	pp.Lib.OnTrack = func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
+	pp.Lib.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
 		t.Logf("libwebrtc received audio track: %s, kind: %s", track.ID(), track.Kind())
 		close(trackReceived)
-	}
+	})
 
 	// Do offer/answer exchange (Pion offers)
 	if err := pp.ExchangeOfferAnswerWithOfferer(false); err != nil {

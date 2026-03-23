@@ -241,11 +241,11 @@ func TestPeerConnection_SignalingStateCallback(t *testing.T) {
 	var states []SignalingState
 	var mu sync.Mutex
 
-	pc.OnSignalingStateChange = func(state SignalingState) {
+	pc.SetOnSignalingStateChange(func(state SignalingState) {
 		mu.Lock()
 		states = append(states, state)
 		mu.Unlock()
-	}
+	})
 
 	// Create and set offer
 	offer, err := pc.CreateOffer(nil)
@@ -288,11 +288,11 @@ func TestPeerConnection_ICECandidateCallback(t *testing.T) {
 
 	candidateReceived := make(chan *ICECandidate, 10)
 
-	pc.OnICECandidate = func(candidate *ICECandidate) {
+	pc.SetOnICECandidate(func(candidate *ICECandidate) {
 		if candidate != nil {
 			candidateReceived <- candidate
 		}
-	}
+	})
 
 	// Create and set offer to trigger ICE gathering
 	offer, err := pc.CreateOffer(nil)
@@ -640,12 +640,12 @@ func TestPeerConnection_NegotiationNeededCallback(t *testing.T) {
 
 	negotiationNeeded := make(chan struct{}, 1)
 
-	pc.OnNegotiationNeeded = func() {
+	pc.SetOnNegotiationNeeded(func() {
 		select {
 		case negotiationNeeded <- struct{}{}:
 		default:
 		}
-	}
+	})
 
 	// Adding a transceiver should trigger negotiation needed
 	_, err = pc.AddTransceiver("video", nil)

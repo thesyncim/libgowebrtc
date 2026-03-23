@@ -12,7 +12,7 @@
 - **Opus** audio encoding/decoding
 - **Allocation-free** hot paths - caller provides all buffers
 - **Pion-compatible** - implements `webrtc.TrackLocal` for seamless integration
-- **Browser-like API** - `GetUserMedia()`, `GetDisplayMedia()`, `PeerConnection`
+- **Browser-like capture API** - `GetUserMedia()`, `GetDisplayMedia()`, `PeerConnection`
 - **SVC/Simulcast** support with Chrome/Firefox-compatible presets
 - **purego FFI** - no CGO required by default, optional CGO mode for 5x faster FFI
 - **Device capture** - camera, microphone, screen/window capture
@@ -25,7 +25,7 @@ libgowebrtc brings native codec performance to Go WebRTC applications. It's desi
 - **Native codec performance** - H.264, VP8, VP9, AV1 via Google's libwebrtc
 - **Hardware acceleration** - VideoToolbox on macOS for H.264
 - **SVC/Simulcast** - Full support with Chrome/Firefox-compatible presets
-- **Browser-like API** - `GetUserMedia`, `GetDisplayMedia`, `PeerConnection`
+- **Browser-like capture API** - `GetUserMedia`, `GetDisplayMedia`, `PeerConnection`
 - **No CGO required** - Uses purego by default (optional CGO mode for 5x faster FFI)
 - **Pion integration** - Implements `webrtc.TrackLocal` for seamless interop
 
@@ -215,13 +215,13 @@ import (
 // Get camera and microphone (like navigator.mediaDevices.getUserMedia)
 stream, _ := media.GetUserMedia(media.Constraints{
     Video: &media.VideoConstraints{
-        Width:     1280,
-        Height:    720,
-        FrameRate: 30,
+        Width:     media.ExactInt(1280),
+        Height:    media.ExactInt(720),
+        FrameRate: media.ExactFloat(30),
         Codec:     codec.VP9,
     },
     Audio: &media.AudioConstraints{
-        SampleRate: 48000,
+        SampleRate: media.ExactInt(48000),
     },
 })
 
@@ -239,6 +239,8 @@ senders, _ := media.AddTracksToPC(peerConnection, stream)
 offer, _ := peerConnection.CreateOffer(nil)
 peerConnection.SetLocalDescription(offer)
 ```
+
+`pkg/media` is capture-only. For synthetic/manual frame production, use [`pkg/track`](./pkg/track).
 
 ### Pion Integration
 
@@ -418,7 +420,7 @@ libgowebrtc/
 │   ├── track/          # Pion-compatible TrackLocal
 │   ├── pionrecv/       # Pion TrackRemote -> decoded frame bridge
 │   ├── pc/             # PeerConnection (libwebrtc-backed)
-│   └── media/          # Browser-like API (GetUserMedia, etc.)
+│   └── media/          # Browser-like capture/stream API
 ├── internal/ffi/       # FFI bindings (purego default, CGO optional)
 ├── shim/               # C++ shim library
 ├── test/
@@ -498,20 +500,21 @@ libgowebrtc/
 
 | Callback | Description |
 |----------|-------------|
-| `OnConnectionStateChange` | Connection state events |
-| `OnSignalingStateChange` | Signaling state events |
-| `OnICEConnectionStateChange` | ICE connection state events |
-| `OnICEGatheringStateChange` | ICE gathering progress events |
-| `OnNegotiationNeeded` | Renegotiation trigger events |
-| `OnICECandidate` | New ICE candidate events |
-| `OnTrack` | Remote track received events |
-| `OnDataChannel` | Data channel received events |
+| `SetOnConnectionStateChange(...)` | Connection state events |
+| `SetOnSignalingStateChange(...)` | Signaling state events |
+| `SetOnICEConnectionStateChange(...)` | ICE connection state events |
+| `SetOnICEGatheringStateChange(...)` | ICE gathering progress events |
+| `SetOnNegotiationNeeded(...)` | Renegotiation trigger events |
+| `SetOnICECandidate(...)` | New ICE candidate events |
+| `SetOnTrack(...)` | Remote track received events |
+| `SetOnDataChannel(...)` | Data channel received events |
 </details>
 
 <details>
 <summary><strong>Media Capture</strong></summary>
 
-- Device/screen capture via `GetUserMedia`/`GetDisplayMedia`
+- Capture-backed device/screen streams via `GetUserMedia`/`GetDisplayMedia`
+- Manual frame injection lives in `pkg/track`
 - Pion interop (libwebrtc tracks work with Pion PC)
 </details>
 
@@ -776,12 +779,12 @@ Notes:
 
 **Debug steps:**
 ```go
-pc.OnConnectionStateChange = func(state pc.PeerConnectionState) {
+pc.SetOnConnectionStateChange(func(state pc.PeerConnectionState) {
     log.Printf("Connection state: %s", state)
-}
-pc.OnICEConnectionStateChange = func(state pc.ICEConnectionState) {
+})
+pc.SetOnICEConnectionStateChange(func(state pc.ICEConnectionState) {
     log.Printf("ICE state: %s", state)
-}
+})
 ```
 
 </details>

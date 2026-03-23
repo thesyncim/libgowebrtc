@@ -491,6 +491,24 @@ func cShimPeerConnectionCreateDataChannelParamsLayout() cStructLayout {
 	}
 }
 
+func cShimPeerConnectionCreateDataChannelExParamsLayout() cStructLayout {
+	var cCfg C.ShimPeerConnectionCreateDataChannelExParams
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"PC":                unsafe.Offsetof(cCfg.pc),
+			"Label":             unsafe.Offsetof(cCfg.label),
+			"Ordered":           unsafe.Offsetof(cCfg.ordered),
+			"MaxPacketLifeTime": unsafe.Offsetof(cCfg.max_packet_lifetime),
+			"MaxRetransmits":    unsafe.Offsetof(cCfg.max_retransmits),
+			"Protocol":          unsafe.Offsetof(cCfg.protocol),
+			"Negotiated":        unsafe.Offsetof(cCfg.negotiated),
+			"ID":                unsafe.Offsetof(cCfg.id),
+			"ErrorOut":          unsafe.Offsetof(cCfg.error_out),
+		},
+	}
+}
+
 func cShimPeerConnectionCreateOfferParamsLayout() cStructLayout {
 	var cCfg C.ShimPeerConnectionCreateOfferParams
 	return cStructLayout{

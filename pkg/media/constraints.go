@@ -11,6 +11,11 @@ type IntConstraint struct {
 	Max   *int
 }
 
+// IsSet returns true if any constraint value is present.
+func (c IntConstraint) IsSet() bool {
+	return c.Exact != nil || c.Ideal != nil || c.Min != nil || c.Max != nil
+}
+
 // Value returns the effective value, preferring exact > ideal > min.
 // Returns (0, false) if no value is set.
 func (c IntConstraint) Value() (int, bool) {
@@ -62,6 +67,11 @@ type FloatConstraint struct {
 	Max   *float64
 }
 
+// IsSet returns true if any constraint value is present.
+func (c FloatConstraint) IsSet() bool {
+	return c.Exact != nil || c.Ideal != nil || c.Min != nil || c.Max != nil
+}
+
 // Value returns the effective value, preferring exact > ideal > min.
 // Returns (0, false) if no value is set.
 func (c FloatConstraint) Value() (float64, bool) {
@@ -100,6 +110,74 @@ func (c FloatConstraint) Validate(value float64) error {
 		return &OverconstrainedError{
 			Constraint: "value",
 			Message:    fmt.Sprintf("maximum is %v, got %v", *c.Max, value),
+		}
+	}
+	return nil
+}
+
+// StringConstraint supports browser-like exact/ideal matching for string values.
+type StringConstraint struct {
+	Exact *string
+	Ideal *string
+}
+
+// Value returns the effective value, preferring exact > ideal.
+// Returns ("", false) if no value is set.
+func (c StringConstraint) Value() (string, bool) {
+	if c.Exact != nil {
+		return *c.Exact, true
+	}
+	if c.Ideal != nil {
+		return *c.Ideal, true
+	}
+	return "", false
+}
+
+// IsSet returns true if any constraint value is present.
+func (c StringConstraint) IsSet() bool {
+	return c.Exact != nil || c.Ideal != nil
+}
+
+// Validate checks if a value satisfies the constraint.
+func (c StringConstraint) Validate(value string) error {
+	if c.Exact != nil && value != *c.Exact {
+		return &OverconstrainedError{
+			Constraint: "value",
+			Message:    fmt.Sprintf("requires exact %q, got %q", *c.Exact, value),
+		}
+	}
+	return nil
+}
+
+// BoolConstraint supports browser-like exact/ideal matching for boolean values.
+type BoolConstraint struct {
+	Exact *bool
+	Ideal *bool
+}
+
+// Value returns the effective value, preferring exact > ideal.
+// Returns (false, false) if no value is set.
+func (c BoolConstraint) Value() (bool, bool) {
+	if c.Exact != nil {
+		return *c.Exact, true
+	}
+	if c.Ideal != nil {
+		return *c.Ideal, true
+	}
+	return false, false
+}
+
+// IsSet returns true if any constraint value is present.
+func (c BoolConstraint) IsSet() bool {
+	return c.Exact != nil || c.Ideal != nil
+}
+
+// Validate checks if a value satisfies the constraint.
+func (c BoolConstraint) Validate(value bool) error {
+	if c.Exact != nil && value != *c.Exact {
+		return &OverconstrainedError{
+			Constraint: "value",
+			Message:    fmt.Sprintf("requires exact %t, got %t", *c.Exact, value),
 		}
 	}
 	return nil
@@ -199,4 +277,24 @@ func IdealFloat(v float64) FloatConstraint {
 // RangeFloat creates a FloatConstraint with min and max bounds.
 func RangeFloat(minVal, maxVal float64) FloatConstraint {
 	return FloatConstraint{Min: &minVal, Max: &maxVal}
+}
+
+// ExactString creates a StringConstraint that requires an exact value.
+func ExactString(v string) StringConstraint {
+	return StringConstraint{Exact: &v}
+}
+
+// IdealString creates a StringConstraint with an ideal (preferred) value.
+func IdealString(v string) StringConstraint {
+	return StringConstraint{Ideal: &v}
+}
+
+// ExactBool creates a BoolConstraint that requires an exact value.
+func ExactBool(v bool) BoolConstraint {
+	return BoolConstraint{Exact: &v}
+}
+
+// IdealBool creates a BoolConstraint with an ideal (preferred) value.
+func IdealBool(v bool) BoolConstraint {
+	return BoolConstraint{Ideal: &v}
 }

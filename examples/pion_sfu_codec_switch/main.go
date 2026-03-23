@@ -329,31 +329,47 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	}
 	publisherRef.Store(publisher)
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Duration)
-	defer cancel()
+	settleDuration := recommendedSettleDuration(cfg.Duration, cfg.SwitchInterval)
+	switchDuration := cfg.Duration - settleDuration
+	if switchDuration <= 0 {
+		switchDuration = cfg.Duration
+	}
+
+	runCtx, runCancel := context.WithTimeout(context.Background(), cfg.Duration)
+	defer runCancel()
+	switchCtx, switchCancel := context.WithTimeout(runCtx, switchDuration)
+	defer switchCancel()
 
 	var loops sync.WaitGroup
-	startLoop := func(label string, fn func() error) {
-		loops.Add(1)
-		go func() {
-			defer loops.Done()
-			reportAsyncError(label, fn())
-		}()
-	}
-	startLoop("publisher loop", func() error {
-		return runPublisher(ctx, publisher)
-	})
-	startLoop("codec switch loop", func() error {
-		return runCodecSwitcher(ctx, publisher, codecCycle, cfg.SwitchInterval)
-	})
+	loops.Add(1)
+	go func() {
+		defer loops.Done()
+		reportAsyncError("publisher loop", runPublisher(runCtx, publisher))
+	}()
+
+	switchDone := make(chan struct{})
+	loops.Add(1)
+	go func() {
+		defer loops.Done()
+		defer close(switchDone)
+		reportAsyncError("codec switch loop", runCodecSwitcher(switchCtx, publisher, codecCycle, cfg.SwitchInterval))
+	}()
 
 	var runErr error
 	select {
-	case <-ctx.Done():
+	case <-switchCtx.Done():
+		<-switchDone
+		runErr = waitForSwitchConvergence(runCtx, publisher, &sfuSwitches, &subscriberSwitches)
+		if runErr == nil {
+			select {
+			case <-runCtx.Done():
+			case runErr = <-errCh:
+			}
+		}
 	case runErr = <-errCh:
 	}
 
-	cancel()
+	runCancel()
 	shutdown()
 	loops.Wait()
 
@@ -975,6 +991,54 @@ func joinCodecNames(codecs []codec.Type) string {
 		parts = append(parts, c.String())
 	}
 	return strings.Join(parts, " -> ")
+}
+
+func waitForSwitchConvergence(ctx context.Context, publisher *codecSwitchingPublisher, sfuSwitches, subscriberSwitches *atomic.Int64) error {
+	if publisher == nil {
+		return nil
+	}
+
+	target := publisher.switchCount.Load()
+	if target == 0 {
+		return nil
+	}
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		currentSFU := sfuSwitches.Load()
+		currentSubscriber := subscriberSwitches.Load()
+		if currentSFU >= target && currentSubscriber >= target {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("codec switch convergence timeout: publisher=%d sfu=%d subscriber=%d", target, currentSFU, currentSubscriber)
+		default:
+		}
+		publisher.RequestKeyframe()
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("codec switch convergence timeout: publisher=%d sfu=%d subscriber=%d", target, currentSFU, currentSubscriber)
+		case <-ticker.C:
+		}
+	}
+}
+
+func maxDuration(a, b time.Duration) time.Duration {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func recommendedSettleDuration(total, interval time.Duration) time.Duration {
+	settle := maxDuration(2*time.Second, interval)
+	if total <= settle {
+		return total / 3
+	}
+	return settle
 }
 
 func drainRTCP(label string, sender *webrtc.RTPSender) {

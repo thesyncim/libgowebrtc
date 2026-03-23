@@ -108,7 +108,7 @@ func NewPionLibPeerPair(t *testing.T) *PionLibPeerPair {
 	})
 
 	// Setup lib OnTrack handler
-	lib.OnTrack = func(track *pc.Track, recv *pc.RTPReceiver, streams []string) {
+	lib.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streams []string) {
 		t.Logf("Lib received track: id=%s kind=%s", track.ID(), track.Kind())
 		select {
 		case pp.libTrackReceived <- track:
@@ -125,7 +125,7 @@ func NewPionLibPeerPair(t *testing.T) *PionLibPeerPair {
 				pp.libAudioFrames.Add(1)
 			})
 		}
-	}
+	})
 
 	// Setup data channel handlers
 	pion.OnDataChannel(func(dc *webrtc.DataChannel) {
@@ -136,13 +136,13 @@ func NewPionLibPeerPair(t *testing.T) *PionLibPeerPair {
 		}
 	})
 
-	lib.OnDataChannel = func(dc *pc.DataChannel) {
+	lib.SetOnDataChannel(func(dc *pc.DataChannel) {
 		t.Logf("Lib received data channel: label=%s", dc.Label())
 		select {
 		case pp.libDataChannel <- dc:
 		default:
 		}
-	}
+	})
 
 	return pp
 }
@@ -209,14 +209,14 @@ func (pp *PionLibPeerPair) ConnectLibOffersPionAnswers() error {
 	var pionCandidates []webrtc.ICECandidate
 	var candidatesMu sync.Mutex
 
-	pp.Lib.OnICECandidate = func(c *pc.ICECandidate) {
+	pp.Lib.SetOnICECandidate(func(c *pc.ICECandidate) {
 		if c == nil {
 			return
 		}
 		candidatesMu.Lock()
 		libCandidates = append(libCandidates, c)
 		candidatesMu.Unlock()
-	}
+	})
 
 	pp.Pion.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c == nil {
@@ -875,12 +875,12 @@ func TestConnectionStateInterop(t *testing.T) {
 
 	var libStates []pc.PeerConnectionState
 	var libStatesMu sync.Mutex
-	pp.Lib.OnConnectionStateChange = func(state pc.PeerConnectionState) {
+	pp.Lib.SetOnConnectionStateChange(func(state pc.PeerConnectionState) {
 		t.Logf("Lib connection state: %s", state)
 		libStatesMu.Lock()
 		libStates = append(libStates, state)
 		libStatesMu.Unlock()
-	}
+	})
 
 	// Add a track to have media
 	track, _ := pp.Lib.CreateVideoTrack("state-test", codec.VP8, 320, 240)
@@ -936,7 +936,7 @@ func TestICECandidateExchange(t *testing.T) {
 
 	var libCandidates []*pc.ICECandidate
 	var libCandidatesMu sync.Mutex
-	pp.Lib.OnICECandidate = func(c *pc.ICECandidate) {
+	pp.Lib.SetOnICECandidate(func(c *pc.ICECandidate) {
 		if c == nil {
 			return
 		}
@@ -944,7 +944,7 @@ func TestICECandidateExchange(t *testing.T) {
 		libCandidates = append(libCandidates, c)
 		libCandidatesMu.Unlock()
 		t.Logf("Lib ICE candidate: %s", c.Candidate)
-	}
+	})
 
 	// Add a track
 	track, _ := pp.Lib.CreateVideoTrack("ice-test", codec.VP8, 320, 240)

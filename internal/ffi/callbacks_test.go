@@ -29,7 +29,8 @@ func TestTrackCallbackRegistriesAndPointers(t *testing.T) {
 	ResetForTesting()
 	t.Cleanup(ResetForTesting)
 
-	RegisterVideoCallback(11, func(width, height int, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) {})
+	RegisterVideoCallback(11, func(width, height int, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) {
+	})
 	RegisterAudioCallback(22, func(samples []int16, sampleRate, channels int, timestampUs int64) {})
 
 	if videoCallbacks[11] == nil {
@@ -68,7 +69,7 @@ func TestDataChannelAndBandwidthEstimateRegistries(t *testing.T) {
 	}
 	defer PeerConnectionDestroy(pc)
 
-	dc := PeerConnectionCreateDataChannel(pc, "ffi-callbacks", true, -1, "")
+	dc := PeerConnectionCreateDataChannel(pc, "ffi-callbacks", true, -1, -1, "", false, -1)
 	if dc == 0 {
 		t.Fatal("PeerConnectionCreateDataChannel returned 0")
 	}
@@ -280,7 +281,8 @@ func TestResetForTestingClearsRegistries(t *testing.T) {
 	release := withFFITestSerialExecution(t)
 	defer release()
 
-	videoCallbacks[1] = func(width, height int, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) {}
+	videoCallbacks[1] = func(width, height int, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) {
+	}
 	audioCallbacks[2] = func(samples []int16, sampleRate, channels int, timestampUs int64) {}
 	dcMessageCallbacks[3] = func(data []byte, isBinary bool) {}
 	dcOpenCallbacks[3] = func() {}
@@ -345,7 +347,7 @@ func TestPeerConnectionNativeWrapperCoverage(t *testing.T) {
 	}
 	defer RTPSenderDestroy(audioSender)
 
-	dc := PeerConnectionCreateDataChannel(pc, "ffi-native", true, -1, "")
+	dc := PeerConnectionCreateDataChannel(pc, "ffi-native", true, -1, -1, "", false, -1)
 	if dc == 0 {
 		t.Fatal("PeerConnectionCreateDataChannel returned 0")
 	}
