@@ -203,6 +203,12 @@ func TestGetUserMediaResolvesDevicesAndSettings(t *testing.T) {
 	if got := video.GetSettings().FrameRate; got != 24 {
 		t.Fatalf("video FrameRate = %.0f, want 24", got)
 	}
+	if got := video.GetCapabilities().DeviceID; len(got) != 1 || got[0] != "cam-2" {
+		t.Fatalf("video DeviceID capability = %v, want [cam-2]", got)
+	}
+	if got := video.GetCapabilities().FacingMode; len(got) != 1 || got[0] != FacingModeEnvironment {
+		t.Fatalf("video FacingMode capability = %v, want [%q]", got, FacingModeEnvironment)
+	}
 
 	if got := audio.Label(); got != "Studio Mic" {
 		t.Fatalf("audio Label() = %q, want %q", got, "Studio Mic")
@@ -212,6 +218,9 @@ func TestGetUserMediaResolvesDevicesAndSettings(t *testing.T) {
 	}
 	if !audio.GetSettings().EchoCancellation {
 		t.Fatal("audio EchoCancellation = false, want true")
+	}
+	if got := audio.GetCapabilities().DeviceID; len(got) != 1 || got[0] != "mic-1" {
+		t.Fatalf("audio DeviceID capability = %v, want [mic-1]", got)
 	}
 }
 
@@ -291,6 +300,9 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 	}
 	if video.displayConstraints == nil || video.displayConstraints.DisplaySurface != DisplaySurfaceWindow {
 		t.Fatalf("display surface = %+v, want %q", video.displayConstraints, DisplaySurfaceWindow)
+	}
+	if got := video.GetCapabilities().DisplaySurface; len(got) != 1 || got[0] != DisplaySurfaceWindow {
+		t.Fatalf("display surface capability = %v, want [%q]", got, DisplaySurfaceWindow)
 	}
 	if got := audioTracks[0].(AudioStreamTrack).GetSettings().DeviceID; got != "mic-1" {
 		t.Fatalf("audio DeviceID = %q, want %q", got, "mic-1")

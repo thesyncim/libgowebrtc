@@ -192,6 +192,7 @@ type MediaStreamTrack interface {
 type VideoStreamTrack interface {
 	MediaStreamTrack
 	GetConstraints() VideoConstraints
+	GetCapabilities() VideoTrackCapabilities
 	ApplyConstraints(constraints VideoConstraints) error
 	GetSettings() VideoTrackSettings
 }
@@ -200,6 +201,7 @@ type VideoStreamTrack interface {
 type AudioStreamTrack interface {
 	MediaStreamTrack
 	GetConstraints() AudioConstraints
+	GetCapabilities() AudioTrackCapabilities
 	ApplyConstraints(constraints AudioConstraints) error
 	GetSettings() AudioTrackSettings
 }
@@ -400,6 +402,7 @@ var (
 type videoStreamTrack struct {
 	track              *track.VideoTrack
 	constraints        VideoConstraints
+	capabilities       VideoTrackCapabilities
 	settings           VideoTrackSettings
 	displayConstraints *DisplayVideoConstraints
 	enabled            atomic.Bool
@@ -415,14 +418,15 @@ type videoStreamTrack struct {
 
 // audioStreamTrack wraps track.AudioTrack as MediaStreamTrack.
 type audioStreamTrack struct {
-	track       *track.AudioTrack
-	constraints AudioConstraints
-	settings    AudioTrackSettings
-	enabled     atomic.Bool
-	muted       atomic.Bool
-	readyState  atomic.Value
-	label       string
-	source      mediaSourceKind
+	track        *track.AudioTrack
+	constraints  AudioConstraints
+	capabilities AudioTrackCapabilities
+	settings     AudioTrackSettings
+	enabled      atomic.Bool
+	muted        atomic.Bool
+	readyState   atomic.Value
+	label        string
+	source       mediaSourceKind
 
 	audioCapture audioCaptureHandle
 	mu           sync.Mutex
@@ -599,6 +603,7 @@ func createDisplayVideoTrack(request DisplayVideoConstraints, screens []ScreenIn
 	}
 	t.source = sourceDisplay
 	t.displayConstraints = &resolvedDisplay
+	t.capabilities.DisplaySurface = []DisplaySurface{resolvedDisplay.DisplaySurface}
 	if err := t.startScreenCapture(); err != nil {
 		t.Stop()
 		return nil, err
@@ -657,10 +662,11 @@ func newVideoStreamTrack(constraints VideoConstraints, settings VideoTrackSettin
 	}
 
 	t := &videoStreamTrack{
-		track:       vt,
-		constraints: constraints,
-		settings:    settings,
-		label:       label,
+		track:        vt,
+		constraints:  constraints,
+		capabilities: newVideoTrackCapabilities(settings),
+		settings:     settings,
+		label:        label,
 	}
 	t.enabled.Store(true)
 	t.muted.Store(false)
@@ -683,10 +689,11 @@ func newAudioStreamTrack(constraints AudioConstraints, settings AudioTrackSettin
 	}
 
 	t := &audioStreamTrack{
-		track:       at,
-		constraints: constraints,
-		settings:    settings,
-		label:       label,
+		track:        at,
+		constraints:  constraints,
+		capabilities: newAudioTrackCapabilities(settings),
+		settings:     settings,
+		label:        label,
 	}
 	t.enabled.Store(true)
 	t.muted.Store(false)
@@ -854,6 +861,35 @@ func defaultVideoBitrate(codecType codec.Type, width, height int) uint32 {
 	default:
 		return codec.DefaultH264Config(width, height).Bitrate
 	}
+}
+
+func newVideoTrackCapabilities(settings VideoTrackSettings) VideoTrackCapabilities {
+	capabilities := VideoTrackCapabilities{
+		Width:     exactIntCapability(settings.Width),
+		Height:    exactIntCapability(settings.Height),
+		FrameRate: frameRateCapability(settings.FrameRate),
+	}
+	if settings.DeviceID != "" {
+		capabilities.DeviceID = []string{settings.DeviceID}
+	}
+	if settings.FacingMode != "" {
+		capabilities.FacingMode = []FacingMode{settings.FacingMode}
+	}
+	return capabilities
+}
+
+func newAudioTrackCapabilities(settings AudioTrackSettings) AudioTrackCapabilities {
+	capabilities := AudioTrackCapabilities{
+		SampleRate:       exactIntCapability(settings.SampleRate),
+		ChannelCount:     exactIntCapability(settings.ChannelCount),
+		EchoCancellation: []bool{false, true},
+		NoiseSuppression: []bool{false, true},
+		AutoGainControl:  []bool{false, true},
+	}
+	if settings.DeviceID != "" {
+		capabilities.DeviceID = []string{settings.DeviceID}
+	}
+	return capabilities
 }
 
 func validateVideoConstraints(c VideoConstraints) error {
@@ -1055,6 +1091,67 @@ func resolveBoolConstraint(c BoolConstraint, def bool) bool {
 	return def
 }
 
+func resolveVideoFrameRateConstraint(c FloatConstraint, current float64, capabilities FloatCapabilityRange) (float64, error) {
+	if !c.IsSet() {
+		return current, nil
+	}
+
+	minSupported := capabilities.Min
+	maxSupported := capabilities.Max
+	if minSupported <= 0 {
+		minSupported = 1
+	}
+	if maxSupported <= 0 {
+		maxSupported = current
+	}
+
+	if c.Min != nil && *c.Min > maxSupported {
+		return 0, &OverconstrainedError{
+			Constraint: "frameRate",
+			Message:    fmt.Sprintf("minimum is %.2f, max supported is %.2f", *c.Min, maxSupported),
+		}
+	}
+	if c.Max != nil && *c.Max < minSupported {
+		return 0, &OverconstrainedError{
+			Constraint: "frameRate",
+			Message:    fmt.Sprintf("maximum is %.2f, min supported is %.2f", *c.Max, minSupported),
+		}
+	}
+	if c.Exact != nil {
+		if *c.Exact < minSupported || *c.Exact > maxSupported {
+			return 0, &OverconstrainedError{
+				Constraint: "frameRate",
+				Message:    fmt.Sprintf("requires exact %.2f, supported range is %.2f-%.2f", *c.Exact, minSupported, maxSupported),
+			}
+		}
+		return *c.Exact, nil
+	}
+
+	target := current
+	if c.Ideal != nil {
+		target = *c.Ideal
+	}
+	if target < minSupported {
+		target = minSupported
+	}
+	if target > maxSupported {
+		target = maxSupported
+	}
+	if c.Max != nil && target > *c.Max {
+		target = *c.Max
+	}
+	if c.Min != nil && target < *c.Min {
+		target = *c.Min
+	}
+	if target < minSupported || target > maxSupported {
+		return 0, &OverconstrainedError{
+			Constraint: "frameRate",
+			Message:    fmt.Sprintf("supported range is %.2f-%.2f", minSupported, maxSupported),
+		}
+	}
+	return target, nil
+}
+
 func mergeVideoConstraints(base, update VideoConstraints) VideoConstraints {
 	merged := base
 	if update.Width.IsSet() {
@@ -1219,7 +1316,10 @@ func (t *videoStreamTrack) Clone() MediaStreamTrack {
 }
 
 func (t *videoStreamTrack) GetConstraints() VideoConstraints { return t.constraints }
-func (t *videoStreamTrack) GetSettings() VideoTrackSettings  { return t.settings }
+func (t *videoStreamTrack) GetCapabilities() VideoTrackCapabilities {
+	return copyVideoTrackCapabilities(t.capabilities)
+}
+func (t *videoStreamTrack) GetSettings() VideoTrackSettings { return t.settings }
 
 func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
 	if err := validateVideoConstraints(vc); err != nil {
@@ -1237,9 +1337,13 @@ func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
 		}
 	}
 
-	nextFrameRate := t.settings.FrameRate
-	if merged.FrameRate.IsSet() {
-		nextFrameRate = resolveFloatConstraint(merged.FrameRate, t.settings.FrameRate)
+	nextFrameRate, err := resolveVideoFrameRateConstraint(
+		merged.FrameRate,
+		t.settings.FrameRate,
+		t.capabilities.FrameRate,
+	)
+	if err != nil {
+		return err
 	}
 	if nextFrameRate != t.settings.FrameRate {
 		if err := t.track.SetFramerate(nextFrameRate); err != nil {
@@ -1390,7 +1494,10 @@ func (t *audioStreamTrack) Clone() MediaStreamTrack {
 }
 
 func (t *audioStreamTrack) GetConstraints() AudioConstraints { return t.constraints }
-func (t *audioStreamTrack) GetSettings() AudioTrackSettings  { return t.settings }
+func (t *audioStreamTrack) GetCapabilities() AudioTrackCapabilities {
+	return copyAudioTrackCapabilities(t.capabilities)
+}
+func (t *audioStreamTrack) GetSettings() AudioTrackSettings { return t.settings }
 
 func (t *audioStreamTrack) ApplyConstraints(ac AudioConstraints) error {
 	if err := validateAudioConstraints(ac); err != nil {

@@ -26,6 +26,16 @@ func PionTrackLocal(t MediaStreamTrack) (webrtc.TrackLocal, bool) {
 	return nil, false
 }
 
+// PionTrackLocalForStream scopes a media track to a MediaStream ID for Pion
+// interop. This preserves browser-like msid semantics when callers want manual
+// control instead of AddTracksToPC.
+func PionTrackLocalForStream(stream *MediaStream, t MediaStreamTrack) (webrtc.TrackLocal, bool) {
+	if stream == nil {
+		return nil, false
+	}
+	return pionTrackLocalWithStreamID(stream.ID(), t)
+}
+
 // AddTracksToPC is a convenience function that adds all tracks from a MediaStream
 // to a Pion PeerConnection.
 //
@@ -35,7 +45,7 @@ func AddTracksToPC(pc *webrtc.PeerConnection, stream *MediaStream) ([]*webrtc.RT
 	senders := make([]*webrtc.RTPSender, 0, len(tracks))
 
 	for _, t := range tracks {
-		pionTrack, ok := PionTrackLocal(t)
+		pionTrack, ok := PionTrackLocalForStream(stream, t)
 		if !ok {
 			// Skip tracks that don't support Pion integration
 			continue
@@ -50,3 +60,45 @@ func AddTracksToPC(pc *webrtc.PeerConnection, stream *MediaStream) ([]*webrtc.RT
 
 	return senders, nil
 }
+
+func pionTrackLocalWithStreamID(streamID string, t MediaStreamTrack) (webrtc.TrackLocal, bool) {
+	pionTrack, ok := PionTrackLocal(t)
+	if !ok {
+		return nil, false
+	}
+	return &streamScopedTrackLocal{
+		base:     pionTrack,
+		streamID: streamID,
+	}, true
+}
+
+type streamScopedTrackLocal struct {
+	base     webrtc.TrackLocal
+	streamID string
+}
+
+func (t *streamScopedTrackLocal) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
+	return t.base.Bind(ctx)
+}
+
+func (t *streamScopedTrackLocal) Unbind(ctx webrtc.TrackLocalContext) error {
+	return t.base.Unbind(ctx)
+}
+
+func (t *streamScopedTrackLocal) ID() string {
+	return t.base.ID()
+}
+
+func (t *streamScopedTrackLocal) RID() string {
+	return t.base.RID()
+}
+
+func (t *streamScopedTrackLocal) StreamID() string {
+	return t.streamID
+}
+
+func (t *streamScopedTrackLocal) Kind() webrtc.RTPCodecType {
+	return t.base.Kind()
+}
+
+var _ webrtc.TrackLocal = (*streamScopedTrackLocal)(nil)
