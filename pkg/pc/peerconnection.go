@@ -5,12 +5,16 @@ package pc
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 // Errors
@@ -723,6 +727,7 @@ type RTPTransceiver struct {
 	receiver  *RTPReceiver
 	direction TransceiverDirection
 	mid       string
+	kind      string
 	pc        *PeerConnection
 }
 
@@ -807,6 +812,11 @@ func (t *RTPTransceiver) Stop() error {
 	return nil
 }
 
+// Kind returns the transceiver media kind when known.
+func (t *RTPTransceiver) Kind() string {
+	return t.kind
+}
+
 // SetCodecPreferences sets which codecs are negotiated for this transceiver.
 // Must be called before creating offer/answer.
 // This allows specifying which codecs should be included in SDP negotiation.
@@ -826,6 +836,60 @@ func (t *RTPTransceiver) SetCodecPreferences(codecs []CodecCapability) error {
 	}
 
 	return ffi.TransceiverSetCodecPreferences(t.handle, ffiCodecs)
+}
+
+// SetCodecSet applies the supported subset of a Pion-native codec set.
+func (t *RTPTransceiver) SetCodecSet(set pioncodec.CodecSet) error {
+	kind := t.Kind()
+	if kind == "" {
+		kind = inferTransceiverKind(t.handle)
+		t.kind = kind
+	}
+	if kind == "" {
+		return errors.New("transceiver media kind is unknown")
+	}
+
+	supported := set.SupportedOnly()
+	var codecs []webrtc.RTPCodecParameters
+	switch kind {
+	case "audio":
+		codecs = supported.AudioCodecs()
+	case "video":
+		codecs = supported.VideoCodecs()
+	default:
+		return fmt.Errorf("unsupported transceiver kind %q", kind)
+	}
+
+	caps := make([]CodecCapability, 0, len(codecs))
+	for _, codec := range codecs {
+		caps = append(caps, CodecCapability{
+			MimeType:    codec.MimeType,
+			ClockRate:   int(codec.ClockRate),
+			Channels:    int(codec.Channels),
+			SDPFmtpLine: codec.SDPFmtpLine,
+			PayloadType: int(codec.PayloadType),
+		})
+	}
+	return t.SetCodecPreferences(caps)
+}
+
+func inferTransceiverKind(handle uintptr) string {
+	if handle == 0 {
+		return ""
+	}
+	codecs, err := ffi.TransceiverGetCodecPreferences(handle)
+	if err != nil || len(codecs) == 0 {
+		return ""
+	}
+	mime := strings.ToLower(strings.TrimSpace(ffi.CStringToGo(codecs[0].MimeType[:])))
+	switch {
+	case strings.HasPrefix(mime, "audio/"):
+		return "audio"
+	case strings.HasPrefix(mime, "video/"):
+		return "video"
+	default:
+		return ""
+	}
 }
 
 // RTPSendParameters for sender configuration.
@@ -1713,6 +1777,7 @@ func (pc *PeerConnection) AddTransceiver(kind string, init *TransceiverInit) (*R
 		handle:    handle,
 		pc:        pc,
 		direction: direction,
+		kind:      kind,
 	}
 
 	// Get sender and receiver handles
@@ -1778,6 +1843,7 @@ func (pc *PeerConnection) GetTransceivers() []*RTPTransceiver {
 			transceiver := &RTPTransceiver{
 				handle: handle,
 				pc:     pc,
+				kind:   inferTransceiverKind(handle),
 			}
 
 			// Get sender and receiver handles

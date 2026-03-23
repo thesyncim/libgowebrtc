@@ -31,6 +31,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/packetizer"
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 	libtrack "github.com/thesyncim/libgowebrtc/pkg/track"
 )
@@ -109,6 +110,7 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	log.Printf("Starting libgowebrtc <-> Pion SFU codec-switch example")
 	log.Printf("Codec cycle: %s", joinCodecNames(codecCycle))
 	log.Printf("Codec switches reuse the first negotiation only; no renegotiation is performed")
+	log.Printf("Subscriber decode envelope is derived from the Chrome browser preset and then filtered to the active cycle")
 
 	errCh := make(chan error, 8)
 	reportAsyncError := func(label string, err error) {
@@ -194,7 +196,8 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	if err != nil {
 		return exampleStats{}, fmt.Errorf("add subscriber recv transceiver: %w", err)
 	}
-	if err := subscriberRecv.SetCodecPreferences(codecPreferences(codecCycle)); err != nil {
+	subscriberPreset := pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionDecode, pioncodec.PresetModeSupported)
+	if err := subscriberRecv.SetCodecPreferences(filterCodecParametersByTypes(subscriberPreset.VideoCodecs(), codecCycle)); err != nil {
 		return exampleStats{}, fmt.Errorf("set subscriber codec preferences: %w", err)
 	}
 
@@ -910,6 +913,23 @@ func codecPreferences(cycle []codec.Type) []webrtc.RTPCodecParameters {
 		})
 	}
 	return preferences
+}
+
+func filterCodecParametersByTypes(codecs []webrtc.RTPCodecParameters, allowed []codec.Type) []webrtc.RTPCodecParameters {
+	filtered := make([]webrtc.RTPCodecParameters, 0, len(codecs))
+	for _, candidate := range codecs {
+		codecType, ok := codec.ParseMimeType(candidate.MimeType)
+		if !ok {
+			continue
+		}
+		for _, allowedType := range allowed {
+			if codecType == allowedType {
+				filtered = append(filtered, candidate)
+				break
+			}
+		}
+	}
+	return filtered
 }
 
 func codecCapabilityFor(c codec.Type) webrtc.RTPCodecCapability {

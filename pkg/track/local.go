@@ -3,6 +3,7 @@ package track
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/packetizer"
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 // Errors
@@ -49,6 +51,10 @@ type VideoTrackConfig struct {
 	MaxFramerate float64 // Ceiling for framerate
 	MinWidth     int     // Don't scale below this
 	MinHeight    int     // Don't scale below this
+
+	// Optional codec preferences used during TrackLocal binding.
+	// When provided, Bind selects the best negotiated codec from this list.
+	CodecPreferences []webrtc.RTPCodecParameters
 }
 
 // BandwidthEstimate contains bandwidth estimation data from the network.
@@ -128,6 +134,11 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 	if cfg.MTU == 0 {
 		cfg.MTU = 1200
 	}
+	if cfg.Codec == 0 && len(cfg.CodecPreferences) > 0 {
+		if codecType, ok := codec.ParseMimeType(cfg.CodecPreferences[0].MimeType); ok {
+			cfg.Codec = codecType
+		}
+	}
 
 	// Default auto adaptation to true (browser-like behavior)
 	// Use explicit false to disable
@@ -156,7 +167,7 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 		id:          cfg.ID,
 		streamID:    cfg.StreamID,
 		codec:       cfg.Codec,
-		config:      cfg,
+		config:      cloneVideoTrackConfig(cfg),
 		scaleFactor: 1.0, // No scaling by default
 		adaptation: adaptationState{
 			currentBitrate:   cfg.Bitrate,
@@ -201,41 +212,29 @@ func (t *VideoTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParamete
 		return webrtc.RTPCodecParameters{}, ErrAlreadyBound
 	}
 
-	// Find matching codec from offered codecs
-	codecs := ctx.CodecParameters()
-	var selected *webrtc.RTPCodecParameters
-	targetMime := t.codec.MimeType()
-
-	for i := range codecs {
-		if codecs[i].MimeType == targetMime {
-			selected = &codecs[i]
-			break
-		}
+	selected, codecType, err := t.selectVideoCodec(ctx.CodecParameters())
+	if err != nil {
+		return webrtc.RTPCodecParameters{}, err
 	}
-
-	if selected == nil {
-		// Use our codec as default if not negotiated
-		selected = &webrtc.RTPCodecParameters{
-			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType:  targetMime,
-				ClockRate: t.codec.ClockRate(),
-			},
-		}
-	}
+	t.codec = codecType
 
 	// Create encoder
-	enc, err := t.createEncoder()
+	enc, err := t.createVideoEncoderForSelection(*selected)
 	if err != nil {
 		return webrtc.RTPCodecParameters{}, err
 	}
 
 	// Create packetizer
+	clockRate := uint32(selected.ClockRate)
+	if clockRate == 0 {
+		clockRate = codecType.ClockRate()
+	}
 	pkt, err := packetizer.New(packetizer.Config{
-		Codec:       t.codec,
+		Codec:       codecType,
 		SSRC:        uint32(ctx.SSRC()),
 		PayloadType: uint8(selected.PayloadType),
 		MTU:         t.config.MTU,
-		ClockRate:   t.codec.ClockRate(),
+		ClockRate:   clockRate,
 	})
 	if err != nil {
 		enc.Close()
@@ -793,6 +792,60 @@ func (t *VideoTrack) createEncoder() (encoder.VideoEncoder, error) {
 	}
 }
 
+func (t *VideoTrack) selectVideoCodec(offered []webrtc.RTPCodecParameters) (*webrtc.RTPCodecParameters, codec.Type, error) {
+	if len(t.config.CodecPreferences) > 0 {
+		selected, ok := pioncodec.Select(t.config.CodecPreferences, offered)
+		if !ok {
+			return nil, 0, fmt.Errorf("no matching video codec preference")
+		}
+		codecType, ok := codec.ParseMimeType(selected.MimeType)
+		if !ok {
+			return nil, 0, ErrInvalidConfig
+		}
+		return &selected, codecType, nil
+	}
+
+	var selected *webrtc.RTPCodecParameters
+	targetMime := t.codec.MimeType()
+
+	for i := range offered {
+		if offered[i].MimeType == targetMime {
+			selected = &offered[i]
+			break
+		}
+	}
+	if selected == nil {
+		selected = &webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:  targetMime,
+				ClockRate: t.codec.ClockRate(),
+			},
+		}
+	}
+	return selected, t.codec, nil
+}
+
+func (t *VideoTrack) createVideoEncoderForSelection(selected webrtc.RTPCodecParameters) (encoder.VideoEncoder, error) {
+	if len(t.config.CodecPreferences) > 0 {
+		return pioncodec.NewVideoEncoder(selected, pioncodec.VideoFactoryConfig{
+			Width:       t.config.Width,
+			Height:      t.config.Height,
+			Bitrate:     t.config.Bitrate,
+			FPS:         t.config.FPS,
+			KeyInterval: int(t.config.FPS * 2),
+		})
+	}
+	return t.createEncoder()
+}
+
+func cloneVideoTrackConfig(cfg VideoTrackConfig) VideoTrackConfig {
+	cloned := cfg
+	if len(cfg.CodecPreferences) > 0 {
+		cloned.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), cfg.CodecPreferences...)
+	}
+	return cloned
+}
+
 // AudioTrackConfig configures an audio track.
 type AudioTrackConfig struct {
 	ID         string
@@ -801,6 +854,9 @@ type AudioTrackConfig struct {
 	Channels   int
 	Bitrate    uint32
 	MTU        uint16
+
+	// Optional codec preferences used during TrackLocal binding.
+	CodecPreferences []webrtc.RTPCodecParameters
 }
 
 // AudioTrack implements webrtc.TrackLocal using libwebrtc Opus encoder.
@@ -851,7 +907,7 @@ func NewAudioTrack(cfg AudioTrackConfig) (*AudioTrack, error) {
 	return &AudioTrack{
 		id:       cfg.ID,
 		streamID: cfg.StreamID,
-		config:   cfg,
+		config:   cloneAudioTrackConfig(cfg),
 	}, nil
 }
 
@@ -888,43 +944,28 @@ func (t *AudioTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParamete
 		return webrtc.RTPCodecParameters{}, ErrAlreadyBound
 	}
 
-	// Find Opus codec
-	codecs := ctx.CodecParameters()
-	var selected *webrtc.RTPCodecParameters
-	for i := range codecs {
-		if codecs[i].MimeType == codec.Opus.MimeType() {
-			selected = &codecs[i]
-			break
-		}
+	selected, err := t.selectAudioCodec(ctx.CodecParameters())
+	if err != nil {
+		return webrtc.RTPCodecParameters{}, err
 	}
 
-	if selected == nil {
-		selected = &webrtc.RTPCodecParameters{
-			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType:  codec.Opus.MimeType(),
-				ClockRate: 48000,
-				Channels:  2,
-			},
-		}
-	}
-
-	// Create Opus encoder
-	enc, err := encoder.NewOpusEncoder(codec.OpusConfig{
-		SampleRate: t.config.SampleRate,
-		Channels:   t.config.Channels,
-		Bitrate:    t.config.Bitrate,
-	})
+	// Create encoder
+	enc, err := t.createAudioEncoderForSelection(*selected)
 	if err != nil {
 		return webrtc.RTPCodecParameters{}, err
 	}
 
 	// Create packetizer
+	clockRate := uint32(selected.ClockRate)
+	if clockRate == 0 {
+		clockRate = 48000
+	}
 	pkt, err := packetizer.New(packetizer.Config{
 		Codec:       codec.Opus,
 		SSRC:        uint32(ctx.SSRC()),
 		PayloadType: uint8(selected.PayloadType),
 		MTU:         t.config.MTU,
-		ClockRate:   48000,
+		ClockRate:   clockRate,
 	})
 	if err != nil {
 		enc.Close()
@@ -947,6 +988,75 @@ func (t *AudioTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParamete
 	t.bound.Store(true)
 
 	return t.codecParams, nil
+}
+
+func (t *AudioTrack) selectAudioCodec(offered []webrtc.RTPCodecParameters) (*webrtc.RTPCodecParameters, error) {
+	if len(t.config.CodecPreferences) > 0 {
+		selected, ok := pioncodec.Select(t.config.CodecPreferences, offered)
+		if !ok {
+			return nil, fmt.Errorf("no matching audio codec preference")
+		}
+		return &selected, nil
+	}
+
+	for i := range offered {
+		if offered[i].MimeType == codec.Opus.MimeType() {
+			return &offered[i], nil
+		}
+	}
+	return &webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:  codec.Opus.MimeType(),
+			ClockRate: 48000,
+			Channels:  2,
+		},
+	}, nil
+}
+
+func (t *AudioTrack) createAudioEncoderForSelection(selected webrtc.RTPCodecParameters) (encoder.AudioEncoder, error) {
+	if len(t.config.CodecPreferences) > 0 {
+		return pioncodec.NewAudioEncoder(selected, pioncodec.AudioFactoryConfig{
+			SampleRate: t.config.SampleRate,
+			Channels:   t.config.Channels,
+			Bitrate:    t.config.Bitrate,
+		})
+	}
+	return encoder.NewOpusEncoder(codec.OpusConfig{
+		SampleRate: t.config.SampleRate,
+		Channels:   t.config.Channels,
+		Bitrate:    t.config.Bitrate,
+	})
+}
+
+func cloneAudioTrackConfig(cfg AudioTrackConfig) AudioTrackConfig {
+	cloned := cfg
+	if len(cfg.CodecPreferences) > 0 {
+		cloned.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), cfg.CodecPreferences...)
+	}
+	return cloned
+}
+
+// NewVideoTrackFromPreset creates a video track using the preset's supported encode subset.
+func NewVideoTrackFromPreset(set pioncodec.CodecSet, cfg VideoTrackConfig) (*VideoTrack, error) {
+	video := set.SupportedOnly().VideoCodecs()
+	if len(video) == 0 {
+		return nil, ErrInvalidConfig
+	}
+	if codecType, ok := codec.ParseMimeType(video[0].MimeType); ok {
+		cfg.Codec = codecType
+	}
+	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), video...)
+	return NewVideoTrack(cfg)
+}
+
+// NewAudioTrackFromPreset creates an audio track using the preset's supported encode subset.
+func NewAudioTrackFromPreset(set pioncodec.CodecSet, cfg AudioTrackConfig) (*AudioTrack, error) {
+	audio := set.SupportedOnly().AudioCodecs()
+	if len(audio) == 0 {
+		return nil, ErrInvalidConfig
+	}
+	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), audio...)
+	return NewAudioTrack(cfg)
 }
 
 // Unbind is called when the track is removed from the PeerConnection.

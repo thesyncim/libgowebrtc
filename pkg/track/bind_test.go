@@ -11,6 +11,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 type collectingWriter struct {
@@ -102,6 +103,15 @@ func newAudioContext(writer webrtc.TrackLocalWriter, payloadType uint8) webrtc.T
 			},
 			PayloadType: webrtc.PayloadType(payloadType),
 		}},
+		writer: writer,
+	}
+}
+
+func newVideoPreferenceContext(writer webrtc.TrackLocalWriter, codecs []webrtc.RTPCodecParameters) webrtc.TrackLocalContext {
+	return &fakeTrackContext{
+		id:     "ctx-video-preferences",
+		ssrc:   4321,
+		codecs: codecs,
 		writer: writer,
 	}
 }
@@ -225,11 +235,62 @@ func TestVideoTrackBindDoubleBindAndWriteRTPError(t *testing.T) {
 
 	track.writer = &collectingWriter{err: errors.New("write failure")}
 	rtpPacket := &rtp.Packet{
-		Header: rtp.Header{Version: 2, PayloadType: 97, SequenceNumber: 1},
+		Header:  rtp.Header{Version: 2, PayloadType: 97, SequenceNumber: 1},
 		Payload: []byte{0x01, 0x02, 0x03},
 	}
 	if err := track.WriteRTP(rtpPacket); err == nil {
 		t.Fatal("WriteRTP should surface writer errors")
+	}
+}
+
+func TestVideoTrackBindSelectsPreferredCodecFromPreferences(t *testing.T) {
+	defer testutil.WithSerialExecution(t)()
+	testutil.SkipIfNoShim(t)
+
+	preset := pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionEncode, pioncodec.PresetModeSupported)
+	track, err := NewVideoTrackFromPreset(preset, VideoTrackConfig{
+		ID:      "video-preset-bind",
+		Width:   320,
+		Height:  240,
+		Bitrate: 400_000,
+		FPS:     30,
+	})
+	if err != nil {
+		t.Fatalf("NewVideoTrackFromPreset: %v", err)
+	}
+	defer track.Close()
+
+	writer := &collectingWriter{}
+	ctx := newVideoPreferenceContext(writer, []webrtc.RTPCodecParameters{
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:    webrtc.MimeTypeH264,
+				ClockRate:   90000,
+				SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+			},
+			PayloadType: 106,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:  webrtc.MimeTypeVP8,
+				ClockRate: 90000,
+			},
+			PayloadType: 96,
+		},
+	})
+
+	params, err := track.Bind(ctx)
+	if err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	if params.MimeType != webrtc.MimeTypeVP8 {
+		t.Fatalf("Bind mime type = %q, want %q", params.MimeType, webrtc.MimeTypeVP8)
+	}
+	if err := track.WriteFrame(testutil.CreateTestVideoFrame(320, 240), true); err != nil {
+		t.Fatalf("WriteFrame: %v", err)
+	}
+	if len(writer.writes) == 0 {
+		t.Fatal("expected RTP writes after preset-backed bind")
 	}
 }
 
