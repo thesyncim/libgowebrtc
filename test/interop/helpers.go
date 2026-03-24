@@ -38,6 +38,8 @@ type PeerPair struct {
 	iceWG         sync.WaitGroup
 	closeOnce     sync.Once
 	stopICE       chan struct{}
+	readyOnce     sync.Once
+	readyForICE   chan struct{}
 
 	t *testing.T
 }
@@ -104,6 +106,7 @@ func NewPeerPair(t *testing.T, cfg PeerPairConfig) (*PeerPair, error) {
 		libCandidates:  make(chan *pc.ICECandidate, 20),
 		pionCandidates: make(chan *pionwebrtc.ICECandidate, 20),
 		stopICE:        make(chan struct{}),
+		readyForICE:    make(chan struct{}),
 		t:              t,
 	}
 
@@ -158,6 +161,9 @@ func (pp *PeerPair) forwardLibToPion() {
 			if candidate == nil {
 				continue
 			}
+			if !pp.waitForICEReady() {
+				return
+			}
 			if pp.stopping() {
 				return
 			}
@@ -178,6 +184,9 @@ func (pp *PeerPair) forwardPionToLib() {
 		case candidate := <-pp.pionCandidates:
 			if candidate == nil {
 				continue
+			}
+			if !pp.waitForICEReady() {
+				return
 			}
 			if pp.stopping() {
 				return
@@ -249,6 +258,7 @@ func (pp *PeerPair) libOffers() error {
 		return err
 	}
 
+	pp.markICEReady()
 	return nil
 }
 
@@ -285,6 +295,7 @@ func (pp *PeerPair) pionOffers() error {
 		return err
 	}
 
+	pp.markICEReady()
 	return nil
 }
 
@@ -368,6 +379,21 @@ func (pp *PeerPair) stopping() bool {
 	case <-pp.stopICE:
 		return true
 	default:
+		return false
+	}
+}
+
+func (pp *PeerPair) markICEReady() {
+	pp.readyOnce.Do(func() {
+		close(pp.readyForICE)
+	})
+}
+
+func (pp *PeerPair) waitForICEReady() bool {
+	select {
+	case <-pp.readyForICE:
+		return true
+	case <-pp.stopICE:
 		return false
 	}
 }
