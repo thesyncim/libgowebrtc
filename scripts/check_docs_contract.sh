@@ -23,11 +23,31 @@ fi
 
 status=0
 
+search_quiet() {
+    local pattern="$1"
+    local path="$2"
+    if command -v rg >/dev/null 2>&1; then
+        rg -q "$pattern" "$path"
+        return
+    fi
+    grep -Eq -- "$pattern" "$path"
+}
+
+search_lines() {
+    local pattern="$1"
+    local path="$2"
+    if command -v rg >/dev/null 2>&1; then
+        rg -n "$pattern" "$path"
+        return
+    fi
+    grep -En -- "$pattern" "$path"
+}
+
 require_pattern() {
     local pattern="$1"
     local description="$2"
     local path="$3"
-    if ! rg -q "$pattern" "$path"; then
+    if ! search_quiet "$pattern" "$path"; then
         echo "::error::Missing contract marker in $path: $description"
         status=1
     fi
@@ -37,9 +57,9 @@ forbid_pattern() {
     local pattern="$1"
     local description="$2"
     local path="$3"
-    if rg -n "$pattern" "$path" >/dev/null; then
+    if search_lines "$pattern" "$path" >/dev/null; then
         echo "::error::Unsupported API reference found in $path: $description"
-        rg -n "$pattern" "$path" || true
+        search_lines "$pattern" "$path" || true
         status=1
     fi
 }
