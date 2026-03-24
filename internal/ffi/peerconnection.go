@@ -5,7 +5,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -782,12 +781,6 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 		return ErrLibraryNotLoaded
 	}
 
-	// DEBUG: Log every 100th call
-	count := atomic.AddUint64(&videoTrackSourcePushCount, 1)
-	if count%100 == 0 {
-		println("DEBUG FFI: VideoTrackSourcePushFrame source=", source, "yLen=", len(yPlane), "ts=", timestampUs)
-	}
-
 	params := shimVideoTrackSourcePushFrameParams{
 		Source:      source,
 		YPlane:      ByteSlicePtr(yPlane),
@@ -805,8 +798,6 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 	runtime.KeepAlive(&params)
 	return ShimError(result)
 }
-
-var videoTrackSourcePushCount uint64
 
 // PeerConnectionAddVideoTrackFromSource adds a video track using a source.
 func PeerConnectionAddVideoTrackFromSource(pc, source uintptr, trackID, streamID string) uintptr {

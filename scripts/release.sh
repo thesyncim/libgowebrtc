@@ -4,6 +4,8 @@
 #
 # Publishes a prebuilt shim release directory to GitHub.
 #
+# For Go module/API releases, use ./scripts/release-module.sh instead.
+#
 # Usage:
 #   ./scripts/release.sh              # Interactive: prompts for version
 #   ./scripts/release.sh 0.4.0        # Publish release/shim-v0.4.0
@@ -31,6 +33,7 @@ Shim Release Script
 ===================
 
 Uploads a prepared local release directory to GitHub and creates the tag.
+For Go module/API releases, use ./scripts/release-module.sh.
 
 Usage: ./scripts/release.sh [OPTIONS] [VERSION]
 
@@ -47,6 +50,7 @@ Examples:
   ./scripts/release.sh              # Interactive mode
   ./scripts/release.sh 0.4.0        # Publish release/shim-v0.4.0
   ./scripts/release.sh --dry-run    # Preview release
+  ./scripts/release-module.sh patch --dry-run  # Preview the next module release
 
 Platforms expected in the local release directory:
   - darwin_arm64  (macOS Apple Silicon)

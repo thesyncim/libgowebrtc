@@ -106,6 +106,22 @@ require_macos_xcode() {
     exit 1
 }
 
+normalize_bazel_libwebrtc_dir() {
+    local dir="$1"
+
+    if [[ "$TARGET_OS" != "windows" ]]; then
+        echo "$dir"
+        return
+    fi
+
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -am "$dir"
+        return
+    fi
+
+    echo "$dir"
+}
+
 show_help() {
     cat << EOF
 libgowebrtc Build Script
@@ -310,13 +326,15 @@ build_shim() {
     log_step "Building shim with Bazel"
     cd "$PROJECT_ROOT"
 
-    export LIBWEBRTC_DIR="$INSTALL_DIR"
+    export LIBWEBRTC_DIR
+    LIBWEBRTC_DIR="$(normalize_bazel_libwebrtc_dir "$INSTALL_DIR")"
 
     if [[ "$HOST_PLATFORM" != "$TARGET_PLATFORM" ]]; then
         log_info "Cross-compiling: $HOST_PLATFORM -> $TARGET_PLATFORM"
     else
         log_info "Building for platform: $TARGET_PLATFORM"
     fi
+    log_info "Bazel libwebrtc dir: $LIBWEBRTC_DIR"
 
     # On Windows Git Bash/MSYS, // gets converted to / - disable path conversion
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" "$BAZEL_CMD" build //shim:webrtc_shim --config="$TARGET_PLATFORM"

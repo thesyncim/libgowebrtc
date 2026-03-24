@@ -20,11 +20,22 @@ import (
 
 // Errors
 var (
-	ErrTrackClosed   = errors.New("track is closed")
-	ErrNotBound      = errors.New("track not bound")
-	ErrAlreadyBound  = errors.New("track already bound")
-	ErrEncodeFailed  = errors.New("encode failed")
+	// ErrTrackClosed reports operations on a closed track.
+	ErrTrackClosed = errors.New("track is closed")
+	// ErrNotBound reports writes attempted before the track is bound.
+	ErrNotBound = errors.New("track not bound")
+	// ErrAlreadyBound reports a second bind attempt on an already bound track.
+	ErrAlreadyBound = errors.New("track already bound")
+	// ErrEncodeFailed reports an encoding failure.
+	ErrEncodeFailed = errors.New("encode failed")
+	// ErrInvalidConfig reports invalid track configuration.
 	ErrInvalidConfig = errors.New("invalid config")
+	// ErrNilVideoFrame reports a nil video frame input.
+	ErrNilVideoFrame = errors.New("video frame is nil")
+	// ErrNilAudioFrame reports a nil audio frame input.
+	ErrNilAudioFrame = errors.New("audio frame is nil")
+	// ErrNilRTPPacket reports a nil RTP packet input.
+	ErrNilRTPPacket = errors.New("rtp packet is nil")
 )
 
 // VideoTrackConfig configures a video track.
@@ -137,9 +148,12 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 	if cfg.MTU == 0 {
 		cfg.MTU = 1200
 	}
-	if cfg.Codec == 0 && len(cfg.CodecPreferences) > 0 {
-		if codecType, ok := codec.ParseMimeType(cfg.CodecPreferences[0].MimeType); ok {
-			cfg.Codec = codecType
+	if len(cfg.CodecPreferences) > 0 {
+		for _, preferred := range cfg.CodecPreferences {
+			if codecType, ok := codec.ParseMimeType(preferred.MimeType); ok {
+				cfg.Codec = codecType
+				break
+			}
 		}
 	}
 
@@ -294,6 +308,9 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 	if !t.bound.Load() {
 		return ErrNotBound
 	}
+	if f == nil {
+		return ErrNilVideoFrame
+	}
 
 	// Check if track is paused (SetParameters with Active=false)
 	if t.paused.Load() {
@@ -403,6 +420,9 @@ func (t *VideoTrack) WriteRTP(pkt *rtp.Packet) error {
 	}
 	if !t.bound.Load() {
 		return ErrNotBound
+	}
+	if pkt == nil {
+		return ErrNilRTPPacket
 	}
 
 	t.mu.Lock()
@@ -1064,29 +1084,6 @@ func cloneAudioTrackConfig(cfg AudioTrackConfig) AudioTrackConfig {
 	return cloned
 }
 
-// NewVideoTrackFromPreset creates a video track using the preset's supported encode subset.
-func NewVideoTrackFromPreset(set pioncodec.CodecSet, cfg VideoTrackConfig) (*VideoTrack, error) {
-	video := set.SupportedOnly().VideoCodecs()
-	if len(video) == 0 {
-		return nil, ErrInvalidConfig
-	}
-	if codecType, ok := codec.ParseMimeType(video[0].MimeType); ok {
-		cfg.Codec = codecType
-	}
-	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), video...)
-	return NewVideoTrack(cfg)
-}
-
-// NewAudioTrackFromPreset creates an audio track using the preset's supported encode subset.
-func NewAudioTrackFromPreset(set pioncodec.CodecSet, cfg AudioTrackConfig) (*AudioTrack, error) {
-	audio := set.SupportedOnly().AudioCodecs()
-	if len(audio) == 0 {
-		return nil, ErrInvalidConfig
-	}
-	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), audio...)
-	return NewAudioTrack(cfg)
-}
-
 // Unbind is called when the track is removed from the PeerConnection.
 func (t *AudioTrack) Unbind(ctx webrtc.TrackLocalContext) error {
 	if !t.bound.CompareAndSwap(true, false) {
@@ -1116,6 +1113,9 @@ func (t *AudioTrack) WriteFrame(f *frame.AudioFrame) error {
 	}
 	if !t.bound.Load() {
 		return ErrNotBound
+	}
+	if f == nil {
+		return ErrNilAudioFrame
 	}
 
 	t.mu.Lock()

@@ -18,7 +18,7 @@ func TestStressInterop(t *testing.T) {
 	pp := NewPionLibPeerPair(t)
 	defer pp.Close()
 
-	track, _ := pp.Lib.CreateVideoTrack("stress-test", codec.VP8, 320, 240)
+	track, _ := pp.Lib.CreateVideoTrack("stress-test", 320, 240)
 	_, _ = pp.Lib.AddTrack(track)
 
 	if err := pp.ConnectLibOffersPionAnswers(); err != nil {

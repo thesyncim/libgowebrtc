@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/webrtc/v4"
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
-	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
@@ -107,7 +107,7 @@ func handleOffer(w http.ResponseWriter, r *http.Request) {
 
 	// Create video track - uses libwebrtc's internal encoder
 	// The codec will be determined by SDP negotiation
-	track, err := peerConn.CreateVideoTrack("video", codec.VP8, width, height)
+	track, err := peerConn.CreateVideoTrack("video", width, height)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -134,9 +134,9 @@ func handleOffer(w http.ResponseWriter, r *http.Request) {
 
 			// Set codec preferences - prefer VP8 first, then AV1
 			// Both will be in the SDP, allowing the remote to accept either
-			prefs := []pc.CodecCapability{
-				{MimeType: "video/VP8", ClockRate: 90000},
-				{MimeType: "video/AV1", ClockRate: 90000},
+			prefs := []webrtc.RTPCodecParameters{
+				{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP8", ClockRate: 90000}},
+				{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/AV1", ClockRate: 90000}},
 			}
 
 			if err := t.SetCodecPreferences(prefs); err != nil {
@@ -256,7 +256,7 @@ func sendVideo(peerConn *pc.PeerConnection, track *pc.Track, sender *pc.RTPSende
 		targetCodec := codecs[1]
 		log.Printf("Attempting to switch to: %s (PT=%d)", targetCodec.MimeType, targetCodec.PayloadType)
 
-		err := sender.SetPreferredCodec(targetCodec.MimeType, targetCodec.PayloadType)
+		err := sender.SetPreferredCodec(targetCodec)
 		if err == pc.ErrRenegotiationNeeded {
 			log.Println("  -> Result: Renegotiation needed (expected per WebRTC spec)")
 			log.Println("  -> To switch codecs mid-stream, you would need to trigger a new offer/answer exchange")
@@ -323,7 +323,7 @@ func sendVideo(peerConn *pc.PeerConnection, track *pc.Track, sender *pc.RTPSende
 					targetCodec := currentCodecs[codecIndex]
 
 					log.Printf("=== Attempting codec switch to: %s (PT=%d) ===", targetCodec.MimeType, targetCodec.PayloadType)
-					err := sender.SetPreferredCodec(targetCodec.MimeType, targetCodec.PayloadType)
+					err := sender.SetPreferredCodec(targetCodec)
 					if err == pc.ErrRenegotiationNeeded {
 						log.Println("  -> Renegotiation needed (expected per WebRTC spec)")
 					} else if err == pc.ErrNotFound {

@@ -22,7 +22,7 @@ env:
 
 jobs:
   validate:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.build_assets }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -40,17 +40,17 @@ jobs:
             extension: dll
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
@@ -88,11 +88,11 @@ jobs:
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
   validate-darwin-amd64-rosetta:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.build_assets }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
     name: darwin_amd64 (Rosetta)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
@@ -105,7 +105,7 @@ jobs:
           rm go.tar.gz
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
@@ -147,17 +147,17 @@ jobs:
           GOOS: darwin
 
   validate-linux-386-docker:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.build_assets }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
     name: linux_386 (Docker)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
@@ -165,17 +165,17 @@ jobs:
         run: ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 
   validate-linux-amd64-docker:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.build_assets }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
     name: linux_amd64 (Docker compatibility)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
@@ -191,12 +191,12 @@ jobs:
       matrix:
         platform: [darwin_arm64, darwin_amd64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -233,12 +233,12 @@ jobs:
       matrix:
         platform: [linux_amd64, linux_386]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
@@ -271,12 +271,12 @@ jobs:
     name: build windows_amd64
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 

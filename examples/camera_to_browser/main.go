@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pion/webrtc/v4"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
@@ -126,8 +127,7 @@ func (s *Session) run() error {
 	s.setupCallbacks()
 
 	// Create video track
-	codecType := parseCodec(*codecName)
-	videoTrack, err := peerConn.CreateVideoTrack("video0", codecType, *width, *height)
+	videoTrack, err := peerConn.CreateVideoTrack("video0", *width, *height)
 	if err != nil {
 		return fmt.Errorf("create video track: %w", err)
 	}
@@ -136,6 +136,9 @@ func (s *Session) run() error {
 	// Add track to PeerConnection
 	if _, err := peerConn.AddTrack(videoTrack); err != nil {
 		return fmt.Errorf("add track: %w", err)
+	}
+	if err := applyVideoCodecPreference(peerConn, parseCodec(*codecName)); err != nil {
+		return fmt.Errorf("apply video codec preference: %w", err)
 	}
 
 	// Create DataChannel for messaging
@@ -471,6 +474,34 @@ func parseCodec(name string) codec.Type {
 	default:
 		return codec.VP8
 	}
+}
+
+func applyVideoCodecPreference(peerConn *pc.PeerConnection, codecType codec.Type) error {
+	supported, err := pc.GetSupportedVideoCodecs()
+	if err != nil {
+		return err
+	}
+
+	targetMime := codecType.MimeType()
+	preferences := make([]webrtc.RTPCodecParameters, 0, len(supported))
+	for _, candidate := range supported {
+		if candidate.MimeType == targetMime {
+			preferences = append(preferences, candidate)
+		}
+	}
+	if len(preferences) == 0 {
+		return fmt.Errorf("no supported codec preferences found for %s", targetMime)
+	}
+
+	for _, transceiver := range peerConn.GetTransceivers() {
+		if !transceiver.IsValid() || transceiver.Kind() != "video" {
+			continue
+		}
+		if err := transceiver.SetCodecPreferences(preferences); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 const indexHTML = `<!DOCTYPE html>

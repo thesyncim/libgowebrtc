@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible defect or regression
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+        Please include a minimal reproduction whenever possible.
+  - type: input
+    id: go_version
+    attributes:
+      label: Go version
+      placeholder: go version go1.26.1 darwin/arm64
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: macOS 15 arm64, Ubuntu 24.04 amd64, Windows 11 amd64
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug and the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Share the smallest code sample or step-by-step reproduction you can.
+      placeholder: |
+        1. Set LIBWEBRTC_SHIM_PATH=...
+        2. Run go test ./...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or stack traces
+      description: Paste relevant logs, panic output, or screenshots.
+      render: shell
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Include environment variables, shim source, or other context that may matter.

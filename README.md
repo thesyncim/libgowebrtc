@@ -200,7 +200,7 @@ Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 |------------|---------|--------|
 | libwebrtc (pre-compiled) | 141.7390.2.0 | [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) |
 | libwebrtc (Linux source build) | branch-heads/7390 @ `d2eaa5570fc9959f8dbde32912a16366b8ee75f4` | [webrtc.googlesource.com/src](https://webrtc.googlesource.com/src) |
-| libwebrtc_shim | shim-v0.4.4 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
+| libwebrtc_shim | shim-v0.4.5 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
 | OpenH264 | 2.5.1 | [Cisco OpenH264](https://github.com/cisco/openh264/releases) |
 
 ### Building the Shim
@@ -225,7 +225,7 @@ The shim is built using Bazel.
 ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 
 # Publish a prepared local release directory
-./scripts/release.sh 0.4.4 --release-dir release/shim-v0.4.4
+./scripts/release.sh 0.4.5 --release-dir release/shim-v0.4.5
 ```
 
 Environment variables:
@@ -241,6 +241,28 @@ Release flow:
   that passes the `MAX_GLIBC_VERSION` release check
 - Upload the prepared `release/shim-vX.Y.Z/` directory with `./scripts/release.sh`
 - CI downloads the published artifacts and runs the smoke tests; it does not rebuild the shim
+
+### Versioning And Releases
+
+`libgowebrtc` now uses two release tracks:
+
+- `vX.Y.Z` for Go module/API releases
+- `shim-vX.Y.Z` for native shim asset releases
+
+Examples:
+
+```bash
+# Preview the next module patch release
+./scripts/release-module.sh patch --dry-run
+
+# Create and push the first public module tag
+./scripts/release-module.sh v0.1.0 --push
+
+# Publish shim assets
+./scripts/release.sh 0.4.5 --release-dir release/shim-v0.4.5
+```
+
+See [VERSIONING.md](VERSIONING.md) for the bump policy and release flow details.
 
 ## Quick Start
 
@@ -338,18 +360,19 @@ preset := pioncodec.BrowserPreset(
     pioncodec.PresetModeSupported,
 )
 
-videoTrack, _ := track.NewVideoTrackFromPreset(preset, track.VideoTrackConfig{
-    ID:      "video",
-    Width:   1280,
-    Height:  720,
-    Bitrate: 2_000_000,
-    FPS:     30,
+videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
+    ID:               "video",
+    Width:            1280,
+    Height:           720,
+    Bitrate:          2_000_000,
+    FPS:              30,
+    CodecPreferences: preset.SupportedOnly().VideoCodecs(),
 })
 
 // Apply the same supported subset to libgowebrtc's native PeerConnection wrapper.
 pc, _ := pc.NewPeerConnection(pc.DefaultConfiguration())
 transceiver, _ := pc.AddTransceiver("video", &pc.TransceiverInit{Direction: pc.TransceiverDirectionSendOnly})
-_ = transceiver.SetCodecSet(preset)
+_ = transceiver.SetCodecPreferences(preset.SupportedOnly().VideoCodecs())
 
 // For direct Pion use, keep the full browser-shaped RTP codec list.
 pionPC, _ := webrtc.NewPeerConnection(webrtc.Configuration{})
@@ -361,6 +384,30 @@ _ = recv.SetCodecPreferences(
         pioncodec.PresetModeNegotiation,
     ).VideoCodecs(),
 )
+```
+
+### Migration Notes
+
+```go
+// CreateVideoTrack no longer accepts a codec selector.
+videoTrack, _ := peerConnection.CreateVideoTrack("video", 1280, 720)
+
+// Prefer typed policies in pc.Configuration.
+cfg := pc.Configuration{
+    BundlePolicy:  pc.BundlePolicyMaxBundle,
+    RTCPMuxPolicy: pc.RTCPMuxPolicyRequire,
+    SDPSemantics:  pc.SDPSemanticsUnifiedPlan,
+}
+
+// The advanced codec path is raw Pion RTP codec parameters everywhere.
+prefs := pioncodec.BrowserPreset(
+    pioncodec.BrowserChrome,
+    pioncodec.DirectionEncode,
+    pioncodec.PresetModeSupported,
+).SupportedOnly().VideoCodecs()
+
+_ = transceiver.SetCodecPreferences(prefs)
+_ = sender.SetPreferredCodec(prefs[0])
 ```
 
 ### Pion Receive Integration
