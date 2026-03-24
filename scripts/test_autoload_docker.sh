@@ -29,17 +29,18 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 TEST_PACKAGE="${1:-./internal/ffi}"
 SHIM_FLAVOR="${SHIM_FLAVOR:-basic}"
-GO_VERSION="${GO_VERSION:-1.25}"
+GO_VERSION="${GO_VERSION:-1.26.1}"
 VERBOSE="${VERBOSE:-0}"
 TEST_OPENH264="${TEST_OPENH264:-0}"
 REQUIRE_SHIM="${REQUIRE_SHIM:-1}"
+DEBIAN_SUITE="${DEBIAN_SUITE:-bullseye}"
 
 # Detect architecture
 ARCH="$(uname -m)"
 case "$ARCH" in
-    x86_64)  GOARCH="amd64" ;;
-    aarch64) GOARCH="arm64" ;;
-    arm64)   GOARCH="arm64" ;;
+    x86_64)  GOARCH="amd64"; GO_BOOTSTRAP_ARCH="amd64" ;;
+    aarch64) GOARCH="arm64"; GO_BOOTSTRAP_ARCH="arm64" ;;
+    arm64)   GOARCH="arm64"; GO_BOOTSTRAP_ARCH="arm64" ;;
     *)
         echo "Unsupported architecture: $ARCH"
         exit 1
@@ -53,6 +54,7 @@ echo "==> Testing shim auto-download in clean Docker environment"
 echo "    Package:  $TEST_PACKAGE"
 echo "    Flavor:   $SHIM_FLAVOR"
 echo "    Go:       $GO_VERSION"
+echo "    Debian:   $DEBIAN_SUITE"
 echo "    Arch:     $GOARCH"
 echo "    OpenH264: $TEST_OPENH264"
 echo "    Require:  $REQUIRE_SHIM"
@@ -68,11 +70,12 @@ shim/build/
 EOF
 
 DOCKERFILE=$(cat << 'DOCKERFILE_END'
-FROM golang:GO_VERSION_PLACEHOLDER-bookworm
+FROM debian:DEBIAN_SUITE_PLACEHOLDER
 
 # Install minimal runtime deps for the shim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
+        curl \
         libx11-6 \
         libxcomposite1 \
         libxdamage1 \
@@ -86,6 +89,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libdrm2 \
     && ldconfig \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL "https://go.dev/dl/goGO_VERSION_PLACEHOLDER.linux-GO_BOOTSTRAP_ARCH_PLACEHOLDER.tar.gz" -o /tmp/go.tgz \
+    && rm -rf /usr/local/go \
+    && tar -C /usr/local -xzf /tmp/go.tgz \
+    && rm -f /tmp/go.tgz
+
+ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 
 WORKDIR /workspace
 
@@ -123,6 +133,8 @@ fi
 
 # Replace placeholders
 DOCKERFILE="${DOCKERFILE//GO_VERSION_PLACEHOLDER/$GO_VERSION}"
+DOCKERFILE="${DOCKERFILE//DEBIAN_SUITE_PLACEHOLDER/$DEBIAN_SUITE}"
+DOCKERFILE="${DOCKERFILE//GO_BOOTSTRAP_ARCH_PLACEHOLDER/$GO_BOOTSTRAP_ARCH}"
 DOCKERFILE="${DOCKERFILE//SHIM_FLAVOR_PLACEHOLDER/$SHIM_FLAVOR}"
 DOCKERFILE="${DOCKERFILE//TEST_PACKAGE_PLACEHOLDER/$TEST_PACKAGE}"
 DOCKERFILE="${DOCKERFILE//OPENH264_ENV_PLACEHOLDER/$OPENH264_ENV}"

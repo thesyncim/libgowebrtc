@@ -149,3 +149,20 @@ jobs:
 
       - name: Validate linux_386 release in Docker
         run: ./scripts/validate_linux_docker.sh --target linux_386 --download-only
+
+  validate-linux-amd64-docker:
+    name: linux_amd64 (Docker compatibility)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Validate linux_amd64 release in Docker
+        run: ./scripts/validate_linux_docker.sh --target linux_amd64 --download-only
