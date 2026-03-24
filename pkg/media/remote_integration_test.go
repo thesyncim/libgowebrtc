@@ -49,39 +49,41 @@ func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
 
 	registry := NewRemoteStreamRegistry()
 	frameCh := make(chan *frame.VideoFrame, 8)
-	trackCh := make(chan RemoteTrack, 1)
+	eventCh := make(chan PionTrackEvent, 1)
 	streamsCh := make(chan []*MediaStream, 1)
 	errCh := make(chan error, 1)
 
-	receiver.OnTrack(func(remoteTrack *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
-		boundTrack, streams, err := registry.BindPionTrack(
-			remoteTrack,
-			rtpReceiver,
-			pionrecv.WithRTCPWriter(rtpReceiver.Transport()),
-		)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		video := boundTrack.(PionRemoteVideoTrack)
-		if err := video.SetOnVideoFrame(func(f *frame.VideoFrame) {
+	receiver.OnTrack(registry.PionOnTrack(
+		func(event PionTrackEvent) {
+			video := event.Track.(PionRemoteVideoTrack)
+			if err := video.SetOnVideoFrame(func(f *frame.VideoFrame) {
+				select {
+				case frameCh <- f:
+				default:
+				}
+			}); err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
 			select {
-			case frameCh <- f:
+			case eventCh <- event:
 			default:
 			}
-		}); err != nil {
-			errCh <- err
-			return
-		}
-		select {
-		case trackCh <- boundTrack:
-		default:
-		}
-		select {
-		case streamsCh <- streams:
-		default:
-		}
-	})
+			select {
+			case streamsCh <- event.Streams:
+			default:
+			}
+		},
+		func(err error) {
+			select {
+			case errCh <- err:
+			default:
+			}
+		},
+	))
 
 	connectRemoteRegistryPionPeers(t, sender, receiver)
 
@@ -92,20 +94,21 @@ func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	var boundTrack RemoteTrack
+	var event PionTrackEvent
 	select {
-	case boundTrack = <-trackCh:
+	case event = <-eventCh:
 	case err := <-errCh:
-		t.Fatalf("BindPionTrack: %v", err)
+		t.Fatalf("PionOnTrack: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for remote track")
 	}
+	boundTrack := event.Track
 
 	var streams []*MediaStream
 	select {
 	case streams = <-streamsCh:
 	case err := <-errCh:
-		t.Fatalf("BindPionTrack: %v", err)
+		t.Fatalf("PionOnTrack: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for remote streams")
 	}
@@ -139,8 +142,128 @@ func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
 	if got := streams[0].GetTrackByID(boundTrack.ID()); got == nil {
 		t.Fatal("expected bound track to be present in returned MediaStream")
 	}
+	if event.TrackRemote == nil {
+		t.Fatal("TrackRemote = nil, want original Pion track")
+	}
+	if event.Receiver == nil {
+		t.Fatal("Receiver = nil, want original RTP receiver")
+	}
 
 	boundTrack.Stop()
+}
+
+func TestRemoteStreamRegistryBindDecodedTrackIntegration(t *testing.T) {
+	sender, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("NewPeerConnection(sender): %v", err)
+	}
+	defer func() { _ = sender.Close() }()
+
+	receiver, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("NewPeerConnection(receiver): %v", err)
+	}
+	defer func() { _ = receiver.Close() }()
+
+	videoTrack, err := webrtc.NewTrackLocalStaticRTP(
+		webrtc.RTPCodecCapability{
+			MimeType:  webrtc.MimeTypeVP8,
+			ClockRate: 90000,
+		},
+		"decoded-video",
+		"decoded-stream",
+	)
+	if err != nil {
+		t.Fatalf("NewTrackLocalStaticRTP: %v", err)
+	}
+
+	rtpSender, err := sender.AddTrack(videoTrack)
+	if err != nil {
+		t.Fatalf("sender.AddTrack: %v", err)
+	}
+	go drainRemoteRegistryRTCP(rtpSender)
+
+	decodedCh := make(chan *pionrecv.DecodedTrack, 1)
+	errCh := make(chan error, 1)
+	receiver.OnTrack(func(remoteTrack *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
+		decoded, err := pionrecv.BindRemoteTrack(
+			remoteTrack,
+			rtpReceiver,
+			pionrecv.WithRTCPWriter(rtpReceiver.Transport()),
+		)
+		if err != nil {
+			select {
+			case errCh <- err:
+			default:
+			}
+			return
+		}
+		select {
+		case decodedCh <- decoded:
+		default:
+		}
+	})
+
+	connectRemoteRegistryPionPeers(t, sender, receiver)
+
+	packets := mustEncodeRemoteRegistryVideoPackets(t, codec.VP8, 96, 0x33445566, []uint32{0, 3000, 6000, 9000})
+	if err := videoTrack.WriteRTP(packets[0]); err != nil {
+		t.Fatalf("videoTrack.WriteRTP(trigger): %v", err)
+	}
+
+	var decoded *pionrecv.DecodedTrack
+	select {
+	case decoded = <-decodedCh:
+	case err := <-errCh:
+		t.Fatalf("BindRemoteTrack: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for decoded track")
+	}
+
+	registry := NewRemoteStreamRegistry()
+	defer registry.Close()
+
+	boundTrack, streams, err := registry.BindDecodedTrack(decoded)
+	if err != nil {
+		t.Fatalf("BindDecodedTrack: %v", err)
+	}
+
+	frameCh := make(chan *frame.VideoFrame, 8)
+	video := boundTrack.(PionRemoteVideoTrack)
+	if err := video.SetOnVideoFrame(func(f *frame.VideoFrame) {
+		select {
+		case frameCh <- f:
+		default:
+		}
+	}); err != nil {
+		t.Fatalf("SetOnVideoFrame: %v", err)
+	}
+
+	for i, pkt := range packets[1:] {
+		if err := videoTrack.WriteRTP(pkt); err != nil {
+			t.Fatalf("videoTrack.WriteRTP(%d): %v", i+1, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	select {
+	case got := <-frameCh:
+		if got == nil || got.Width == 0 || got.Height == 0 {
+			t.Fatalf("decoded frame = %+v, want non-empty video frame", got)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for decoded frame")
+	}
+
+	if boundTrack.ID() != "decoded-video" {
+		t.Fatalf("boundTrack.ID() = %q, want %q", boundTrack.ID(), "decoded-video")
+	}
+	if boundTrack.StreamID() != "decoded-stream" {
+		t.Fatalf("boundTrack.StreamID() = %q, want %q", boundTrack.StreamID(), "decoded-stream")
+	}
+	if len(streams) != 1 || streams[0].ID() != "decoded-stream" {
+		t.Fatalf("streams = %v, want [decoded-stream]", streams)
+	}
 }
 
 const (

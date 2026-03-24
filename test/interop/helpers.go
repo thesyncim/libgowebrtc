@@ -38,6 +38,8 @@ type PeerPair struct {
 	iceWG         sync.WaitGroup
 	closeOnce     sync.Once
 	stopICE       chan struct{}
+	readyOnce     sync.Once
+	readyForICE   chan struct{}
 
 	t *testing.T
 }
@@ -104,6 +106,7 @@ func NewPeerPair(t *testing.T, cfg PeerPairConfig) (*PeerPair, error) {
 		libCandidates:  make(chan *pc.ICECandidate, 20),
 		pionCandidates: make(chan *pionwebrtc.ICECandidate, 20),
 		stopICE:        make(chan struct{}),
+		readyForICE:    make(chan struct{}),
 		t:              t,
 	}
 
@@ -118,20 +121,22 @@ func NewPeerPair(t *testing.T, cfg PeerPairConfig) (*PeerPair, error) {
 // setupICECallbacks sets up ICE candidate exchange between peers.
 func (pp *PeerPair) setupICECallbacks() {
 	pp.Lib.SetOnICECandidate(func(candidate *pc.ICECandidate) {
-		if candidate != nil {
-			select {
-			case pp.libCandidates <- candidate:
-			case <-pp.stopICE:
-			}
+		if candidate == nil || pp.stopping() {
+			return
+		}
+		select {
+		case pp.libCandidates <- candidate:
+		case <-pp.stopICE:
 		}
 	})
 
 	pp.Pion.OnICECandidate(func(candidate *pionwebrtc.ICECandidate) {
-		if candidate != nil {
-			select {
-			case pp.pionCandidates <- candidate:
-			case <-pp.stopICE:
-			}
+		if candidate == nil || pp.stopping() {
+			return
+		}
+		select {
+		case pp.pionCandidates <- candidate:
+		case <-pp.stopICE:
 		}
 	})
 
@@ -156,6 +161,12 @@ func (pp *PeerPair) forwardLibToPion() {
 			if candidate == nil {
 				continue
 			}
+			if !pp.waitForICEReady() {
+				return
+			}
+			if pp.stopping() {
+				return
+			}
 			_ = pp.Pion.AddICECandidate(pionwebrtc.ICECandidateInit{
 				Candidate:     candidate.Candidate,
 				SDPMid:        &candidate.SDPMid,
@@ -171,15 +182,30 @@ func (pp *PeerPair) forwardPionToLib() {
 		case <-pp.stopICE:
 			return
 		case candidate := <-pp.pionCandidates:
-			if candidate != nil {
-				if pp.Lib.IsValid() {
-					init := candidate.ToJSON()
-					_ = pp.Lib.AddICECandidate(&pc.ICECandidate{
-						Candidate:     init.Candidate,
-						SDPMid:        *init.SDPMid,
-						SDPMLineIndex: uint16(*init.SDPMLineIndex),
-					})
+			if candidate == nil {
+				continue
+			}
+			if !pp.waitForICEReady() {
+				return
+			}
+			if pp.stopping() {
+				return
+			}
+			if pp.Lib.IsValid() {
+				init := candidate.ToJSON()
+				sdpMid := ""
+				if init.SDPMid != nil {
+					sdpMid = *init.SDPMid
 				}
+				sdpMLineIndex := uint16(0)
+				if init.SDPMLineIndex != nil {
+					sdpMLineIndex = uint16(*init.SDPMLineIndex)
+				}
+				_ = pp.Lib.AddICECandidate(&pc.ICECandidate{
+					Candidate:     init.Candidate,
+					SDPMid:        sdpMid,
+					SDPMLineIndex: sdpMLineIndex,
+				})
 			}
 		}
 	}
@@ -232,6 +258,7 @@ func (pp *PeerPair) libOffers() error {
 		return err
 	}
 
+	pp.markICEReady()
 	return nil
 }
 
@@ -268,6 +295,7 @@ func (pp *PeerPair) pionOffers() error {
 		return err
 	}
 
+	pp.markICEReady()
 	return nil
 }
 
@@ -325,20 +353,49 @@ func (pp *PeerPair) WaitForConnection(timeout time.Duration) bool {
 // Close closes both PeerConnections.
 func (pp *PeerPair) Close() {
 	pp.closeOnce.Do(func() {
-		close(pp.stopICE)
-		pp.iceWG.Wait()
-
 		if pp.Lib != nil {
 			pp.Lib.SetOnICECandidate(nil)
 			pp.Lib.SetOnConnectionStateChange(nil)
-			pp.Lib.Close()
 		}
 		if pp.Pion != nil {
 			pp.Pion.OnICECandidate(nil)
 			pp.Pion.OnConnectionStateChange(nil)
+		}
+
+		close(pp.stopICE)
+		pp.iceWG.Wait()
+
+		if pp.Lib != nil {
+			pp.Lib.Close()
+		}
+		if pp.Pion != nil {
 			pp.Pion.Close()
 		}
 	})
+}
+
+func (pp *PeerPair) stopping() bool {
+	select {
+	case <-pp.stopICE:
+		return true
+	default:
+		return false
+	}
+}
+
+func (pp *PeerPair) markICEReady() {
+	pp.readyOnce.Do(func() {
+		close(pp.readyForICE)
+	})
+}
+
+func (pp *PeerPair) waitForICEReady() bool {
+	select {
+	case <-pp.readyForICE:
+		return true
+	case <-pp.stopICE:
+		return false
+	}
 }
 
 // DataChannelPair holds a pair of data channels for testing.
