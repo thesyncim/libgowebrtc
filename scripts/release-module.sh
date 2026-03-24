@@ -45,7 +45,7 @@ Options:
 
 Notes:
   - Module releases use tags like v0.1.0, v0.2.0, v1.0.0.
-  - Shim/binary releases use tags like shim-v0.4.5 and are separate.
+  - Shim/binary releases use tags like shim-vX.Y.Z and are separate.
   - If no stable module tag exists yet, the first suggested release is v0.1.0.
 EOF
 }
