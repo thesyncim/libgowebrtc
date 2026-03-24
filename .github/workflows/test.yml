@@ -34,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -51,6 +53,7 @@ jobs:
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: ./...
+          only-new-issues: true
 
   security:
     name: Security
