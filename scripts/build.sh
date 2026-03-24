@@ -433,11 +433,12 @@ create_release() {
 
     local tarball="libwebrtc_shim_${TARGET_PLATFORM}.tar.gz"
     local dist_dir="$PROJECT_ROOT/dist"
+    local built_shim="$PROJECT_ROOT/lib/$TARGET_PLATFORM/libwebrtc_shim.$ext"
 
     rm -rf "$dist_dir"
     mkdir -p "$dist_dir"
 
-    cp "bazel-bin/shim/libwebrtc_shim.$ext" "$dist_dir/"
+    cp "$built_shim" "$dist_dir/"
     cp "shim/shim.h" "$dist_dir/"
     [[ -f "LICENSE" ]] && cp "LICENSE" "$dist_dir/"
 
