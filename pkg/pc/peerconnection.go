@@ -1484,7 +1484,11 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 			pc.receivers = append(pc.receivers, receiver)
 			pc.mu.Unlock()
 
-			cb(track, receiver, splitStreamIDs(streams))
+			streamIDs := splitStreamIDs(streams)
+			if len(streamIDs) == 0 {
+				streamIDs = pc.remoteTrackStreamIDs(trackID)
+			}
+			cb(track, receiver, streamIDs)
 		}
 	})
 
@@ -1631,14 +1635,23 @@ func (pc *PeerConnection) SetRemoteDescription(desc *SessionDescription) error {
 		return ErrPeerConnectionClosed
 	}
 
-	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock
+	pc.mu.Lock()
+	prevRemoteDescription := pc.remoteDescription
+	pc.remoteDescription = desc
+	pc.mu.Unlock()
+
+	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock.
+	// We publish the description first so callbacks fired during SetRemoteDescription
+	// can still recover track/stream relationships from SDP. Roll back on failure.
 	if err := ffi.PeerConnectionSetRemoteDescription(pc.handle, int(desc.Type), desc.SDP); err != nil {
+		pc.mu.Lock()
+		if pc.remoteDescription == desc {
+			pc.remoteDescription = prevRemoteDescription
+		}
+		pc.mu.Unlock()
 		return ErrSetDescriptionFailed
 	}
 
-	pc.mu.Lock()
-	pc.remoteDescription = desc
-	pc.mu.Unlock()
 	return nil
 }
 
@@ -2043,6 +2056,70 @@ func splitStreamIDs(streams string) []string {
 			streamIDs = append(streamIDs, streamID)
 		}
 	}
+	if len(streamIDs) == 0 {
+		return nil
+	}
+	return streamIDs
+}
+
+func (pc *PeerConnection) remoteTrackStreamIDs(trackID string) []string {
+	if trackID == "" {
+		return nil
+	}
+
+	pc.mu.RLock()
+	desc := pc.remoteDescription
+	pc.mu.RUnlock()
+	if desc == nil {
+		return nil
+	}
+
+	return streamIDsForTrackID(desc.SDP, trackID)
+}
+
+func streamIDsForTrackID(sdp, trackID string) []string {
+	if sdp == "" || trackID == "" {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	streamIDs := make([]string, 0, 2)
+	lines := strings.Split(sdp, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		var value string
+		switch {
+		case strings.HasPrefix(line, "a=msid:"):
+			value = strings.TrimPrefix(line, "a=msid:")
+		case strings.HasPrefix(line, "a=ssrc:"):
+			idx := strings.Index(line, " msid:")
+			if idx < 0 {
+				continue
+			}
+			value = line[idx+len(" msid:"):]
+		default:
+			continue
+		}
+
+		parts := strings.Fields(value)
+		if len(parts) < 2 || parts[1] != trackID {
+			continue
+		}
+		streamID := strings.TrimSpace(parts[0])
+		if streamID == "" {
+			continue
+		}
+		if _, ok := seen[streamID]; ok {
+			continue
+		}
+		seen[streamID] = struct{}{}
+		streamIDs = append(streamIDs, streamID)
+	}
+
 	if len(streamIDs) == 0 {
 		return nil
 	}

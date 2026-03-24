@@ -65,6 +65,53 @@ func TestSplitStreamIDs(t *testing.T) {
 	}
 }
 
+func TestStreamIDsForTrackID(t *testing.T) {
+	const sdp = `v=0
+o=- 1 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=msid-semantic: WMS stream-a stream-b
+m=video 9 UDP/TLS/RTP/SAVPF 96
+a=mid:0
+a=msid:stream-a video-track
+a=msid:stream-b video-track
+a=msid:stream-b video-track
+a=ssrc:123456 msid:stream-c audio-track
+`
+
+	videoStreams := streamIDsForTrackID(sdp, "video-track")
+	if len(videoStreams) != 2 || videoStreams[0] != "stream-a" || videoStreams[1] != "stream-b" {
+		t.Fatalf("streamIDsForTrackID(video-track) = %v, want [stream-a stream-b]", videoStreams)
+	}
+
+	audioStreams := streamIDsForTrackID(sdp, "audio-track")
+	if len(audioStreams) != 1 || audioStreams[0] != "stream-c" {
+		t.Fatalf("streamIDsForTrackID(audio-track) = %v, want [stream-c]", audioStreams)
+	}
+
+	if got := streamIDsForTrackID(sdp, "missing-track"); got != nil {
+		t.Fatalf("streamIDsForTrackID(missing-track) = %v, want nil", got)
+	}
+}
+
+func TestPeerConnectionRemoteTrackStreamIDs(t *testing.T) {
+	pc := &PeerConnection{
+		remoteDescription: &SessionDescription{
+			SDP: "a=msid:stream-1 video-track\r\na=ssrc:42 msid:stream-2 audio-track\r\n",
+		},
+	}
+
+	videoStreams := pc.remoteTrackStreamIDs("video-track")
+	if len(videoStreams) != 1 || videoStreams[0] != "stream-1" {
+		t.Fatalf("remoteTrackStreamIDs(video-track) = %v, want [stream-1]", videoStreams)
+	}
+
+	audioStreams := pc.remoteTrackStreamIDs("audio-track")
+	if len(audioStreams) != 1 || audioStreams[0] != "stream-2" {
+		t.Fatalf("remoteTrackStreamIDs(audio-track) = %v, want [stream-2]", audioStreams)
+	}
+}
+
 func TestCreateDataChannelValidatesOptionCombinations(t *testing.T) {
 	pc := &PeerConnection{}
 
