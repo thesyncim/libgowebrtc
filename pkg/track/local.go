@@ -20,11 +20,22 @@ import (
 
 // Errors
 var (
-	ErrTrackClosed   = errors.New("track is closed")
-	ErrNotBound      = errors.New("track not bound")
-	ErrAlreadyBound  = errors.New("track already bound")
-	ErrEncodeFailed  = errors.New("encode failed")
+	// ErrTrackClosed reports operations on a closed track.
+	ErrTrackClosed = errors.New("track is closed")
+	// ErrNotBound reports writes attempted before the track is bound.
+	ErrNotBound = errors.New("track not bound")
+	// ErrAlreadyBound reports a second bind attempt on an already bound track.
+	ErrAlreadyBound = errors.New("track already bound")
+	// ErrEncodeFailed reports an encoding failure.
+	ErrEncodeFailed = errors.New("encode failed")
+	// ErrInvalidConfig reports invalid track configuration.
 	ErrInvalidConfig = errors.New("invalid config")
+	// ErrNilVideoFrame reports a nil video frame input.
+	ErrNilVideoFrame = errors.New("video frame is nil")
+	// ErrNilAudioFrame reports a nil audio frame input.
+	ErrNilAudioFrame = errors.New("audio frame is nil")
+	// ErrNilRTPPacket reports a nil RTP packet input.
+	ErrNilRTPPacket = errors.New("rtp packet is nil")
 )
 
 // VideoTrackConfig configures a video track.
@@ -295,6 +306,9 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 	if !t.bound.Load() {
 		return ErrNotBound
 	}
+	if f == nil {
+		return ErrNilVideoFrame
+	}
 
 	// Check if track is paused (SetParameters with Active=false)
 	if t.paused.Load() {
@@ -404,6 +418,9 @@ func (t *VideoTrack) WriteRTP(pkt *rtp.Packet) error {
 	}
 	if !t.bound.Load() {
 		return ErrNotBound
+	}
+	if pkt == nil {
+		return ErrNilRTPPacket
 	}
 
 	t.mu.Lock()
@@ -1092,6 +1109,9 @@ func (t *AudioTrack) WriteFrame(f *frame.AudioFrame) error {
 	}
 	if !t.bound.Load() {
 		return ErrNotBound
+	}
+	if f == nil {
+		return ErrNilAudioFrame
 	}
 
 	t.mu.Lock()
