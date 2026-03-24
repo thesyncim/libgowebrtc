@@ -539,6 +539,7 @@ libgowebrtc/
 - Full offer/answer/ICE support
 - Track writing with frame push to native source
 - Frame receiving from remote tracks (`SetOnVideoFrame`/`SetOnAudioFrame`)
+- Browser-style `addTrack(track, streamA, streamB, ...)` stream identity preservation
 - DataChannel communication
 - `GetStats()` - connection statistics
 - `RestartICE()` - ICE restart trigger
@@ -556,6 +557,7 @@ libgowebrtc/
 | `GetActiveLayers()` | Get active layer count |
 | `SetOnRTCPFeedback()` | RTCP feedback events (PLI/FIR/NACK) |
 | `SetScalabilityMode()` / `GetScalabilityMode()` | Runtime SVC mode control |
+| `StreamIDs()` | MediaStream IDs associated with the sender |
 | `GetStats()` | Sender statistics |
 </details>
 
@@ -588,7 +590,7 @@ libgowebrtc/
 | `SetOnICEGatheringStateChange(...)` | ICE gathering progress events |
 | `SetOnNegotiationNeeded(...)` | Renegotiation trigger events |
 | `SetOnICECandidate(...)` | New ICE candidate events |
-| `SetOnTrack(...)` | Remote track received events |
+| `SetOnTrack(...)` | Remote track received events with browser-style stream IDs |
 | `SetOnDataChannel(...)` | Data channel received events |
 </details>
 

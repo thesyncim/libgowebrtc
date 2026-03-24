@@ -3,6 +3,7 @@ package pc
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
@@ -239,6 +240,67 @@ func TestAddTrack(t *testing.T) {
 	}
 
 	t.Log("AddTrack succeeded")
+}
+
+func TestAddTrackPreservesMultipleStreamIDs(t *testing.T) {
+	senderPC, err := NewPeerConnection(DefaultConfiguration())
+	if err != nil {
+		t.Fatalf("NewPeerConnection(sender): %v", err)
+	}
+	defer senderPC.Close()
+
+	receiverPC, err := NewPeerConnection(DefaultConfiguration())
+	if err != nil {
+		t.Fatalf("NewPeerConnection(receiver): %v", err)
+	}
+	defer receiverPC.Close()
+
+	streamsCh := make(chan []string, 1)
+	receiverPC.SetOnTrack(func(track *Track, receiver *RTPReceiver, streams []string) {
+		select {
+		case streamsCh <- append([]string(nil), streams...):
+		default:
+		}
+	})
+
+	videoTrack, err := senderPC.CreateVideoTrack("video-multi", codec.VP8, 64, 64)
+	if err != nil {
+		t.Fatalf("CreateVideoTrack: %v", err)
+	}
+	if _, err := senderPC.AddTrack(videoTrack, "stream-a", "stream-b"); err != nil {
+		t.Fatalf("AddTrack: %v", err)
+	}
+
+	offer, err := senderPC.CreateOffer(nil)
+	if err != nil {
+		t.Fatalf("CreateOffer: %v", err)
+	}
+	if err := senderPC.SetLocalDescription(offer); err != nil {
+		t.Fatalf("SetLocalDescription(offer): %v", err)
+	}
+	if err := receiverPC.SetRemoteDescription(offer); err != nil {
+		t.Fatalf("SetRemoteDescription(offer): %v", err)
+	}
+
+	answer, err := receiverPC.CreateAnswer(nil)
+	if err != nil {
+		t.Fatalf("CreateAnswer: %v", err)
+	}
+	if err := receiverPC.SetLocalDescription(answer); err != nil {
+		t.Fatalf("SetLocalDescription(answer): %v", err)
+	}
+	if err := senderPC.SetRemoteDescription(answer); err != nil {
+		t.Fatalf("SetRemoteDescription(answer): %v", err)
+	}
+
+	select {
+	case streams := <-streamsCh:
+		if len(streams) != 2 || streams[0] != "stream-a" || streams[1] != "stream-b" {
+			t.Fatalf("OnTrack streams = %v, want [stream-a stream-b]", streams)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for OnTrack callback")
+	}
 }
 
 func TestRemoveTrack(t *testing.T) {
