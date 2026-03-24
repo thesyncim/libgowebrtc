@@ -204,8 +204,9 @@ func EnumerateDevices() ([]DeviceInfo, error) {
 		return nil, err
 	}
 
-	out := make([]DeviceInfo, params.OutCount)
-	for i := int32(0); i < params.OutCount; i++ {
+	count := clampEnumeratedCount(params.OutCount, maxDevices)
+	out := make([]DeviceInfo, count)
+	for i := 0; i < count; i++ {
 		out[i] = DeviceInfo{
 			DeviceID: CStringToGo(devices[i].deviceID[:]),
 			Label:    CStringToGo(devices[i].label[:]),
@@ -604,8 +605,9 @@ func EnumerateScreens() ([]ScreenInfo, error) {
 		return nil, err
 	}
 
-	out := make([]ScreenInfo, params.OutCount)
-	for i := int32(0); i < params.OutCount; i++ {
+	count := clampEnumeratedCount(params.OutCount, maxScreens)
+	out := make([]ScreenInfo, count)
+	for i := 0; i < count; i++ {
 		out[i] = ScreenInfo{
 			ID:       screens[i].id,
 			Title:    CStringToGo(screens[i].title[:]),
@@ -812,4 +814,14 @@ func CStringToGo(b []byte) string {
 		}
 	}
 	return string(b)
+}
+
+func clampEnumeratedCount(outCount, maxCount int32) int {
+	if outCount <= 0 {
+		return 0
+	}
+	if outCount > maxCount {
+		return int(maxCount)
+	}
+	return int(outCount)
 }

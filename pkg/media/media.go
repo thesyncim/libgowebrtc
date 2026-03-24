@@ -25,6 +25,8 @@ var (
 	ErrStreamClosed        = errors.New("stream closed")
 	ErrDeviceNotFound      = errors.New("device not found")
 	ErrCaptureNotSupported = errors.New("capture not supported without shim library")
+	ErrNilMediaStream      = errors.New("media stream is nil")
+	ErrNilPeerConnection   = errors.New("peer connection is nil")
 )
 
 // MediaDeviceKind represents the type of media device.
@@ -122,88 +124,88 @@ func EnumerateScreens() ([]ScreenInfo, error) {
 
 // DisplayConstraints is used with GetDisplayMedia for screen/window capture.
 type DisplayConstraints struct {
-	Video *DisplayVideoConstraints // nil = invalid for getDisplayMedia
-	Audio *AudioConstraints        // optional additional audio capture
+	Video *DisplayVideoConstraints // Video configures the required display-capture video source.
+	Audio *AudioConstraints        // Audio optionally requests additional audio capture alongside video.
 }
 
 // DisplayVideoConstraints for screen/window capture.
 type DisplayVideoConstraints struct {
-	DisplaySurface DisplaySurface
+	DisplaySurface DisplaySurface // DisplaySurface narrows capture to monitor, window, or browser-like sources.
 	// ScreenID specifies which screen to capture (from EnumerateScreens).
 	// If 0 and WindowID is 0, captures the first matching screen for the requested DisplaySurface.
 	ScreenID int64
 	// WindowID specifies which window to capture (from EnumerateScreens).
 	// Takes precedence over ScreenID if non-zero.
-	WindowID  int64
-	FrameRate FloatConstraint
-	Width     IntConstraint
-	Height    IntConstraint
-	Codec     codec.Type
-	Bitrate   uint32
-	SVC       *codec.SVCConfig
-	CodecSet  *pioncodec.CodecSet
+	WindowID  int64               // WindowID targets one specific capture window when non-zero.
+	FrameRate FloatConstraint     // FrameRate constrains the captured frame rate.
+	Width     IntConstraint       // Width constrains the captured frame width in pixels.
+	Height    IntConstraint       // Height constrains the captured frame height in pixels.
+	Codec     codec.Type          // Codec picks the preferred encoder codec for the resulting track.
+	Bitrate   uint32              // Bitrate overrides the initial encoder target bitrate in bps.
+	SVC       *codec.SVCConfig    // SVC configures scalable or simulcast video output when supported.
+	CodecSet  *pioncodec.CodecSet // CodecSet overrides codec selection with a Pion-friendly preference list.
 }
 
 // VideoConstraints mirrors the supported subset of browser MediaTrackConstraints for video capture.
 type VideoConstraints struct {
-	Width      IntConstraint
-	Height     IntConstraint
-	FrameRate  FloatConstraint
-	FacingMode FacingMode
-	DeviceID   StringConstraint
-	Codec      codec.Type
-	Bitrate    uint32
-	SVC        *codec.SVCConfig
-	CodecSet   *pioncodec.CodecSet
+	Width      IntConstraint       // Width constrains the captured frame width in pixels.
+	Height     IntConstraint       // Height constrains the captured frame height in pixels.
+	FrameRate  FloatConstraint     // FrameRate constrains the captured frame rate.
+	FacingMode FacingMode          // FacingMode prefers a front, rear, left, or right camera.
+	DeviceID   StringConstraint    // DeviceID selects a specific capture device when available.
+	Codec      codec.Type          // Codec picks the preferred encoder codec for the resulting track.
+	Bitrate    uint32              // Bitrate overrides the initial encoder target bitrate in bps.
+	SVC        *codec.SVCConfig    // SVC configures scalable or simulcast video output when supported.
+	CodecSet   *pioncodec.CodecSet // CodecSet overrides codec selection with a Pion-friendly preference list.
 }
 
 // AudioConstraints mirrors the supported subset of browser MediaTrackConstraints for audio capture.
 type AudioConstraints struct {
-	SampleRate       IntConstraint
-	ChannelCount     IntConstraint
-	EchoCancellation BoolConstraint
-	NoiseSuppression BoolConstraint
-	AutoGainControl  BoolConstraint
-	DeviceID         StringConstraint
-	Bitrate          uint32
+	SampleRate       IntConstraint    // SampleRate constrains the captured sample rate in Hz.
+	ChannelCount     IntConstraint    // ChannelCount constrains the captured number of channels.
+	EchoCancellation BoolConstraint   // EchoCancellation prefers or requires echo cancellation.
+	NoiseSuppression BoolConstraint   // NoiseSuppression prefers or requires noise suppression.
+	AutoGainControl  BoolConstraint   // AutoGainControl prefers or requires automatic gain control.
+	DeviceID         StringConstraint // DeviceID selects a specific audio device when available.
+	Bitrate          uint32           // Bitrate overrides the initial encoder target bitrate in bps.
 }
 
 // Constraints mirrors browser's MediaStreamConstraints.
 type Constraints struct {
-	Video *VideoConstraints
-	Audio *AudioConstraints
+	Video *VideoConstraints // Video requests a video capture track when non-nil.
+	Audio *AudioConstraints // Audio requests an audio capture track when non-nil.
 }
 
 // MediaStreamTrack mirrors browser's MediaStreamTrack interface.
 // Use VideoStreamTrack or AudioStreamTrack for type-safe constraint access.
 type MediaStreamTrack interface {
-	ID() string
-	Kind() string
-	Label() string
-	Enabled() bool
-	SetEnabled(enabled bool)
-	Muted() bool
-	ReadyState() string
-	Stop()
-	Clone() MediaStreamTrack
+	ID() string              // ID returns the stable track identifier.
+	Kind() string            // Kind returns the browser-shaped media kind, such as "audio" or "video".
+	Label() string           // Label returns the human-readable source label when available.
+	Enabled() bool           // Enabled reports whether the track is enabled for delivery.
+	SetEnabled(enabled bool) // SetEnabled enables or disables the track without stopping it.
+	Muted() bool             // Muted reports whether the source is currently muted.
+	ReadyState() string      // ReadyState returns the browser-shaped lifecycle state.
+	Stop()                   // Stop permanently ends the track.
+	Clone() MediaStreamTrack // Clone returns an independent track view for the same source.
 }
 
 // VideoStreamTrack provides type-safe access to video track constraints and settings.
 type VideoStreamTrack interface {
 	MediaStreamTrack
-	GetConstraints() VideoConstraints
-	GetCapabilities() VideoTrackCapabilities
-	ApplyConstraints(constraints VideoConstraints) error
-	GetSettings() VideoTrackSettings
+	GetConstraints() VideoConstraints                    // GetConstraints returns the currently applied video constraints.
+	GetCapabilities() VideoTrackCapabilities             // GetCapabilities reports the supported video capability range.
+	ApplyConstraints(constraints VideoConstraints) error // ApplyConstraints updates the active video constraints.
+	GetSettings() VideoTrackSettings                     // GetSettings returns the current concrete video settings.
 }
 
 // AudioStreamTrack provides type-safe access to audio track constraints and settings.
 type AudioStreamTrack interface {
 	MediaStreamTrack
-	GetConstraints() AudioConstraints
-	GetCapabilities() AudioTrackCapabilities
-	ApplyConstraints(constraints AudioConstraints) error
-	GetSettings() AudioTrackSettings
+	GetConstraints() AudioConstraints                    // GetConstraints returns the currently applied audio constraints.
+	GetCapabilities() AudioTrackCapabilities             // GetCapabilities reports the supported audio capability range.
+	ApplyConstraints(constraints AudioConstraints) error // ApplyConstraints updates the active audio constraints.
+	GetSettings() AudioTrackSettings                     // GetSettings returns the current concrete audio settings.
 }
 
 // MediaStream mirrors browser's MediaStream interface.
@@ -281,38 +283,67 @@ func (s *MediaStream) GetTrackByID(id string) MediaStreamTrack {
 }
 
 // AddTrack adds a track to the stream.
+// Nil tracks and duplicate track IDs are ignored to match browser-like behavior.
 func (s *MediaStream) AddTrack(t MediaStreamTrack) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if t.Kind() == "video" {
-		s.videoTracks = append(s.videoTracks, t)
+	if t == nil {
 		return
 	}
-	s.audioTracks = append(s.audioTracks, t)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.getTrackByIDLocked(t.ID()) != nil {
+		return
+	}
+
+	switch t.Kind() {
+	case "video":
+		s.videoTracks = append(s.videoTracks, t)
+	case "audio":
+		s.audioTracks = append(s.audioTracks, t)
+	}
 }
 
 // RemoveTrack removes a track from the stream.
+// Nil tracks are ignored.
 func (s *MediaStream) RemoveTrack(t MediaStreamTrack) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if t.Kind() == "video" {
-		for i, track := range s.videoTracks {
-			if track.ID() == t.ID() {
-				s.videoTracks = append(s.videoTracks[:i], s.videoTracks[i+1:]...)
-				return
-			}
-		}
+	if t == nil {
 		return
 	}
-	for i, track := range s.audioTracks {
-		if track.ID() == t.ID() {
-			s.audioTracks = append(s.audioTracks[:i], s.audioTracks[i+1:]...)
-			return
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if removeTrackByID(&s.videoTracks, t.ID()) {
+		return
+	}
+	_ = removeTrackByID(&s.audioTracks, t.ID())
+}
+
+func removeTrackByID(tracks *[]MediaStreamTrack, id string) bool {
+	for i, track := range *tracks {
+		if track.ID() == id {
+			*tracks = append((*tracks)[:i], (*tracks)[i+1:]...)
+			return true
 		}
 	}
+	return false
+}
+
+func (s *MediaStream) getTrackByIDLocked(id string) MediaStreamTrack {
+	for _, t := range s.videoTracks {
+		if t.ID() == id {
+			return t
+		}
+	}
+	for i, track := range s.audioTracks {
+		if track.ID() == id {
+			return s.audioTracks[i]
+		}
+	}
+	return nil
 }
 
 // Clone creates a clone of this stream with cloned tracks.
+// Track enabled and ended state are preserved on the cloned tracks.
 func (s *MediaStream) Clone() *MediaStream {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -350,21 +381,21 @@ func (s *MediaStream) Active() bool {
 
 // VideoTrackSettings represents current video track settings.
 type VideoTrackSettings struct {
-	Width      int
-	Height     int
-	FrameRate  float64
-	DeviceID   string
-	FacingMode FacingMode
+	Width      int        // Width is the current frame width in pixels.
+	Height     int        // Height is the current frame height in pixels.
+	FrameRate  float64    // FrameRate is the current capture frame rate.
+	DeviceID   string     // DeviceID is the selected capture device identifier, when known.
+	FacingMode FacingMode // FacingMode is the selected camera direction, when applicable.
 }
 
 // AudioTrackSettings represents current audio track settings.
 type AudioTrackSettings struct {
-	SampleRate       int
-	ChannelCount     int
-	DeviceID         string
-	EchoCancellation bool
-	NoiseSuppression bool
-	AutoGainControl  bool
+	SampleRate       int    // SampleRate is the current capture sample rate in Hz.
+	ChannelCount     int    // ChannelCount is the current number of captured channels.
+	DeviceID         string // DeviceID is the selected audio device identifier, when known.
+	EchoCancellation bool   // EchoCancellation reports whether echo cancellation is active.
+	NoiseSuppression bool   // NoiseSuppression reports whether noise suppression is active.
+	AutoGainControl  bool   // AutoGainControl reports whether automatic gain control is active.
 }
 
 type mediaSourceKind int
@@ -445,6 +476,16 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 	if constraints.Video == nil && constraints.Audio == nil {
 		return nil, ErrInvalidConstraints
 	}
+	if constraints.Video != nil {
+		if err := validateVideoConstraints(*constraints.Video); err != nil {
+			return nil, err
+		}
+	}
+	if constraints.Audio != nil {
+		if err := validateAudioConstraints(*constraints.Audio); err != nil {
+			return nil, err
+		}
+	}
 	if err := ensureCaptureBackend(); err != nil {
 		return nil, err
 	}
@@ -487,6 +528,14 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 func GetDisplayMedia(c DisplayConstraints) (*MediaStream, error) {
 	if c.Video == nil {
 		return nil, ErrInvalidConstraints
+	}
+	if err := validateDisplayVideoConstraints(*c.Video); err != nil {
+		return nil, err
+	}
+	if c.Audio != nil {
+		if err := validateAudioConstraints(*c.Audio); err != nil {
+			return nil, err
+		}
 	}
 	if err := ensureCaptureBackend(); err != nil {
 		return nil, err
@@ -1292,34 +1341,40 @@ func (t *videoStreamTrack) Stop() {
 }
 
 func (t *videoStreamTrack) Clone() MediaStreamTrack {
+	var clone *videoStreamTrack
 	switch t.source {
 	case sourceDevice:
 		devices, err := listCaptureDevices()
 		if err != nil {
 			return nil
 		}
-		clone, err := createUserVideoTrack(t.constraints, devices)
+		clone, err = createUserVideoTrack(t.constraints, devices)
 		if err != nil {
 			return nil
 		}
-		return clone
 	case sourceDisplay:
 		screens, err := listCaptureScreens()
 		if err != nil || t.displayConstraints == nil {
 			return nil
 		}
-		clone, err := createDisplayVideoTrack(*t.displayConstraints, screens)
+		clone, err = createDisplayVideoTrack(*t.displayConstraints, screens)
 		if err != nil {
 			return nil
 		}
-		return clone
 	default:
-		clone, err := newVideoStreamTrack(t.constraints, t.settings, t.label)
+		var err error
+		clone, err = newVideoStreamTrack(t.constraints, t.settings, t.label)
 		if err != nil {
 			return nil
 		}
-		return clone
 	}
+
+	clone.enabled.Store(t.enabled.Load())
+	clone.muted.Store(t.muted.Load())
+	if t.ReadyState() == "ended" {
+		clone.Stop()
+	}
+	return clone
 }
 
 func (t *videoStreamTrack) GetConstraints() VideoConstraints { return t.constraints }
@@ -1480,24 +1535,31 @@ func (t *audioStreamTrack) Stop() {
 }
 
 func (t *audioStreamTrack) Clone() MediaStreamTrack {
+	var clone *audioStreamTrack
 	switch t.source {
 	case sourceDevice:
 		devices, err := listCaptureDevices()
 		if err != nil {
 			return nil
 		}
-		clone, err := createUserAudioTrack(t.constraints, devices)
+		clone, err = createUserAudioTrack(t.constraints, devices)
 		if err != nil {
 			return nil
 		}
-		return clone
 	default:
-		clone, err := newAudioStreamTrack(t.constraints, t.settings, t.label)
+		var err error
+		clone, err = newAudioStreamTrack(t.constraints, t.settings, t.label)
 		if err != nil {
 			return nil
 		}
-		return clone
 	}
+
+	clone.enabled.Store(t.enabled.Load())
+	clone.muted.Store(t.muted.Load())
+	if t.ReadyState() == "ended" {
+		clone.Stop()
+	}
+	return clone
 }
 
 func (t *audioStreamTrack) GetConstraints() AudioConstraints { return t.constraints }

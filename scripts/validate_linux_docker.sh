@@ -22,11 +22,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 TARGET_PLATFORM="${TARGET_PLATFORM:-linux_amd64}"
-GO_VERSION="${GO_VERSION:-1.25}"
+GO_VERSION="${GO_VERSION:-1.26.1}"
 IMAGE_NAME="${IMAGE_NAME:-libgowebrtc-validate}"
 DOCKER_PROGRESS="${DOCKER_PROGRESS:-plain}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
 VALIDATION_MODE="${VALIDATION_MODE:-build}"
+DEBIAN_SUITE="${DEBIAN_SUITE:-bullseye}"
+MAX_GLIBC_VERSION="${MAX_GLIBC_VERSION:-2.31}"
 CONTAINER_NAME=""
 SHIM_RELEASE_TAG="${SHIM_RELEASE_TAG:-$(cd "$REPO_ROOT" && python3 - <<'PY'
 import json
@@ -36,17 +38,6 @@ manifest = json.loads(pathlib.Path("internal/ffi/shim_manifest.json").read_text(
 print(manifest["flavors"]["basic"]["release_tag"])
 PY
 )}"
-
-docker_go_version() {
-    local version="$1"
-    if [[ "$version" == *.x ]]; then
-        echo "${version%.x}"
-        return
-    fi
-    echo "$version"
-}
-
-DOCKER_GO_VERSION="$(docker_go_version "$GO_VERSION")"
 
 usage() {
     cat <<EOF
@@ -60,6 +51,10 @@ Options:
   --download-only    Validate the published shim artifact instead of building it
   --artifact-dir DIR Copy the built shim and public headers to DIR after validation
   --help             Show this help
+
+Environment:
+  DEBIAN_SUITE       Compatibility distro suite for the Docker image (default: $DEBIAN_SUITE)
+  MAX_GLIBC_VERSION  Maximum allowed GLIBC symbol version in the shim (default: $MAX_GLIBC_VERSION)
 EOF
 }
 
@@ -106,6 +101,7 @@ case "$TARGET_PLATFORM" in
     linux_amd64)
         DOCKER_PLATFORM="linux/amd64"
         TEST_GOARCH="amd64"
+        GO_BOOTSTRAP_ARCH="amd64"
         EXTRA_SETUP=""
         GO_TEST_ENV=""
         GO_TEST_EXPORTS=":;"
@@ -113,6 +109,7 @@ case "$TARGET_PLATFORM" in
     linux_386)
         DOCKER_PLATFORM="linux/amd64"
         TEST_GOARCH="386"
+        GO_BOOTSTRAP_ARCH="amd64"
         EXTRA_SETUP=$'RUN set -eux; \\\n        dpkg --add-architecture i386; \\\n        apt-get update; \\\n        libstdcxx_dev_pkg="libstdc++-$(g++ -dumpversion | cut -d. -f1)-dev:i386"; \\\n        apt-get install -y --no-install-recommends \\\n            gcc-multilib \\\n            g++-multilib \\\n            libc6-dev-i386 \\\n            lib32gcc-s1 \\\n            lib32stdc++6 \\\n            "$libstdcxx_dev_pkg" \\\n            libasound2-dev:i386 \\\n            libdrm-dev:i386 \\\n            libgbm-dev:i386 \\\n            libglib2.0-dev:i386 \\\n            libpulse-dev:i386 \\\n            libx11-dev:i386 \\\n            libxcomposite-dev:i386 \\\n            libxdamage-dev:i386 \\\n            libxext-dev:i386 \\\n            libxfixes-dev:i386 \\\n            libxrandr-dev:i386 \\\n            libxrender-dev:i386 \\\n            libxtst-dev:i386; \\\n        rm -rf /var/lib/apt/lists/*'
         GO_TEST_ENV='CGO_ENABLED=1 CC="gcc -m32" CXX="g++ -m32"'
         GO_TEST_EXPORTS=$'export CGO_ENABLED=1; \\\n    export CC="gcc -m32"; \\\n    export CXX="g++ -m32";'
@@ -120,6 +117,7 @@ case "$TARGET_PLATFORM" in
     linux_arm64)
         DOCKER_PLATFORM="linux/arm64/v8"
         TEST_GOARCH="arm64"
+        GO_BOOTSTRAP_ARCH="arm64"
         EXTRA_SETUP=""
         GO_TEST_ENV=""
         GO_TEST_EXPORTS=":;"
@@ -127,6 +125,7 @@ case "$TARGET_PLATFORM" in
     linux_arm)
         DOCKER_PLATFORM="linux/arm/v7"
         TEST_GOARCH="arm"
+        GO_BOOTSTRAP_ARCH="armv6l"
         EXTRA_SETUP=""
         GO_TEST_ENV=""
         GO_TEST_EXPORTS=":;"
@@ -140,7 +139,9 @@ esac
 echo "==> Validating $TARGET_PLATFORM in Docker"
 echo "    Mode:            $VALIDATION_MODE"
 echo "    Docker platform: $DOCKER_PLATFORM"
+echo "    Debian suite:    $DEBIAN_SUITE"
 echo "    Go version:      $GO_VERSION"
+echo "    Max GLIBC:       $MAX_GLIBC_VERSION"
 echo ""
 
 DOCKERIGNORE_PATH="$REPO_ROOT/.dockerignore.validate-linux"
@@ -156,12 +157,14 @@ EOF
 
 cat > "$DOCKERFILE_PATH" <<'EOF'
 # syntax=docker/dockerfile:1.7
-FROM golang:DOCKER_IMAGE_GO_VERSION_PLACEHOLDER-bookworm
+FROM debian:DEBIAN_SUITE_PLACEHOLDER
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
+        binutils \
         build-essential \
         ca-certificates \
+        clang \
         curl \
         file \
         gawk \
@@ -191,10 +194,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         zip \
     && rm -rf /var/lib/apt/lists/*
 
+RUN curl -fsSL "https://go.dev/dl/goGO_VERSION_PLACEHOLDER.linux-GO_BOOTSTRAP_ARCH_PLACEHOLDER.tar.gz" -o /tmp/go.tgz \
+    && rm -rf /usr/local/go \
+    && tar -C /usr/local -xzf /tmp/go.tgz \
+    && rm -f /tmp/go.tgz
+
 EXTRA_SETUP_PLACEHOLDER
 
-RUN go install github.com/bazelbuild/bazelisk@latest \
-    && ln -sf /go/bin/bazelisk /usr/local/bin/bazel
+RUN GOBIN=/usr/local/bin /usr/local/go/bin/go install github.com/bazelbuild/bazelisk@latest \
+    && ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
 
 WORKDIR /workspace
 COPY . .
@@ -246,10 +254,12 @@ CMD ["/bin/true"]
 EOF
 
 sed -i.bak \
-    -e "s/DOCKER_IMAGE_GO_VERSION_PLACEHOLDER/$DOCKER_GO_VERSION/g" \
+    -e "s/DEBIAN_SUITE_PLACEHOLDER/$DEBIAN_SUITE/g" \
     -e "s/GO_VERSION_PLACEHOLDER/$GO_VERSION/g" \
+    -e "s/GO_BOOTSTRAP_ARCH_PLACEHOLDER/$GO_BOOTSTRAP_ARCH/g" \
     -e "s/GOARCH_PLACEHOLDER/$TEST_GOARCH/g" \
     -e "s|GO_TEST_ENV_PLACEHOLDER|$GO_TEST_ENV|g" \
+    -e "s/MAX_GLIBC_VERSION_PLACEHOLDER/$MAX_GLIBC_VERSION/g" \
     -e "s/SHIM_RELEASE_TAG_PLACEHOLDER/$SHIM_RELEASE_TAG/g" \
     -e "s/TARGET_PLACEHOLDER/$TARGET_PLATFORM/g" \
     "$DOCKERFILE_PATH"
@@ -272,12 +282,42 @@ if [[ "$VALIDATION_MODE" == "build" ]]; then
     VALIDATION_STEPS=$(cat <<'EOF'
 RUN --mount=type=cache,target=/root/.cache/libgowebrtc \
     --mount=type=cache,target=/root/.cache/bazel \
-    TARGET_PLATFORM=TARGET_PLACEHOLDER INSTALL_DIR=/tmp/libwebrtc ./scripts/build.sh
+    CC=clang CXX=clang++ TARGET_PLATFORM=TARGET_PLACEHOLDER INSTALL_DIR=/tmp/libwebrtc ./scripts/build.sh
 RUN ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so
 RUN if ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so | grep -E 'libstdc\+\+|libgcc_s'; then \
         echo "Linux shim should not depend on host libstdc++ or libgcc_s"; \
         exit 1; \
     fi
+RUN python3 - <<'PY'
+import pathlib
+import re
+import subprocess
+
+lib = pathlib.Path("lib/TARGET_PLACEHOLDER/libwebrtc_shim.so")
+allowed_raw = "MAX_GLIBC_VERSION_PLACEHOLDER"
+
+def parse_version(raw):
+    return tuple(int(part) for part in raw.split("."))
+
+def normalize(version):
+    return version + (0,) * (3 - len(version))
+
+allowed = parse_version(allowed_raw)
+output = subprocess.check_output(["objdump", "-T", str(lib)], text=True, stderr=subprocess.STDOUT)
+versions = sorted(
+    {parse_version(match) for match in re.findall(r"GLIBC_(\d+(?:\.\d+)*)", output)},
+    key=normalize,
+)
+if not versions:
+    raise SystemExit(f"failed to detect GLIBC symbol versions in {lib}")
+highest = versions[-1]
+highest_raw = ".".join(str(part) for part in highest)
+if normalize(highest) > normalize(allowed):
+    raise SystemExit(
+        f"{lib} requires GLIBC_{highest_raw}, which exceeds the compatibility ceiling GLIBC_{allowed_raw}"
+    )
+print(f"verified {lib} max GLIBC requirement <= GLIBC_{allowed_raw} (found GLIBC_{highest_raw})")
+PY
 RUN python3 - <<'PY'
 import hashlib
 import json
@@ -330,6 +370,36 @@ RUN if ldd lib/TARGET_PLACEHOLDER/libwebrtc_shim.so | grep -E 'libstdc\+\+|libgc
         exit 1; \
     fi
 RUN python3 - <<'PY'
+import pathlib
+import re
+import subprocess
+
+lib = pathlib.Path("lib/TARGET_PLACEHOLDER/libwebrtc_shim.so")
+allowed_raw = "MAX_GLIBC_VERSION_PLACEHOLDER"
+
+def parse_version(raw):
+    return tuple(int(part) for part in raw.split("."))
+
+def normalize(version):
+    return version + (0,) * (3 - len(version))
+
+allowed = parse_version(allowed_raw)
+output = subprocess.check_output(["objdump", "-T", str(lib)], text=True, stderr=subprocess.STDOUT)
+versions = sorted(
+    {parse_version(match) for match in re.findall(r"GLIBC_(\d+(?:\.\d+)*)", output)},
+    key=normalize,
+)
+if not versions:
+    raise SystemExit(f"failed to detect GLIBC symbol versions in {lib}")
+highest = versions[-1]
+highest_raw = ".".join(str(part) for part in highest)
+if normalize(highest) > normalize(allowed):
+    raise SystemExit(
+        f"{lib} requires GLIBC_{highest_raw}, which exceeds the compatibility ceiling GLIBC_{allowed_raw}"
+    )
+print(f"verified {lib} max GLIBC requirement <= GLIBC_{allowed_raw} (found GLIBC_{highest_raw})")
+PY
+RUN python3 - <<'PY'
 import json
 import pathlib
 import shutil
@@ -362,6 +432,7 @@ path.write_text(text)
 PY
 
 sed -i.bak \
+    -e "s/MAX_GLIBC_VERSION_PLACEHOLDER/$MAX_GLIBC_VERSION/g" \
     -e "s/SHIM_RELEASE_TAG_PLACEHOLDER/$SHIM_RELEASE_TAG/g" \
     -e "s/TARGET_PLACEHOLDER/$TARGET_PLATFORM/g" \
     "$DOCKERFILE_PATH"

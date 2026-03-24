@@ -20,6 +20,7 @@ type opusEncoder struct {
 	mu     sync.Mutex
 }
 
+// NewOpusEncoder creates a new Opus audio encoder.
 func NewOpusEncoder(cfg codec.OpusConfig) (AudioEncoder, error) {
 	if err := validateOpusConfig(cfg); err != nil {
 		return nil, err

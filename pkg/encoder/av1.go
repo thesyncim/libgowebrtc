@@ -17,6 +17,7 @@ type av1Encoder struct {
 	mu            sync.Mutex
 }
 
+// NewAV1Encoder creates a new AV1 video encoder.
 func NewAV1Encoder(cfg codec.AV1Config) (VideoEncoder, error) {
 	if err := validateAV1Config(cfg); err != nil {
 		return nil, err

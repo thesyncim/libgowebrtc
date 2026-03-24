@@ -73,18 +73,18 @@ type WriteRTCPFunc func([]rtcp.Packet) error
 // RTCPWriter is the subset of Pion's PeerConnection/DTLSTransport surface
 // needed to send RTCP feedback packets.
 type RTCPWriter interface {
-	WriteRTCP([]rtcp.Packet) (int, error)
+	WriteRTCP([]rtcp.Packet) (int, error) // WriteRTCP sends one or more RTCP packets.
 }
 
 // CodecChange describes a runtime decoder pipeline reconfiguration for the
 // same Pion TrackRemote.
 type CodecChange struct {
-	PreviousType        codec.Type
-	CurrentType         codec.Type
-	PreviousCodec       webrtc.RTPCodecParameters
-	CurrentCodec        webrtc.RTPCodecParameters
-	PreviousPayloadType webrtc.PayloadType
-	CurrentPayloadType  webrtc.PayloadType
+	PreviousType        codec.Type                // PreviousType is the prior normalized libgowebrtc codec type.
+	CurrentType         codec.Type                // CurrentType is the new normalized libgowebrtc codec type.
+	PreviousCodec       webrtc.RTPCodecParameters // PreviousCodec is the prior full Pion codec description.
+	CurrentCodec        webrtc.RTPCodecParameters // CurrentCodec is the new full Pion codec description.
+	PreviousPayloadType webrtc.PayloadType        // PreviousPayloadType is the prior RTP payload type.
+	CurrentPayloadType  webrtc.PayloadType        // CurrentPayloadType is the new RTP payload type.
 }
 
 type config struct {

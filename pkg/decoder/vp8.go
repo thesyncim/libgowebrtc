@@ -15,6 +15,7 @@ type vp8Decoder struct {
 	mu     sync.Mutex
 }
 
+// NewVP8Decoder creates a VP8 video decoder backed by libwebrtc.
 func NewVP8Decoder() (VideoDecoder, error) {
 	if err := ffi.LoadLibrary(); err != nil {
 		return nil, err

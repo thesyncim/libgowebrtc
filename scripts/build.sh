@@ -28,6 +28,7 @@ else
     INSTALL_DIR="$HOME/libwebrtc"
 fi
 LIBWEBRTC_SOURCE_BUILD="${LIBWEBRTC_SOURCE_BUILD:-auto}"
+MAX_GLIBC_VERSION="${MAX_GLIBC_VERSION:-2.31}"
 
 # Platform detection
 detect_platform() {
@@ -132,6 +133,8 @@ Environment:
                       auto (default), true, or false. Linux defaults to source
                       builds because the upstream prebuilt archive uses an
                       incompatible Chromium libc++ runtime.
+  MAX_GLIBC_VERSION   Maximum allowed GLIBC symbol version for Linux release
+                      artifacts (default: $MAX_GLIBC_VERSION)
 
 Examples:
   ./scripts/build.sh                        # Build for current platform
@@ -337,6 +340,61 @@ build_shim() {
     log_success "Shim built: $lib_dir/libwebrtc_shim.$ext"
 }
 
+verify_linux_release_compatibility() {
+    local lib_path="$1"
+
+    if [[ "$TARGET_OS" != "linux" ]]; then
+        return 0
+    fi
+
+    if ldd "$lib_path" | grep -E 'libstdc\+\+|libgcc_s'; then
+        log_error "Linux shim should not depend on host libstdc++ or libgcc_s"
+        return 1
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        log_error "python3 is required to verify Linux release compatibility"
+        return 1
+    fi
+
+    if ! command -v objdump >/dev/null 2>&1; then
+        log_error "objdump is required to verify Linux release compatibility"
+        return 1
+    fi
+
+    python3 - "$lib_path" "$MAX_GLIBC_VERSION" <<'PY'
+import pathlib
+import re
+import subprocess
+import sys
+
+lib = pathlib.Path(sys.argv[1])
+allowed_raw = sys.argv[2]
+
+def parse_version(raw):
+    return tuple(int(part) for part in raw.split("."))
+
+def normalize(version):
+    return version + (0,) * (3 - len(version))
+
+allowed = parse_version(allowed_raw)
+output = subprocess.check_output(["objdump", "-T", str(lib)], text=True, stderr=subprocess.STDOUT)
+versions = sorted(
+    {parse_version(match) for match in re.findall(r"GLIBC_(\d+(?:\.\d+)*)", output)},
+    key=normalize,
+)
+if not versions:
+    raise SystemExit(f"failed to detect GLIBC symbol versions in {lib}")
+highest = versions[-1]
+highest_raw = ".".join(str(part) for part in highest)
+if normalize(highest) > normalize(allowed):
+    raise SystemExit(
+        f"{lib} requires GLIBC_{highest_raw}, which exceeds the release compatibility ceiling GLIBC_{allowed_raw}"
+    )
+print(f"verified {lib} max GLIBC requirement <= GLIBC_{allowed_raw} (found GLIBC_{highest_raw})")
+PY
+}
+
 create_release() {
     log_step "Creating release tarball"
     cd "$PROJECT_ROOT"
@@ -346,6 +404,14 @@ create_release() {
         darwin)  ext="dylib" ;;
         windows) ext="dll" ;;
     esac
+
+    if [[ "$TARGET_OS" == "linux" ]]; then
+        if ! verify_linux_release_compatibility "bazel-bin/shim/libwebrtc_shim.$ext"; then
+            log_error "Build Linux release artifacts in the compatibility Docker image instead:"
+            log_error "  ./scripts/validate_linux_docker.sh --target $TARGET_PLATFORM"
+            exit 1
+        fi
+    fi
 
     local tarball="libwebrtc_shim_${TARGET_PLATFORM}.tar.gz"
     local dist_dir="$PROJECT_ROOT/dist"

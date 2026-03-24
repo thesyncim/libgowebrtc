@@ -17,57 +17,57 @@ import (
 // track-to-stream association available for higher-level routing.
 type RemoteTrack interface {
 	MediaStreamTrack
-	StreamID() string
-	StreamIDs() []string
-	RID() string
+	StreamID() string    // StreamID returns the first associated remote MediaStream ID, if any.
+	StreamIDs() []string // StreamIDs returns all associated remote MediaStream IDs.
+	RID() string         // RID returns the RTP stream ID for simulcast/SVC tracks when available.
 }
 
 // RemoteVideoTrack is a browser-like remote video track that emits decoded
 // frames regardless of whether the source is backed by Pion or libwebrtc.
 type RemoteVideoTrack interface {
 	RemoteTrack
-	SetOnVideoFrame(func(*frame.VideoFrame)) error
+	SetOnVideoFrame(func(*frame.VideoFrame)) error // SetOnVideoFrame installs the decoded video-frame callback.
 }
 
 // RemoteAudioTrack is a browser-like remote audio track that emits decoded
 // frames regardless of whether the source is backed by Pion or libwebrtc.
 type RemoteAudioTrack interface {
 	RemoteTrack
-	SetOnAudioFrame(func(*frame.AudioFrame)) error
+	SetOnAudioFrame(func(*frame.AudioFrame)) error // SetOnAudioFrame installs the decoded audio-frame callback.
 }
 
 // RemoteCodecTrack exposes codec metadata for backends that can surface it.
 // Today this is implemented by the Pion-backed remote track wrappers.
 type RemoteCodecTrack interface {
 	RemoteTrack
-	Codec() codec.Type
-	CodecParameters() webrtc.RTPCodecParameters
-	PayloadType() webrtc.PayloadType
+	Codec() codec.Type                          // Codec returns the normalized libgowebrtc codec type.
+	CodecParameters() webrtc.RTPCodecParameters // CodecParameters returns the full negotiated RTP codec description.
+	PayloadType() webrtc.PayloadType            // PayloadType returns the current RTP payload type.
 }
 
 // PionRemoteVideoTrack is the rich Pion-backed variant of RemoteVideoTrack.
 type PionRemoteVideoTrack interface {
 	RemoteVideoTrack
 	RemoteCodecTrack
-	SetOnCodecChange(func(pionrecv.CodecChange))
-	RequestKeyframe() error
-	DecodedTrack() *pionrecv.DecodedTrack
+	SetOnCodecChange(func(pionrecv.CodecChange)) // SetOnCodecChange installs a callback for runtime codec switches.
+	RequestKeyframe() error                      // RequestKeyframe asks the remote sender for a fresh keyframe.
+	DecodedTrack() *pionrecv.DecodedTrack        // DecodedTrack exposes the underlying Pion bridge for advanced control.
 }
 
 // PionRemoteAudioTrack is the rich Pion-backed variant of RemoteAudioTrack.
 type PionRemoteAudioTrack interface {
 	RemoteAudioTrack
 	RemoteCodecTrack
-	SetOnCodecChange(func(pionrecv.CodecChange))
-	DecodedTrack() *pionrecv.DecodedTrack
+	SetOnCodecChange(func(pionrecv.CodecChange)) // SetOnCodecChange installs a callback for runtime codec switches.
+	DecodedTrack() *pionrecv.DecodedTrack        // DecodedTrack exposes the underlying Pion bridge for advanced control.
 }
 
 // PCRemoteTrack exposes the underlying native libwebrtc receiver objects when
 // callers need to drop down from the browser-like media layer.
 type PCRemoteTrack interface {
 	RemoteTrack
-	PCTrack() *pc.Track
-	PCReceiver() *pc.RTPReceiver
+	PCTrack() *pc.Track          // PCTrack returns the underlying native libwebrtc track wrapper.
+	PCReceiver() *pc.RTPReceiver // PCReceiver returns the underlying native libwebrtc receiver wrapper.
 }
 
 // PCRemoteVideoTrack is a browser-like remote video track backed by pkg/pc.
@@ -85,24 +85,24 @@ type PCRemoteAudioTrack interface {
 // RemoteTrackEvent mirrors the browser ontrack event payload after it has been
 // normalized into browser-like MediaStream objects.
 type RemoteTrackEvent struct {
-	Track   RemoteTrack
-	Streams []*MediaStream
+	Track   RemoteTrack    // Track is the normalized browser-like remote track.
+	Streams []*MediaStream // Streams are the stable MediaStream views associated with Track.
 }
 
 // PionTrackEvent is the browser-like remote track event for low-level Pion
 // OnTrack handlers.
 type PionTrackEvent struct {
 	RemoteTrackEvent
-	TrackRemote *webrtc.TrackRemote
-	Receiver    *webrtc.RTPReceiver
+	TrackRemote *webrtc.TrackRemote // TrackRemote is the original Pion TrackRemote.
+	Receiver    *webrtc.RTPReceiver // Receiver is the original Pion RTPReceiver, when available.
 }
 
 // PCTrackEvent is the browser-like remote track event for native pkg/pc
 // SetOnTrack handlers.
 type PCTrackEvent struct {
 	RemoteTrackEvent
-	PCTrack  *pc.Track
-	Receiver *pc.RTPReceiver
+	PCTrack  *pc.Track       // PCTrack is the original pkg/pc remote track wrapper.
+	Receiver *pc.RTPReceiver // Receiver is the original pkg/pc RTPReceiver wrapper.
 }
 
 // RemoteStreamRegistry groups incoming remote tracks into stable MediaStream
@@ -615,7 +615,15 @@ func (t *remoteTrackView) Stop() {
 }
 
 func (t *remoteTrackView) Clone() MediaStreamTrack {
-	return t.source.newTrack(generateID())
+	clone := t.source.newTrack(generateID())
+	if cloneView := remoteTrackViewFor(clone); cloneView != nil {
+		cloneView.enabled.Store(t.enabled.Load())
+		cloneView.muted.Store(t.muted.Load())
+		if t.ReadyState() == "ended" {
+			cloneView.Stop()
+		}
+	}
+	return clone
 }
 
 func (t *remoteTrackView) StreamID() string { return firstStreamID(t.StreamIDs()) }
@@ -629,6 +637,27 @@ func (t *remoteTrackView) shouldDispatch() bool {
 }
 
 var _ RemoteTrack = (*remoteTrackView)(nil)
+
+func remoteTrackViewFor(track MediaStreamTrack) *remoteTrackView {
+	switch t := track.(type) {
+	case *remoteTrackView:
+		return t
+	case *remoteVideoTrackView:
+		return t.remoteTrackView
+	case *remoteAudioTrackView:
+		return t.remoteTrackView
+	case *pionRemoteVideoTrackView:
+		return t.remoteTrackView
+	case *pionRemoteAudioTrackView:
+		return t.remoteTrackView
+	case *pcRemoteVideoTrackView:
+		return t.remoteTrackView
+	case *pcRemoteAudioTrackView:
+		return t.remoteTrackView
+	default:
+		return nil
+	}
+}
 
 type remoteVideoTrackView struct {
 	*remoteTrackView

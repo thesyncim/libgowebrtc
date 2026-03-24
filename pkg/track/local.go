@@ -29,14 +29,14 @@ var (
 
 // VideoTrackConfig configures a video track.
 type VideoTrackConfig struct {
-	ID       string
-	StreamID string
-	Codec    codec.Type
-	Width    int
-	Height   int
-	Bitrate  uint32
-	FPS      float64
-	MTU      uint16 // RTP MTU (default 1200)
+	ID       string     // ID is the stable media track identifier.
+	StreamID string     // StreamID is the MediaStream identifier exposed to the remote peer.
+	Codec    codec.Type // Codec is the preferred libgowebrtc video codec.
+	Width    int        // Width is the source frame width in pixels.
+	Height   int        // Height is the source frame height in pixels.
+	Bitrate  uint32     // Bitrate is the initial encoder target bitrate in bps.
+	FPS      float64    // FPS is the initial encoder target frame rate.
+	MTU      uint16     // RTP MTU (default 1200)
 
 	// Auto adaptation (all default true for browser-like behavior)
 	AutoKeyframe   bool // PLI/FIR → RequestKeyFrame()
@@ -59,11 +59,11 @@ type VideoTrackConfig struct {
 
 // BandwidthEstimate contains bandwidth estimation data from the network.
 type BandwidthEstimate struct {
-	TimestampUs      int64
-	TargetBitrateBps int64
-	AvailableSendBps int64
-	PacingRateBps    int64
-	LossRate         float64
+	TimestampUs      int64   // TimestampUs is when the estimate was produced, in microseconds.
+	TargetBitrateBps int64   // TargetBitrateBps is libwebrtc's current target send bitrate.
+	AvailableSendBps int64   // AvailableSendBps is the estimated available uplink bitrate.
+	PacingRateBps    int64   // PacingRateBps is the packet pacing rate suggested by the estimator.
+	LossRate         float64 // LossRate is the recent packet loss fraction in the range [0,1].
 }
 
 // BandwidthEstimateSource is a function that returns the current BWE.
@@ -71,12 +71,14 @@ type BandwidthEstimateSource func() *BandwidthEstimate
 
 // Parameters mirrors browser RTCRtpEncodingParameters for manual control.
 type Parameters struct {
+	// Active enables or pauses output. Set it explicitly on each call because
+	// SetParameters applies this struct as an absolute state, not a partial patch.
 	Active                bool
-	MaxBitrate            uint32
-	MaxFramerate          float64
-	ScaleResolutionDownBy float64
-	ScalabilityMode       string // SVC mode (e.g., "L3T3_KEY", "L1T2")
-	Priority              string // "very-low", "low", "medium", "high"
+	MaxBitrate            uint32  // MaxBitrate caps the active encoding bitrate in bps.
+	MaxFramerate          float64 // MaxFramerate caps the active encoding frame rate.
+	ScaleResolutionDownBy float64 // ScaleResolutionDownBy reduces output resolution by this factor.
+	ScalabilityMode       string  // SVC mode (e.g., "L3T3_KEY", "L1T2")
+	Priority              string  // "very-low", "low", "medium", "high"
 }
 
 // adaptationState tracks the current adaptation parameters.
@@ -455,6 +457,8 @@ func (t *VideoTrack) SetFramerate(fps float64) error {
 }
 
 // SetParameters allows manual control like browser RTCRtpSender.setParameters().
+// It applies Parameters as an absolute state, so callers should always set
+// Active explicitly instead of relying on the zero value.
 func (t *VideoTrack) SetParameters(params Parameters) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -872,12 +876,12 @@ func cloneVideoTrackConfig(cfg VideoTrackConfig) VideoTrackConfig {
 
 // AudioTrackConfig configures an audio track.
 type AudioTrackConfig struct {
-	ID         string
-	StreamID   string
-	SampleRate int
-	Channels   int
-	Bitrate    uint32
-	MTU        uint16
+	ID         string // ID is the stable media track identifier.
+	StreamID   string // StreamID is the MediaStream identifier exposed to the remote peer.
+	SampleRate int    // SampleRate is the source PCM sample rate in Hz.
+	Channels   int    // Channels is the number of PCM channels in source frames.
+	Bitrate    uint32 // Bitrate is the initial Opus target bitrate in bps.
+	MTU        uint16 // MTU is the RTP packet size budget used during packetization.
 
 	// Optional codec preferences used during TrackLocal binding.
 	CodecPreferences []webrtc.RTPCodecParameters

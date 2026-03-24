@@ -64,9 +64,9 @@ func CanonicalizeFMTPMap(values map[string]string) string {
 
 // H264FMTP captures the H264 fmtp parameters that influence compatibility.
 type H264FMTP struct {
-	LevelAsymmetryAllowed string
-	PacketizationMode     int
-	ProfileLevelID        string
+	LevelAsymmetryAllowed string // LevelAsymmetryAllowed mirrors the SDP level-asymmetry-allowed flag.
+	PacketizationMode     int    // PacketizationMode is the SDP packetization-mode value.
+	ProfileLevelID        string // ProfileLevelID is the canonical six-byte profile-level-id value.
 }
 
 // ParseH264FMTP parses H264-specific fmtp parameters.
