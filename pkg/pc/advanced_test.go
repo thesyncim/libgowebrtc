@@ -4,11 +4,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unsafe"
 
+	"github.com/pion/webrtc/v4"
+
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
-	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 func TestPeerConnectionWrapperStringers(t *testing.T) {
@@ -248,7 +250,10 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	if _, err := sender.GetNegotiatedCodecs(); err == nil {
 		t.Fatal("GetNegotiatedCodecs on uninitialized sender expected error")
 	}
-	if err := sender.SetPreferredCodec("video/VP8", 96); err == nil {
+	if err := sender.SetPreferredCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP8", ClockRate: 90000},
+		PayloadType:        96,
+	}); err == nil {
 		t.Fatal("SetPreferredCodec on uninitialized sender expected error")
 	}
 
@@ -297,11 +302,10 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	if err := transceiver.Stop(); err != nil {
 		t.Fatalf("Stop() unexpected error: %v", err)
 	}
-	if err := transceiver.SetCodecPreferences([]CodecCapability{{MimeType: "video/VP8", ClockRate: 90000}}); err == nil {
+	if err := transceiver.SetCodecPreferences([]webrtc.RTPCodecParameters{{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP8", ClockRate: 90000},
+	}}); err == nil {
 		t.Fatal("SetCodecPreferences on uninitialized transceiver expected error")
-	}
-	if err := transceiver.SetCodecSet(pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionEncode, pioncodec.PresetModeSupported)); err == nil {
-		t.Fatal("SetCodecSet on uninitialized transceiver expected error")
 	}
 }
 
@@ -329,6 +333,9 @@ func TestTrackAndDataChannelGuardPaths(t *testing.T) {
 	if err := video.SetOnVideoFrame(func(*frame.VideoFrame) {}); err == nil {
 		t.Fatal("SetOnVideoFrame without handle expected error")
 	}
+	if err := video.WriteVideoFrame(nil); err != ErrNilVideoFrame {
+		t.Fatalf("WriteVideoFrame(nil) = %v, want %v", err, ErrNilVideoFrame)
+	}
 	if err := video.WriteVideoFrame(testutil.CreateTestVideoFrame(32, 32)); err != nil {
 		t.Fatalf("WriteVideoFrame when disabled should be ignored, got %v", err)
 	}
@@ -355,6 +362,9 @@ func TestTrackAndDataChannelGuardPaths(t *testing.T) {
 	}
 	if err := audio.SetOnAudioFrame(func(*frame.AudioFrame) {}); err == nil {
 		t.Fatal("SetOnAudioFrame without handle expected error")
+	}
+	if err := audio.WriteAudioFrame(nil); err != ErrNilAudioFrame {
+		t.Fatalf("WriteAudioFrame(nil) = %v, want %v", err, ErrNilAudioFrame)
 	}
 	if err := audio.WriteAudioFrame(frame.NewAudioFrameS16(48_000, 2, 960)); err == nil {
 		t.Fatal("WriteAudioFrame without source expected error")
@@ -392,6 +402,41 @@ func TestTrackAndDataChannelGuardPaths(t *testing.T) {
 	}
 }
 
+func TestPeerConnectionNilArgumentGuards(t *testing.T) {
+	pc := &PeerConnection{}
+
+	if err := pc.SetLocalDescription(nil); err != ErrNilSessionDescription {
+		t.Fatalf("SetLocalDescription(nil) = %v, want %v", err, ErrNilSessionDescription)
+	}
+	if err := pc.SetRemoteDescription(nil); err != ErrNilSessionDescription {
+		t.Fatalf("SetRemoteDescription(nil) = %v, want %v", err, ErrNilSessionDescription)
+	}
+	if _, err := pc.AddTrack(nil); err != ErrNilTrack {
+		t.Fatalf("AddTrack(nil) = %v, want %v", err, ErrNilTrack)
+	}
+	if err := pc.RemoveTrack(nil); err != ErrNilSender {
+		t.Fatalf("RemoveTrack(nil) = %v, want %v", err, ErrNilSender)
+	}
+}
+
+func TestBuildFFIConfigUsesTypedPolicies(t *testing.T) {
+	data := buildFFIConfig(&Configuration{
+		BundlePolicy:  BundlePolicyBalanced,
+		RTCPMuxPolicy: RTCPMuxPolicyNegotiate,
+		SDPSemantics:  SDPSemanticsPlanB,
+	})
+
+	if got := cStringFromPtr(data.config.BundlePolicy); got != string(BundlePolicyBalanced) {
+		t.Fatalf("BundlePolicy = %q, want %q", got, BundlePolicyBalanced)
+	}
+	if got := cStringFromPtr(data.config.RTCPMuxPolicy); got != string(RTCPMuxPolicyNegotiate) {
+		t.Fatalf("RTCPMuxPolicy = %q, want %q", got, RTCPMuxPolicyNegotiate)
+	}
+	if got := cStringFromPtr(data.config.SDPSemantics); got != string(SDPSemanticsPlanB) {
+		t.Fatalf("SDPSemantics = %q, want %q", got, SDPSemanticsPlanB)
+	}
+}
+
 func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 	release := testutil.WithSerialExecution(t)
@@ -410,7 +455,7 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 		t.Fatalf("GetCurrentBandwidthEstimate: %v", err)
 	}
 
-	videoTrack, err := pc.CreateVideoTrack("video-real", codec.VP8, 64, 64)
+	videoTrack, err := pc.CreateVideoTrack("video-real", 64, 64)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack: %v", err)
 	}
@@ -509,4 +554,11 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 	if err := transceiver.Stop(); err != nil && !errors.Is(err, ErrPeerConnectionClosed) {
 		t.Fatalf("transceiver Stop(): %v", err)
 	}
+}
+
+func cStringFromPtr(ptr *byte) string {
+	if ptr == nil {
+		return ""
+	}
+	return ffi.CStringToGo(unsafe.Slice(ptr, 64))
 }

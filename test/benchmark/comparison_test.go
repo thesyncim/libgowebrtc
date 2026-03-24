@@ -10,7 +10,6 @@ import (
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
-	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
@@ -168,7 +167,7 @@ func BenchmarkLibwebrtcAddTrack(b *testing.B) {
 		b.StartTimer()
 
 		// Add a track
-		track, _ := pcConn.CreateVideoTrack("video-0", codec.H264, 640, 480)
+		track, _ := pcConn.CreateVideoTrack("video-0", 640, 480)
 		pcConn.AddTrack(track, "stream-0")
 
 		b.StopTimer()

@@ -307,7 +307,7 @@ func (fc *FrameCounter) Count() int {
 // CreateTestVideoTrack creates a video track for testing.
 func CreateTestVideoTrack(t *testing.T, p *pc.PeerConnection, id string, c codec.Type, width, height int) *pc.Track {
 	t.Helper()
-	track, err := p.CreateVideoTrack(id, c, width, height)
+	track, err := p.CreateVideoTrack(id, width, height)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}

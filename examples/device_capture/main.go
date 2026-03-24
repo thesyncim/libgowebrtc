@@ -24,7 +24,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
-	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
@@ -292,7 +291,7 @@ func (s *Session) handleSelectVideoDevice(deviceID string) error {
 
 	// Create video track if not exists
 	if s.videoTrack == nil {
-		track, err := s.peerConn.CreateVideoTrack("video0", codec.VP8, 1280, 720)
+		track, err := s.peerConn.CreateVideoTrack("video0", 1280, 720)
 		if err != nil {
 			return fmt.Errorf("create video track: %w", err)
 		}

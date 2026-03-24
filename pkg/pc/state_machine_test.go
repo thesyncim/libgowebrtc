@@ -378,7 +378,7 @@ func TestPeerConnection_Track_VideoTrackCreation(t *testing.T) {
 	}
 	defer pc.Close()
 
-	track, err := pc.CreateVideoTrack("video-1", 0, 640, 480)
+	track, err := pc.CreateVideoTrack("video-1", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestPeerConnection_Track_InvalidDimensions(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := pc.CreateVideoTrack("test", 0, tc.width, tc.height)
+			_, err := pc.CreateVideoTrack("test", tc.width, tc.height)
 			if err == nil {
 				t.Error("expected error for invalid dimensions")
 			}
@@ -484,7 +484,7 @@ func TestPeerConnection_AddTrack_AfterClose(t *testing.T) {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
 
-	track, err := pc.CreateVideoTrack("video", 0, 640, 480)
+	track, err := pc.CreateVideoTrack("video", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack: %v", err)
 	}
