@@ -230,7 +230,7 @@ func findLocalLibrary() (string, bool, error) {
 		case err == nil && info.IsDir():
 			return resolvedPath, false, fmt.Errorf("%w: LIBWEBRTC_SHIM_PATH must point to a file, got directory %s", ErrLibraryNotFound, resolvedPath)
 		case err != nil:
-			return resolvedPath, false, fmt.Errorf("%w: inspect LIBWEBRTC_SHIM_PATH %s: %v", ErrLibraryNotFound, resolvedPath, err)
+			return resolvedPath, false, fmt.Errorf("%w: inspect LIBWEBRTC_SHIM_PATH %s: %w", ErrLibraryNotFound, resolvedPath, err)
 		}
 	}
 
