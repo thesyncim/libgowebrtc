@@ -248,15 +248,16 @@ func TestVideoTrackBindSelectsPreferredCodecFromPreferences(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
 	preset := pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionEncode, pioncodec.PresetModeSupported)
-	track, err := NewVideoTrackFromPreset(preset, VideoTrackConfig{
-		ID:      "video-preset-bind",
-		Width:   320,
-		Height:  240,
-		Bitrate: 400_000,
-		FPS:     30,
+	track, err := NewVideoTrack(VideoTrackConfig{
+		ID:               "video-preset-bind",
+		Width:            320,
+		Height:           240,
+		Bitrate:          400_000,
+		FPS:              30,
+		CodecPreferences: preset.SupportedOnly().VideoCodecs(),
 	})
 	if err != nil {
-		t.Fatalf("NewVideoTrackFromPreset: %v", err)
+		t.Fatalf("NewVideoTrack: %v", err)
 	}
 	defer track.Close()
 

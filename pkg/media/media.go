@@ -14,7 +14,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
@@ -141,7 +140,8 @@ type DisplayVideoConstraints struct {
 	Codec     codec.Type
 	Bitrate   uint32
 	SVC       *codec.SVCConfig
-	CodecSet  *pioncodec.CodecSet
+	// CodecPreferences is the advanced codec selection path and takes precedence over Codec.
+	CodecPreferences []webrtc.RTPCodecParameters
 }
 
 // VideoConstraints mirrors the supported subset of browser MediaTrackConstraints for video capture.
@@ -154,7 +154,8 @@ type VideoConstraints struct {
 	Codec      codec.Type
 	Bitrate    uint32
 	SVC        *codec.SVCConfig
-	CodecSet   *pioncodec.CodecSet
+	// CodecPreferences is the advanced codec selection path and takes precedence over Codec.
+	CodecPreferences []webrtc.RTPCodecParameters
 }
 
 // AudioConstraints mirrors the supported subset of browser MediaTrackConstraints for audio capture.
@@ -166,6 +167,8 @@ type AudioConstraints struct {
 	AutoGainControl  BoolConstraint
 	DeviceID         StringConstraint
 	Bitrate          uint32
+	// CodecPreferences is the advanced codec selection path.
+	CodecPreferences []webrtc.RTPCodecParameters
 }
 
 // Constraints mirrors browser's MediaStreamConstraints.
@@ -671,12 +674,13 @@ func newVideoStreamTrack(constraints VideoConstraints, settings VideoTrackSettin
 		Bitrate: constraints.Bitrate,
 		FPS:     settings.FrameRate,
 	}
-	if constraints.CodecSet != nil {
-		trackCfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), constraints.CodecSet.SupportedOnly().VideoCodecs()...)
-		if len(trackCfg.CodecPreferences) > 0 {
-			if selectedCodec, ok := codec.ParseMimeType(trackCfg.CodecPreferences[0].MimeType); ok {
+	if len(constraints.CodecPreferences) > 0 {
+		trackCfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), constraints.CodecPreferences...)
+		for _, preferred := range trackCfg.CodecPreferences {
+			if selectedCodec, ok := codec.ParseMimeType(preferred.MimeType); ok {
 				trackCfg.Codec = selectedCodec
 				constraints.Codec = selectedCodec
+				break
 			}
 		}
 	}
@@ -704,10 +708,11 @@ func newAudioStreamTrack(constraints AudioConstraints, settings AudioTrackSettin
 		constraints.Bitrate = codec.DefaultOpusConfig().Bitrate
 	}
 	at, err := track.NewAudioTrack(track.AudioTrackConfig{
-		ID:         generateID(),
-		SampleRate: settings.SampleRate,
-		Channels:   settings.ChannelCount,
-		Bitrate:    constraints.Bitrate,
+		ID:               generateID(),
+		SampleRate:       settings.SampleRate,
+		Channels:         settings.ChannelCount,
+		Bitrate:          constraints.Bitrate,
+		CodecPreferences: append([]webrtc.RTPCodecParameters(nil), constraints.CodecPreferences...),
 	})
 	if err != nil {
 		return nil, err
@@ -830,13 +835,13 @@ func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []Scr
 	}
 
 	videoConstraints := VideoConstraints{
-		Width:     ExactInt(width),
-		Height:    ExactInt(height),
-		FrameRate: ExactFloat(frameRate),
-		Codec:     request.Codec,
-		Bitrate:   request.Bitrate,
-		SVC:       request.SVC,
-		CodecSet:  request.CodecSet,
+		Width:            ExactInt(width),
+		Height:           ExactInt(height),
+		FrameRate:        ExactFloat(frameRate),
+		Codec:            request.Codec,
+		Bitrate:          request.Bitrate,
+		SVC:              request.SVC,
+		CodecPreferences: append([]webrtc.RTPCodecParameters(nil), request.CodecPreferences...),
 	}
 	if videoConstraints.Codec == 0 {
 		videoConstraints.Codec = codec.H264
@@ -1203,8 +1208,8 @@ func mergeVideoConstraints(base, update VideoConstraints) VideoConstraints {
 	if update.SVC != nil {
 		merged.SVC = update.SVC
 	}
-	if update.CodecSet != nil {
-		merged.CodecSet = update.CodecSet
+	if len(update.CodecPreferences) > 0 {
+		merged.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), update.CodecPreferences...)
 	}
 	return merged
 }
@@ -1231,6 +1236,9 @@ func mergeAudioConstraints(base, update AudioConstraints) AudioConstraints {
 	}
 	if update.Bitrate != 0 {
 		merged.Bitrate = update.Bitrate
+	}
+	if len(update.CodecPreferences) > 0 {
+		merged.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), update.CodecPreferences...)
 	}
 	return merged
 }
