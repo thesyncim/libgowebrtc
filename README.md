@@ -391,10 +391,19 @@ func (h *subscriber) OnTrack(track receivedTrack) {
 
 ### Browser-Like Remote Streams
 
-When you want browser-style `ontrack` behavior on top of Pion, use
-`media.RemoteStreamRegistry`. It groups repeated `OnTrack` callbacks into
-stable `MediaStream` objects keyed by remote stream ID while still exposing the
-underlying decoded-track controls.
+When you want browser-style `ontrack` behavior, use
+`media.RemoteStreamRegistry`. It groups repeated track callbacks into stable
+`MediaStream` objects keyed by remote stream ID.
+
+The browser-like layer is backend-neutral:
+- `media.RemoteTrack`, `media.RemoteVideoTrack`, and `media.RemoteAudioTrack`
+  work across Pion and native `pkg/pc`
+- `media.PionRemoteVideoTrack` / `media.PionRemoteAudioTrack` add decoded-track
+  metadata and codec-switch controls
+- `media.PCRemoteVideoTrack` / `media.PCRemoteAudioTrack` expose the underlying
+  libwebrtc `pkg/pc` receiver objects when you need to drop lower
+
+Pion-backed receive flow:
 
 ```go
 import (
@@ -416,13 +425,41 @@ pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
         return
     }
 
-    video, ok := remoteTrack.(media.RemoteVideoTrack)
+    video, ok := remoteTrack.(media.PionRemoteVideoTrack)
     if !ok {
         return
     }
 
     _ = video.SetOnVideoFrame(func(f *frame.VideoFrame) {
         println("decoded frame", f.Width, f.Height, "from stream", streams[0].ID())
+    })
+})
+```
+
+Native libwebrtc-backed receive flow:
+
+```go
+import (
+    "github.com/thesyncim/libgowebrtc/pkg/frame"
+    "github.com/thesyncim/libgowebrtc/pkg/media"
+    "github.com/thesyncim/libgowebrtc/pkg/pc"
+)
+
+registry := media.NewRemoteStreamRegistry()
+
+peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamIDs []string) {
+    remoteTrack, streams, err := registry.BindPCTrack(track, receiver, streamIDs)
+    if err != nil {
+        return
+    }
+
+    video, ok := remoteTrack.(media.PCRemoteVideoTrack)
+    if !ok {
+        return
+    }
+
+    _ = video.SetOnVideoFrame(func(f *frame.VideoFrame) {
+        println("native frame", f.Width, f.Height, "streams", len(streams))
     })
 })
 ```

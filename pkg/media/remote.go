@@ -1,6 +1,7 @@
 package media
 
 import (
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -8,37 +9,77 @@ import (
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
+	"github.com/thesyncim/libgowebrtc/pkg/pc"
 	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
 // RemoteTrack mirrors the browser ontrack event's track surface while keeping
-// access to the live codec state coming from pionrecv.
+// track-to-stream association available for higher-level routing.
 type RemoteTrack interface {
 	MediaStreamTrack
 	StreamID() string
+	StreamIDs() []string
 	RID() string
+}
+
+// RemoteVideoTrack is a browser-like remote video track that emits decoded
+// frames regardless of whether the source is backed by Pion or libwebrtc.
+type RemoteVideoTrack interface {
+	RemoteTrack
+	SetOnVideoFrame(func(*frame.VideoFrame)) error
+}
+
+// RemoteAudioTrack is a browser-like remote audio track that emits decoded
+// frames regardless of whether the source is backed by Pion or libwebrtc.
+type RemoteAudioTrack interface {
+	RemoteTrack
+	SetOnAudioFrame(func(*frame.AudioFrame)) error
+}
+
+// RemoteCodecTrack exposes codec metadata for backends that can surface it.
+// Today this is implemented by the Pion-backed remote track wrappers.
+type RemoteCodecTrack interface {
+	RemoteTrack
 	Codec() codec.Type
 	CodecParameters() webrtc.RTPCodecParameters
 	PayloadType() webrtc.PayloadType
 }
 
-// RemoteVideoTrack is a browser-like remote video track that emits decoded
-// frames from a Pion remote track.
-type RemoteVideoTrack interface {
-	RemoteTrack
-	SetOnVideoFrame(func(*frame.VideoFrame)) error
+// PionRemoteVideoTrack is the rich Pion-backed variant of RemoteVideoTrack.
+type PionRemoteVideoTrack interface {
+	RemoteVideoTrack
+	RemoteCodecTrack
 	SetOnCodecChange(func(pionrecv.CodecChange))
 	RequestKeyframe() error
 	DecodedTrack() *pionrecv.DecodedTrack
 }
 
-// RemoteAudioTrack is a browser-like remote audio track that emits decoded
-// frames from a Pion remote track.
-type RemoteAudioTrack interface {
-	RemoteTrack
-	SetOnAudioFrame(func(*frame.AudioFrame)) error
+// PionRemoteAudioTrack is the rich Pion-backed variant of RemoteAudioTrack.
+type PionRemoteAudioTrack interface {
+	RemoteAudioTrack
+	RemoteCodecTrack
 	SetOnCodecChange(func(pionrecv.CodecChange))
 	DecodedTrack() *pionrecv.DecodedTrack
+}
+
+// PCRemoteTrack exposes the underlying native libwebrtc receiver objects when
+// callers need to drop down from the browser-like media layer.
+type PCRemoteTrack interface {
+	RemoteTrack
+	PCTrack() *pc.Track
+	PCReceiver() *pc.RTPReceiver
+}
+
+// PCRemoteVideoTrack is a browser-like remote video track backed by pkg/pc.
+type PCRemoteVideoTrack interface {
+	RemoteVideoTrack
+	PCRemoteTrack
+}
+
+// PCRemoteAudioTrack is a browser-like remote audio track backed by pkg/pc.
+type PCRemoteAudioTrack interface {
+	RemoteAudioTrack
+	PCRemoteTrack
 }
 
 // RemoteStreamRegistry groups incoming remote tracks into stable MediaStream
@@ -62,67 +103,121 @@ func (r *RemoteStreamRegistry) BindPionTrack(track *webrtc.TrackRemote, receiver
 	if err != nil {
 		return nil, nil, err
 	}
-	return r.bindDecodedTrack(&decodedTrackAdapter{decoded: decoded})
+	return r.bindSource(&decodedTrackAdapter{decoded: decoded})
 }
 
-func (r *RemoteStreamRegistry) bindDecodedTrack(decoded remoteDecodedTrack) (RemoteTrack, []*MediaStream, error) {
-	source, err := newRemoteDecodedSource(decoded)
+// BindPCTrack binds a libwebrtc-backed pkg/pc track event into the same
+// browser-like remote track and MediaStream model used by BindPionTrack.
+func (r *RemoteStreamRegistry) BindPCTrack(track *pc.Track, receiver *pc.RTPReceiver, streams []string) (RemoteTrack, []*MediaStream, error) {
+	if track == nil {
+		return nil, nil, ErrTrackNotFound
+	}
+	return r.bindSource(newPCTrackAdapter(track, receiver, streams))
+}
+
+// Close stops all bound remote tracks and forgets the cached MediaStreams.
+func (r *RemoteStreamRegistry) Close() {
+	r.mu.Lock()
+	streams := make([]*MediaStream, 0, len(r.streams))
+	for _, stream := range r.streams {
+		streams = append(streams, stream)
+	}
+	r.streams = make(map[string]*MediaStream)
+	r.mu.Unlock()
+
+	seenTracks := make(map[MediaStreamTrack]struct{})
+	for _, stream := range streams {
+		for _, track := range stream.GetTracks() {
+			if _, ok := seenTracks[track]; ok {
+				continue
+			}
+			seenTracks[track] = struct{}{}
+			track.Stop()
+		}
+	}
+}
+
+func (r *RemoteStreamRegistry) bindSource(source remoteFrameTrack) (RemoteTrack, []*MediaStream, error) {
+	input, err := newRemoteFrameSource(source)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	view := source.newTrack(decoded.ID())
+	view := input.newTrack(source.ID())
 	streams := r.streamsForTrack(view)
-	source.start()
+	input.start()
 	return view, streams, nil
 }
 
-func (r *RemoteStreamRegistry) streamsForTrack(track MediaStreamTrack) []*MediaStream {
-	remote, ok := track.(RemoteTrack)
-	if !ok || remote.StreamID() == "" {
+func (r *RemoteStreamRegistry) streamsForTrack(track RemoteTrack) []*MediaStream {
+	streamIDs := normalizeStreamIDs(track.StreamIDs())
+	if len(streamIDs) == 0 {
 		return []*MediaStream{}
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	stream, ok := r.streams[remote.StreamID()]
-	if !ok {
-		stream = newMediaStreamWithID(remote.StreamID())
-		r.streams[remote.StreamID()] = stream
+	streams := make([]*MediaStream, 0, len(streamIDs))
+	for _, streamID := range streamIDs {
+		stream, ok := r.streams[streamID]
+		if !ok {
+			stream = newMediaStreamWithID(streamID)
+			r.streams[streamID] = stream
+		}
+		if stream.GetTrackByID(track.ID()) == nil {
+			stream.AddTrack(track)
+		}
+		streams = append(streams, stream)
 	}
-	if stream.GetTrackByID(track.ID()) == nil {
-		stream.AddTrack(track)
-	}
-	return []*MediaStream{stream}
+	return streams
 }
 
-type remoteDecodedTrack interface {
+type remoteFrameTrack interface {
 	ID() string
-	StreamID() string
+	StreamIDs() []string
 	RID() string
-	Kind() webrtc.RTPCodecType
+	Kind() string
+	Label() string
+	SetOnVideoFrame(func(*frame.VideoFrame)) error
+	SetOnAudioFrame(func(*frame.AudioFrame)) error
+	Start(func()) error
+	Close() error
+}
+
+type remoteCodecTrack interface {
 	Codec() codec.Type
 	CodecParameters() webrtc.RTPCodecParameters
 	PayloadType() webrtc.PayloadType
-	RequestKeyframe() error
-	SetOnVideoFrame(func(*frame.VideoFrame)) error
-	SetOnAudioFrame(func(*frame.AudioFrame)) error
+}
+
+type remoteCodecChangeTrack interface {
 	SetOnCodecChange(func(pionrecv.CodecChange))
-	Run() error
-	Close() error
+}
+
+type remoteKeyframeTrack interface {
+	RequestKeyframe() error
+}
+
+type remoteDecodedTrack interface {
 	RawDecodedTrack() *pionrecv.DecodedTrack
+}
+
+type remotePCTrack interface {
+	RawPCTrack() *pc.Track
+	RawPCReceiver() *pc.RTPReceiver
 }
 
 type decodedTrackAdapter struct {
 	decoded *pionrecv.DecodedTrack
 }
 
-func (a *decodedTrackAdapter) ID() string                { return a.decoded.ID() }
-func (a *decodedTrackAdapter) StreamID() string          { return a.decoded.StreamID() }
-func (a *decodedTrackAdapter) RID() string               { return a.decoded.RID() }
-func (a *decodedTrackAdapter) Kind() webrtc.RTPCodecType { return a.decoded.Kind() }
-func (a *decodedTrackAdapter) Codec() codec.Type         { return a.decoded.Codec() }
+func (a *decodedTrackAdapter) ID() string          { return a.decoded.ID() }
+func (a *decodedTrackAdapter) StreamIDs() []string { return singleStreamIDs(a.decoded.StreamID()) }
+func (a *decodedTrackAdapter) RID() string         { return a.decoded.RID() }
+func (a *decodedTrackAdapter) Kind() string        { return a.decoded.Kind().String() }
+func (a *decodedTrackAdapter) Label() string       { return a.decoded.ID() }
+func (a *decodedTrackAdapter) Codec() codec.Type   { return a.decoded.Codec() }
 func (a *decodedTrackAdapter) CodecParameters() webrtc.RTPCodecParameters {
 	return a.decoded.CodecParameters()
 }
@@ -137,12 +232,62 @@ func (a *decodedTrackAdapter) SetOnAudioFrame(h func(*frame.AudioFrame)) error {
 func (a *decodedTrackAdapter) SetOnCodecChange(h func(pionrecv.CodecChange)) {
 	a.decoded.SetOnCodecChange(h)
 }
-func (a *decodedTrackAdapter) Run() error                              { return a.decoded.Run() }
+func (a *decodedTrackAdapter) Start(onEnd func()) error {
+	go func() {
+		_ = a.decoded.Run()
+		onEnd()
+	}()
+	return nil
+}
 func (a *decodedTrackAdapter) Close() error                            { return a.decoded.Close() }
 func (a *decodedTrackAdapter) RawDecodedTrack() *pionrecv.DecodedTrack { return a.decoded }
 
-type remoteDecodedSource struct {
-	decoded remoteDecodedTrack
+type pcTrackAdapter struct {
+	track    *pc.Track
+	receiver *pc.RTPReceiver
+	streams  []string
+}
+
+func newPCTrackAdapter(track *pc.Track, receiver *pc.RTPReceiver, streams []string) *pcTrackAdapter {
+	return &pcTrackAdapter{
+		track:    track,
+		receiver: receiver,
+		streams:  normalizeStreamIDs(streams),
+	}
+}
+
+func (a *pcTrackAdapter) ID() string          { return a.track.ID() }
+func (a *pcTrackAdapter) StreamIDs() []string { return append([]string(nil), a.streams...) }
+func (a *pcTrackAdapter) RID() string         { return "" }
+func (a *pcTrackAdapter) Kind() string        { return a.track.Kind() }
+func (a *pcTrackAdapter) Label() string {
+	if label := a.track.Label(); label != "" {
+		return label
+	}
+	return a.track.ID()
+}
+func (a *pcTrackAdapter) SetOnVideoFrame(h func(*frame.VideoFrame)) error {
+	return a.track.SetOnVideoFrame(h)
+}
+func (a *pcTrackAdapter) SetOnAudioFrame(h func(*frame.AudioFrame)) error {
+	return a.track.SetOnAudioFrame(h)
+}
+func (a *pcTrackAdapter) Start(func()) error { return nil }
+func (a *pcTrackAdapter) Close() error {
+	switch a.track.Kind() {
+	case "video":
+		return a.track.SetOnVideoFrame(nil)
+	case "audio":
+		return a.track.SetOnAudioFrame(nil)
+	default:
+		return nil
+	}
+}
+func (a *pcTrackAdapter) RawPCTrack() *pc.Track          { return a.track }
+func (a *pcTrackAdapter) RawPCReceiver() *pc.RTPReceiver { return a.receiver }
+
+type remoteFrameSource struct {
+	track remoteFrameTrack
 
 	mu      sync.Mutex
 	views   map[*remoteTrackView]struct{}
@@ -152,44 +297,64 @@ type remoteDecodedSource struct {
 	closeOnce sync.Once
 }
 
-func newRemoteDecodedSource(decoded remoteDecodedTrack) (*remoteDecodedSource, error) {
-	s := &remoteDecodedSource{
-		decoded: decoded,
-		views:   make(map[*remoteTrackView]struct{}),
+func newRemoteFrameSource(track remoteFrameTrack) (*remoteFrameSource, error) {
+	s := &remoteFrameSource{
+		track: track,
+		views: make(map[*remoteTrackView]struct{}),
 	}
 
-	switch decoded.Kind() {
-	case webrtc.RTPCodecTypeVideo:
-		if err := decoded.SetOnVideoFrame(s.handleVideoFrame); err != nil {
+	switch track.Kind() {
+	case "video":
+		if err := track.SetOnVideoFrame(s.handleVideoFrame); err != nil {
 			return nil, err
 		}
-	case webrtc.RTPCodecTypeAudio:
-		if err := decoded.SetOnAudioFrame(s.handleAudioFrame); err != nil {
+	case "audio":
+		if err := track.SetOnAudioFrame(s.handleAudioFrame); err != nil {
 			return nil, err
 		}
 	default:
 		return nil, pionrecv.ErrUnsupportedTrackKind
 	}
-	decoded.SetOnCodecChange(s.handleCodecChange)
+
+	if codecTrack, ok := track.(remoteCodecChangeTrack); ok {
+		codecTrack.SetOnCodecChange(s.handleCodecChange)
+	}
+
 	return s, nil
 }
 
-func (s *remoteDecodedSource) newTrack(id string) RemoteTrack {
+func (s *remoteFrameSource) newTrack(id string) RemoteTrack {
 	return s.wrapView(s.newView(id))
 }
 
-func (s *remoteDecodedSource) wrapView(view *remoteTrackView) RemoteTrack {
-	switch s.decoded.Kind() {
-	case webrtc.RTPCodecTypeVideo:
-		return &remoteVideoTrackView{remoteTrackView: view}
-	case webrtc.RTPCodecTypeAudio:
-		return &remoteAudioTrackView{remoteTrackView: view}
+func (s *remoteFrameSource) wrapView(view *remoteTrackView) RemoteTrack {
+	switch s.track.Kind() {
+	case "video":
+		base := &remoteVideoTrackView{remoteTrackView: view}
+		switch {
+		case supportsDecodedTrack(s.track):
+			return &pionRemoteVideoTrackView{remoteVideoTrackView: base}
+		case supportsPCTrack(s.track):
+			return &pcRemoteVideoTrackView{remoteVideoTrackView: base}
+		default:
+			return base
+		}
+	case "audio":
+		base := &remoteAudioTrackView{remoteTrackView: view}
+		switch {
+		case supportsDecodedTrack(s.track):
+			return &pionRemoteAudioTrackView{remoteAudioTrackView: base}
+		case supportsPCTrack(s.track):
+			return &pcRemoteAudioTrackView{remoteAudioTrackView: base}
+		default:
+			return base
+		}
 	default:
 		return view
 	}
 }
 
-func (s *remoteDecodedSource) newView(id string) *remoteTrackView {
+func (s *remoteFrameSource) newView(id string) *remoteTrackView {
 	if id == "" {
 		id = generateID()
 	}
@@ -197,7 +362,7 @@ func (s *remoteDecodedSource) newView(id string) *remoteTrackView {
 	view := &remoteTrackView{
 		source: s,
 		id:     id,
-		label:  s.decoded.ID(),
+		label:  s.track.Label(),
 	}
 	view.enabled.Store(true)
 	view.readyState.Store("live")
@@ -214,7 +379,7 @@ func (s *remoteDecodedSource) newView(id string) *remoteTrackView {
 	return view
 }
 
-func (s *remoteDecodedSource) start() {
+func (s *remoteFrameSource) start() {
 	s.mu.Lock()
 	if s.started {
 		s.mu.Unlock()
@@ -223,13 +388,12 @@ func (s *remoteDecodedSource) start() {
 	s.started = true
 	s.mu.Unlock()
 
-	go func() {
-		_ = s.decoded.Run()
+	if err := s.track.Start(s.end); err != nil {
 		s.end()
-	}()
+	}
 }
 
-func (s *remoteDecodedSource) end() {
+func (s *remoteFrameSource) end() {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -245,10 +409,10 @@ func (s *remoteDecodedSource) end() {
 	for _, view := range views {
 		view.readyState.Store("ended")
 	}
-	s.closeDecoded()
+	s.closeTrack()
 }
 
-func (s *remoteDecodedSource) detach(view *remoteTrackView) {
+func (s *remoteFrameSource) detach(view *remoteTrackView) {
 	s.mu.Lock()
 	delete(s.views, view)
 	remaining := len(s.views)
@@ -256,17 +420,17 @@ func (s *remoteDecodedSource) detach(view *remoteTrackView) {
 	s.mu.Unlock()
 
 	if remaining == 0 && !closed {
-		s.closeDecoded()
+		s.closeTrack()
 	}
 }
 
-func (s *remoteDecodedSource) closeDecoded() {
+func (s *remoteFrameSource) closeTrack() {
 	s.closeOnce.Do(func() {
-		_ = s.decoded.Close()
+		_ = s.track.Close()
 	})
 }
 
-func (s *remoteDecodedSource) snapshotViews() []*remoteTrackView {
+func (s *remoteFrameSource) snapshotViews() []*remoteTrackView {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -277,7 +441,7 @@ func (s *remoteDecodedSource) snapshotViews() []*remoteTrackView {
 	return views
 }
 
-func (s *remoteDecodedSource) handleVideoFrame(f *frame.VideoFrame) {
+func (s *remoteFrameSource) handleVideoFrame(f *frame.VideoFrame) {
 	for _, view := range s.snapshotViews() {
 		if !view.shouldDispatch() {
 			continue
@@ -291,7 +455,7 @@ func (s *remoteDecodedSource) handleVideoFrame(f *frame.VideoFrame) {
 	}
 }
 
-func (s *remoteDecodedSource) handleAudioFrame(f *frame.AudioFrame) {
+func (s *remoteFrameSource) handleAudioFrame(f *frame.AudioFrame) {
 	for _, view := range s.snapshotViews() {
 		if !view.shouldDispatch() {
 			continue
@@ -305,7 +469,7 @@ func (s *remoteDecodedSource) handleAudioFrame(f *frame.AudioFrame) {
 	}
 }
 
-func (s *remoteDecodedSource) handleCodecChange(change pionrecv.CodecChange) {
+func (s *remoteFrameSource) handleCodecChange(change pionrecv.CodecChange) {
 	for _, view := range s.snapshotViews() {
 		if view.ReadyState() != "live" {
 			continue
@@ -320,7 +484,7 @@ func (s *remoteDecodedSource) handleCodecChange(change pionrecv.CodecChange) {
 }
 
 type remoteTrackView struct {
-	source *remoteDecodedSource
+	source *remoteFrameSource
 	id     string
 	label  string
 
@@ -336,13 +500,15 @@ type remoteTrackView struct {
 	stopOnce sync.Once
 }
 
-func (t *remoteTrackView) ID() string         { return t.id }
-func (t *remoteTrackView) Kind() string       { return t.source.decoded.Kind().String() }
-func (t *remoteTrackView) Label() string      { return t.label }
-func (t *remoteTrackView) Enabled() bool      { return t.enabled.Load() }
-func (t *remoteTrackView) SetEnabled(v bool)  { t.enabled.Store(v) }
-func (t *remoteTrackView) Muted() bool        { return t.muted.Load() }
-func (t *remoteTrackView) ReadyState() string { return t.readyState.Load().(string) }
+func (t *remoteTrackView) ID() string        { return t.id }
+func (t *remoteTrackView) Kind() string      { return t.source.track.Kind() }
+func (t *remoteTrackView) Label() string     { return t.label }
+func (t *remoteTrackView) Enabled() bool     { return t.enabled.Load() }
+func (t *remoteTrackView) SetEnabled(v bool) { t.enabled.Store(v) }
+func (t *remoteTrackView) Muted() bool       { return t.muted.Load() }
+func (t *remoteTrackView) ReadyState() string {
+	return t.readyState.Load().(string)
+}
 
 func (t *remoteTrackView) Stop() {
 	t.stopOnce.Do(func() {
@@ -355,18 +521,11 @@ func (t *remoteTrackView) Clone() MediaStreamTrack {
 	return t.source.newTrack(generateID())
 }
 
-func (t *remoteTrackView) StreamID() string  { return t.source.decoded.StreamID() }
-func (t *remoteTrackView) RID() string       { return t.source.decoded.RID() }
-func (t *remoteTrackView) Codec() codec.Type { return t.source.decoded.Codec() }
-func (t *remoteTrackView) CodecParameters() webrtc.RTPCodecParameters {
-	return t.source.decoded.CodecParameters()
+func (t *remoteTrackView) StreamID() string { return firstStreamID(t.StreamIDs()) }
+func (t *remoteTrackView) StreamIDs() []string {
+	return normalizeStreamIDs(t.source.track.StreamIDs())
 }
-func (t *remoteTrackView) PayloadType() webrtc.PayloadType { return t.source.decoded.PayloadType() }
-func (t *remoteTrackView) SetOnCodecChange(handler func(pionrecv.CodecChange)) {
-	t.handlerMu.Lock()
-	defer t.handlerMu.Unlock()
-	t.onCodecChange = handler
-}
+func (t *remoteTrackView) RID() string { return t.source.track.RID() }
 
 func (t *remoteTrackView) shouldDispatch() bool {
 	return t.Enabled() && t.ReadyState() == "live"
@@ -385,14 +544,6 @@ func (t *remoteVideoTrackView) SetOnVideoFrame(handler func(*frame.VideoFrame)) 
 	return nil
 }
 
-func (t *remoteVideoTrackView) RequestKeyframe() error {
-	return t.source.decoded.RequestKeyframe()
-}
-
-func (t *remoteVideoTrackView) DecodedTrack() *pionrecv.DecodedTrack {
-	return t.source.decoded.RawDecodedTrack()
-}
-
 type remoteAudioTrackView struct {
 	*remoteTrackView
 }
@@ -404,9 +555,137 @@ func (t *remoteAudioTrackView) SetOnAudioFrame(handler func(*frame.AudioFrame)) 
 	return nil
 }
 
-func (t *remoteAudioTrackView) DecodedTrack() *pionrecv.DecodedTrack {
-	return t.source.decoded.RawDecodedTrack()
+type pionRemoteVideoTrackView struct {
+	*remoteVideoTrackView
+}
+
+func (t *pionRemoteVideoTrackView) Codec() codec.Type {
+	return t.source.track.(remoteCodecTrack).Codec()
+}
+
+func (t *pionRemoteVideoTrackView) CodecParameters() webrtc.RTPCodecParameters {
+	return t.source.track.(remoteCodecTrack).CodecParameters()
+}
+
+func (t *pionRemoteVideoTrackView) PayloadType() webrtc.PayloadType {
+	return t.source.track.(remoteCodecTrack).PayloadType()
+}
+
+func (t *pionRemoteVideoTrackView) SetOnCodecChange(handler func(pionrecv.CodecChange)) {
+	t.handlerMu.Lock()
+	defer t.handlerMu.Unlock()
+	t.onCodecChange = handler
+}
+
+func (t *pionRemoteVideoTrackView) RequestKeyframe() error {
+	return t.source.track.(remoteKeyframeTrack).RequestKeyframe()
+}
+
+func (t *pionRemoteVideoTrackView) DecodedTrack() *pionrecv.DecodedTrack {
+	return t.source.track.(remoteDecodedTrack).RawDecodedTrack()
+}
+
+type pionRemoteAudioTrackView struct {
+	*remoteAudioTrackView
+}
+
+func (t *pionRemoteAudioTrackView) Codec() codec.Type {
+	return t.source.track.(remoteCodecTrack).Codec()
+}
+
+func (t *pionRemoteAudioTrackView) CodecParameters() webrtc.RTPCodecParameters {
+	return t.source.track.(remoteCodecTrack).CodecParameters()
+}
+
+func (t *pionRemoteAudioTrackView) PayloadType() webrtc.PayloadType {
+	return t.source.track.(remoteCodecTrack).PayloadType()
+}
+
+func (t *pionRemoteAudioTrackView) SetOnCodecChange(handler func(pionrecv.CodecChange)) {
+	t.handlerMu.Lock()
+	defer t.handlerMu.Unlock()
+	t.onCodecChange = handler
+}
+
+func (t *pionRemoteAudioTrackView) DecodedTrack() *pionrecv.DecodedTrack {
+	return t.source.track.(remoteDecodedTrack).RawDecodedTrack()
+}
+
+type pcRemoteVideoTrackView struct {
+	*remoteVideoTrackView
+}
+
+func (t *pcRemoteVideoTrackView) PCTrack() *pc.Track {
+	return t.source.track.(remotePCTrack).RawPCTrack()
+}
+
+func (t *pcRemoteVideoTrackView) PCReceiver() *pc.RTPReceiver {
+	return t.source.track.(remotePCTrack).RawPCReceiver()
+}
+
+type pcRemoteAudioTrackView struct {
+	*remoteAudioTrackView
+}
+
+func (t *pcRemoteAudioTrackView) PCTrack() *pc.Track {
+	return t.source.track.(remotePCTrack).RawPCTrack()
+}
+
+func (t *pcRemoteAudioTrackView) PCReceiver() *pc.RTPReceiver {
+	return t.source.track.(remotePCTrack).RawPCReceiver()
 }
 
 var _ RemoteVideoTrack = (*remoteVideoTrackView)(nil)
 var _ RemoteAudioTrack = (*remoteAudioTrackView)(nil)
+var _ PionRemoteVideoTrack = (*pionRemoteVideoTrackView)(nil)
+var _ PionRemoteAudioTrack = (*pionRemoteAudioTrackView)(nil)
+var _ PCRemoteVideoTrack = (*pcRemoteVideoTrackView)(nil)
+var _ PCRemoteAudioTrack = (*pcRemoteAudioTrackView)(nil)
+
+func supportsDecodedTrack(track remoteFrameTrack) bool {
+	_, ok := track.(remoteDecodedTrack)
+	return ok
+}
+
+func supportsPCTrack(track remoteFrameTrack) bool {
+	_, ok := track.(remotePCTrack)
+	return ok
+}
+
+func normalizeStreamIDs(streamIDs []string) []string {
+	if len(streamIDs) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(streamIDs))
+	out := make([]string, 0, len(streamIDs))
+	for _, streamID := range streamIDs {
+		streamID = strings.TrimSpace(streamID)
+		if streamID == "" {
+			continue
+		}
+		if _, ok := seen[streamID]; ok {
+			continue
+		}
+		seen[streamID] = struct{}{}
+		out = append(out, streamID)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func singleStreamIDs(streamID string) []string {
+	if streamID == "" {
+		return nil
+	}
+	return []string{streamID}
+}
+
+func firstStreamID(streamIDs []string) string {
+	if len(streamIDs) == 0 {
+		return ""
+	}
+	return streamIDs[0]
+}
