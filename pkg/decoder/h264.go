@@ -93,15 +93,7 @@ func (d *h264Decoder) DecodeInto(src []byte, dst *frame.VideoFrame, timestamp ui
 		return normalizeVideoDecodeError(err, isKeyframe)
 	}
 
-	dst.Width = width
-	dst.Height = height
-	dst.Stride[0] = yStride
-	dst.Stride[1] = uStride
-	dst.Stride[2] = vStride
-	dst.PTS = timestamp
-	dst.Format = frame.PixelFormatI420
-
-	return nil
+	return applyVideoDecodeOutput(dst, width, height, yStride, uStride, vStride, timestamp)
 }
 
 // isAnnexB checks if the data starts with an Annex B start code.

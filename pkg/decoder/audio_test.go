@@ -32,13 +32,13 @@ func TestOpusDecoder_DecodeEncodedFrame(t *testing.T) {
 	srcFrame := testutil.CreateSilentAudioFrame(48000, 2, 960)
 	encBuf := make([]byte, enc.MaxEncodedSize())
 
-	n, err := enc.EncodeInto(srcFrame, encBuf)
+	n, err := encodeAudioUntilOutput(t, enc, srcFrame, encBuf)
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
 
 	dstFrame := frame.NewAudioFrameS16(48000, 2, dec.MaxSamplesPerFrame())
-	samples, err := dec.DecodeInto(encBuf[:n], dstFrame)
+	samples, err := decodeAudioUntilOutput(t, dec, encBuf[:n], dstFrame)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -71,12 +71,12 @@ func TestOpusDecoder_DecodeSequence(t *testing.T) {
 	dstFrame := frame.NewAudioFrameS16(48000, 2, dec.MaxSamplesPerFrame())
 
 	for i := 0; i < 50; i++ {
-		n, err := enc.EncodeInto(srcFrame, encBuf)
+		n, err := encodeAudioUntilOutput(t, enc, srcFrame, encBuf)
 		if err != nil {
 			t.Fatalf("encode frame %d: %v", i, err)
 		}
 
-		samples, err := dec.DecodeInto(encBuf[:n], dstFrame)
+		samples, err := decodeAudioUntilOutput(t, dec, encBuf[:n], dstFrame)
 		if err != nil {
 			t.Fatalf("decode frame %d: %v", i, err)
 		}
@@ -180,13 +180,13 @@ func TestOpusDecoder_DifferentConfigs(t *testing.T) {
 			srcFrame := testutil.CreateSilentAudioFrame(cfg.sampleRate, cfg.channels, samplesPerFrame)
 			encBuf := make([]byte, enc.MaxEncodedSize())
 
-			n, err := enc.EncodeInto(srcFrame, encBuf)
+			n, err := encodeAudioUntilOutput(t, enc, srcFrame, encBuf)
 			if err != nil {
 				t.Fatalf("encode: %v", err)
 			}
 
 			dstFrame := frame.NewAudioFrameS16(cfg.sampleRate, cfg.channels, dec.MaxSamplesPerFrame())
-			samples, err := dec.DecodeInto(encBuf[:n], dstFrame)
+			samples, err := decodeAudioUntilOutput(t, dec, encBuf[:n], dstFrame)
 			if err != nil {
 				t.Fatalf("decode: %v", err)
 			}
@@ -212,7 +212,10 @@ func TestOpusDecoder_ConcurrentDecode(t *testing.T) {
 
 	srcFrame := testutil.CreateSilentAudioFrame(48000, 2, 960)
 	encBuf := make([]byte, enc.MaxEncodedSize())
-	n, _ := enc.EncodeInto(srcFrame, encBuf)
+	n, err := encodeAudioUntilOutput(t, enc, srcFrame, encBuf)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
 	encodedData := make([]byte, n)
 	copy(encodedData, encBuf[:n])
 	enc.Close()
@@ -235,7 +238,7 @@ func TestOpusDecoder_ConcurrentDecode(t *testing.T) {
 			defer wg.Done()
 			dstFrame := frame.NewAudioFrameS16(48000, 2, dec.MaxSamplesPerFrame())
 			_, err := dec.DecodeInto(encodedData, dstFrame)
-			if err != nil {
+			if err != nil && err != ErrNeedMoreData {
 				errCh <- err
 			}
 		}()
