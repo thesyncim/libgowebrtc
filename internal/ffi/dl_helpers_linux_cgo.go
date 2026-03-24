@@ -36,7 +36,7 @@ func dlsymLibrary(handle uintptr, name string) (uintptr, error) {
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
 
-	symbol := C.dlsym(unsafe.Pointer(handle), cname)
+	symbol := C.dlsym(UnsafePointerFromC(handle), cname)
 	if symbol == nil {
 		return 0, fmt.Errorf("dlsym: %s", C.GoString(C.dlerror()))
 	}
@@ -47,7 +47,7 @@ func dlcloseLibrary(handle uintptr) error {
 	if handle == 0 {
 		return nil
 	}
-	if rc := C.dlclose(unsafe.Pointer(handle)); rc != 0 {
+	if rc := C.dlclose(UnsafePointerFromC(handle)); rc != 0 {
 		return fmt.Errorf("dlclose: %s", C.GoString(C.dlerror()))
 	}
 	return nil

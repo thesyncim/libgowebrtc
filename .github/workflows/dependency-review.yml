@@ -1,0 +1,38 @@
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check dependency graph support
+        id: dependency-graph
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          enabled="$(
+            curl -fsSL \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/${{ github.repository }}" |
+              jq -r 'if (.security_and_analysis.dependency_graph.status? // "") == "enabled" then "true" else "false" end'
+          )"
+          echo "enabled=${enabled}" >> "$GITHUB_OUTPUT"
+          if [[ "${enabled}" != "true" ]]; then
+            echo "::warning::Dependency graph is not enabled for this repository; skipping dependency review."
+          fi
+
+      - name: Review dependency changes
+        if: steps.dependency-graph.outputs.enabled == 'true'
+        uses: actions/dependency-review-action@v4

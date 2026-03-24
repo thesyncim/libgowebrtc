@@ -11,7 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
 var (
@@ -70,8 +69,8 @@ var (
 // either func_bind_purego.go or func_bind_cgo.go depending on build tags.
 
 // LoadLibrary loads the libwebrtc_shim shared library.
-// It searches in the following locations:
-// 1. Path specified by LIBWEBRTC_SHIM_PATH environment variable
+// It resolves the library in the following order:
+// 1. Exact path specified by LIBWEBRTC_SHIM_PATH (authoritative if set)
 // 2. ./lib/{os}_{arch}/ (module-relative)
 // 3. Auto-download from GitHub Releases (unless disabled)
 // 4. System library paths
@@ -180,7 +179,7 @@ func ShimVersion() string {
 	if ptr == 0 {
 		return ""
 	}
-	return GoString(unsafe.Pointer(ptr))
+	return GoStringFromC(ptr)
 }
 
 // LibWebRTCVersion returns the libwebrtc version the shim was built with.
@@ -193,7 +192,7 @@ func LibWebRTCVersion() string {
 	if ptr == 0 {
 		return ""
 	}
-	return GoString(unsafe.Pointer(ptr))
+	return GoStringFromC(ptr)
 }
 
 // CheckVersion verifies the shim version matches what this Go code expects.
@@ -215,11 +214,23 @@ func CheckVersion() error {
 	return nil
 }
 
-func findLocalLibrary() (string, bool) {
-	// Check environment variable first
+func findLocalLibrary() (string, bool, error) {
+	// An explicit shim path is authoritative. If it is configured but invalid,
+	// fail fast instead of silently falling back to a different library.
 	if path := os.Getenv("LIBWEBRTC_SHIM_PATH"); path != "" {
-		if _, err := os.Stat(path); err == nil {
-			return path, true
+		resolvedPath := path
+		if absPath, err := filepath.Abs(path); err == nil {
+			resolvedPath = absPath
+		}
+
+		info, err := os.Stat(resolvedPath)
+		switch {
+		case err == nil && !info.IsDir():
+			return resolvedPath, true, nil
+		case err == nil && info.IsDir():
+			return resolvedPath, false, fmt.Errorf("%w: LIBWEBRTC_SHIM_PATH must point to a file, got directory %s", ErrLibraryNotFound, resolvedPath)
+		case err != nil:
+			return resolvedPath, false, fmt.Errorf("%w: inspect LIBWEBRTC_SHIM_PATH %s: %w", ErrLibraryNotFound, resolvedPath, err)
 		}
 	}
 
@@ -262,11 +273,11 @@ func findLocalLibrary() (string, bool) {
 	for _, path := range searchPaths {
 		if _, err := os.Stat(path); err == nil {
 			absPath, _ := filepath.Abs(path)
-			return absPath, true
+			return absPath, true, nil
 		}
 	}
 
-	return "", false
+	return "", false, nil
 }
 
 func getLibraryName() string {

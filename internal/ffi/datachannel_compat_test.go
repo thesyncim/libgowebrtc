@@ -2,7 +2,6 @@ package ffi
 
 import (
 	"testing"
-	"unsafe"
 )
 
 func TestPeerConnectionCreateDataChannelSelectsAvailableShimPath(t *testing.T) {
@@ -30,9 +29,13 @@ func TestPeerConnectionCreateDataChannelSelectsAvailableShimPath(t *testing.T) {
 		var gotLabel string
 		var gotProtocol string
 		shimPeerConnectionCreateDataChannelEx = func(params uintptr) uintptr {
-			got = *(*shimPeerConnectionCreateDataChannelExParams)(unsafe.Pointer(params))
-			gotLabel = GoString(unsafe.Pointer(got.Label))
-			gotProtocol = GoString(unsafe.Pointer(got.Protocol))
+			var ok bool
+			got, ok = CopyStructFromC[shimPeerConnectionCreateDataChannelExParams](params)
+			if !ok {
+				t.Fatal("expected params to be readable")
+			}
+			gotLabel = GoStringFromC(got.Label)
+			gotProtocol = GoStringFromC(got.Protocol)
 			return 123
 		}
 
@@ -74,9 +77,13 @@ func TestPeerConnectionCreateDataChannelSelectsAvailableShimPath(t *testing.T) {
 		var gotLabel string
 		var gotProtocol string
 		shimPeerConnectionCreateDataChannel = func(params uintptr) uintptr {
-			got = *(*shimPeerConnectionCreateDataChannelParams)(unsafe.Pointer(params))
-			gotLabel = GoString(unsafe.Pointer(got.Label))
-			gotProtocol = GoString(unsafe.Pointer(got.Protocol))
+			var ok bool
+			got, ok = CopyStructFromC[shimPeerConnectionCreateDataChannelParams](params)
+			if !ok {
+				t.Fatal("expected params to be readable")
+			}
+			gotLabel = GoStringFromC(got.Label)
+			gotProtocol = GoStringFromC(got.Protocol)
 			return 456
 		}
 		shimPeerConnectionCreateDataChannelEx = nil

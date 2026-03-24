@@ -150,12 +150,11 @@ SHIM_EXPORT int shim_rtp_sender_get_stats(ShimRTPSenderGetStatsParams* params) {
     }
 
     memset(&params->out_stats, 0, sizeof(ShimRTCStats));
-    // TODO: Implement stats collection
-    return SHIM_OK;
+    return SHIM_ERROR_NOT_SUPPORTED;
 }
 
 SHIM_EXPORT void shim_rtp_sender_set_on_rtcp_feedback(ShimRTPSenderSetOnRTCPFeedbackParams* params) {
-    // TODO: Implement RTCP feedback notification
+    // Unsupported in the current shim. The Go layer surfaces ErrNotSupported.
     (void)params;
 }
 

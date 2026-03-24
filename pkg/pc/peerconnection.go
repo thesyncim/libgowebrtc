@@ -26,6 +26,9 @@ var (
 	ErrSetDescriptionFailed  = errors.New("set description failed")
 	ErrAddICECandidateFailed = errors.New("add ice candidate failed")
 	ErrTrackNotFound         = errors.New("track not found")
+	// ErrNotSupported reports APIs that are intentionally exposed but not yet
+	// backed by the current shim/runtime implementation.
+	ErrNotSupported = ffi.ErrNotSupported
 )
 
 // Constants
@@ -398,6 +401,7 @@ func (s *RTPSender) GetParameters() RTPSendParameters {
 }
 
 // GetStats gets statistics for this sender.
+// The current shim does not implement sender stats and returns ErrNotSupported.
 func (s *RTPSender) GetStats() (*RTCStats, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -451,15 +455,16 @@ func (s *RTPSender) GetActiveLayers() (spatial, temporal int, err error) {
 }
 
 // SetOnRTCPFeedback sets a callback for RTCP feedback events.
-func (s *RTPSender) SetOnRTCPFeedback(cb func(feedbackType RTCPFeedbackType, ssrc uint32)) {
+// The current shim does not implement this surface and returns ErrNotSupported.
+func (s *RTPSender) SetOnRTCPFeedback(cb func(feedbackType RTCPFeedbackType, ssrc uint32)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.handle == 0 {
-		return
+		return errors.New("sender not initialized")
 	}
 
-	ffi.RTPSenderSetOnRTCPFeedback(s.handle, func(feedbackType int, ssrc uint32) {
+	return ffi.RTPSenderSetOnRTCPFeedback(s.handle, func(feedbackType int, ssrc uint32) {
 		cb(RTCPFeedbackType(feedbackType), ssrc)
 	})
 }
@@ -2421,14 +2426,16 @@ type BandwidthEstimate struct {
 }
 
 // SetOnBandwidthEstimate sets a callback for bandwidth estimation updates from libwebrtc.
-// This exposes libwebrtc's internal BWE (TWCC/GCC) for observability or for wiring
-// to pkg/track tracks when using Pion interop.
-func (pc *PeerConnection) SetOnBandwidthEstimate(cb func(*BandwidthEstimate)) {
-	if pc.closed.Load() || pc.handle == 0 {
-		return
+// The current shim does not implement this surface and returns ErrNotSupported.
+func (pc *PeerConnection) SetOnBandwidthEstimate(cb func(*BandwidthEstimate)) error {
+	if pc.closed.Load() {
+		return ErrPeerConnectionClosed
+	}
+	if pc.handle == 0 {
+		return errors.New("peer connection not initialized")
 	}
 
-	ffi.PeerConnectionSetOnBandwidthEstimate(pc.handle, func(bwe *ffi.BandwidthEstimate) {
+	return ffi.PeerConnectionSetOnBandwidthEstimate(pc.handle, func(bwe *ffi.BandwidthEstimate) {
 		if cb != nil && bwe != nil {
 			cb(&BandwidthEstimate{
 				TimestampUs:      bwe.TimestampUs,
@@ -2444,14 +2451,21 @@ func (pc *PeerConnection) SetOnBandwidthEstimate(cb func(*BandwidthEstimate)) {
 }
 
 // GetCurrentBandwidthEstimate returns the current bandwidth estimate from libwebrtc.
-func (pc *PeerConnection) GetCurrentBandwidthEstimate() *BandwidthEstimate {
-	if pc.closed.Load() || pc.handle == 0 {
-		return nil
+// The current shim does not implement this surface and returns ErrNotSupported.
+func (pc *PeerConnection) GetCurrentBandwidthEstimate() (*BandwidthEstimate, error) {
+	if pc.closed.Load() {
+		return nil, ErrPeerConnectionClosed
+	}
+	if pc.handle == 0 {
+		return nil, errors.New("peer connection not initialized")
 	}
 
 	bwe, err := ffi.PeerConnectionGetBandwidthEstimate(pc.handle)
-	if err != nil || bwe == nil {
-		return nil
+	if err != nil {
+		return nil, err
+	}
+	if bwe == nil {
+		return nil, ErrNotSupported
 	}
 
 	return &BandwidthEstimate{
@@ -2462,5 +2476,5 @@ func (pc *PeerConnection) GetCurrentBandwidthEstimate() *BandwidthEstimate {
 		PacingRateBps:    bwe.PacingRateBps,
 		CongestionWindow: bwe.CongestionWindow,
 		LossRate:         bwe.LossRate,
-	}
+	}, nil
 }

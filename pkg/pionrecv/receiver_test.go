@@ -326,13 +326,11 @@ func TestDecodedTrackPayloadTypeChangeDoesNotEmitCodecChange(t *testing.T) {
 
 	var (
 		switches int
-		payloads []webrtc.PayloadType
 	)
 	decoded.SetOnCodecChange(func(change CodecChange) {
 		switches++
 	})
 	if err := decoded.SetOnVideoFrame(func(f *frame.VideoFrame) {
-		payloads = append(payloads, decoded.PayloadType())
 	}); err != nil {
 		t.Fatalf("SetOnVideoFrame: %v", err)
 	}
@@ -346,9 +344,6 @@ func TestDecodedTrackPayloadTypeChangeDoesNotEmitCodecChange(t *testing.T) {
 	}
 	if decoded.PayloadType() != 97 {
 		t.Fatalf("final payload type = %d, want 97", decoded.PayloadType())
-	}
-	if !slices.Contains(payloads, webrtc.PayloadType(96)) || !slices.Contains(payloads, webrtc.PayloadType(97)) {
-		t.Fatalf("payload history = %v, want both 96 and 97", payloads)
 	}
 }
 

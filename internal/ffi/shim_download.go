@@ -60,7 +60,11 @@ var (
 )
 
 func resolveLibrary() (string, error, error) {
-	if path, ok := findLocalLibrary(); ok {
+	path, ok, err := findLocalLibrary()
+	if err != nil {
+		return path, nil, err
+	}
+	if ok {
 		return path, nil, nil
 	}
 
@@ -68,7 +72,7 @@ func resolveLibrary() (string, error, error) {
 		return getLibraryName(), nil, nil
 	}
 
-	path, err := downloadShim()
+	path, err = downloadShim()
 	if err != nil {
 		return getLibraryName(), err, nil
 	}
@@ -222,6 +226,11 @@ func shimPlatformKeyFor(goos, goarch string) (string, error) {
 			return "linux_arm64", nil
 		case "amd64":
 			return "linux_amd64", nil
+		}
+	case "windows":
+		switch goarch {
+		case "amd64":
+			return "windows_amd64", nil
 		}
 	}
 	return "", fmt.Errorf("unsupported platform for auto-download: %s/%s", goos, goarch)

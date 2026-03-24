@@ -182,6 +182,7 @@ SHIM_EXPORT void shim_data_channel_destroy(ShimDataChannel* dc) {
     std::lock_guard<std::mutex> lock(g_dc_registry_mutex);
     auto it = g_dc_registry.find(channel);
     if (it != g_dc_registry.end()) {
+        channel->UnregisterObserver();
         auto* wrapper = it->second.get();
         g_dc_observers.erase(wrapper);
         g_dc_registry.erase(it);

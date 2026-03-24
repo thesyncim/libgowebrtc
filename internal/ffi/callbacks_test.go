@@ -102,25 +102,105 @@ func TestDataChannelAndBandwidthEstimateRegistries(t *testing.T) {
 		t.Fatal("data channel close callback was not removed")
 	}
 
-	PeerConnectionSetOnBandwidthEstimate(pc, func(*BandwidthEstimate) {})
-	if bweCallbacks[pc] == nil {
-		t.Fatal("bandwidth estimate callback was not registered")
+	if err := PeerConnectionSetOnBandwidthEstimate(pc, func(*BandwidthEstimate) {}); !errors.Is(err, ErrNotSupported) {
+		t.Fatalf("PeerConnectionSetOnBandwidthEstimate() error = %v, want %v", err, ErrNotSupported)
 	}
-	if !bweInitialized || bweCallbackPtr == 0 {
-		t.Fatal("bandwidth estimate callback was not initialized")
+	if _, ok := bweCallbacks[pc]; ok {
+		t.Fatal("bandwidth estimate callback should not be registered when unsupported")
 	}
-
-	bwe, err := PeerConnectionGetBandwidthEstimate(pc)
-	if err != nil {
-		t.Fatalf("PeerConnectionGetBandwidthEstimate: %v", err)
-	}
-	if bwe == nil {
-		t.Fatal("PeerConnectionGetBandwidthEstimate() returned nil")
+	if _, err := PeerConnectionGetBandwidthEstimate(pc); !errors.Is(err, ErrNotSupported) {
+		t.Fatalf("PeerConnectionGetBandwidthEstimate() error = %v, want %v", err, ErrNotSupported)
 	}
 
 	UnregisterBandwidthEstimateCallback(pc)
 	if _, ok := bweCallbacks[pc]; ok {
 		t.Fatal("bandwidth estimate callback was not removed")
+	}
+}
+
+func TestPeerConnectionDataChannelCallbackChurnRepeated(t *testing.T) {
+	release := withFFITestSerialExecution(t)
+	defer release()
+
+	t.Cleanup(ResetForTesting)
+
+	for i := 0; i < 20; i++ {
+		ResetForTesting()
+
+		pc, err := CreatePeerConnection(&PeerConnectionConfig{})
+		if err != nil {
+			t.Fatalf("iteration %d: CreatePeerConnection: %v", i, err)
+		}
+
+		dc := PeerConnectionCreateDataChannel(pc, "ffi-churn", true, -1, -1, "", false, -1)
+		if dc == 0 {
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: PeerConnectionCreateDataChannel returned 0", i)
+		}
+
+		DataChannelSetOnMessage(dc, func(data []byte, isBinary bool) {})
+		DataChannelSetOnOpen(dc, func() {})
+		DataChannelSetOnClose(dc, func() {})
+		PeerConnectionSetOnConnectionStateChange(pc, func(state int) {})
+		PeerConnectionSetOnDataChannel(pc, func(dc uintptr) {})
+		PeerConnectionSetOnSignalingStateChange(pc, func(state int) {})
+		PeerConnectionSetOnNegotiationNeeded(pc, func() {})
+
+		if dcMessageCallbacks[dc] == nil || dcOpenCallbacks[dc] == nil || dcCloseCallbacks[dc] == nil {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: expected data channel callbacks to be registered", i)
+		}
+		if connectionStateCallbacks[pc] == nil || onDataChannelCallbacks[pc] == nil || signalingStateCallbacks[pc] == nil || negotiationNeededCallbacks[pc] == nil {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: expected peer connection callbacks to be registered", i)
+		}
+
+		UnregisterDataChannelCallbacks(dc)
+		UnregisterConnectionStateCallback(pc)
+		UnregisterOnDataChannelCallback(pc)
+		UnregisterSignalingStateCallback(pc)
+		UnregisterNegotiationNeededCallback(pc)
+
+		if _, ok := dcMessageCallbacks[dc]; ok {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: message callback was not removed", i)
+		}
+		if _, ok := dcOpenCallbacks[dc]; ok {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: open callback was not removed", i)
+		}
+		if _, ok := dcCloseCallbacks[dc]; ok {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: close callback was not removed", i)
+		}
+		if _, ok := connectionStateCallbacks[pc]; ok {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: connection state callback was not removed", i)
+		}
+		if _, ok := onDataChannelCallbacks[pc]; ok {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: on data channel callback was not removed", i)
+		}
+		if _, ok := signalingStateCallbacks[pc]; ok {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: signaling state callback was not removed", i)
+		}
+		if _, ok := negotiationNeededCallbacks[pc]; ok {
+			DataChannelDestroy(dc)
+			PeerConnectionDestroy(pc)
+			t.Fatalf("iteration %d: negotiation callback was not removed", i)
+		}
+
+		PeerConnectionClose(pc)
+		PeerConnectionDestroy(pc)
 	}
 }
 
@@ -434,12 +514,14 @@ func TestPeerConnectionNativeWrapperCoverage(t *testing.T) {
 		t.Fatalf("RTPSenderSetParameters: %v", err)
 	}
 
-	if _, err := RTPSenderGetStats(videoSender); err != nil {
-		t.Fatalf("RTPSenderGetStats: %v", err)
+	if _, err := RTPSenderGetStats(videoSender); !errors.Is(err, ErrNotSupported) {
+		t.Fatalf("RTPSenderGetStats() error = %v, want %v", err, ErrNotSupported)
 	}
-	RTPSenderSetOnRTCPFeedback(videoSender, func(feedbackType int, ssrc uint32) {})
-	if rtcpFeedbackCallbacks[videoSender] == nil || rtcpFeedbackCallbackPtr == 0 {
-		t.Fatal("RTCP feedback callback was not registered")
+	if err := RTPSenderSetOnRTCPFeedback(videoSender, func(feedbackType int, ssrc uint32) {}); !errors.Is(err, ErrNotSupported) {
+		t.Fatalf("RTPSenderSetOnRTCPFeedback() error = %v, want %v", err, ErrNotSupported)
+	}
+	if _, ok := rtcpFeedbackCallbacks[videoSender]; ok {
+		t.Fatal("RTCP feedback callback should not be registered when unsupported")
 	}
 	UnregisterRTCPFeedbackCallback(videoSender)
 

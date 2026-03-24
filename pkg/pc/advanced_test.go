@@ -236,7 +236,9 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	if _, _, err := sender.GetActiveLayers(); err == nil {
 		t.Fatal("GetActiveLayers on uninitialized sender expected error")
 	}
-	sender.SetOnRTCPFeedback(func(feedbackType RTCPFeedbackType, ssrc uint32) {})
+	if err := sender.SetOnRTCPFeedback(func(feedbackType RTCPFeedbackType, ssrc uint32) {}); err == nil {
+		t.Fatal("SetOnRTCPFeedback on uninitialized sender expected error")
+	}
 	if err := sender.SetScalabilityMode("L1T2"); err == nil {
 		t.Fatal("SetScalabilityMode on uninitialized sender expected error")
 	}
@@ -401,8 +403,12 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 	}
 	defer pc.Close()
 
-	pc.SetOnBandwidthEstimate(func(*BandwidthEstimate) {})
-	_ = pc.GetCurrentBandwidthEstimate()
+	if err := pc.SetOnBandwidthEstimate(func(*BandwidthEstimate) {}); !errors.Is(err, ErrNotSupported) {
+		t.Fatalf("SetOnBandwidthEstimate: %v", err)
+	}
+	if _, err := pc.GetCurrentBandwidthEstimate(); !errors.Is(err, ErrNotSupported) {
+		t.Fatalf("GetCurrentBandwidthEstimate: %v", err)
+	}
 
 	videoTrack, err := pc.CreateVideoTrack("video-real", codec.VP8, 64, 64)
 	if err != nil {
@@ -426,7 +432,7 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 		t.Fatalf("WriteVideoFrame: %v", err)
 	}
 	_ = videoSender.GetParameters()
-	if _, err := videoSender.GetStats(); err != nil {
+	if _, err := videoSender.GetStats(); !errors.Is(err, ErrNotSupported) {
 		t.Fatalf("sender.GetStats: %v", err)
 	}
 

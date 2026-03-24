@@ -253,6 +253,11 @@ SHIM_EXPORT void shim_peer_connection_destroy(ShimPeerConnection* pc) {
             pc->peer_connection->Close();
         }
 
+        for (const auto& channel : pc->data_channels) {
+            shim_data_channel_destroy(reinterpret_cast<ShimDataChannel*>(channel.get()));
+        }
+        pc->data_channels.clear();
+
         // Clean up observer
         {
             std::lock_guard<std::mutex> lock(g_pc_observers_mutex);
@@ -1098,8 +1103,7 @@ SHIM_EXPORT void shim_peer_connection_set_on_bandwidth_estimate(ShimPeerConnecti
     if (!params || !params->pc) {
         return;
     }
-    // TODO: Wire up BWE callback from libwebrtc's BitrateController
-    // This requires implementing a NetworkControllerObserver
+    // Unsupported in the current shim. The Go layer surfaces ErrNotSupported.
     (void)params->callback;
     (void)params->ctx;
 }
@@ -1114,18 +1118,7 @@ SHIM_EXPORT int shim_peer_connection_get_bandwidth_estimate(ShimPeerConnectionGe
     }
 
     memset(&params->out_estimate, 0, sizeof(ShimBandwidthEstimate));
-    params->out_estimate.timestamp_us = webrtc::TimeMicros();
-
-    // TODO: Get actual BWE from libwebrtc's transport controller
-    // For now, return placeholder values
-    params->out_estimate.target_bitrate_bps = 0;
-    params->out_estimate.available_send_bps = 0;
-    params->out_estimate.available_recv_bps = 0;
-    params->out_estimate.pacing_rate_bps = 0;
-    params->out_estimate.congestion_window = 0;
-    params->out_estimate.loss_rate = 0.0;
-
-    return SHIM_OK;
+    return SHIM_ERROR_NOT_SUPPORTED;
 }
 
 }  // extern "C"

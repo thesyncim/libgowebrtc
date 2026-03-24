@@ -1125,35 +1125,23 @@ type BandwidthEstimate struct {
 //
 //go:nocheckptr
 func ReadBandwidthEstimateFromC(ptr uintptr) *BandwidthEstimate {
-	if ptr == 0 {
+	estimate, ok := CopyStructFromC[BandwidthEstimate](ptr)
+	if !ok {
 		return nil
 	}
-	src := (*BandwidthEstimate)(unsafe.Pointer(ptr))
-	// Copy the struct to avoid holding C pointers
-	estimate := *src
 	return &estimate
 }
 
 // RTPSenderGetStats gets statistics for a sender.
+// The current shim does not implement sender stats and returns ErrNotSupported.
 func RTPSenderGetStats(sender uintptr) (*RTCStats, error) {
 	if !libLoaded.Load() || shimRTPSenderGetStats == nil {
 		return nil, ErrLibraryNotLoaded
 	}
-
-	params := shimRTPSenderGetStatsParams{
-		Sender: sender,
-	}
-	result := shimRTPSenderGetStats(uintptr(unsafe.Pointer(&params)))
-	runtime.KeepAlive(&params)
-	if err := ShimError(result); err != nil {
-		return nil, err
-	}
-
-	stats := params.OutStats
-	return &stats, nil
+	return nil, ErrNotSupported
 }
 
-// RTCPFeedbackCallback is called when RTCP feedback is received.
+// RTCPFeedbackCallback describes the future RTCP feedback callback surface.
 type RTCPFeedbackCallback func(feedbackType int, ssrc uint32)
 
 var (
@@ -1189,24 +1177,14 @@ func initRTCPCallback() {
 }
 
 // RTPSenderSetOnRTCPFeedback sets the RTCP feedback callback.
-func RTPSenderSetOnRTCPFeedback(sender uintptr, cb RTCPFeedbackCallback) {
+// The current shim does not implement this surface and returns ErrNotSupported.
+func RTPSenderSetOnRTCPFeedback(sender uintptr, cb RTCPFeedbackCallback) error {
 	if !libLoaded.Load() || shimRTPSenderSetOnRTCPFeedback == nil {
-		return
+		return ErrLibraryNotLoaded
 	}
-
-	initRTCPCallback()
-
-	rtcpFeedbackCallbackMu.Lock()
-	rtcpFeedbackCallbacks[sender] = cb
-	rtcpFeedbackCallbackMu.Unlock()
-
-	params := shimRTPSenderSetOnRTCPFeedbackParams{
-		Sender:   sender,
-		Callback: rtcpFeedbackCallbackPtr,
-		Ctx:      sender,
-	}
-	shimRTPSenderSetOnRTCPFeedback(uintptr(unsafe.Pointer(&params)))
-	runtime.KeepAlive(&params)
+	_ = sender
+	_ = cb
+	return ErrNotSupported
 }
 
 // UnregisterRTCPFeedbackCallback removes the RTCP feedback callback for a sender.
@@ -2419,24 +2397,14 @@ func initBWECallback() {
 }
 
 // PeerConnectionSetOnBandwidthEstimate sets the bandwidth estimate callback.
-func PeerConnectionSetOnBandwidthEstimate(pc uintptr, cb BandwidthEstimateCallback) {
+// The current shim does not implement this surface and returns ErrNotSupported.
+func PeerConnectionSetOnBandwidthEstimate(pc uintptr, cb BandwidthEstimateCallback) error {
 	if !libLoaded.Load() || shimPeerConnectionSetOnBandwidthEstimate == nil {
-		return
+		return ErrLibraryNotLoaded
 	}
-
-	initBWECallback()
-
-	bweCallbackMu.Lock()
-	bweCallbacks[pc] = cb
-	bweCallbackMu.Unlock()
-
-	params := shimPeerConnectionSetOnBandwidthEstimateParams{
-		PC:       pc,
-		Callback: bweCallbackPtr,
-		Ctx:      pc,
-	}
-	shimPeerConnectionSetOnBandwidthEstimate(uintptr(unsafe.Pointer(&params)))
-	runtime.KeepAlive(&params)
+	_ = pc
+	_ = cb
+	return ErrNotSupported
 }
 
 // UnregisterBandwidthEstimateCallback removes the bandwidth estimate callback for a PC.
@@ -2447,22 +2415,13 @@ func UnregisterBandwidthEstimateCallback(pc uintptr) {
 }
 
 // PeerConnectionGetBandwidthEstimate gets the current bandwidth estimate.
+// The current shim does not implement this surface and returns ErrNotSupported.
 func PeerConnectionGetBandwidthEstimate(pc uintptr) (*BandwidthEstimate, error) {
 	if !libLoaded.Load() || shimPeerConnectionGetBandwidthEstimate == nil {
 		return nil, ErrLibraryNotLoaded
 	}
-
-	params := shimPeerConnectionGetBandwidthEstimateParams{
-		PC: pc,
-	}
-	result := shimPeerConnectionGetBandwidthEstimate(uintptr(unsafe.Pointer(&params)))
-	runtime.KeepAlive(&params)
-	if err := ShimError(result); err != nil {
-		return nil, err
-	}
-
-	estimate := params.OutEstimate
-	return &estimate, nil
+	_ = pc
+	return nil, ErrNotSupported
 }
 
 // ============================================================================
