@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -111,10 +112,7 @@ func LoadLibrary() error {
 		}
 	}
 	if err != nil {
-		if downloadErr != nil {
-			return fmt.Errorf("failed to load %s: %w (auto-download failed: %w)", libPath, err, downloadErr)
-		}
-		return fmt.Errorf("failed to load %s: %w", libPath, err)
+		return wrapLibraryLoadError(libPath, err, downloadErr)
 	}
 
 	libHandle = handle
@@ -341,6 +339,29 @@ func preloadLinuxDeps() {
 		// Best effort - ignore errors as these may not be needed on all systems
 		_, _ = dlopenLibrary(lib, RTLD_NOW|RTLD_GLOBAL)
 	}
+}
+
+func wrapLibraryLoadError(libPath string, loadErr, downloadErr error) error {
+	if hint := linuxLoadFailureHintFor(runtime.GOOS, loadErr); hint != "" {
+		loadErr = fmt.Errorf("%w (%s)", loadErr, hint)
+	}
+	if downloadErr != nil {
+		return fmt.Errorf("failed to load %s: %w (auto-download failed: %w)", libPath, loadErr, downloadErr)
+	}
+	return fmt.Errorf("failed to load %s: %w", libPath, loadErr)
+}
+
+func linuxLoadFailureHintFor(goos string, err error) string {
+	if goos != "linux" || err == nil {
+		return ""
+	}
+
+	msg := err.Error()
+	if strings.Contains(msg, "GLIBC_") && strings.Contains(msg, "not found") {
+		return "downloaded linux shim requires a newer glibc than this system; publish the shim from an older distro baseline such as Debian bullseye"
+	}
+
+	return ""
 }
 
 func retryLoadLibrary(libPath string) (uintptr, string, error) {

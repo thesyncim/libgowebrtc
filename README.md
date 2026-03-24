@@ -200,7 +200,7 @@ Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 |------------|---------|--------|
 | libwebrtc (pre-compiled) | 141.7390.2.0 | [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) |
 | libwebrtc (Linux source build) | branch-heads/7390 @ `d2eaa5570fc9959f8dbde32912a16366b8ee75f4` | [webrtc.googlesource.com/src](https://webrtc.googlesource.com/src) |
-| libwebrtc_shim | shim-v0.4.4 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
+| libwebrtc_shim | shim-v0.4.5 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
 | OpenH264 | 2.5.1 | [Cisco OpenH264](https://github.com/cisco/openh264/releases) |
 
 ### Building the Shim
@@ -217,12 +217,15 @@ The shim is built using Bazel.
 # Build for current platform
 ./scripts/build.sh
 
+# Build/validate the Linux shim in a compatibility Docker image
+./scripts/validate_linux_docker.sh --target linux_amd64
+
 # Validate published Linux release artifacts in Docker
 ./scripts/validate_linux_docker.sh --target linux_amd64 --download-only
 ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 
 # Publish a prepared local release directory
-./scripts/release.sh 0.4.4 --release-dir release/shim-v0.4.4
+./scripts/release.sh 0.4.5 --release-dir release/shim-v0.4.5
 ```
 
 Environment variables:
@@ -234,6 +237,8 @@ Local build targets: `darwin_arm64`, `darwin_amd64`, `linux_386`, `linux_arm`, `
 
 Release flow:
 - Build or validate the platform artifacts locally
+- Build Linux release artifacts in the compatibility Docker image or on a host
+  that passes the `MAX_GLIBC_VERSION` release check
 - Upload the prepared `release/shim-vX.Y.Z/` directory with `./scripts/release.sh`
 - CI downloads the published artifacts and runs the smoke tests; it does not rebuild the shim
 
@@ -792,6 +797,9 @@ go test -v ./...
 # Create release tarball
 ./scripts/build.sh --release
 
+# Recommended Linux release path (portable glibc baseline)
+./scripts/validate_linux_docker.sh --target linux_amd64
+
 # Clean and rebuild
 ./scripts/build.sh --clean
 ```
@@ -803,6 +811,8 @@ Build behavior:
 - macOS and Windows default to the prebuilt libwebrtc download path
 - `LIBWEBRTC_SOURCE_BUILD=false` forces the prebuilt path
 - `LIBWEBRTC_SOURCE_BUILD=true` forces the source-build path
+- Linux `--release` builds enforce a maximum GLIBC symbol version
+  (`MAX_GLIBC_VERSION`, default `2.31`) to keep published shims portable
 
 ### Manual Bazel Build
 
