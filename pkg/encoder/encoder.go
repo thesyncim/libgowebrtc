@@ -28,6 +28,8 @@ type EncodeResult struct {
 
 // VideoEncoder encodes raw video frames to compressed bitstream.
 // All operations are allocation-free - caller provides buffers.
+// Encoder instances are stateful; serialize calls per instance and use
+// separate encoders for parallel pipelines.
 type VideoEncoder interface {
 	// EncodeInto encodes a video frame into the destination buffer.
 	// Returns the number of bytes written and whether it's a keyframe.
@@ -122,6 +124,8 @@ type EncoderStats struct {
 
 // AudioEncoder encodes raw audio samples to compressed bitstream.
 // All operations are allocation-free - caller provides buffers.
+// Encoder instances are stateful; serialize calls per instance and use
+// separate encoders for parallel pipelines.
 type AudioEncoder interface {
 	// EncodeInto encodes audio samples into the destination buffer.
 	// Returns the number of bytes written.
