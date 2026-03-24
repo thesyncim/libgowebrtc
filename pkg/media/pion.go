@@ -36,11 +36,11 @@ func PionTrackLocalForStream(stream *MediaStream, t MediaStreamTrack) (webrtc.Tr
 	return pionTrackLocalWithStreamID(stream.ID(), t)
 }
 
-// AddTracksToPC is a convenience function that adds all tracks from a MediaStream
-// to a Pion PeerConnection.
+// AddTracksToPionPeerConnection is a convenience function that adds all tracks
+// from a MediaStream to a Pion PeerConnection.
 //
 // Returns the list of RTPSenders created, or an error if any track fails to add.
-func AddTracksToPC(pc *webrtc.PeerConnection, stream *MediaStream) ([]*webrtc.RTPSender, error) {
+func AddTracksToPionPeerConnection(pc *webrtc.PeerConnection, stream *MediaStream) ([]*webrtc.RTPSender, error) {
 	tracks := stream.GetTracks()
 	senders := make([]*webrtc.RTPSender, 0, len(tracks))
 

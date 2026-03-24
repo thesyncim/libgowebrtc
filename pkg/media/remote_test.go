@@ -1,6 +1,7 @@
 package media
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -391,6 +392,65 @@ func TestRemoteStreamRegistryCloseStopsTracks(t *testing.T) {
 	waitForCondition(t, 2*time.Second, func() bool { return videoSource.closed.Load() })
 	if got := videoTrack.ReadyState(); got != "ended" {
 		t.Fatalf("ReadyState() after registry.Close = %q, want ended", got)
+	}
+}
+
+func TestRemoteStreamRegistryBindDecodedTrackRejectsNil(t *testing.T) {
+	registry := NewRemoteStreamRegistry()
+	if _, _, err := registry.BindDecodedTrack(nil); !errors.Is(err, ErrTrackNotFound) {
+		t.Fatalf("BindDecodedTrack(nil) error = %v, want %v", err, ErrTrackNotFound)
+	}
+}
+
+func TestRemoteStreamRegistryPCOnTrackErrorPath(t *testing.T) {
+	registry := NewRemoteStreamRegistry()
+
+	var handlerCalled bool
+	errCh := make(chan error, 1)
+	callback := registry.PCOnTrack(func(PCTrackEvent) {
+		handlerCalled = true
+	}, func(err error) {
+		errCh <- err
+	})
+
+	callback(nil, nil, nil)
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, ErrTrackNotFound) {
+			t.Fatalf("PCOnTrack() error = %v, want %v", err, ErrTrackNotFound)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for PCOnTrack error callback")
+	}
+	if handlerCalled {
+		t.Fatal("PCOnTrack success handler should not run on bind error")
+	}
+}
+
+func TestRemoteStreamRegistryPionOnTrackErrorPath(t *testing.T) {
+	registry := NewRemoteStreamRegistry()
+
+	var handlerCalled bool
+	errCh := make(chan error, 1)
+	callback := registry.PionOnTrack(func(PionTrackEvent) {
+		handlerCalled = true
+	}, func(err error) {
+		errCh <- err
+	})
+
+	callback(nil, nil)
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, pionrecv.ErrNilTrack) {
+			t.Fatalf("PionOnTrack() error = %v, want %v", err, pionrecv.ErrNilTrack)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for PionOnTrack error callback")
+	}
+	if handlerCalled {
+		t.Fatal("PionOnTrack success handler should not run on bind error")
 	}
 }
 

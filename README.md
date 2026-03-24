@@ -207,8 +207,9 @@ Release flow:
 
 ```go
 import (
+    "github.com/pion/webrtc/v4"
+
     "github.com/thesyncim/libgowebrtc/pkg/media"
-    "github.com/thesyncim/libgowebrtc/pkg/pc"
     "github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
@@ -226,14 +227,14 @@ stream, _ := media.GetUserMedia(media.Constraints{
 })
 
 // Create PeerConnection
-peerConnection, _ := pc.NewPeerConnection(pc.Configuration{
-    ICEServers: []pc.ICEServer{
+peerConnection, _ := webrtc.NewPeerConnection(webrtc.Configuration{
+    ICEServers: []webrtc.ICEServer{
         {URLs: []string{"stun:stun.l.google.com:19302"}},
     },
 })
 
-// Add tracks using helper
-senders, _ := media.AddTracksToPC(peerConnection, stream)
+// Add capture-backed tracks to a Pion PeerConnection
+senders, _ := media.AddTracksToPionPeerConnection(peerConnection, stream)
 
 // Create offer
 offer, _ := peerConnection.CreateOffer(nil)
@@ -241,6 +242,7 @@ peerConnection.SetLocalDescription(offer)
 ```
 
 `pkg/media` is capture-only. For synthetic/manual frame production, use [`pkg/track`](./pkg/track).
+For native libwebrtc-backed senders, create tracks through [`pkg/pc`](./pkg/pc).
 Use `media.GetSupportedConstraints()` and typed `GetCapabilities()` calls to
 inspect which browser-shaped knobs the library can actually honor for a given
 capture-backed track.
@@ -410,30 +412,22 @@ import (
     "github.com/pion/webrtc/v4"
     "github.com/thesyncim/libgowebrtc/pkg/frame"
     "github.com/thesyncim/libgowebrtc/pkg/media"
-    "github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
 registry := media.NewRemoteStreamRegistry()
 
-pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-    remoteTrack, streams, err := registry.BindPionTrack(
-        track,
-        receiver,
-        pionrecv.WithRTCPWriter(receiver.Transport()),
-    )
-    if err != nil {
-        return
-    }
-
-    video, ok := remoteTrack.(media.PionRemoteVideoTrack)
+pc.OnTrack(registry.PionOnTrack(func(event media.PionTrackEvent) {
+    video, ok := event.Track.(media.PionRemoteVideoTrack)
     if !ok {
         return
     }
 
     _ = video.SetOnVideoFrame(func(f *frame.VideoFrame) {
-        println("decoded frame", f.Width, f.Height, "from stream", streams[0].ID())
+        println("decoded frame", f.Width, f.Height, "from stream", event.Streams[0].ID())
     })
-})
+}, func(err error) {
+    println("remote bind error:", err.Error())
+}))
 ```
 
 Native libwebrtc-backed receive flow:
@@ -447,22 +441,23 @@ import (
 
 registry := media.NewRemoteStreamRegistry()
 
-peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamIDs []string) {
-    remoteTrack, streams, err := registry.BindPCTrack(track, receiver, streamIDs)
-    if err != nil {
-        return
-    }
-
-    video, ok := remoteTrack.(media.PCRemoteVideoTrack)
+peer.SetOnTrack(registry.PCOnTrack(func(event media.PCTrackEvent) {
+    video, ok := event.Track.(media.PCRemoteVideoTrack)
     if !ok {
         return
     }
 
     _ = video.SetOnVideoFrame(func(f *frame.VideoFrame) {
-        println("native frame", f.Width, f.Height, "streams", len(streams))
+        println("native frame", f.Width, f.Height, "streams", len(event.Streams))
     })
-})
+}, func(err error) {
+    println("remote bind error:", err.Error())
+}))
 ```
+
+If you already manage the Pion receive pipeline yourself with `pionrecv.New(...)`
+or `pionrecv.BindRemoteTrack(...)`, use `registry.BindDecodedTrack(decoded)` to
+project that decoded track into the same browser-like `MediaStream` model.
 
 ### Low-Level Encoding (Allocation-Free)
 

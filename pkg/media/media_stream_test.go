@@ -263,7 +263,7 @@ func TestAudioStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
 	}
 }
 
-func TestPionTrackLocalAndAddTracksToPC(t *testing.T) {
+func TestPionTrackLocalAndAddTracksToPionPeerConnection(t *testing.T) {
 	stream := NewMediaStream()
 	video := newTestVideoTrack(t)
 	audio := newTestAudioTrack(t)
@@ -295,16 +295,16 @@ func TestPionTrackLocalAndAddTracksToPC(t *testing.T) {
 	}
 	defer pc.Close()
 
-	senders, err := AddTracksToPC(pc, stream)
+	senders, err := AddTracksToPionPeerConnection(pc, stream)
 	if err != nil {
-		t.Fatalf("AddTracksToPC() error = %v", err)
+		t.Fatalf("AddTracksToPionPeerConnection() error = %v", err)
 	}
 	if got := len(senders); got != 2 {
-		t.Fatalf("AddTracksToPC() senders len = %d, want 2", got)
+		t.Fatalf("AddTracksToPionPeerConnection() senders len = %d, want 2", got)
 	}
 	for _, sender := range senders {
 		if sender.Track() == nil {
-			t.Fatal("AddTracksToPC() sender.Track() returned nil")
+			t.Fatal("AddTracksToPionPeerConnection() sender.Track() returned nil")
 		}
 		if got := sender.Track().StreamID(); got != stream.ID() {
 			t.Fatalf("sender.Track().StreamID() = %q, want %q", got, stream.ID())

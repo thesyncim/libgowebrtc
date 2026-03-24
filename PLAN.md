@@ -550,7 +550,7 @@ func main() {
     })
 
     // Add all tracks to peer connection
-    senders, _ := media.AddTracksToPC(peerConnection, stream)
+    senders, _ := media.AddTracksToPionPeerConnection(peerConnection, stream)
 
     // Configure simulcast layers for SFU on video senders
     for _, sender := range senders {
@@ -1370,7 +1370,7 @@ Cleaned up public API to hide C implementation details and provide more browser/
 | `RTPTransceiver.IsValid()` | Validation helper for RTPTransceiver |
 | `DataChannel.IsValid()` | Validation helper for DataChannel |
 | `media.PionTrackLocal()` | Extract Pion TrackLocal from MediaStreamTrack |
-| `media.AddTracksToPC()` | Add all tracks from MediaStream to Pion PeerConnection |
+| `media.AddTracksToPionPeerConnection()` | Add all tracks from MediaStream to Pion PeerConnection |
 | `media.IntConstraint` | Browser-like exact/ideal/min/max constraint for integers |
 | `media.FloatConstraint` | Browser-like exact/ideal/min/max constraint for floats |
 | `media.FacingMode` | Camera facing mode enum (`user`, `environment`) |
@@ -1787,4 +1787,3 @@ receiver.OnJitterBufferStats(func(stats *JitterBufferStats) {
 - [ ] Add CongestionState struct
 - [ ] Add pc.SetOnCongestionState() callback
 - [ ] Example: Custom ABR algorithm
-
