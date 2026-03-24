@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a new capability or an improvement to an existing one
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing an idea.
+        The most useful requests explain the use case and the expected API or runtime behavior.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do today, and what is hard or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the API shape, behavior, or workflow you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any workarounds or competing approaches you evaluated.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Compatibility and platform impact
+      description: Note any expected effect on supported platforms, shim artifacts, or public API behavior.

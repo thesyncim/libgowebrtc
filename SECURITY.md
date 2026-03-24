@@ -11,9 +11,10 @@ Send a private report with:
 - Any known mitigations or workarounds
 - Your preferred contact details for follow-up
 
-If GitHub private vulnerability reporting is enabled for this repository, use it.
-Otherwise contact the maintainer directly and treat the report as confidential
-until a fix or mitigation is ready.
+GitHub private vulnerability reporting is enabled for this repository and is
+the preferred reporting path. If you cannot use GitHub's private reporting,
+contact the maintainer directly and treat the report as confidential until a
+fix or mitigation is ready.
 
 ## Scope
 
