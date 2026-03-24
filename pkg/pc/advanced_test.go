@@ -8,7 +8,6 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
-	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
@@ -560,5 +559,13 @@ func cStringFromPtr(ptr *byte) string {
 	if ptr == nil {
 		return ""
 	}
-	return ffi.CStringToGo(unsafe.Slice(ptr, 64))
+
+	buf := make([]byte, 0, 32)
+	for offset := uintptr(0); ; offset++ {
+		b := *(*byte)(unsafe.Add(unsafe.Pointer(ptr), offset))
+		if b == 0 {
+			return string(buf)
+		}
+		buf = append(buf, b)
+	}
 }
