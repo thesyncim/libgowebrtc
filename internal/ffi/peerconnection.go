@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/ebitengine/purego"
+	"github.com/pion/webrtc/v4"
 )
 
 // safeCallback wraps a callback invocation with panic recovery.
@@ -186,6 +187,7 @@ type PeerConnectionConfig struct {
 	ICEServers           uintptr // Pointer to array of ICEServerConfig
 	ICEServerCount       int32
 	ICECandidatePoolSize int32
+	ICETransportPolicy   *byte // C string
 	BundlePolicy         *byte // C string
 	RTCPMuxPolicy        *byte // C string
 	SDPSemantics         *byte // C string
@@ -249,7 +251,7 @@ func PeerConnectionDestroy(pc uintptr) {
 
 // PeerConnectionCreateOffer creates an SDP offer.
 // Returns the SDP string written to the provided buffer.
-func PeerConnectionCreateOffer(pc uintptr, sdpBuf []byte) (int, error) {
+func PeerConnectionCreateOffer(pc uintptr, sdpBuf []byte, options *webrtc.OfferOptions) (int, error) {
 	if !libLoaded.Load() || shimPeerConnectionCreateOffer == nil {
 		return 0, ErrLibraryNotLoaded
 	}
@@ -260,6 +262,17 @@ func PeerConnectionCreateOffer(pc uintptr, sdpBuf []byte) (int, error) {
 		SDPOut:     ByteSlicePtr(sdpBuf),
 		SDPOutSize: int32(len(sdpBuf)),
 		ErrorOut:   errBuf.Ptr(),
+	}
+	if options != nil {
+		if options.ICERestart {
+			params.ICERestart = 1
+		}
+		if options.VoiceActivityDetection {
+			params.VoiceActivityDetection = 1
+		}
+		if options.ICETricklingSupported {
+			params.ICETricklingSupported = 1
+		}
 	}
 	result := shimPeerConnectionCreateOffer(uintptr(unsafe.Pointer(&params)))
 	runtime.KeepAlive(sdpBuf)
@@ -273,7 +286,7 @@ func PeerConnectionCreateOffer(pc uintptr, sdpBuf []byte) (int, error) {
 }
 
 // PeerConnectionCreateAnswer creates an SDP answer.
-func PeerConnectionCreateAnswer(pc uintptr, sdpBuf []byte) (int, error) {
+func PeerConnectionCreateAnswer(pc uintptr, sdpBuf []byte, options *webrtc.AnswerOptions) (int, error) {
 	if !libLoaded.Load() || shimPeerConnectionCreateAnswer == nil {
 		return 0, ErrLibraryNotLoaded
 	}
@@ -284,6 +297,14 @@ func PeerConnectionCreateAnswer(pc uintptr, sdpBuf []byte) (int, error) {
 		SDPOut:     ByteSlicePtr(sdpBuf),
 		SDPOutSize: int32(len(sdpBuf)),
 		ErrorOut:   errBuf.Ptr(),
+	}
+	if options != nil {
+		if options.VoiceActivityDetection {
+			params.VoiceActivityDetection = 1
+		}
+		if options.ICETricklingSupported {
+			params.ICETricklingSupported = 1
+		}
 	}
 	result := shimPeerConnectionCreateAnswer(uintptr(unsafe.Pointer(&params)))
 	runtime.KeepAlive(sdpBuf)
@@ -466,7 +487,7 @@ func PeerConnectionCreateDataChannel(
 			PC:                pc,
 			Label:             labelPtr,
 			Ordered:           orderedInt,
-			MaxPacketLifeTime: int32(maxPacketLifeTime),
+			MaxPacketLifetime: int32(maxPacketLifeTime),
 			MaxRetransmits:    int32(maxRetransmits),
 			Protocol:          protocolPtr,
 			Negotiated:        negotiatedInt,
@@ -1438,19 +1459,24 @@ const (
 )
 
 // PeerConnectionAddTransceiver adds a transceiver with the specified kind and direction.
-func PeerConnectionAddTransceiver(pc uintptr, kind MediaKind, direction TransceiverDirection) uintptr {
+func PeerConnectionAddTransceiver(pc uintptr, kind MediaKind, direction TransceiverDirection, paramsConfig *RTPSendParameters) uintptr {
 	if !libLoaded.Load() || shimPeerConnectionAddTransceiver == nil {
 		return 0
 	}
 	var errBuf ShimErrorBuffer
 	params := shimPeerConnectionAddTransceiverParams{
-		PC:        pc,
-		Kind:      int32(kind),
-		Direction: int32(direction),
-		ErrorOut:  errBuf.Ptr(),
+		PC:             pc,
+		Kind:           int32(kind),
+		Direction:      int32(direction),
+		SendParameters: 0,
+		ErrorOut:       errBuf.Ptr(),
+	}
+	if paramsConfig != nil {
+		params.SendParameters = uintptr(unsafe.Pointer(paramsConfig))
 	}
 	result := shimPeerConnectionAddTransceiver(uintptr(unsafe.Pointer(&params)))
 	runtime.KeepAlive(&params)
+	runtime.KeepAlive(paramsConfig)
 	runtime.KeepAlive(&errBuf)
 	return result
 }
@@ -1560,6 +1586,31 @@ func PeerConnectionGetStats(pc uintptr) (*RTCStats, error) {
 
 	stats := params.OutStats
 	return &stats, nil
+}
+
+// PeerConnectionGetStatsJSON gets a structured stats report serialized as JSON.
+func PeerConnectionGetStatsJSON(pc uintptr) ([]byte, error) {
+	if !libLoaded.Load() || shimPeerConnectionGetStatsJSON == nil {
+		return nil, ErrLibraryNotLoaded
+	}
+
+	const defaultStatsJSONBufferSize = 1024 * 1024
+	jsonBuf := make([]byte, defaultStatsJSONBufferSize)
+	var errBuf ShimErrorBuffer
+	params := shimPeerConnectionGetStatsJSONParams{
+		PC:          pc,
+		JsonOut:     ByteSlicePtr(jsonBuf),
+		JsonOutSize: int32(len(jsonBuf)),
+		ErrorOut:    errBuf.Ptr(),
+	}
+	result := shimPeerConnectionGetStatsJSON(uintptr(unsafe.Pointer(&params)))
+	runtime.KeepAlive(jsonBuf)
+	runtime.KeepAlive(&params)
+	if err := errBuf.ToError(result); err != nil {
+		return nil, err
+	}
+
+	return append([]byte(nil), jsonBuf[:params.OutJsonLen]...), nil
 }
 
 // ============================================================================
@@ -1724,7 +1775,14 @@ func initOnICECandidateCallback() {
 		cb, ok := onICECandidateCallbacks[ctx]
 		onICECandidateCallbackMu.RUnlock()
 
-		if ok && cb != nil && candidatePtr != 0 {
+		if ok && cb != nil {
+			if candidatePtr == 0 {
+				safeCallback(func() {
+					cb("", "", -1)
+				})
+				return 0
+			}
+
 			// Read ICECandidate fields from memory
 			// struct layout: const char* candidate; const char* sdp_mid; int sdp_mline_index;
 			candidateStrPtr := ReadUintptrFromC(candidatePtr)

@@ -119,7 +119,7 @@ func TestVideoTrackRoundtrip(t *testing.T) {
 		t.Fatalf("pionPC.SetLocalDescription failed: %v", err)
 	}
 
-	err = libPC.SetRemoteDescription(&pc.SessionDescription{
+	err = libPC.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  answer.SDP,
 	})
@@ -195,7 +195,7 @@ func TestPionToLibWebRTCVideo(t *testing.T) {
 		t.Fatalf("pionPC.SetLocalDescription failed: %v", err)
 	}
 
-	err = libPC.SetRemoteDescription(&pc.SessionDescription{
+	err = libPC.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeOffer,
 		SDP:  offer.SDP,
 	})

@@ -78,6 +78,7 @@ var (
 	shimPeerConnectionGetTransceivers               func(params uintptr) int32
 	shimPeerConnectionRestartICE                    func(pc uintptr) int32
 	shimPeerConnectionGetStats                      func(params uintptr) int32
+	shimPeerConnectionGetStatsJSON                  func(params uintptr) int32
 	shimPeerConnectionSetOnSignalingStateChange     func(params uintptr)
 	shimPeerConnectionSetOnICEConnectionStateChange func(params uintptr)
 	shimPeerConnectionSetOnICEGatheringStateChange  func(params uintptr)

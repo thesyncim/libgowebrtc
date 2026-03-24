@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/webrtc/v4"
+
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 )
 
@@ -43,7 +45,7 @@ func TestNewPeerConnection(t *testing.T) {
 
 func TestPeerConnectionWithICEServers(t *testing.T) {
 	cfg := Configuration{
-		ICEServers: []ICEServer{
+		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 			{
 				URLs:       []string{"turn:turn.example.com:3478"},
@@ -364,12 +366,14 @@ func TestCreateDataChannelWithOptions(t *testing.T) {
 	ordered := false
 	maxPacketLifeTime := uint16(250)
 	id := uint16(17)
+	protocol := "test-protocol"
+	negotiated := true
 
 	dc, err := pc.CreateDataChannel("ordered-channel", &DataChannelInit{
 		Ordered:           &ordered,
 		MaxPacketLifeTime: &maxPacketLifeTime,
-		Protocol:          "test-protocol",
-		Negotiated:        true,
+		Protocol:          &protocol,
+		Negotiated:        &negotiated,
 		ID:                &id,
 	})
 	if err != nil {
@@ -399,10 +403,12 @@ func TestAddICECandidate(t *testing.T) {
 	pc.SetRemoteDescription(offer)
 
 	// Try to add a candidate
-	candidate := &ICECandidate{
+	sdpMid := "0"
+	sdpLineIndex := uint16(0)
+	candidate := ICECandidate{
 		Candidate:     "candidate:1 1 UDP 2130706431 192.168.1.1 12345 typ host",
-		SDPMid:        "0",
-		SDPMLineIndex: 0,
+		SDPMid:        &sdpMid,
+		SDPMLineIndex: &sdpLineIndex,
 	}
 
 	err = pc.AddICECandidate(candidate)
@@ -638,7 +644,7 @@ func TestJitterBufferMinDelay(t *testing.T) {
 }
 
 func TestJitterBufferStatsViaGetStats(t *testing.T) {
-	// Test that jitter buffer stats are available through GetStats()
+	// Test that jitter buffer stats are available through PeerConnection.GetStats().
 	pc, err := NewPeerConnection(DefaultConfiguration())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
@@ -651,11 +657,9 @@ func TestJitterBufferStatsViaGetStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddTransceiver failed: %v", err)
 	}
+	_ = transceiver
 
-	receiver := transceiver.Receiver()
-
-	// Get stats - jitter buffer info is in RTCStats now
-	stats, err := receiver.GetStats()
+	stats, err := pc.GetStats()
 	if err != nil {
 		t.Errorf("GetStats failed: %v", err)
 	}
@@ -664,12 +668,23 @@ func TestJitterBufferStatsViaGetStats(t *testing.T) {
 		t.Fatal("Stats should not be nil")
 	}
 
-	// Log jitter buffer values (will be zeros without actual media flow)
-	t.Logf("Jitter buffer stats from GetStats():")
-	t.Logf("  JitterBufferDelayMs: %.2f", stats.JitterBufferDelayMs)
-	t.Logf("  JitterBufferTargetDelayMs: %.2f", stats.JitterBufferTargetDelayMs)
-	t.Logf("  JitterBufferMinimumDelayMs: %.2f", stats.JitterBufferMinimumDelayMs)
-	t.Logf("  JitterBufferEmittedCount: %d", stats.JitterBufferEmittedCount)
+	sawInbound := false
+	for _, stat := range stats {
+		inbound, ok := stat.(webrtc.InboundRTPStreamStats)
+		if !ok {
+			continue
+		}
+		sawInbound = true
+		t.Logf("inbound jitter buffer stats: delay=%.2f target=%.2f minimum=%.2f emitted=%d",
+			inbound.JitterBufferDelay,
+			inbound.JitterBufferTargetDelay,
+			inbound.JitterBufferMinimumDelay,
+			inbound.JitterBufferEmittedCount,
+		)
+	}
+	if !sawInbound {
+		t.Log("GetStats returned no inbound RTP entries yet, which is expected without media flow")
+	}
 
 	t.Log("Jitter buffer stats retrieval via GetStats() succeeded")
 }

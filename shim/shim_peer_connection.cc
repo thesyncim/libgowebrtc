@@ -90,6 +90,9 @@ public:
         if (pc_->on_ice_gathering_state_change) {
             pc_->on_ice_gathering_state_change(pc_->on_ice_gathering_state_change_ctx, static_cast<int>(state));
         }
+        if (state == webrtc::PeerConnectionInterface::kIceGatheringComplete && pc_->on_ice_candidate) {
+            pc_->on_ice_candidate(pc_->on_ice_candidate_ctx, nullptr);
+        }
     }
 
     void OnIceCandidate(const webrtc::IceCandidateInterface* candidate) override {
@@ -210,6 +213,38 @@ SHIM_EXPORT ShimPeerConnection* shim_peer_connection_create(ShimPeerConnectionCr
     rtc_config.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
 
     if (config) {
+        rtc_config.ice_candidate_pool_size = config->ice_candidate_pool_size;
+
+        if (config->ice_transport_policy) {
+            if (EqualsIgnoreCase(config->ice_transport_policy, "relay")) {
+                rtc_config.type = webrtc::PeerConnectionInterface::IceTransportsType::kRelay;
+            } else {
+                rtc_config.type = webrtc::PeerConnectionInterface::IceTransportsType::kAll;
+            }
+        }
+
+        if (config->bundle_policy) {
+            if (EqualsIgnoreCase(config->bundle_policy, "balanced")) {
+                rtc_config.bundle_policy = webrtc::PeerConnectionInterface::BundlePolicy::kBundlePolicyBalanced;
+            } else if (EqualsIgnoreCase(config->bundle_policy, "max-compat")) {
+                rtc_config.bundle_policy = webrtc::PeerConnectionInterface::BundlePolicy::kBundlePolicyMaxCompat;
+            } else if (EqualsIgnoreCase(config->bundle_policy, "max-bundle")) {
+                rtc_config.bundle_policy = webrtc::PeerConnectionInterface::BundlePolicy::kBundlePolicyMaxBundle;
+            }
+        }
+
+        if (config->rtcp_mux_policy) {
+            if (EqualsIgnoreCase(config->rtcp_mux_policy, "negotiate")) {
+                rtc_config.rtcp_mux_policy = webrtc::PeerConnectionInterface::RtcpMuxPolicy::kRtcpMuxPolicyNegotiate;
+            } else {
+                rtc_config.rtcp_mux_policy = webrtc::PeerConnectionInterface::RtcpMuxPolicy::kRtcpMuxPolicyRequire;
+            }
+        }
+
+        if (config->sdp_semantics && EqualsIgnoreCase(config->sdp_semantics, "plan-b")) {
+            rtc_config.sdp_semantics = webrtc::SdpSemantics::kPlanB_DEPRECATED;
+        }
+
         for (int i = 0; i < config->ice_server_count; i++) {
             webrtc::PeerConnectionInterface::IceServer server;
             for (int j = 0; j < config->ice_servers[i].url_count; j++) {
@@ -368,6 +403,8 @@ SHIM_EXPORT int shim_peer_connection_create_offer(ShimPeerConnectionCreateOfferP
     auto observer = webrtc::make_ref_counted<CreateSessionDescriptionObserver>();
 
     webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
+    options.ice_restart = params->ice_restart != 0;
+    options.voice_activity_detection = params->voice_activity_detection != 0;
     params->pc->peer_connection->CreateOffer(observer.get(), options);
 
     // Wait for completion
@@ -437,6 +474,7 @@ SHIM_EXPORT int shim_peer_connection_create_answer(ShimPeerConnectionCreateAnswe
     auto observer = webrtc::make_ref_counted<CreateSessionDescriptionObserver>();
 
     webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
+    options.voice_activity_detection = params->voice_activity_detection != 0;
     params->pc->peer_connection->CreateAnswer(observer.get(), options);
 
     // Wait for completion
@@ -476,6 +514,7 @@ SHIM_EXPORT int shim_peer_connection_set_local_description(ShimPeerConnectionSet
         case 0: sdp_type = webrtc::SdpType::kOffer; break;
         case 1: sdp_type = webrtc::SdpType::kPrAnswer; break;
         case 2: sdp_type = webrtc::SdpType::kAnswer; break;
+        case 3: sdp_type = webrtc::SdpType::kRollback; break;
         default:
             shim::SetErrorMessage(params->error_out, "invalid SDP type", SHIM_ERROR_INVALID_PARAM);
             return SHIM_ERROR_INVALID_PARAM;
@@ -549,6 +588,7 @@ SHIM_EXPORT int shim_peer_connection_set_remote_description(ShimPeerConnectionSe
         case 0: sdp_type = webrtc::SdpType::kOffer; break;
         case 1: sdp_type = webrtc::SdpType::kPrAnswer; break;
         case 2: sdp_type = webrtc::SdpType::kAnswer; break;
+        case 3: sdp_type = webrtc::SdpType::kRollback; break;
         default:
             shim::SetErrorMessage(params->error_out, "invalid SDP type", SHIM_ERROR_INVALID_PARAM);
             return SHIM_ERROR_INVALID_PARAM;
@@ -813,6 +853,32 @@ SHIM_EXPORT ShimRTPTransceiver* shim_peer_connection_add_transceiver(ShimPeerCon
     webrtc::MediaType media_type = params->kind == 0 ? webrtc::MediaType::AUDIO : webrtc::MediaType::VIDEO;
     webrtc::RtpTransceiverInit init;
     init.direction = static_cast<webrtc::RtpTransceiverDirection>(params->direction);
+    if (params->send_parameters && params->send_parameters->encodings) {
+        for (int i = 0; i < params->send_parameters->encoding_count; ++i) {
+            const ShimRTPEncodingParameters& shim_encoding = params->send_parameters->encodings[i];
+            webrtc::RtpEncodingParameters encoding;
+            if (shim_encoding.rid[0] != '\0') {
+                encoding.rid = shim_encoding.rid;
+            }
+            encoding.active = shim_encoding.active != 0;
+            if (shim_encoding.max_bitrate_bps > 0) {
+                encoding.max_bitrate_bps = shim_encoding.max_bitrate_bps;
+            }
+            if (shim_encoding.min_bitrate_bps > 0) {
+                encoding.min_bitrate_bps = shim_encoding.min_bitrate_bps;
+            }
+            if (shim_encoding.max_framerate > 0) {
+                encoding.max_framerate = shim_encoding.max_framerate;
+            }
+            if (shim_encoding.scale_resolution_down_by > 0) {
+                encoding.scale_resolution_down_by = shim_encoding.scale_resolution_down_by;
+            }
+            if (shim_encoding.scalability_mode[0] != '\0') {
+                encoding.scalability_mode = shim_encoding.scalability_mode;
+            }
+            init.send_encodings.push_back(encoding);
+        }
+    }
 
     auto result = params->pc->peer_connection->AddTransceiver(media_type, init);
     if (!result.ok()) {
@@ -1092,6 +1158,41 @@ SHIM_EXPORT int shim_peer_connection_get_stats(ShimPeerConnectionGetStatsParams*
                                         static_cast<double>(params->out_stats.responses_received);
     }
 
+    return SHIM_OK;
+}
+
+SHIM_EXPORT int shim_peer_connection_get_stats_json(ShimPeerConnectionGetStatsJSONParams* params) {
+    if (!params) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+    params->out_json_len = 0;
+    if (!params->pc || !params->pc->peer_connection || !params->json_out || params->json_out_size <= 0) {
+        shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    auto callback = webrtc::make_ref_counted<StatsCollectorCallback>();
+    params->pc->peer_connection->GetStats(callback.get());
+
+    {
+        std::unique_lock<std::mutex> lock(callback->mutex);
+        callback->cv.wait(lock, [&]() { return callback->done; });
+    }
+
+    if (!callback->report) {
+        shim::SetErrorMessage(params->error_out, "stats collection failed");
+        return SHIM_ERROR_INIT_FAILED;
+    }
+
+    std::string json = callback->report->ToJson();
+    int len = static_cast<int>(json.size());
+    if (len >= params->json_out_size) {
+        shim::SetErrorMessage(params->error_out, "stats json buffer too small", SHIM_ERROR_BUFFER_TOO_SMALL);
+        return SHIM_ERROR_BUFFER_TOO_SMALL;
+    }
+
+    memcpy(params->json_out, json.c_str(), len + 1);
+    params->out_json_len = len;
     return SHIM_OK;
 }
 

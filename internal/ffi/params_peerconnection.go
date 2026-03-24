@@ -64,20 +64,25 @@ type shimPeerConnectionSetOnNegotiationNeededParams struct {
 
 // shimPeerConnectionCreateOfferParams matches ShimPeerConnectionCreateOfferParams in shim.h.
 type shimPeerConnectionCreateOfferParams struct {
-	PC         uintptr
-	SDPOut     uintptr
-	SDPOutSize int32
-	OutSDPLen  int32
-	ErrorOut   uintptr
+	PC                     uintptr
+	SDPOut                 uintptr
+	SDPOutSize             int32
+	OutSDPLen              int32
+	ICERestart             int32
+	VoiceActivityDetection int32
+	ICETricklingSupported  int32
+	ErrorOut               uintptr
 }
 
 // shimPeerConnectionCreateAnswerParams matches ShimPeerConnectionCreateAnswerParams in shim.h.
 type shimPeerConnectionCreateAnswerParams struct {
-	PC         uintptr
-	SDPOut     uintptr
-	SDPOutSize int32
-	OutSDPLen  int32
-	ErrorOut   uintptr
+	PC                     uintptr
+	SDPOut                 uintptr
+	SDPOutSize             int32
+	OutSDPLen              int32
+	VoiceActivityDetection int32
+	ICETricklingSupported  int32
+	ErrorOut               uintptr
 }
 
 // shimPeerConnectionSetLocalDescriptionParams matches ShimPeerConnectionSetLocalDescriptionParams in shim.h.
@@ -136,7 +141,7 @@ type shimPeerConnectionCreateDataChannelExParams struct {
 	PC                uintptr
 	Label             uintptr
 	Ordered           int32
-	MaxPacketLifeTime int32
+	MaxPacketLifetime int32
 	MaxRetransmits    int32
 	Protocol          uintptr
 	Negotiated        int32
@@ -146,10 +151,11 @@ type shimPeerConnectionCreateDataChannelExParams struct {
 
 // shimPeerConnectionAddTransceiverParams matches ShimPeerConnectionAddTransceiverParams in shim.h.
 type shimPeerConnectionAddTransceiverParams struct {
-	PC        uintptr
-	Kind      int32
-	Direction int32
-	ErrorOut  uintptr
+	PC             uintptr
+	Kind           int32
+	Direction      int32
+	SendParameters uintptr
+	ErrorOut       uintptr
 }
 
 // shimPeerConnectionGetSendersParams matches ShimPeerConnectionGetSendersParams in shim.h.

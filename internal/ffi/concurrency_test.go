@@ -249,7 +249,7 @@ func TestConcurrent_PeerConnectionOperations(t *testing.T) {
 		defer wg.Done()
 		buf := make([]byte, 64*1024)
 		for i := 0; i < 5; i++ {
-			PeerConnectionCreateOffer(handle, buf)
+			PeerConnectionCreateOffer(handle, buf, nil)
 		}
 	}()
 

@@ -91,7 +91,7 @@ func TestDataChannelLibToP(t *testing.T) {
 		t.Fatalf("pionPC.SetLocalDescription failed: %v", err)
 	}
 
-	err = libPC.SetRemoteDescription(&pc.SessionDescription{
+	err = libPC.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  answer.SDP,
 	})
@@ -163,7 +163,7 @@ func TestDataChannelPionToLib(t *testing.T) {
 		t.Fatalf("pionPC.SetLocalDescription failed: %v", err)
 	}
 
-	err = libPC.SetRemoteDescription(&pc.SessionDescription{
+	err = libPC.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeOffer,
 		SDP:  offer.SDP,
 	})
@@ -279,7 +279,7 @@ func TestDataChannelBidirectional(t *testing.T) {
 	}
 
 	pionPC.SetLocalDescription(answer)
-	libPC.SetRemoteDescription(&pc.SessionDescription{
+	libPC.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  answer.SDP,
 	})
@@ -320,7 +320,7 @@ func TestDataChannelBidirectional(t *testing.T) {
 func TestDataChannelWithICE(t *testing.T) {
 	// Create PeerConnections with STUN servers
 	libPC, err := pc.NewPeerConnection(pc.Configuration{
-		ICEServers: []pc.ICEServer{
+		ICEServers: []pionwebrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		},
 	})
@@ -391,7 +391,7 @@ func TestDataChannelWithICE(t *testing.T) {
 
 	answer, _ := pionPC.CreateAnswer(nil)
 	pionPC.SetLocalDescription(answer)
-	libPC.SetRemoteDescription(&pc.SessionDescription{
+	libPC.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  answer.SDP,
 	})
@@ -401,8 +401,8 @@ func TestDataChannelWithICE(t *testing.T) {
 		for candidate := range libCandidates {
 			pionPC.AddICECandidate(pionwebrtc.ICECandidateInit{
 				Candidate:     candidate.Candidate,
-				SDPMid:        &candidate.SDPMid,
-				SDPMLineIndex: &candidate.SDPMLineIndex,
+				SDPMid:        candidate.SDPMid,
+				SDPMLineIndex: candidate.SDPMLineIndex,
 			})
 		}
 	}()
@@ -411,10 +411,10 @@ func TestDataChannelWithICE(t *testing.T) {
 		for candidate := range pionCandidates {
 			if candidate != nil {
 				init := candidate.ToJSON()
-				libPC.AddICECandidate(&pc.ICECandidate{
+				libPC.AddICECandidate(pc.ICECandidate{
 					Candidate:     init.Candidate,
-					SDPMid:        *init.SDPMid,
-					SDPMLineIndex: uint16(*init.SDPMLineIndex),
+					SDPMid:        init.SDPMid,
+					SDPMLineIndex: init.SDPMLineIndex,
 				})
 			}
 		}
@@ -499,7 +499,7 @@ func TestMultipleDataChannels(t *testing.T) {
 
 	answer, _ := pionPC.CreateAnswer(nil)
 	pionPC.SetLocalDescription(answer)
-	libPC.SetRemoteDescription(&pc.SessionDescription{
+	libPC.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  answer.SDP,
 	})

@@ -70,8 +70,7 @@ func registerFunctions() error {
 	registerLibFunc(&shimPeerConnectionAddTrack, libHandle, "shim_peer_connection_add_track")
 	registerLibFunc(&shimPeerConnectionRemoveTrack, libHandle, "shim_peer_connection_remove_track")
 	registerLibFunc(&shimPeerConnectionCreateDataChannel, libHandle, "shim_peer_connection_create_data_channel")
-	shimPeerConnectionCreateDataChannelEx = nil
-	registerOptionalLibFunc(&shimPeerConnectionCreateDataChannelEx, libHandle, "shim_peer_connection_create_data_channel_ex")
+	registerLibFunc(&shimPeerConnectionCreateDataChannelEx, libHandle, "shim_peer_connection_create_data_channel_ex")
 	registerLibFunc(&shimPeerConnectionClose, libHandle, "shim_peer_connection_close")
 
 	// PeerConnectionExtended
@@ -81,6 +80,7 @@ func registerFunctions() error {
 	registerLibFunc(&shimPeerConnectionGetTransceivers, libHandle, "shim_peer_connection_get_transceivers")
 	registerLibFunc(&shimPeerConnectionRestartICE, libHandle, "shim_peer_connection_restart_ice")
 	registerLibFunc(&shimPeerConnectionGetStats, libHandle, "shim_peer_connection_get_stats")
+	registerLibFunc(&shimPeerConnectionGetStatsJSON, libHandle, "shim_peer_connection_get_stats_json")
 	registerLibFunc(&shimPeerConnectionSetOnSignalingStateChange, libHandle, "shim_peer_connection_set_on_signaling_state_change")
 	registerLibFunc(&shimPeerConnectionSetOnICEConnectionStateChange, libHandle, "shim_peer_connection_set_on_ice_connection_state_change")
 	registerLibFunc(&shimPeerConnectionSetOnICEGatheringStateChange, libHandle, "shim_peer_connection_set_on_ice_gathering_state_change")
@@ -193,14 +193,6 @@ func registerLibFunc(fptr any, handle uintptr, name string) {
 	sym, err := dlsymLibrary(handle, name)
 	if err != nil {
 		panic(err)
-	}
-	purego.RegisterFunc(fptr, sym)
-}
-
-func registerOptionalLibFunc(fptr any, handle uintptr, name string) {
-	sym, err := dlsymLibrary(handle, name)
-	if err != nil {
-		return
 	}
 	purego.RegisterFunc(fptr, sym)
 }

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/pion/webrtc/v4"
+	"github.com/thesyncim/libgowebrtc/internal/examplesupport"
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
@@ -148,7 +149,7 @@ func handleOffer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set remote description (browser's offer)
-	if err := peerConn.SetRemoteDescription(&pc.SessionDescription{
+	if err := peerConn.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeOffer,
 		SDP:  offer.SDP,
 	}); err != nil {
@@ -306,10 +307,12 @@ func sendVideo(peerConn *pc.PeerConnection, track *pc.Track, sender *pc.RTPSende
 			log.Printf("Sent %d frames (%.1f seconds)", frameNum, elapsed.Seconds())
 
 			// Show stats
-			stats, err := peerConn.GetStats()
-			if err == nil && stats != nil {
-				log.Printf("  Stats: frames=%d, bytes=%d, packets=%d",
-					stats.FramesEncoded, stats.BytesSent, stats.PacketsSent)
+			report, err := peerConn.GetStats()
+			if err == nil {
+				if summary := examplesupport.SummarizePeerConnectionStats(report); summary != nil {
+					log.Printf("  Stats: frames=%d, bytes=%d, packets=%d",
+						summary.FramesEncoded, summary.BytesSent, summary.PacketsSent)
+				}
 			}
 
 			// Get current negotiated codecs and attempt to switch

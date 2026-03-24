@@ -700,6 +700,10 @@
           "go_name": "Direction"
         },
         {
+          "c_name": "send_parameters",
+          "go_name": "SendParameters"
+        },
+        {
           "c_name": "error_out",
           "go_name": "ErrorOut"
         }
@@ -748,6 +752,10 @@
           "go_name": "ICECandidatePoolSize"
         },
         {
+          "c_name": "ice_transport_policy",
+          "go_name": "ICETransportPolicy"
+        },
+        {
           "c_name": "bundle_policy",
           "go_name": "BundlePolicy"
         },
@@ -780,6 +788,56 @@
         {
           "c_name": "out_sdp_len",
           "go_name": "OutSDPLen"
+        },
+        {
+          "c_name": "voice_activity_detection",
+          "go_name": "VoiceActivityDetection"
+        },
+        {
+          "c_name": "ice_trickling_supported",
+          "go_name": "ICETricklingSupported"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionCreateDataChannelExParams",
+      "go_name": "shimPeerConnectionCreateDataChannelExParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "label",
+          "go_name": "Label"
+        },
+        {
+          "c_name": "ordered",
+          "go_name": "Ordered"
+        },
+        {
+          "c_name": "max_packet_lifetime",
+          "go_name": "MaxPacketLifetime"
+        },
+        {
+          "c_name": "max_retransmits",
+          "go_name": "MaxRetransmits"
+        },
+        {
+          "c_name": "protocol",
+          "go_name": "Protocol"
+        },
+        {
+          "c_name": "negotiated",
+          "go_name": "Negotiated"
+        },
+        {
+          "c_name": "id",
+          "go_name": "ID"
         },
         {
           "c_name": "error_out",
@@ -836,6 +894,18 @@
         {
           "c_name": "out_sdp_len",
           "go_name": "OutSDPLen"
+        },
+        {
+          "c_name": "ice_restart",
+          "go_name": "ICERestart"
+        },
+        {
+          "c_name": "voice_activity_detection",
+          "go_name": "VoiceActivityDetection"
+        },
+        {
+          "c_name": "ice_trickling_supported",
+          "go_name": "ICETricklingSupported"
         },
         {
           "c_name": "error_out",
@@ -912,6 +982,32 @@
         {
           "c_name": "out_count",
           "go_name": "OutCount"
+        }
+      ]
+    },
+    {
+      "c_name": "ShimPeerConnectionGetStatsJSONParams",
+      "go_name": "shimPeerConnectionGetStatsJSONParams",
+      "fields": [
+        {
+          "c_name": "pc",
+          "go_name": "PC"
+        },
+        {
+          "c_name": "json_out",
+          "go_name": "JsonOut"
+        },
+        {
+          "c_name": "json_out_size",
+          "go_name": "JsonOutSize"
+        },
+        {
+          "c_name": "out_json_len",
+          "go_name": "OutJsonLen"
+        },
+        {
+          "c_name": "error_out",
+          "go_name": "ErrorOut"
         }
       ]
     },

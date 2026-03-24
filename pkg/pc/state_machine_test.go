@@ -159,19 +159,19 @@ func TestPeerConnection_OperationsAfterClose(t *testing.T) {
 	}
 
 	// SetLocalDescription should fail
-	err = pc.SetLocalDescription(&SessionDescription{Type: SDPTypeOffer, SDP: "v=0..."})
+	err = pc.SetLocalDescription(SessionDescription{Type: SDPTypeOffer, SDP: "v=0..."})
 	if err != ErrPeerConnectionClosed {
 		t.Errorf("SetLocalDescription after close: got %v, want ErrPeerConnectionClosed", err)
 	}
 
 	// SetRemoteDescription should fail
-	err = pc.SetRemoteDescription(&SessionDescription{Type: SDPTypeOffer, SDP: "v=0..."})
+	err = pc.SetRemoteDescription(SessionDescription{Type: SDPTypeOffer, SDP: "v=0..."})
 	if err != ErrPeerConnectionClosed {
 		t.Errorf("SetRemoteDescription after close: got %v, want ErrPeerConnectionClosed", err)
 	}
 
 	// AddICECandidate should fail
-	err = pc.AddICECandidate(&ICECandidate{Candidate: "candidate:..."})
+	err = pc.AddICECandidate(ICECandidate{Candidate: "candidate:..."})
 	if err != ErrPeerConnectionClosed {
 		t.Errorf("AddICECandidate after close: got %v, want ErrPeerConnectionClosed", err)
 	}
@@ -353,11 +353,12 @@ func TestPeerConnection_DataChannel_WithOptions(t *testing.T) {
 
 	ordered := false
 	maxRetransmits := uint16(3)
+	protocol := "custom-protocol"
 
 	dc, err := pc.CreateDataChannel("unordered-channel", &DataChannelInit{
 		Ordered:        &ordered,
 		MaxRetransmits: &maxRetransmits,
-		Protocol:       "custom-protocol",
+		Protocol:       &protocol,
 	})
 	if err != nil {
 		t.Fatalf("CreateDataChannel with options: %v", err)

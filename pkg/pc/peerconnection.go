@@ -24,7 +24,6 @@ var (
 	ErrSetDescriptionFailed  = errors.New("set description failed")
 	ErrAddICECandidateFailed = errors.New("add ice candidate failed")
 	ErrTrackNotFound         = errors.New("track not found")
-	ErrNilSessionDescription = errors.New("session description is nil")
 	ErrNilTrack              = errors.New("track is nil")
 	ErrNilSender             = errors.New("sender is nil")
 	ErrNilVideoFrame         = errors.New("video frame is nil")
@@ -39,225 +38,83 @@ const (
 	maxSDPSize = 64 * 1024 // 64KB should be sufficient for SDP
 )
 
-// SignalingState represents the signaling state.
-type SignalingState int
-
-const (
-	SignalingStateStable SignalingState = iota
-	SignalingStateHaveLocalOffer
-	SignalingStateHaveRemoteOffer
-	SignalingStateHaveLocalPranswer
-	SignalingStateHaveRemotePranswer
-	SignalingStateClosed
+type (
+	SignalingState        = webrtc.SignalingState
+	ICEConnectionState    = webrtc.ICEConnectionState
+	ICEGatheringState     = webrtc.ICEGathererState
+	PeerConnectionState   = webrtc.PeerConnectionState
+	SDPType               = webrtc.SDPType
+	SessionDescription    = webrtc.SessionDescription
+	ICECandidate          = webrtc.ICECandidateInit
+	Configuration         = webrtc.Configuration
+	OfferOptions          = webrtc.OfferOptions
+	AnswerOptions         = webrtc.AnswerOptions
+	DataChannelState      = webrtc.DataChannelState
+	TransceiverDirection  = webrtc.RTPTransceiverDirection
+	TransceiverInit       = webrtc.RTPTransceiverInit
+	DataChannelInit       = webrtc.DataChannelInit
+	RTPSendParameters     = webrtc.RTPSendParameters
+	RTPEncodingParameters = webrtc.RTPEncodingParameters
 )
 
-func (s SignalingState) String() string {
-	switch s {
-	case SignalingStateStable:
-		return "stable"
-	case SignalingStateHaveLocalOffer:
-		return "have-local-offer"
-	case SignalingStateHaveRemoteOffer:
-		return "have-remote-offer"
-	case SignalingStateHaveLocalPranswer:
-		return "have-local-pranswer"
-	case SignalingStateHaveRemotePranswer:
-		return "have-remote-pranswer"
-	case SignalingStateClosed:
-		return "closed"
-	default:
-		return "unknown"
-	}
-}
-
-// ICEConnectionState represents the ICE connection state.
-type ICEConnectionState int
-
 const (
-	ICEConnectionStateNew ICEConnectionState = iota
-	ICEConnectionStateChecking
-	ICEConnectionStateConnected
-	ICEConnectionStateCompleted
-	ICEConnectionStateDisconnected
-	ICEConnectionStateFailed
-	ICEConnectionStateClosed
+	SignalingStateStable             = webrtc.SignalingStateStable
+	SignalingStateHaveLocalOffer     = webrtc.SignalingStateHaveLocalOffer
+	SignalingStateHaveRemoteOffer    = webrtc.SignalingStateHaveRemoteOffer
+	SignalingStateHaveLocalPranswer  = webrtc.SignalingStateHaveLocalPranswer
+	SignalingStateHaveRemotePranswer = webrtc.SignalingStateHaveRemotePranswer
+	SignalingStateClosed             = webrtc.SignalingStateClosed
+	ICEConnectionStateNew            = webrtc.ICEConnectionStateNew
+	ICEConnectionStateChecking       = webrtc.ICEConnectionStateChecking
+	ICEConnectionStateConnected      = webrtc.ICEConnectionStateConnected
+	ICEConnectionStateCompleted      = webrtc.ICEConnectionStateCompleted
+	ICEConnectionStateDisconnected   = webrtc.ICEConnectionStateDisconnected
+	ICEConnectionStateFailed         = webrtc.ICEConnectionStateFailed
+	ICEConnectionStateClosed         = webrtc.ICEConnectionStateClosed
+	ICEGatheringStateNew             = webrtc.ICEGathererStateNew
+	ICEGatheringStateGathering       = webrtc.ICEGathererStateGathering
+	ICEGatheringStateComplete        = webrtc.ICEGathererStateComplete
+	ICEGatheringStateClosed          = webrtc.ICEGathererStateClosed
+	PeerConnectionStateNew           = webrtc.PeerConnectionStateNew
+	PeerConnectionStateConnecting    = webrtc.PeerConnectionStateConnecting
+	PeerConnectionStateConnected     = webrtc.PeerConnectionStateConnected
+	PeerConnectionStateDisconnected  = webrtc.PeerConnectionStateDisconnected
+	PeerConnectionStateFailed        = webrtc.PeerConnectionStateFailed
+	PeerConnectionStateClosed        = webrtc.PeerConnectionStateClosed
+	SDPTypeOffer                     = webrtc.SDPTypeOffer
+	SDPTypePranswer                  = webrtc.SDPTypePranswer
+	SDPTypeAnswer                    = webrtc.SDPTypeAnswer
+	SDPTypeRollback                  = webrtc.SDPTypeRollback
+	BundlePolicyBalanced             = webrtc.BundlePolicyBalanced
+	BundlePolicyMaxCompat            = webrtc.BundlePolicyMaxCompat
+	BundlePolicyMaxBundle            = webrtc.BundlePolicyMaxBundle
+	RTCPMuxPolicyRequire             = webrtc.RTCPMuxPolicyRequire
+	RTCPMuxPolicyNegotiate           = webrtc.RTCPMuxPolicyNegotiate
+	SDPSemanticsUnifiedPlan          = webrtc.SDPSemanticsUnifiedPlan
+	SDPSemanticsPlanB                = webrtc.SDPSemanticsPlanB
+	ICETransportPolicyAll            = webrtc.ICETransportPolicyAll
+	ICETransportPolicyRelay          = webrtc.ICETransportPolicyRelay
+	DataChannelStateConnecting       = webrtc.DataChannelStateConnecting
+	DataChannelStateOpen             = webrtc.DataChannelStateOpen
+	DataChannelStateClosing          = webrtc.DataChannelStateClosing
+	DataChannelStateClosed           = webrtc.DataChannelStateClosed
+	TransceiverDirectionSendRecv     = webrtc.RTPTransceiverDirectionSendrecv
+	TransceiverDirectionSendOnly     = webrtc.RTPTransceiverDirectionSendonly
+	TransceiverDirectionRecvOnly     = webrtc.RTPTransceiverDirectionRecvonly
+	TransceiverDirectionInactive     = webrtc.RTPTransceiverDirectionInactive
 )
-
-func (s ICEConnectionState) String() string {
-	switch s {
-	case ICEConnectionStateNew:
-		return "new"
-	case ICEConnectionStateChecking:
-		return "checking"
-	case ICEConnectionStateConnected:
-		return "connected"
-	case ICEConnectionStateCompleted:
-		return "completed"
-	case ICEConnectionStateDisconnected:
-		return "disconnected"
-	case ICEConnectionStateFailed:
-		return "failed"
-	case ICEConnectionStateClosed:
-		return "closed"
-	default:
-		return "unknown"
-	}
-}
-
-// ICEGatheringState represents the ICE gathering state.
-type ICEGatheringState int
-
-const (
-	ICEGatheringStateNew ICEGatheringState = iota
-	ICEGatheringStateGathering
-	ICEGatheringStateComplete
-)
-
-func (s ICEGatheringState) String() string {
-	switch s {
-	case ICEGatheringStateNew:
-		return "new"
-	case ICEGatheringStateGathering:
-		return "gathering"
-	case ICEGatheringStateComplete:
-		return "complete"
-	default:
-		return "unknown"
-	}
-}
-
-// PeerConnectionState represents the overall connection state.
-type PeerConnectionState int
-
-const (
-	PeerConnectionStateNew PeerConnectionState = iota
-	PeerConnectionStateConnecting
-	PeerConnectionStateConnected
-	PeerConnectionStateDisconnected
-	PeerConnectionStateFailed
-	PeerConnectionStateClosed
-)
-
-func (s PeerConnectionState) String() string {
-	switch s {
-	case PeerConnectionStateNew:
-		return "new"
-	case PeerConnectionStateConnecting:
-		return "connecting"
-	case PeerConnectionStateConnected:
-		return "connected"
-	case PeerConnectionStateDisconnected:
-		return "disconnected"
-	case PeerConnectionStateFailed:
-		return "failed"
-	case PeerConnectionStateClosed:
-		return "closed"
-	default:
-		return "unknown"
-	}
-}
-
-// SDPType represents the type of session description.
-type SDPType int
-
-const (
-	SDPTypeOffer SDPType = iota
-	SDPTypePranswer
-	SDPTypeAnswer
-	SDPTypeRollback
-)
-
-func (t SDPType) String() string {
-	switch t {
-	case SDPTypeOffer:
-		return "offer"
-	case SDPTypePranswer:
-		return "pranswer"
-	case SDPTypeAnswer:
-		return "answer"
-	case SDPTypeRollback:
-		return "rollback"
-	default:
-		return "unknown"
-	}
-}
-
-// SessionDescription represents an SDP session description.
-type SessionDescription struct {
-	Type SDPType
-	SDP  string
-}
-
-// ICECandidate represents an ICE candidate.
-type ICECandidate struct {
-	Candidate        string
-	SDPMid           string
-	SDPMLineIndex    uint16
-	UsernameFragment string
-}
-
-// ICEServer represents an ICE server configuration.
-type ICEServer struct {
-	URLs       []string
-	Username   string
-	Credential string
-}
-
-// BundlePolicy represents the bundle policy used during negotiation.
-type BundlePolicy string
-
-const (
-	BundlePolicyBalanced  BundlePolicy = "balanced"
-	BundlePolicyMaxCompat BundlePolicy = "max-compat"
-	BundlePolicyMaxBundle BundlePolicy = "max-bundle"
-)
-
-// RTCPMuxPolicy represents the RTCP mux policy used during negotiation.
-type RTCPMuxPolicy string
-
-const (
-	RTCPMuxPolicyRequire   RTCPMuxPolicy = "require"
-	RTCPMuxPolicyNegotiate RTCPMuxPolicy = "negotiate"
-)
-
-// SDPSemantics represents the SDP semantics used by the peer connection.
-type SDPSemantics string
-
-const (
-	SDPSemanticsUnifiedPlan SDPSemantics = "unified-plan"
-	SDPSemanticsPlanB       SDPSemantics = "plan-b"
-)
-
-// Configuration for PeerConnection.
-type Configuration struct {
-	ICEServers           []ICEServer
-	BundlePolicy         BundlePolicy
-	RTCPMuxPolicy        RTCPMuxPolicy
-	SDPSemantics         SDPSemantics
-	ICECandidatePoolSize int
-}
 
 // DefaultConfiguration returns a default configuration.
-func DefaultConfiguration() Configuration {
-	return Configuration{
-		ICEServers: []ICEServer{
+func DefaultConfiguration() webrtc.Configuration {
+	return webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		},
-		BundlePolicy:  BundlePolicyMaxBundle,
-		RTCPMuxPolicy: RTCPMuxPolicyRequire,
-		SDPSemantics:  SDPSemanticsUnifiedPlan,
+		BundlePolicy:       webrtc.BundlePolicyBalanced,
+		RTCPMuxPolicy:      webrtc.RTCPMuxPolicyRequire,
+		ICETransportPolicy: webrtc.ICETransportPolicyAll,
+		SDPSemantics:       webrtc.SDPSemanticsUnifiedPlan,
 	}
-}
-
-// OfferOptions for createOffer.
-type OfferOptions struct {
-	ICERestart             bool
-	VoiceActivityDetection bool
-}
-
-// AnswerOptions for createAnswer.
-type AnswerOptions struct {
-	VoiceActivityDetection bool
 }
 
 // GetSupportedVideoCodecs returns a list of supported video codecs.
@@ -369,88 +226,43 @@ func (s *RTPSender) ReplaceTrack(t *Track) error {
 	return nil
 }
 
-// SetParameters sets encoding parameters.
-func (s *RTPSender) SetParameters(params RTPSendParameters) error {
+// SetParameters sets sender parameters.
+func (s *RTPSender) SetParameters(params webrtc.RTPSendParameters) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.handle == 0 {
 		return errors.New("sender not initialized")
 	}
-
-	// Convert to FFI format
-	ffiEncodings := make([]ffi.RTPEncodingParameters, len(params.Encodings))
-	for i, enc := range params.Encodings {
-		copy(ffiEncodings[i].RID[:], enc.RID)
-		ffiEncodings[i].MaxBitrateBps = enc.MaxBitrate
-		ffiEncodings[i].MaxFramerate = enc.MaxFramerate
-		ffiEncodings[i].ScaleResolutionDownBy = enc.ScaleResolutionDownBy
-		if enc.Active {
-			ffiEncodings[i].Active = 1
-		}
-		copy(ffiEncodings[i].ScalabilityMode[:], enc.ScalabilityMode)
+	if err := validateSendParameters(params); err != nil {
+		return err
 	}
 
-	ffiParams := &ffi.RTPSendParameters{
-		EncodingCount: int32(len(ffiEncodings)),
-	}
-	if len(ffiEncodings) > 0 {
-		ffiParams.Encodings = ffi.UintptrFromSlice(ffiEncodings)
-	}
-
+	ffiParams := ffiSendParametersFromWebRTC(params)
 	return ffi.RTPSenderSetParameters(s.handle, ffiParams)
 }
 
 // GetParameters gets current parameters.
-func (s *RTPSender) GetParameters() RTPSendParameters {
+func (s *RTPSender) GetParameters() webrtc.RTPSendParameters {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.handle == 0 {
-		return RTPSendParameters{}
+		return webrtc.RTPSendParameters{}
 	}
 
 	const maxEncodings = 8
 	ffiEncodings := make([]ffi.RTPEncodingParameters, maxEncodings)
 	ffiParams, count, err := ffi.RTPSenderGetParameters(s.handle, ffiEncodings)
 	if err != nil || ffiParams == nil {
-		return RTPSendParameters{}
+		return webrtc.RTPSendParameters{}
 	}
 
-	params := RTPSendParameters{
-		Encodings: make([]RTPEncodingParameters, count),
-	}
-
-	for i := 0; i < count; i++ {
-		params.Encodings[i] = RTPEncodingParameters{
-			RID:                   ffi.ByteArrayToString(ffiEncodings[i].RID[:]),
-			Active:                ffiEncodings[i].Active != 0,
-			MaxBitrate:            ffiEncodings[i].MaxBitrateBps,
-			MaxFramerate:          ffiEncodings[i].MaxFramerate,
-			ScaleResolutionDownBy: ffiEncodings[i].ScaleResolutionDownBy,
-			ScalabilityMode:       ffi.ByteArrayToString(ffiEncodings[i].ScalabilityMode[:]),
-		}
-	}
-
-	return params
-}
-
-// GetStats gets statistics for this sender.
-// The current shim does not implement sender stats and returns ErrNotSupported.
-func (s *RTPSender) GetStats() (*RTCStats, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.handle == 0 {
-		return nil, errors.New("sender not initialized")
-	}
-
-	ffiStats, err := ffi.RTPSenderGetStats(s.handle)
+	ffiCodecs, err := ffi.RTPSenderGetNegotiatedCodecs(s.handle)
 	if err != nil {
-		return nil, err
+		return webrtc.RTPSendParameters{}
 	}
-
-	return convertFFIStats(ffiStats), nil
+	return webRTCSendParametersFromFFI(ffiEncodings[:count], count, codecParametersFromFFICapabilities(ffiCodecs))
 }
 
 // SetLayerActive enables or disables a simulcast layer.
@@ -487,21 +299,6 @@ func (s *RTPSender) GetActiveLayers() (spatial, temporal int, err error) {
 	}
 
 	return ffi.RTPSenderGetActiveLayers(s.handle)
-}
-
-// SetOnRTCPFeedback sets a callback for RTCP feedback events.
-// The current shim does not implement this surface and returns ErrNotSupported.
-func (s *RTPSender) SetOnRTCPFeedback(cb func(feedbackType RTCPFeedbackType, ssrc uint32)) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.handle == 0 {
-		return errors.New("sender not initialized")
-	}
-
-	return ffi.RTPSenderSetOnRTCPFeedback(s.handle, func(feedbackType int, ssrc uint32) {
-		cb(RTCPFeedbackType(feedbackType), ssrc)
-	})
 }
 
 // SetScalabilityMode sets the SVC scalability mode (e.g., "L3T3_KEY", "L1T2").
@@ -573,154 +370,6 @@ var ErrRenegotiationNeeded = ffi.ErrRenegotiationNeeded
 // ErrNotFound is returned when the requested codec was not negotiated.
 var ErrNotFound = ffi.ErrNotFound
 
-// RTCPFeedbackType represents the type of RTCP feedback.
-type RTCPFeedbackType int
-
-const (
-	RTCPFeedbackTypePLI  RTCPFeedbackType = 0
-	RTCPFeedbackTypeFIR  RTCPFeedbackType = 1
-	RTCPFeedbackTypeNACK RTCPFeedbackType = 2
-)
-
-func (t RTCPFeedbackType) String() string {
-	switch t {
-	case RTCPFeedbackTypePLI:
-		return "PLI"
-	case RTCPFeedbackTypeFIR:
-		return "FIR"
-	case RTCPFeedbackTypeNACK:
-		return "NACK"
-	default:
-		return "unknown"
-	}
-}
-
-// RTCStats represents connection statistics.
-type RTCStats struct {
-	TimestampUs              int64
-	BytesSent                int64
-	BytesReceived            int64
-	PacketsSent              int64
-	PacketsReceived          int64
-	PacketsLost              int64
-	RoundTripTimeMs          float64
-	JitterMs                 float64
-	AvailableOutgoingBitrate float64
-	AvailableIncomingBitrate float64
-	CurrentRTTMs             int64
-	TotalRTTMs               int64
-	ResponsesReceived        int64
-	FramesEncoded            int
-	FramesDecoded            int
-	FramesDropped            int
-	KeyFramesEncoded         int
-	KeyFramesDecoded         int
-	NACKCount                int
-	PLICount                 int
-	FIRCount                 int
-	QPSum                    int
-	AudioLevel               float64
-	TotalAudioEnergy         float64
-	ConcealmentEvents        int
-
-	// SCTP/DataChannel stats
-	DataChannelsOpened       int64
-	DataChannelsClosed       int64
-	MessagesSent             int64
-	MessagesReceived         int64
-	BytesSentDataChannel     int64
-	BytesReceivedDataChannel int64
-
-	// Quality limitation
-	QualityLimitationReason     QualityLimitationReason
-	QualityLimitationDurationMs int
-
-	// Remote inbound/outbound RTP stats
-	RemotePacketsLost     int64
-	RemoteJitterMs        float64
-	RemoteRoundTripTimeMs float64
-
-	// Jitter buffer stats (from RTCInboundRtpStreamStats)
-	JitterBufferDelayMs        float64 // Total time spent in jitter buffer / emitted count
-	JitterBufferTargetDelayMs  float64 // Target delay for adaptive buffer
-	JitterBufferMinimumDelayMs float64 // User-configured minimum delay
-	JitterBufferEmittedCount   int64   // Number of samples/frames emitted from buffer
-}
-
-// QualityLimitationReason indicates why quality is limited.
-type QualityLimitationReason int
-
-const (
-	QualityLimitationNone      QualityLimitationReason = 0
-	QualityLimitationCPU       QualityLimitationReason = 1
-	QualityLimitationBandwidth QualityLimitationReason = 2
-	QualityLimitationOther     QualityLimitationReason = 3
-)
-
-func (r QualityLimitationReason) String() string {
-	switch r {
-	case QualityLimitationNone:
-		return "none"
-	case QualityLimitationCPU:
-		return "cpu"
-	case QualityLimitationBandwidth:
-		return "bandwidth"
-	case QualityLimitationOther:
-		return "other"
-	default:
-		return "unknown"
-	}
-}
-
-func convertFFIStats(s *ffi.RTCStats) *RTCStats {
-	if s == nil {
-		return nil
-	}
-	return &RTCStats{
-		TimestampUs:                 s.TimestampUs,
-		BytesSent:                   s.BytesSent,
-		BytesReceived:               s.BytesReceived,
-		PacketsSent:                 s.PacketsSent,
-		PacketsReceived:             s.PacketsReceived,
-		PacketsLost:                 s.PacketsLost,
-		RoundTripTimeMs:             s.RoundTripTimeMs,
-		JitterMs:                    s.JitterMs,
-		AvailableOutgoingBitrate:    s.AvailableOutgoingBitrate,
-		AvailableIncomingBitrate:    s.AvailableIncomingBitrate,
-		CurrentRTTMs:                s.CurrentRTTMs,
-		TotalRTTMs:                  s.TotalRTTMs,
-		ResponsesReceived:           s.ResponsesReceived,
-		FramesEncoded:               int(s.FramesEncoded),
-		FramesDecoded:               int(s.FramesDecoded),
-		FramesDropped:               int(s.FramesDropped),
-		KeyFramesEncoded:            int(s.KeyFramesEncoded),
-		KeyFramesDecoded:            int(s.KeyFramesDecoded),
-		NACKCount:                   int(s.NACKCount),
-		PLICount:                    int(s.PLICount),
-		FIRCount:                    int(s.FIRCount),
-		QPSum:                       int(s.QPSum),
-		AudioLevel:                  s.AudioLevel,
-		TotalAudioEnergy:            s.TotalAudioEnergy,
-		ConcealmentEvents:           int(s.ConcealmentEvents),
-		DataChannelsOpened:          s.DataChannelsOpened,
-		DataChannelsClosed:          s.DataChannelsClosed,
-		MessagesSent:                s.MessagesSent,
-		MessagesReceived:            s.MessagesReceived,
-		BytesSentDataChannel:        s.BytesSentDataChannel,
-		BytesReceivedDataChannel:    s.BytesReceivedDataChannel,
-		QualityLimitationReason:     QualityLimitationReason(s.QualityLimitationReason),
-		QualityLimitationDurationMs: int(s.QualityLimitationDurationMs),
-		RemotePacketsLost:           s.RemotePacketsLost,
-		RemoteJitterMs:              s.RemoteJitterMs,
-		RemoteRoundTripTimeMs:       s.RemoteRoundTripTimeMs,
-		// Jitter buffer stats
-		JitterBufferDelayMs:        s.JitterBufferDelayMs,
-		JitterBufferTargetDelayMs:  s.JitterBufferTargetDelayMs,
-		JitterBufferMinimumDelayMs: s.JitterBufferMinimumDelayMs,
-		JitterBufferEmittedCount:   s.JitterBufferEmittedCount,
-	}
-}
-
 // RTPReceiver represents an RTP receiver.
 type RTPReceiver struct {
 	handle uintptr
@@ -738,30 +387,13 @@ func (r *RTPReceiver) Track() *Track {
 	return r.track
 }
 
-// GetStats gets statistics for this receiver.
-func (r *RTPReceiver) GetStats() (*RTCStats, error) {
-	if r.handle == 0 {
-		return nil, errors.New("receiver not initialized")
-	}
-
-	ffiStats, err := ffi.RTPReceiverGetStats(r.handle)
-	if err != nil {
-		return nil, err
-	}
-
-	return convertFFIStats(ffiStats), nil
-}
-
 // SetJitterBufferMinDelay sets the minimum jitter buffer delay in milliseconds.
 // This sets a floor for libwebrtc's adaptive jitter buffer. The actual delay
 // may be higher based on network conditions, but won't go below this value.
 // Pass 0 to let libwebrtc's adaptive algorithm decide without a minimum floor.
 //
-// For jitter buffer statistics, use GetStats() which returns RTCStats with:
-// - JitterBufferDelayMs: Total time spent in buffer / emitted count
-// - JitterBufferTargetDelayMs: Target delay for adaptive buffer
-// - JitterBufferMinimumDelayMs: User-configured minimum delay
-// - JitterBufferEmittedCount: Number of samples/frames emitted from buffer
+// For jitter buffer statistics, use PeerConnection.GetStats() and inspect the
+// resulting inbound RTP stats entries.
 func (r *RTPReceiver) SetJitterBufferMinDelay(minDelayMs int) error {
 	if r.handle == 0 {
 		return errors.New("receiver not initialized")
@@ -786,31 +418,6 @@ func (t *RTPTransceiver) IsValid() bool {
 	return t.handle != 0
 }
 
-// TransceiverDirection represents the transceiver direction.
-type TransceiverDirection int
-
-const (
-	TransceiverDirectionSendRecv TransceiverDirection = iota
-	TransceiverDirectionSendOnly
-	TransceiverDirectionRecvOnly
-	TransceiverDirectionInactive
-)
-
-func (d TransceiverDirection) String() string {
-	switch d {
-	case TransceiverDirectionSendRecv:
-		return "sendrecv"
-	case TransceiverDirectionSendOnly:
-		return "sendonly"
-	case TransceiverDirectionRecvOnly:
-		return "recvonly"
-	case TransceiverDirectionInactive:
-		return "inactive"
-	default:
-		return "unknown"
-	}
-}
-
 // Sender returns the transceiver's sender.
 func (t *RTPTransceiver) Sender() *RTPSender { return t.sender }
 
@@ -821,15 +428,19 @@ func (t *RTPTransceiver) Receiver() *RTPReceiver { return t.receiver }
 func (t *RTPTransceiver) Direction() TransceiverDirection {
 	if t.handle != 0 {
 		dir := ffi.TransceiverGetDirection(t.handle)
-		return TransceiverDirection(dir)
+		return transceiverDirectionFromFFI(ffi.TransceiverDirection(dir))
 	}
 	return t.direction
 }
 
 // SetDirection sets the direction.
 func (t *RTPTransceiver) SetDirection(d TransceiverDirection) error {
+	direction, err := transceiverDirectionToFFI(d)
+	if err != nil {
+		return err
+	}
 	if t.handle != 0 {
-		if err := ffi.TransceiverSetDirection(t.handle, ffi.TransceiverDirection(d)); err != nil {
+		if err := ffi.TransceiverSetDirection(t.handle, direction); err != nil {
 			return err
 		}
 	}
@@ -841,7 +452,7 @@ func (t *RTPTransceiver) SetDirection(d TransceiverDirection) error {
 func (t *RTPTransceiver) CurrentDirection() TransceiverDirection {
 	if t.handle != 0 {
 		dir := ffi.TransceiverGetCurrentDirection(t.handle)
-		return TransceiverDirection(dir)
+		return transceiverDirectionFromFFI(ffi.TransceiverDirection(dir))
 	}
 	return t.direction
 }
@@ -895,21 +506,6 @@ func inferTransceiverKind(handle uintptr) string {
 	default:
 		return ""
 	}
-}
-
-// RTPSendParameters for sender configuration.
-type RTPSendParameters struct {
-	Encodings []RTPEncodingParameters
-}
-
-// RTPEncodingParameters for per-encoding configuration.
-type RTPEncodingParameters struct {
-	RID                   string  // RTP stream ID (for simulcast)
-	Active                bool    // Whether this encoding is active
-	MaxBitrate            uint32  // Max bitrate in bps
-	MaxFramerate          float64 // Max framerate
-	ScaleResolutionDownBy float64 // Scale factor for resolution
-	ScalabilityMode       string  // SVC mode string (e.g., "L3T3_KEY")
 }
 
 // VideoFrameHandler is called when a video frame is received on a remote track.
@@ -1124,15 +720,15 @@ func (t *Track) WriteAudioFrame(f *frame.AudioFrame) error {
 // PeerConnection wraps libwebrtc's native PeerConnection.
 type PeerConnection struct {
 	handle uintptr
-	config Configuration
+	config webrtc.Configuration
 
 	signalingState     atomic.Value
 	iceConnectionState atomic.Value
 	iceGatheringState  atomic.Value
 	connectionState    atomic.Value
 
-	localDescription  *SessionDescription
-	remoteDescription *SessionDescription
+	localDescription  *webrtc.SessionDescription
+	remoteDescription *webrtc.SessionDescription
 
 	senders      []*RTPSender
 	receivers    []*RTPReceiver
@@ -1141,7 +737,7 @@ type PeerConnection struct {
 
 	callbackMu sync.RWMutex
 
-	onICECandidate             func(candidate *ICECandidate)
+	onICECandidate             func(candidate *webrtc.ICECandidateInit)
 	onICEConnectionStateChange func(state ICEConnectionState)
 	onICEGatheringStateChange  func(state ICEGatheringState)
 	onSignalingStateChange     func(state SignalingState)
@@ -1159,7 +755,7 @@ func (pc *PeerConnection) IsValid() bool {
 	return pc.handle != 0
 }
 
-func (pc *PeerConnection) SetOnICECandidate(cb func(candidate *ICECandidate)) {
+func (pc *PeerConnection) SetOnICECandidate(cb func(candidate *webrtc.ICECandidateInit)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onICECandidate = cb
@@ -1207,31 +803,6 @@ func (pc *PeerConnection) SetOnDataChannel(cb func(dc *DataChannel)) {
 	pc.onDataChannel = cb
 }
 
-// DataChannelState represents the state of a data channel.
-type DataChannelState int
-
-const (
-	DataChannelStateConnecting DataChannelState = iota
-	DataChannelStateOpen
-	DataChannelStateClosing
-	DataChannelStateClosed
-)
-
-func (s DataChannelState) String() string {
-	switch s {
-	case DataChannelStateConnecting:
-		return "connecting"
-	case DataChannelStateOpen:
-		return "open"
-	case DataChannelStateClosing:
-		return "closing"
-	case DataChannelStateClosed:
-		return "closed"
-	default:
-		return "unknown"
-	}
-}
-
 // DataChannel represents a data channel.
 type DataChannel struct {
 	handle uintptr
@@ -1261,7 +832,7 @@ func (dc *DataChannel) ReadyState() DataChannelState {
 	if dc.handle == 0 {
 		return DataChannelStateClosed
 	}
-	return DataChannelState(ffi.DataChannelReadyState(dc.handle))
+	return dataChannelStateFromFFI(ffi.DataChannelReadyState(dc.handle))
 }
 
 // SetOnOpen sets the callback for when the data channel opens.
@@ -1342,7 +913,7 @@ type ffiConfigData struct {
 
 // buildFFIConfig converts a Configuration to FFI-compatible format.
 // Returns config data that must be kept alive during the FFI call.
-func buildFFIConfig(config *Configuration) *ffiConfigData {
+func buildFFIConfig(config *webrtc.Configuration) (*ffiConfigData, error) {
 	data := &ffiConfigData{
 		config: &ffi.PeerConnectionConfig{
 			ICECandidatePoolSize: int32(config.ICECandidatePoolSize),
@@ -1372,8 +943,8 @@ func buildFFIConfig(config *Configuration) *ffiConfigData {
 				data.strings = append(data.strings, usernameStr)
 				data.iceServers[i].Username = &usernameStr[0]
 			}
-			if server.Credential != "" {
-				credStr := ffi.CString(server.Credential)
+			if credential := credentialString(server); credential != "" {
+				credStr := ffi.CString(credential)
 				data.strings = append(data.strings, credStr)
 				data.iceServers[i].Credential = &credStr[0]
 			}
@@ -1383,28 +954,45 @@ func buildFFIConfig(config *Configuration) *ffiConfigData {
 	}
 
 	// Set policies
-	if config.BundlePolicy != "" {
-		bundleStr := ffi.CString(string(config.BundlePolicy))
+	if bundlePolicy, err := bundlePolicyString(config.BundlePolicy); err != nil {
+		return nil, err
+	} else {
+		bundleStr := ffi.CString(bundlePolicy)
 		data.strings = append(data.strings, bundleStr)
 		data.config.BundlePolicy = &bundleStr[0]
 	}
-	if config.RTCPMuxPolicy != "" {
-		rtcpStr := ffi.CString(string(config.RTCPMuxPolicy))
+	if rtcpMuxPolicy, err := rtcpMuxPolicyString(config.RTCPMuxPolicy); err != nil {
+		return nil, err
+	} else {
+		rtcpStr := ffi.CString(rtcpMuxPolicy)
 		data.strings = append(data.strings, rtcpStr)
 		data.config.RTCPMuxPolicy = &rtcpStr[0]
 	}
-	if config.SDPSemantics != "" {
-		sdpStr := ffi.CString(string(config.SDPSemantics))
+	if iceTransportPolicy, err := iceTransportPolicyString(config.ICETransportPolicy); err != nil {
+		return nil, err
+	} else {
+		iceStr := ffi.CString(iceTransportPolicy)
+		data.strings = append(data.strings, iceStr)
+		data.config.ICETransportPolicy = &iceStr[0]
+	}
+	if sdpSemantics, err := sdpSemanticsString(config.SDPSemantics); err != nil {
+		return nil, err
+	} else {
+		sdpStr := ffi.CString(sdpSemantics)
 		data.strings = append(data.strings, sdpStr)
 		data.config.SDPSemantics = &sdpStr[0]
 	}
 
-	return data
+	return data, nil
 }
 
 // NewPeerConnection creates a new libwebrtc-backed PeerConnection.
-func NewPeerConnection(config Configuration) (*PeerConnection, error) {
+func NewPeerConnection(config webrtc.Configuration) (*PeerConnection, error) {
 	if err := ffi.LoadLibrary(); err != nil {
+		return nil, err
+	}
+	config = normalizeConfiguration(config)
+	if err := validateConfiguration(config); err != nil {
 		return nil, err
 	}
 
@@ -1416,13 +1004,16 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		localTracks:  make([]*Track, 0),
 	}
 
-	pc.signalingState.Store(SignalingStateStable)
-	pc.iceConnectionState.Store(ICEConnectionStateNew)
-	pc.iceGatheringState.Store(ICEGatheringStateNew)
-	pc.connectionState.Store(PeerConnectionStateNew)
+	pc.signalingState.Store(webrtc.SignalingStateStable)
+	pc.iceConnectionState.Store(webrtc.ICEConnectionStateNew)
+	pc.iceGatheringState.Store(webrtc.ICEGathererStateNew)
+	pc.connectionState.Store(webrtc.PeerConnectionStateNew)
 
 	// Build FFI config - keep data alive during FFI call
-	configData := buildFFIConfig(&config)
+	configData, err := buildFFIConfig(&config)
+	if err != nil {
+		return nil, err
+	}
 	handle, err := ffi.CreatePeerConnection(configData.config)
 	// Ensure configData is kept alive until after FFI call completes
 	_ = configData
@@ -1436,7 +1027,7 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		if pc.closed.Load() {
 			return // Ignore if closed
 		}
-		newState := PeerConnectionState(state)
+		newState := peerConnectionStateFromFFI(state)
 		pc.connectionState.Store(newState)
 		pc.callbackMu.RLock()
 		cb := pc.onConnectionStateChange
@@ -1455,11 +1046,7 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		cb := pc.onICECandidate
 		pc.callbackMu.RUnlock()
 		if cb != nil {
-			cb(&ICECandidate{
-				Candidate:     candidate,
-				SDPMid:        sdpMid,
-				SDPMLineIndex: uint16(sdpMLineIndex),
-			})
+			cb(iceCandidateInitFromParts(candidate, sdpMid, sdpMLineIndex))
 		}
 	})
 
@@ -1526,7 +1113,7 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		if pc.closed.Load() {
 			return // Ignore if closed
 		}
-		newState := SignalingState(state)
+		newState := signalingStateFromFFI(state)
 		pc.signalingState.Store(newState)
 		pc.callbackMu.RLock()
 		cb := pc.onSignalingStateChange
@@ -1541,7 +1128,7 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		if pc.closed.Load() {
 			return // Ignore if closed
 		}
-		newState := ICEConnectionState(state)
+		newState := iceConnectionStateFromFFI(state)
 		pc.iceConnectionState.Store(newState)
 		pc.callbackMu.RLock()
 		cb := pc.onICEConnectionStateChange
@@ -1556,7 +1143,7 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 		if pc.closed.Load() {
 			return // Ignore if closed
 		}
-		newState := ICEGatheringState(state)
+		newState := iceGathererStateFromFFI(state)
 		pc.iceGatheringState.Store(newState)
 		pc.callbackMu.RLock()
 		cb := pc.onICEGatheringStateChange
@@ -1583,91 +1170,99 @@ func NewPeerConnection(config Configuration) (*PeerConnection, error) {
 }
 
 // CreateOffer creates an SDP offer.
-func (pc *PeerConnection) CreateOffer(options *OfferOptions) (*SessionDescription, error) {
+func (pc *PeerConnection) CreateOffer(options *webrtc.OfferOptions) (webrtc.SessionDescription, error) {
 	if pc.closed.Load() {
-		return nil, ErrPeerConnectionClosed
+		return webrtc.SessionDescription{}, ErrPeerConnectionClosed
 	}
 
 	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock.
 	// Allocate buffer for SDP output
 	sdpBuf := make([]byte, maxSDPSize)
-	sdpLen, err := ffi.PeerConnectionCreateOffer(pc.handle, sdpBuf)
+	sdpLen, err := ffi.PeerConnectionCreateOffer(pc.handle, sdpBuf, options)
 	if err != nil {
-		return nil, ErrCreateOfferFailed
+		return webrtc.SessionDescription{}, ErrCreateOfferFailed
 	}
 
-	return &SessionDescription{
-		Type: SDPTypeOffer,
+	return webrtc.SessionDescription{
+		Type: webrtc.SDPTypeOffer,
 		SDP:  pc.expandLocalTrackStreamIDs(string(sdpBuf[:sdpLen])),
 	}, nil
 }
 
 // CreateAnswer creates an SDP answer.
-func (pc *PeerConnection) CreateAnswer(options *AnswerOptions) (*SessionDescription, error) {
+func (pc *PeerConnection) CreateAnswer(options *webrtc.AnswerOptions) (webrtc.SessionDescription, error) {
 	if pc.closed.Load() {
-		return nil, ErrPeerConnectionClosed
+		return webrtc.SessionDescription{}, ErrPeerConnectionClosed
 	}
 
 	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock.
 	// Allocate buffer for SDP output
 	sdpBuf := make([]byte, maxSDPSize)
-	sdpLen, err := ffi.PeerConnectionCreateAnswer(pc.handle, sdpBuf)
+	sdpLen, err := ffi.PeerConnectionCreateAnswer(pc.handle, sdpBuf, options)
 	if err != nil {
-		return nil, ErrCreateAnswerFailed
+		return webrtc.SessionDescription{}, ErrCreateAnswerFailed
 	}
 
-	return &SessionDescription{
-		Type: SDPTypeAnswer,
+	return webrtc.SessionDescription{
+		Type: webrtc.SDPTypeAnswer,
 		SDP:  pc.expandLocalTrackStreamIDs(string(sdpBuf[:sdpLen])),
 	}, nil
 }
 
 // SetLocalDescription sets the local description.
-func (pc *PeerConnection) SetLocalDescription(desc *SessionDescription) error {
-	if desc == nil {
-		return ErrNilSessionDescription
-	}
+func (pc *PeerConnection) SetLocalDescription(desc webrtc.SessionDescription) error {
 	if pc.closed.Load() {
 		return ErrPeerConnectionClosed
 	}
 	if pc.handle == 0 {
 		return ErrPeerConnectionClosed
 	}
+	sdpType, err := sdpTypeToFFI(desc.Type)
+	if err != nil {
+		return err
+	}
 
 	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock
-	if err := ffi.PeerConnectionSetLocalDescription(pc.handle, int(desc.Type), desc.SDP); err != nil {
+	if err := ffi.PeerConnectionSetLocalDescription(pc.handle, sdpType, desc.SDP); err != nil {
 		return ErrSetDescriptionFailed
 	}
 
 	pc.mu.Lock()
-	pc.localDescription = desc
+	pc.localDescription = &webrtc.SessionDescription{
+		Type: desc.Type,
+		SDP:  desc.SDP,
+	}
 	pc.mu.Unlock()
 	return nil
 }
 
 // SetRemoteDescription sets the remote description.
-func (pc *PeerConnection) SetRemoteDescription(desc *SessionDescription) error {
-	if desc == nil {
-		return ErrNilSessionDescription
-	}
+func (pc *PeerConnection) SetRemoteDescription(desc webrtc.SessionDescription) error {
 	if pc.closed.Load() {
 		return ErrPeerConnectionClosed
 	}
 	if pc.handle == 0 {
 		return ErrPeerConnectionClosed
 	}
+	sdpType, err := sdpTypeToFFI(desc.Type)
+	if err != nil {
+		return err
+	}
 
 	pc.mu.Lock()
 	prevRemoteDescription := pc.remoteDescription
-	pc.remoteDescription = desc
+	pc.remoteDescription = &webrtc.SessionDescription{
+		Type: desc.Type,
+		SDP:  desc.SDP,
+	}
 	pc.mu.Unlock()
 
 	// Note: Don't hold lock during FFI call - it can trigger callbacks that need the lock.
 	// We publish the description first so callbacks fired during SetRemoteDescription
 	// can still recover track/stream relationships from SDP. Roll back on failure.
-	if err := ffi.PeerConnectionSetRemoteDescription(pc.handle, int(desc.Type), desc.SDP); err != nil {
+	if err := ffi.PeerConnectionSetRemoteDescription(pc.handle, sdpType, desc.SDP); err != nil {
 		pc.mu.Lock()
-		if pc.remoteDescription == desc {
+		if pc.remoteDescription != nil && pc.remoteDescription.Type == desc.Type && pc.remoteDescription.SDP == desc.SDP {
 			pc.remoteDescription = prevRemoteDescription
 		}
 		pc.mu.Unlock()
@@ -1678,10 +1273,7 @@ func (pc *PeerConnection) SetRemoteDescription(desc *SessionDescription) error {
 }
 
 // AddICECandidate adds an ICE candidate.
-func (pc *PeerConnection) AddICECandidate(candidate *ICECandidate) error {
-	if candidate == nil {
-		return errors.New("candidate is nil")
-	}
+func (pc *PeerConnection) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 	if pc.closed.Load() {
 		return ErrPeerConnectionClosed
 	}
@@ -1693,7 +1285,8 @@ func (pc *PeerConnection) AddICECandidate(candidate *ICECandidate) error {
 		return ErrPeerConnectionClosed
 	}
 
-	if err := ffi.PeerConnectionAddICECandidate(pc.handle, candidate.Candidate, candidate.SDPMid, int(candidate.SDPMLineIndex)); err != nil {
+	candidateValue, sdpMid, sdpMLineIndex := candidateParts(candidate)
+	if err := ffi.PeerConnectionAddICECandidate(pc.handle, candidateValue, sdpMid, sdpMLineIndex); err != nil {
 		return ErrAddICECandidateFailed
 	}
 
@@ -1701,14 +1294,14 @@ func (pc *PeerConnection) AddICECandidate(candidate *ICECandidate) error {
 }
 
 // LocalDescription returns the local description.
-func (pc *PeerConnection) LocalDescription() *SessionDescription {
+func (pc *PeerConnection) LocalDescription() *webrtc.SessionDescription {
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
 	return pc.localDescription
 }
 
 // RemoteDescription returns the remote description.
-func (pc *PeerConnection) RemoteDescription() *SessionDescription {
+func (pc *PeerConnection) RemoteDescription() *webrtc.SessionDescription {
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
 	return pc.remoteDescription
@@ -1862,7 +1455,31 @@ func (pc *PeerConnection) RemoveTrack(sender *RTPSender) error {
 }
 
 // AddTransceiver adds a transceiver.
-func (pc *PeerConnection) AddTransceiver(kind string, init *TransceiverInit) (*RTPTransceiver, error) {
+func (pc *PeerConnection) AddTransceiver(kind string, init *webrtc.RTPTransceiverInit) (*RTPTransceiver, error) {
+	codecType, err := codecTypeFromString(kind)
+	if err != nil {
+		return nil, err
+	}
+	return pc.addTransceiver(codecType, kind, init)
+}
+
+// AddTransceiverFromKind adds a transceiver using Pion's RTP codec kind enum.
+func (pc *PeerConnection) AddTransceiverFromKind(kind webrtc.RTPCodecType, init ...webrtc.RTPTransceiverInit) (*RTPTransceiver, error) {
+	var config *webrtc.RTPTransceiverInit
+	if len(init) > 1 {
+		return nil, errors.New("only one RTPTransceiverInit is supported")
+	}
+	if len(init) == 1 {
+		config = &init[0]
+	}
+	_, kindString, err := mediaKindFromCodecType(kind)
+	if err != nil {
+		return nil, err
+	}
+	return pc.addTransceiver(kind, kindString, config)
+}
+
+func (pc *PeerConnection) addTransceiver(kind webrtc.RTPCodecType, kindString string, init *webrtc.RTPTransceiverInit) (*RTPTransceiver, error) {
 	if pc.closed.Load() {
 		return nil, ErrPeerConnectionClosed
 	}
@@ -1871,23 +1488,32 @@ func (pc *PeerConnection) AddTransceiver(kind string, init *TransceiverInit) (*R
 	defer pc.mu.Unlock()
 
 	// Determine media kind
-	var mediaKind ffi.MediaKind
-	if kind == "video" {
-		mediaKind = ffi.MediaKindVideo
-	} else if kind == "audio" {
-		mediaKind = ffi.MediaKindAudio
-	} else {
-		return nil, errors.New("unknown media kind")
+	mediaKind, _, err := mediaKindFromCodecType(kind)
+	if err != nil {
+		return nil, err
 	}
 
 	// Determine direction
-	direction := TransceiverDirectionSendRecv
+	direction := webrtc.RTPTransceiverDirectionSendrecv
 	if init != nil {
 		direction = init.Direction
+		for _, encoding := range init.SendEncodings {
+			if err := validateEncodingParameters(encoding); err != nil {
+				return nil, err
+			}
+		}
+	}
+	ffiDirection, err := transceiverDirectionToFFI(direction)
+	if err != nil {
+		return nil, err
+	}
+	sendParams := ffiSendParametersFromWebRTC(webrtc.RTPSendParameters{Encodings: nil})
+	if init != nil && len(init.SendEncodings) > 0 {
+		sendParams = ffiSendParametersFromWebRTC(webrtc.RTPSendParameters{Encodings: init.SendEncodings})
 	}
 
 	// Call FFI to add transceiver
-	handle := ffi.PeerConnectionAddTransceiver(pc.handle, mediaKind, ffi.TransceiverDirection(direction))
+	handle := ffi.PeerConnectionAddTransceiver(pc.handle, mediaKind, ffiDirection, sendParams)
 	if handle == 0 {
 		return nil, errors.New("failed to add transceiver")
 	}
@@ -1896,7 +1522,7 @@ func (pc *PeerConnection) AddTransceiver(kind string, init *TransceiverInit) (*R
 		handle:    handle,
 		pc:        pc,
 		direction: direction,
-		kind:      kind,
+		kind:      kindString,
 	}
 
 	// Get sender and receiver handles
@@ -1913,11 +1539,6 @@ func (pc *PeerConnection) AddTransceiver(kind string, init *TransceiverInit) (*R
 	pc.transceivers = append(pc.transceivers, transceiver)
 
 	return transceiver, nil
-}
-
-// TransceiverInit for AddTransceiver.
-type TransceiverInit struct {
-	Direction TransceiverDirection
 }
 
 // GetTransceivers returns all transceivers.
@@ -2002,7 +1623,7 @@ func (pc *PeerConnection) GetReceivers() []*RTPReceiver {
 }
 
 // CreateDataChannel creates a data channel.
-func (pc *PeerConnection) CreateDataChannel(label string, options *DataChannelInit) (*DataChannel, error) {
+func (pc *PeerConnection) CreateDataChannel(label string, options *webrtc.DataChannelInit) (*DataChannel, error) {
 	if pc.closed.Load() {
 		return nil, ErrPeerConnectionClosed
 	}
@@ -2028,8 +1649,12 @@ func (pc *PeerConnection) CreateDataChannel(label string, options *DataChannelIn
 		if options.MaxRetransmits != nil {
 			maxRetransmits = int(*options.MaxRetransmits)
 		}
-		protocol = options.Protocol
-		negotiated = options.Negotiated
+		if options.Protocol != nil {
+			protocol = *options.Protocol
+		}
+		if options.Negotiated != nil {
+			negotiated = *options.Negotiated
+		}
 		if options.ID != nil {
 			id = int(*options.ID)
 		}
@@ -2067,16 +1692,6 @@ func (pc *PeerConnection) CreateDataChannel(label string, options *DataChannelIn
 	}
 
 	return dc, nil
-}
-
-// DataChannelInit for CreateDataChannel.
-type DataChannelInit struct {
-	Ordered           *bool
-	MaxPacketLifeTime *uint16
-	MaxRetransmits    *uint16
-	Protocol          string
-	Negotiated        bool
-	ID                *uint16
 }
 
 func splitStreamIDs(streams string) []string {
@@ -2328,8 +1943,6 @@ func (pc *PeerConnection) Close() error {
 		ffi.UnregisterICEConnectionStateCallback(pc.handle)
 		ffi.UnregisterICEGatheringStateCallback(pc.handle)
 		ffi.UnregisterNegotiationNeededCallback(pc.handle)
-		ffi.UnregisterBandwidthEstimateCallback(pc.handle)
-
 		ffi.PeerConnectionClose(pc.handle)
 		ffi.PeerConnectionDestroy(pc.handle)
 		pc.handle = 0
@@ -2393,8 +2006,8 @@ func (pc *PeerConnection) CreateAudioTrackWithOptions(id string, sampleRate, cha
 
 // --- Stats API ---
 
-// GetStats returns connection statistics.
-func (pc *PeerConnection) GetStats() (*RTCStats, error) {
+// GetStats returns the current stats report.
+func (pc *PeerConnection) GetStats() (webrtc.StatsReport, error) {
 	if pc.closed.Load() {
 		return nil, ErrPeerConnectionClosed
 	}
@@ -2406,12 +2019,11 @@ func (pc *PeerConnection) GetStats() (*RTCStats, error) {
 		return nil, errors.New("peer connection not initialized")
 	}
 
-	ffiStats, err := ffi.PeerConnectionGetStats(pc.handle)
+	data, err := ffi.PeerConnectionGetStatsJSON(pc.handle)
 	if err != nil {
 		return nil, err
 	}
-
-	return convertFFIStats(ffiStats), nil
+	return statsReportFromJSON(data)
 }
 
 // RestartICE triggers an ICE restart on the next offer.
@@ -2428,69 +2040,4 @@ func (pc *PeerConnection) RestartICE() error {
 	}
 
 	return ffi.PeerConnectionRestartICE(pc.handle)
-}
-
-// BandwidthEstimate contains bandwidth estimation data from libwebrtc's BWE engine.
-type BandwidthEstimate struct {
-	TimestampUs      int64
-	TargetBitrateBps int64
-	AvailableSendBps int64
-	AvailableRecvBps int64
-	PacingRateBps    int64
-	CongestionWindow int32
-	LossRate         float64
-}
-
-// SetOnBandwidthEstimate sets a callback for bandwidth estimation updates from libwebrtc.
-// The current shim does not implement this surface and returns ErrNotSupported.
-func (pc *PeerConnection) SetOnBandwidthEstimate(cb func(*BandwidthEstimate)) error {
-	if pc.closed.Load() {
-		return ErrPeerConnectionClosed
-	}
-	if pc.handle == 0 {
-		return errors.New("peer connection not initialized")
-	}
-
-	return ffi.PeerConnectionSetOnBandwidthEstimate(pc.handle, func(bwe *ffi.BandwidthEstimate) {
-		if cb != nil && bwe != nil {
-			cb(&BandwidthEstimate{
-				TimestampUs:      bwe.TimestampUs,
-				TargetBitrateBps: bwe.TargetBitrateBps,
-				AvailableSendBps: bwe.AvailableSendBps,
-				AvailableRecvBps: bwe.AvailableRecvBps,
-				PacingRateBps:    bwe.PacingRateBps,
-				CongestionWindow: bwe.CongestionWindow,
-				LossRate:         bwe.LossRate,
-			})
-		}
-	})
-}
-
-// GetCurrentBandwidthEstimate returns the current bandwidth estimate from libwebrtc.
-// The current shim does not implement this surface and returns ErrNotSupported.
-func (pc *PeerConnection) GetCurrentBandwidthEstimate() (*BandwidthEstimate, error) {
-	if pc.closed.Load() {
-		return nil, ErrPeerConnectionClosed
-	}
-	if pc.handle == 0 {
-		return nil, errors.New("peer connection not initialized")
-	}
-
-	bwe, err := ffi.PeerConnectionGetBandwidthEstimate(pc.handle)
-	if err != nil {
-		return nil, err
-	}
-	if bwe == nil {
-		return nil, ErrNotSupported
-	}
-
-	return &BandwidthEstimate{
-		TimestampUs:      bwe.TimestampUs,
-		TargetBitrateBps: bwe.TargetBitrateBps,
-		AvailableSendBps: bwe.AvailableSendBps,
-		AvailableRecvBps: bwe.AvailableRecvBps,
-		PacingRateBps:    bwe.PacingRateBps,
-		CongestionWindow: bwe.CongestionWindow,
-		LossRate:         bwe.LossRate,
-	}, nil
 }

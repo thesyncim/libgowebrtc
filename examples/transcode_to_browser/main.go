@@ -152,7 +152,7 @@ func (s *Session) run() error {
 
 	// Create PeerConnection
 	peerConn, err := pc.NewPeerConnection(pc.Configuration{
-		ICEServers: []pc.ICEServer{
+		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{*stunServer}},
 		},
 	})
@@ -390,7 +390,7 @@ func (s *Session) handleSignaling(ctx context.Context) error {
 			s.sendMessage(SignalingMessage{Type: "offer", SDP: offer.SDP})
 
 		case "answer":
-			if err := s.peerConn.SetRemoteDescription(&pc.SessionDescription{
+			if err := s.peerConn.SetRemoteDescription(pc.SessionDescription{
 				Type: pc.SDPTypeAnswer,
 				SDP:  msg.SDP,
 			}); err != nil {
@@ -400,7 +400,7 @@ func (s *Session) handleSignaling(ctx context.Context) error {
 		case "candidate":
 			var candidate pc.ICECandidate
 			if err := json.Unmarshal(msg.Candidate, &candidate); err == nil {
-				s.peerConn.AddICECandidate(&candidate)
+				s.peerConn.AddICECandidate(candidate)
 			}
 		}
 	}

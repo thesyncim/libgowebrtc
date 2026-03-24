@@ -23,11 +23,6 @@ func TestPeerConnectionWrapperStringers(t *testing.T) {
 		{"datachannel closing", DataChannelStateClosing.String(), "closing"},
 		{"datachannel closed", DataChannelStateClosed.String(), "closed"},
 		{"datachannel unknown", DataChannelState(99).String(), "unknown"},
-		{"quality none", QualityLimitationNone.String(), "none"},
-		{"quality cpu", QualityLimitationCPU.String(), "cpu"},
-		{"quality bandwidth", QualityLimitationBandwidth.String(), "bandwidth"},
-		{"quality other", QualityLimitationOther.String(), "other"},
-		{"quality unknown", QualityLimitationReason(99).String(), "unknown"},
 		{"transceiver sendrecv", TransceiverDirectionSendRecv.String(), "sendrecv"},
 		{"transceiver sendonly", TransceiverDirectionSendOnly.String(), "sendonly"},
 		{"transceiver recvonly", TransceiverDirectionRecvOnly.String(), "recvonly"},
@@ -188,7 +183,7 @@ func TestCreateDataChannelValidatesOptionCombinations(t *testing.T) {
 
 	negotiated := true
 	if _, err := pc.CreateDataChannel("negotiated", &DataChannelInit{
-		Negotiated: negotiated,
+		Negotiated: &negotiated,
 	}); err == nil {
 		t.Fatal("CreateDataChannel() negotiated without ID = nil, want error")
 	}
@@ -196,10 +191,7 @@ func TestCreateDataChannelValidatesOptionCombinations(t *testing.T) {
 
 func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	peerConnection := &PeerConnection{}
-	if err := peerConnection.AddICECandidate(nil); err == nil {
-		t.Fatal("AddICECandidate(nil) expected error")
-	}
-	if err := peerConnection.AddICECandidate(&ICECandidate{Candidate: "candidate:1"}); err != ErrPeerConnectionClosed {
+	if err := peerConnection.AddICECandidate(webrtc.ICECandidateInit{Candidate: "candidate:1"}); err != ErrPeerConnectionClosed {
 		t.Fatalf("AddICECandidate() on zero-handle pc = %v, want ErrPeerConnectionClosed", err)
 	}
 
@@ -225,9 +217,6 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	if got := sender.GetParameters(); len(got.Encodings) != 0 {
 		t.Fatalf("GetParameters() len = %d, want 0", len(got.Encodings))
 	}
-	if _, err := sender.GetStats(); err == nil {
-		t.Fatal("GetStats on uninitialized sender expected error")
-	}
 	if err := sender.SetLayerActive("f", true); err == nil {
 		t.Fatal("SetLayerActive on uninitialized sender expected error")
 	}
@@ -236,9 +225,6 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	}
 	if _, _, err := sender.GetActiveLayers(); err == nil {
 		t.Fatal("GetActiveLayers on uninitialized sender expected error")
-	}
-	if err := sender.SetOnRTCPFeedback(func(feedbackType RTCPFeedbackType, ssrc uint32) {}); err == nil {
-		t.Fatal("SetOnRTCPFeedback on uninitialized sender expected error")
 	}
 	if err := sender.SetScalabilityMode("L1T2"); err == nil {
 		t.Fatal("SetScalabilityMode on uninitialized sender expected error")
@@ -262,9 +248,6 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	}
 	if receiver.Track() != track {
 		t.Fatal("Track() did not return stored track")
-	}
-	if _, err := receiver.GetStats(); err == nil {
-		t.Fatal("GetStats on uninitialized receiver expected error")
 	}
 	if err := receiver.SetJitterBufferMinDelay(50); err == nil {
 		t.Fatal("SetJitterBufferMinDelay on uninitialized receiver expected error")
@@ -404,12 +387,6 @@ func TestTrackAndDataChannelGuardPaths(t *testing.T) {
 func TestPeerConnectionNilArgumentGuards(t *testing.T) {
 	pc := &PeerConnection{}
 
-	if err := pc.SetLocalDescription(nil); err != ErrNilSessionDescription {
-		t.Fatalf("SetLocalDescription(nil) = %v, want %v", err, ErrNilSessionDescription)
-	}
-	if err := pc.SetRemoteDescription(nil); err != ErrNilSessionDescription {
-		t.Fatalf("SetRemoteDescription(nil) = %v, want %v", err, ErrNilSessionDescription)
-	}
 	if _, err := pc.AddTrack(nil); err != ErrNilTrack {
 		t.Fatalf("AddTrack(nil) = %v, want %v", err, ErrNilTrack)
 	}
@@ -419,20 +396,27 @@ func TestPeerConnectionNilArgumentGuards(t *testing.T) {
 }
 
 func TestBuildFFIConfigUsesTypedPolicies(t *testing.T) {
-	data := buildFFIConfig(&Configuration{
-		BundlePolicy:  BundlePolicyBalanced,
-		RTCPMuxPolicy: RTCPMuxPolicyNegotiate,
-		SDPSemantics:  SDPSemanticsPlanB,
+	data, err := buildFFIConfig(&Configuration{
+		BundlePolicy:       BundlePolicyBalanced,
+		RTCPMuxPolicy:      RTCPMuxPolicyNegotiate,
+		ICETransportPolicy: ICETransportPolicyRelay,
+		SDPSemantics:       SDPSemanticsPlanB,
 	})
+	if err != nil {
+		t.Fatalf("buildFFIConfig: %v", err)
+	}
 
-	if got := cStringFromPtr(data.config.BundlePolicy); got != string(BundlePolicyBalanced) {
-		t.Fatalf("BundlePolicy = %q, want %q", got, BundlePolicyBalanced)
+	if got := cStringFromPtr(data.config.BundlePolicy); got != "balanced" {
+		t.Fatalf("BundlePolicy = %q, want %q", got, "balanced")
 	}
-	if got := cStringFromPtr(data.config.RTCPMuxPolicy); got != string(RTCPMuxPolicyNegotiate) {
-		t.Fatalf("RTCPMuxPolicy = %q, want %q", got, RTCPMuxPolicyNegotiate)
+	if got := cStringFromPtr(data.config.RTCPMuxPolicy); got != "negotiate" {
+		t.Fatalf("RTCPMuxPolicy = %q, want %q", got, "negotiate")
 	}
-	if got := cStringFromPtr(data.config.SDPSemantics); got != string(SDPSemanticsPlanB) {
-		t.Fatalf("SDPSemantics = %q, want %q", got, SDPSemanticsPlanB)
+	if got := cStringFromPtr(data.config.ICETransportPolicy); got != "relay" {
+		t.Fatalf("ICETransportPolicy = %q, want %q", got, "relay")
+	}
+	if got := cStringFromPtr(data.config.SDPSemantics); got != "plan-b" {
+		t.Fatalf("SDPSemantics = %q, want %q", got, "plan-b")
 	}
 }
 
@@ -446,13 +430,6 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
 	defer pc.Close()
-
-	if err := pc.SetOnBandwidthEstimate(func(*BandwidthEstimate) {}); !errors.Is(err, ErrNotSupported) {
-		t.Fatalf("SetOnBandwidthEstimate: %v", err)
-	}
-	if _, err := pc.GetCurrentBandwidthEstimate(); !errors.Is(err, ErrNotSupported) {
-		t.Fatalf("GetCurrentBandwidthEstimate: %v", err)
-	}
 
 	videoTrack, err := pc.CreateVideoTrack("video-real", 64, 64)
 	if err != nil {
@@ -476,9 +453,6 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 		t.Fatalf("WriteVideoFrame: %v", err)
 	}
 	_ = videoSender.GetParameters()
-	if _, err := videoSender.GetStats(); !errors.Is(err, ErrNotSupported) {
-		t.Fatalf("sender.GetStats: %v", err)
-	}
 
 	audioTrack, err := pc.CreateAudioTrack("audio-real")
 	if err != nil {

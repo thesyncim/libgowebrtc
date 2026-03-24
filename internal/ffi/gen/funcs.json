@@ -1203,6 +1203,18 @@
       "category": "PeerConnectionExtended"
     },
     {
+      "go_name": "shimPeerConnectionGetStatsJSON",
+      "c_name": "shim_peer_connection_get_stats_json",
+      "params": [
+        {
+          "name": "params",
+          "type": "uintptr"
+        }
+      ],
+      "return": "int32",
+      "category": "PeerConnectionExtended"
+    },
+    {
       "go_name": "shimPeerConnectionSetOnSignalingStateChange",
       "c_name": "shim_peer_connection_set_on_signaling_state_change",
       "params": [

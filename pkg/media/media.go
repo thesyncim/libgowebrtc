@@ -238,21 +238,29 @@ func (s *MediaStream) ID() string {
 	return s.id
 }
 
-// GetVideoTracks returns all video tracks.
-func (s *MediaStream) GetVideoTracks() []MediaStreamTrack {
+// GetVideoTracks returns all video tracks with video-specific accessors.
+func (s *MediaStream) GetVideoTracks() []VideoStreamTrack {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	tracks := make([]MediaStreamTrack, len(s.videoTracks))
-	copy(tracks, s.videoTracks)
+	tracks := make([]VideoStreamTrack, 0, len(s.videoTracks))
+	for _, track := range s.videoTracks {
+		if video, ok := track.(VideoStreamTrack); ok {
+			tracks = append(tracks, video)
+		}
+	}
 	return tracks
 }
 
-// GetAudioTracks returns all audio tracks.
-func (s *MediaStream) GetAudioTracks() []MediaStreamTrack {
+// GetAudioTracks returns all audio tracks with audio-specific accessors.
+func (s *MediaStream) GetAudioTracks() []AudioStreamTrack {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	tracks := make([]MediaStreamTrack, len(s.audioTracks))
-	copy(tracks, s.audioTracks)
+	tracks := make([]AudioStreamTrack, 0, len(s.audioTracks))
+	for _, track := range s.audioTracks {
+		if audio, ok := track.(AudioStreamTrack); ok {
+			tracks = append(tracks, audio)
+		}
+	}
 	return tracks
 }
 

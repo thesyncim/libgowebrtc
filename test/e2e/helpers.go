@@ -196,14 +196,14 @@ func (pp *LibPeerPair) ExchangeICECandidates() error {
 
 	// Add sender's candidates to receiver
 	for _, c := range senderCandidates {
-		if err := pp.Receiver.AddICECandidate(c); err != nil {
+		if err := pp.Receiver.AddICECandidate(*c); err != nil {
 			pp.t.Logf("Failed to add sender candidate to receiver: %v", err)
 		}
 	}
 
 	// Add receiver's candidates to sender
 	for _, c := range receiverCandidates {
-		if err := pp.Sender.AddICECandidate(c); err != nil {
+		if err := pp.Sender.AddICECandidate(*c); err != nil {
 			pp.t.Logf("Failed to add receiver candidate to sender: %v", err)
 		}
 	}

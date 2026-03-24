@@ -93,7 +93,7 @@ func TestOfferAnswerExchangeManual(t *testing.T) {
 	}
 
 	// libwebrtc sets remote description (the answer)
-	libAnswer := &pc.SessionDescription{
+	libAnswer := pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  pionAnswer.SDP,
 	}

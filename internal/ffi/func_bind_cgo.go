@@ -107,6 +107,7 @@ static void* fn_shim_peer_connection_get_receivers;
 static void* fn_shim_peer_connection_get_transceivers;
 static void* fn_shim_peer_connection_restart_ice;
 static void* fn_shim_peer_connection_get_stats;
+static void* fn_shim_peer_connection_get_stats_json;
 static void* fn_shim_peer_connection_set_on_signaling_state_change;
 static void* fn_shim_peer_connection_set_on_ice_connection_state_change;
 static void* fn_shim_peer_connection_set_on_ice_gathering_state_change;
@@ -239,6 +240,7 @@ void set_fn_shim_peer_connection_get_receivers(void* fn) { fn_shim_peer_connecti
 void set_fn_shim_peer_connection_get_transceivers(void* fn) { fn_shim_peer_connection_get_transceivers = fn; }
 void set_fn_shim_peer_connection_restart_ice(void* fn) { fn_shim_peer_connection_restart_ice = fn; }
 void set_fn_shim_peer_connection_get_stats(void* fn) { fn_shim_peer_connection_get_stats = fn; }
+void set_fn_shim_peer_connection_get_stats_json(void* fn) { fn_shim_peer_connection_get_stats_json = fn; }
 void set_fn_shim_peer_connection_set_on_signaling_state_change(void* fn) { fn_shim_peer_connection_set_on_signaling_state_change = fn; }
 void set_fn_shim_peer_connection_set_on_ice_connection_state_change(void* fn) { fn_shim_peer_connection_set_on_ice_connection_state_change = fn; }
 void set_fn_shim_peer_connection_set_on_ice_gathering_state_change(void* fn) { fn_shim_peer_connection_set_on_ice_gathering_state_change = fn; }
@@ -668,6 +670,10 @@ int32_t call_shim_peer_connection_get_stats(uintptr_t params) {
     typedef int32_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_peer_connection_get_stats)(params);
 }
+int32_t call_shim_peer_connection_get_stats_json(uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t);
+    return ((fn_t)fn_shim_peer_connection_get_stats_json)(params);
+}
 void call_shim_peer_connection_set_on_signaling_state_change(uintptr_t params) {
     typedef void (*fn_t)(uintptr_t);
     ((fn_t)fn_shim_peer_connection_set_on_signaling_state_change)(params);
@@ -860,11 +866,7 @@ func registerFunctions() error {
 	C.set_fn_shim_peer_connection_add_track(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_add_track")))
 	C.set_fn_shim_peer_connection_remove_track(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_remove_track")))
 	C.set_fn_shim_peer_connection_create_data_channel(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_create_data_channel")))
-	if sym := optionalDlsym(libHandle, "shim_peer_connection_create_data_channel_ex"); sym != 0 {
-		C.set_fn_shim_peer_connection_create_data_channel_ex(unsafe.Pointer(sym))
-	} else {
-		C.set_fn_shim_peer_connection_create_data_channel_ex(nil)
-	}
+	C.set_fn_shim_peer_connection_create_data_channel_ex(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_create_data_channel_ex")))
 	C.set_fn_shim_peer_connection_close(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_close")))
 
 	// PeerConnectionExtended
@@ -874,6 +876,7 @@ func registerFunctions() error {
 	C.set_fn_shim_peer_connection_get_transceivers(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_get_transceivers")))
 	C.set_fn_shim_peer_connection_restart_ice(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_restart_ice")))
 	C.set_fn_shim_peer_connection_get_stats(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_get_stats")))
+	C.set_fn_shim_peer_connection_get_stats_json(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_get_stats_json")))
 	C.set_fn_shim_peer_connection_set_on_signaling_state_change(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_set_on_signaling_state_change")))
 	C.set_fn_shim_peer_connection_set_on_ice_connection_state_change(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_set_on_ice_connection_state_change")))
 	C.set_fn_shim_peer_connection_set_on_ice_gathering_state_change(unsafe.Pointer(mustDlsym(libHandle, "shim_peer_connection_set_on_ice_gathering_state_change")))
@@ -1135,12 +1138,8 @@ func registerFunctions() error {
 	shimPeerConnectionCreateDataChannel = func(params uintptr) uintptr {
 		return uintptr(C.call_shim_peer_connection_create_data_channel(C.uintptr_t(params)))
 	}
-	if optionalDlsym(libHandle, "shim_peer_connection_create_data_channel_ex") != 0 {
-		shimPeerConnectionCreateDataChannelEx = func(params uintptr) uintptr {
-			return uintptr(C.call_shim_peer_connection_create_data_channel_ex(C.uintptr_t(params)))
-		}
-	} else {
-		shimPeerConnectionCreateDataChannelEx = nil
+	shimPeerConnectionCreateDataChannelEx = func(params uintptr) uintptr {
+		return uintptr(C.call_shim_peer_connection_create_data_channel_ex(C.uintptr_t(params)))
 	}
 	shimPeerConnectionClose = func(pc uintptr) {
 		C.call_shim_peer_connection_close(C.uintptr_t(pc))
@@ -1164,6 +1163,9 @@ func registerFunctions() error {
 	}
 	shimPeerConnectionGetStats = func(params uintptr) int32 {
 		return int32(C.call_shim_peer_connection_get_stats(C.uintptr_t(params)))
+	}
+	shimPeerConnectionGetStatsJSON = func(params uintptr) int32 {
+		return int32(C.call_shim_peer_connection_get_stats_json(C.uintptr_t(params)))
 	}
 	shimPeerConnectionSetOnSignalingStateChange = func(params uintptr) {
 		C.call_shim_peer_connection_set_on_signaling_state_change(C.uintptr_t(params))
@@ -1429,14 +1431,6 @@ func mustDlsym(handle uintptr, name string) uintptr {
 	sym, err := dlsymLibrary(handle, name)
 	if err != nil {
 		panic(err)
-	}
-	return sym
-}
-
-func optionalDlsym(handle uintptr, name string) uintptr {
-	sym, err := dlsymLibrary(handle, name)
-	if err != nil {
-		return 0
 	}
 	return sym
 }
