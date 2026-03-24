@@ -127,7 +127,7 @@ type PacketizerConfig struct {
 	Codec       int32
 	SSRC        uint32
 	PayloadType uint8
-	_           byte   // 1 byte padding to align MTU
+	_           byte // 1 byte padding to align MTU
 	MTU         uint16
 	ClockRate   uint32
 }
@@ -311,7 +311,7 @@ func CopyBytesFromC(ptr uintptr, size int) []byte {
 		return nil
 	}
 	data := make([]byte, size)
-	copy(data, unsafe.Slice((*byte)(unsafe.Pointer(ptr)), size))
+	copy(data, unsafe.Slice((*byte)(UnsafePointerFromC(ptr)), size))
 	return data
 }
 
@@ -324,8 +324,19 @@ func CopyInt16FromC(ptr uintptr, length int) []int16 {
 		return nil
 	}
 	data := make([]int16, length)
-	copy(data, unsafe.Slice((*int16)(unsafe.Pointer(ptr)), length))
+	copy(data, unsafe.Slice((*int16)(UnsafePointerFromC(ptr)), length))
 	return data
+}
+
+// CopyStructFromC copies a value of type T from C memory.
+//
+//go:nocheckptr
+func CopyStructFromC[T any](ptr uintptr) (T, bool) {
+	var zero T
+	if ptr == 0 {
+		return zero, false
+	}
+	return *(*T)(UnsafePointerFromC(ptr)), true
 }
 
 // ReadUintptrFromC reads a uintptr value from C memory at the given address.
@@ -335,7 +346,7 @@ func ReadUintptrFromC(ptr uintptr) uintptr {
 	if ptr == 0 {
 		return 0
 	}
-	return *(*uintptr)(unsafe.Pointer(ptr))
+	return *(*uintptr)(UnsafePointerFromC(ptr))
 }
 
 // ReadInt32FromC reads an int32 value from C memory at the given address.
@@ -345,7 +356,7 @@ func ReadInt32FromC(ptr uintptr) int32 {
 	if ptr == 0 {
 		return 0
 	}
-	return *(*int32)(unsafe.Pointer(ptr))
+	return *(*int32)(UnsafePointerFromC(ptr))
 }
 
 // ReadUint32FromC reads a uint32 value from C memory at the given address.
@@ -355,7 +366,7 @@ func ReadUint32FromC(ptr uintptr) uint32 {
 	if ptr == 0 {
 		return 0
 	}
-	return *(*uint32)(unsafe.Pointer(ptr))
+	return *(*uint32)(UnsafePointerFromC(ptr))
 }
 
 // ReadFloat64FromC reads a float64 value from C memory at the given address.
@@ -365,7 +376,7 @@ func ReadFloat64FromC(ptr uintptr) float64 {
 	if ptr == 0 {
 		return 0
 	}
-	return *(*float64)(unsafe.Pointer(ptr))
+	return *(*float64)(UnsafePointerFromC(ptr))
 }
 
 // PtrAt returns pointer offset by n bytes from base.
@@ -379,7 +390,8 @@ func PtrAt(base uintptr, offset uintptr) uintptr {
 //go:nocheckptr
 //go:noinline
 func UnsafePointerFromC(ptr uintptr) unsafe.Pointer {
-	return unsafe.Pointer(ptr)
+	ptrCopy := ptr
+	return *(*unsafe.Pointer)(unsafe.Pointer(&ptrCopy))
 }
 
 // GoStringFromC converts a C string pointer (as uintptr) to a Go string.

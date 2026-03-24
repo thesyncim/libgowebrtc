@@ -1,8 +1,12 @@
 package ffi
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -41,5 +45,60 @@ func TestResolveShimSHA256FallsBackToSidecar(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("resolveShimSHA256 = %q, want %q", got, want)
+	}
+}
+
+func TestResolveLibraryRejectsMissingExplicitShimPath(t *testing.T) {
+	release := withFFITestSerialExecution(t)
+	defer release()
+
+	tempDir := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd(): %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Chdir(%q): %v", tempDir, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Fatalf("restore wd: %v", err)
+		}
+	})
+
+	fallbackPath := filepath.Join(tempDir, "lib", runtime.GOOS+"_"+runtime.GOARCH, getLibraryName())
+	writeShimFixture(t, fallbackPath)
+
+	missingPath := filepath.Join(tempDir, "missing", getLibraryName())
+	expectedPath, err := filepath.Abs(missingPath)
+	if err != nil {
+		t.Fatalf("Abs(%q): %v", missingPath, err)
+	}
+
+	t.Setenv("LIBWEBRTC_SHIM_PATH", missingPath)
+	t.Setenv(envShimDisableDownload, "1")
+
+	path, _, err := resolveLibrary()
+	if err == nil {
+		t.Fatal("expected resolveLibrary to fail for a missing explicit shim path")
+	}
+	if !errors.Is(err, ErrLibraryNotFound) {
+		t.Fatalf("resolveLibrary error = %v, want ErrLibraryNotFound", err)
+	}
+	if path != expectedPath {
+		t.Fatalf("resolveLibrary path = %q, want %q", path, expectedPath)
+	}
+	if !strings.Contains(err.Error(), "LIBWEBRTC_SHIM_PATH") {
+		t.Fatalf("expected error to mention LIBWEBRTC_SHIM_PATH, got %v", err)
+	}
+}
+
+func writeShimFixture(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q): %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte("shim-fixture"), 0o755); err != nil {
+		t.Fatalf("WriteFile(%q): %v", path, err)
 	}
 }

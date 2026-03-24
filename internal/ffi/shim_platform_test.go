@@ -14,6 +14,7 @@ func TestShimPlatformKeys(t *testing.T) {
 		{"linux", "arm", "linux_arm"},
 		{"linux", "amd64", "linux_amd64"},
 		{"linux", "arm64", "linux_arm64"},
+		{"windows", "amd64", "windows_amd64"},
 	}
 
 	for _, tc := range testCases {
@@ -32,7 +33,6 @@ func TestShimPlatformKeys(t *testing.T) {
 		goos   string
 		goarch string
 	}{
-		{"windows", "amd64"},
 		{"darwin", "386"},
 	}
 

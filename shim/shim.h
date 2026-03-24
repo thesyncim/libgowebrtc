@@ -1103,11 +1103,14 @@ typedef struct {
     double loss_rate;                 /* Observed packet loss rate (0.0-1.0) */
 } ShimBandwidthEstimate;
 
-/* Callback for bandwidth estimate updates */
+/* Callback type reserved for future bandwidth estimate updates. */
 typedef void (*ShimOnBandwidthEstimate)(void* ctx, const ShimBandwidthEstimate* estimate);
 
 /*
  * Set bandwidth estimate callback.
+ *
+ * NOTE: Unsupported in the current shim. This surface returns
+ * SHIM_ERROR_NOT_SUPPORTED until bandwidth estimate callbacks are implemented.
  *
  * @param params Input parameters (pc + callback + ctx)
  */
@@ -1124,8 +1127,11 @@ SHIM_EXPORT void shim_peer_connection_set_on_bandwidth_estimate(
 /*
  * Get current bandwidth estimate.
  *
+ * NOTE: Unsupported in the current shim. This surface returns
+ * SHIM_ERROR_NOT_SUPPORTED until bandwidth estimate retrieval is implemented.
+ *
  * @param params Output parameters (pc + estimate)
- * @return SHIM_OK on success
+ * @return SHIM_ERROR_NOT_SUPPORTED in the current shim
  */
 /* Bandwidth estimate parameters. Caller-owned buffers; shim uses them only during the call. */
 typedef struct {
@@ -1156,8 +1162,11 @@ SHIM_EXPORT int shim_peer_connection_get_stats(
 /*
  * Get statistics for a specific sender.
  *
+ * NOTE: Unsupported in the current shim. This surface returns
+ * SHIM_ERROR_NOT_SUPPORTED until sender statistics are implemented.
+ *
  * @param params Output parameters (sender + stats)
- * @return SHIM_OK on success
+ * @return SHIM_ERROR_NOT_SUPPORTED in the current shim
  */
 /* Stats parameters. Caller-owned buffers; shim uses them only during the call. */
 typedef struct {
@@ -1197,7 +1206,7 @@ SHIM_EXPORT int shim_rtp_receiver_get_stats(
  */
 
 /*
- * Callback for RTCP feedback events.
+ * Callback type reserved for future RTCP feedback events.
  *
  * @param ctx User context
  * @param type Feedback type (0=PLI, 1=FIR, 2=NACK)
@@ -1207,6 +1216,9 @@ typedef void (*ShimOnRTCPFeedback)(void* ctx, int type, uint32_t ssrc);
 
 /*
  * Set RTCP feedback callback on a sender.
+ *
+ * NOTE: Unsupported in the current shim. This surface returns
+ * SHIM_ERROR_NOT_SUPPORTED until RTCP feedback callbacks are implemented.
  *
  * @param params Input parameters (sender + callback + ctx)
  */

@@ -16,6 +16,7 @@
 - **SVC/Simulcast** support with Chrome/Firefox-compatible presets
 - **purego FFI** - no CGO required by default, optional CGO mode for 5x faster FFI
 - **Device capture** - camera, microphone, screen/window capture
+- **Runtime diagnostics** - `pkg/diagnostics.Check()` preflights shim/OpenH264 state without downloading
 
 ## Why libgowebrtc?
 
@@ -94,6 +95,41 @@ Override behavior with:
 - `LIBWEBRTC_SHIM_DISABLE_DOWNLOAD=1` (disable auto-download)
 - `LIBWEBRTC_SHIM_CACHE_DIR=/custom/cache/dir` (override cache location)
 - `LIBWEBRTC_SHIM_FLAVOR=basic` (override shim flavor; default: basic)
+
+If `LIBWEBRTC_SHIM_PATH` is set, it is treated as authoritative. A missing or
+invalid path fails diagnostics and runtime loading instead of falling back to a
+different shim on disk.
+
+## Supported Platform Tiers
+
+| Platform | Shim Auto-Download | Tier | Notes |
+|----------|--------------------|------|-------|
+| `darwin_arm64` | Yes | Primary | Most complete local development path |
+| `darwin_amd64` | Yes | Primary | Validated via Rosetta in CI |
+| `linux_amd64` | Yes | Primary | Main Linux runtime target |
+| `linux_386` | Yes | Secondary | Release-validated in Docker |
+| `windows_amd64` | Yes | Secondary | Shim release artifact supported |
+| `linux_arm`, `linux_arm64` | No | Experimental | Build shim locally and set `LIBWEBRTC_SHIM_PATH` |
+
+## Runtime Diagnostics
+
+Use [`pkg/diagnostics`](./pkg/diagnostics) to inspect runtime readiness without
+triggering downloads or mutating loader state:
+
+```go
+report, err := diagnostics.Check()
+if err != nil {
+    log.Fatal(err)
+}
+
+if !report.Ready {
+    log.Printf("blocking issues: %v", report.Shim.BlockingIssues)
+}
+log.Printf("shim source=%s path=%s checksum=%s", report.Shim.Source, report.Shim.Path, report.Shim.ChecksumStatus)
+```
+
+`diagnostics.Check()` reports resolved shim/OpenH264 paths, source (`local` vs
+`downloaded`), cache directories, version/checksum status, and blocking issues.
 
 ### FFI Variants
 
@@ -491,6 +527,7 @@ libgowebrtc/
 │   ├── codec/          # Codec types, configs, SVC presets
 │   ├── encoder/        # Video/audio encoders
 │   ├── decoder/        # Video/audio decoders
+│   ├── diagnostics/    # Runtime preflight checks
 │   ├── frame/          # VideoFrame, AudioFrame types
 │   ├── packetizer/     # RTP packetization
 │   ├── depacketizer/   # RTP depacketization
@@ -514,9 +551,9 @@ libgowebrtc/
 |----------|--------|--------------|
 | **Encoding/Decoding** | ✅ Complete | H.264, VP8, VP9, AV1, Opus - allocation-free |
 | **PeerConnection** | ✅ Complete | Offer/answer, ICE, tracks, data channels |
-| **RTP Control** | ✅ Complete | Sender/receiver/transceiver, simulcast layers |
+| **RTP Control** | ⚠️ Partial | Sender/receiver/transceiver, simulcast layers; RTCP feedback callback not yet supported |
 | **Media Capture** | ✅ Complete | Camera, microphone, screen/window |
-| **Statistics** | ✅ Complete | Full RTCStats, BWE, quality metrics |
+| **Statistics** | ⚠️ Partial | PeerConnection and RTPReceiver stats; sender stats and BWE are not yet supported |
 
 <details>
 <summary><strong>Core Encoding/Decoding</strong></summary>
@@ -550,10 +587,10 @@ libgowebrtc/
 | `SetParameters()` / `GetParameters()` | Encoding parameters |
 | `SetLayerActive()` / `SetLayerBitrate()` | Simulcast layer control |
 | `GetActiveLayers()` | Get active layer count |
-| `SetOnRTCPFeedback()` | RTCP feedback events (PLI/FIR/NACK) |
+| `SetOnRTCPFeedback()` | Returns `pc.ErrNotSupported` in the current shim |
 | `SetScalabilityMode()` / `GetScalabilityMode()` | Runtime SVC mode control |
 | `StreamIDs()` | MediaStream IDs associated with the sender |
-| `GetStats()` | Sender statistics |
+| `GetStats()` | Returns `pc.ErrNotSupported` in the current shim |
 </details>
 
 <details>
@@ -619,32 +656,26 @@ libgowebrtc/
 - `IsCodecSupported(mimeType)` - check codec support
 
 **Bandwidth Estimation:**
-- `GetBandwidthEstimate()` - get current BWE (target bitrate, available bandwidth)
-- `SetOnBandwidthEstimate(callback)` - receive BWE updates
+- `GetCurrentBandwidthEstimate()` currently returns `pc.ErrNotSupported`
+- `SetOnBandwidthEstimate(callback)` currently returns `pc.ErrNotSupported`
 </details>
 
 ### Jitter Buffer Control
 
-Control libwebrtc's internal jitter buffer for latency vs quality tradeoffs:
+Control libwebrtc's minimum jitter-buffer floor for latency vs quality tradeoffs:
 
 ```go
 receiver := transceiver.Receiver()
 
-// Low latency mode (gaming, live streaming)
-receiver.SetJitterBufferTarget(50)  // 50ms target delay
+// Low latency floor (gaming, live streaming)
+_ = receiver.SetJitterBufferMinDelay(50)
 
-// High buffering mode (unreliable networks)
-receiver.SetJitterBufferTarget(500)  // 500ms buffer
-
-// Set bounds
-receiver.SetJitterBufferBounds(20, 500)
-
-// Get stats
-stats, _ := receiver.GetJitterBufferStats()
-log.Printf("Buffer: %dms, Late packets: %d", stats.CurrentDelayMs, stats.LatePackets)
-
-// Disable adaptive mode for manual control
-receiver.SetAdaptiveJitterBuffer(false)
+stats, _ := receiver.GetStats()
+log.Printf("buffer target=%.2fms minimum=%.2fms emitted=%d",
+    stats.JitterBufferTargetDelayMs,
+    stats.JitterBufferMinimumDelayMs,
+    stats.JitterBufferEmittedCount,
+)
 ```
 
 ## Browser Example
@@ -818,8 +849,9 @@ Notes:
 **Solutions:**
 1. Let auto-download work (default behavior downloads from GitHub releases)
 2. Set explicit path: `export LIBWEBRTC_SHIM_PATH=/path/to/libwebrtc_shim.dylib`
-3. Check platform is supported for auto-download: `darwin_arm64`, `darwin_amd64`, `linux_386`, `linux_amd64`, `windows_amd64`
-4. For unsupported platforms, build the shim locally and point `LIBWEBRTC_SHIM_PATH` at it
+3. Confirm that explicit path exists; once set, it is authoritative and will not fall back to another shim
+4. Check platform is supported for auto-download: `darwin_arm64`, `darwin_amd64`, `linux_386`, `linux_amd64`, `windows_amd64`
+5. For unsupported platforms, build the shim locally and point `LIBWEBRTC_SHIM_PATH` at it
 
 </details>
 
@@ -871,7 +903,10 @@ pc.SetOnICEConnectionStateChange(func(state pc.ICEConnectionState) {
 
 ## Contributing
 
-Contributions are welcome! Here's how to get started:
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the
+current development and quality-check flow.
+
+Quick start:
 
 1. **Report bugs** - Open an issue with reproduction steps
 2. **Request features** - Describe the use case in an issue
@@ -889,8 +924,8 @@ go test ./...
 # Run with verbose output
 go test -v ./pkg/encoder/...
 
-# Run linter
-golangci-lint run
+# Run contract checks
+bash ./scripts/check_docs_contract.sh
 ```
 
 **Code style:**
@@ -901,7 +936,7 @@ golangci-lint run
 
 ## License
 
-MIT
+MIT. See [LICENSE](./LICENSE).
 
 ## See Also
 
