@@ -1665,12 +1665,19 @@ func (pc *PeerConnection) SetRemoteDescription(desc *SessionDescription) error {
 
 // AddICECandidate adds an ICE candidate.
 func (pc *PeerConnection) AddICECandidate(candidate *ICECandidate) error {
+	if candidate == nil {
+		return errors.New("candidate is nil")
+	}
 	if pc.closed.Load() {
 		return ErrPeerConnectionClosed
 	}
 
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
+
+	if pc.handle == 0 {
+		return ErrPeerConnectionClosed
+	}
 
 	if err := ffi.PeerConnectionAddICECandidate(pc.handle, candidate.Candidate, candidate.SDPMid, int(candidate.SDPMLineIndex)); err != nil {
 		return ErrAddICECandidateFailed

@@ -194,6 +194,14 @@ func TestCreateDataChannelValidatesOptionCombinations(t *testing.T) {
 }
 
 func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
+	peerConnection := &PeerConnection{}
+	if err := peerConnection.AddICECandidate(nil); err == nil {
+		t.Fatal("AddICECandidate(nil) expected error")
+	}
+	if err := peerConnection.AddICECandidate(&ICECandidate{Candidate: "candidate:1"}); err != ErrPeerConnectionClosed {
+		t.Fatalf("AddICECandidate() on zero-handle pc = %v, want ErrPeerConnectionClosed", err)
+	}
+
 	track := &Track{id: "track-1", kind: "video", label: "camera"}
 
 	sender := &RTPSender{track: track}

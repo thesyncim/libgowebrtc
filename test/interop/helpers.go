@@ -35,6 +35,9 @@ type PeerPair struct {
 	libConnected  bool
 	pionConnected bool
 	mu            sync.Mutex
+	iceWG         sync.WaitGroup
+	closeOnce     sync.Once
+	stopICE       chan struct{}
 
 	t *testing.T
 }
@@ -100,6 +103,7 @@ func NewPeerPair(t *testing.T, cfg PeerPairConfig) (*PeerPair, error) {
 		Pion:           pionPC,
 		libCandidates:  make(chan *pc.ICECandidate, 20),
 		pionCandidates: make(chan *pionwebrtc.ICECandidate, 20),
+		stopICE:        make(chan struct{}),
 		t:              t,
 	}
 
@@ -115,44 +119,68 @@ func NewPeerPair(t *testing.T, cfg PeerPairConfig) (*PeerPair, error) {
 func (pp *PeerPair) setupICECallbacks() {
 	pp.Lib.SetOnICECandidate(func(candidate *pc.ICECandidate) {
 		if candidate != nil {
-			pp.libCandidates <- candidate
-		} else {
-			close(pp.libCandidates)
+			select {
+			case pp.libCandidates <- candidate:
+			case <-pp.stopICE:
+			}
 		}
 	})
 
 	pp.Pion.OnICECandidate(func(candidate *pionwebrtc.ICECandidate) {
 		if candidate != nil {
-			pp.pionCandidates <- candidate
-		} else {
-			close(pp.pionCandidates)
+			select {
+			case pp.pionCandidates <- candidate:
+			case <-pp.stopICE:
+			}
 		}
 	})
 
 	// Start ICE exchange goroutines
-	go pp.forwardLibToPion()
-	go pp.forwardPionToLib()
+	pp.iceWG.Add(2)
+	go func() {
+		defer pp.iceWG.Done()
+		pp.forwardLibToPion()
+	}()
+	go func() {
+		defer pp.iceWG.Done()
+		pp.forwardPionToLib()
+	}()
 }
 
 func (pp *PeerPair) forwardLibToPion() {
-	for candidate := range pp.libCandidates {
-		pp.Pion.AddICECandidate(pionwebrtc.ICECandidateInit{
-			Candidate:     candidate.Candidate,
-			SDPMid:        &candidate.SDPMid,
-			SDPMLineIndex: &candidate.SDPMLineIndex,
-		})
+	for {
+		select {
+		case <-pp.stopICE:
+			return
+		case candidate := <-pp.libCandidates:
+			if candidate == nil {
+				continue
+			}
+			_ = pp.Pion.AddICECandidate(pionwebrtc.ICECandidateInit{
+				Candidate:     candidate.Candidate,
+				SDPMid:        &candidate.SDPMid,
+				SDPMLineIndex: &candidate.SDPMLineIndex,
+			})
+		}
 	}
 }
 
 func (pp *PeerPair) forwardPionToLib() {
-	for candidate := range pp.pionCandidates {
-		if candidate != nil {
-			init := candidate.ToJSON()
-			pp.Lib.AddICECandidate(&pc.ICECandidate{
-				Candidate:     init.Candidate,
-				SDPMid:        *init.SDPMid,
-				SDPMLineIndex: uint16(*init.SDPMLineIndex),
-			})
+	for {
+		select {
+		case <-pp.stopICE:
+			return
+		case candidate := <-pp.pionCandidates:
+			if candidate != nil {
+				if pp.Lib.IsValid() {
+					init := candidate.ToJSON()
+					_ = pp.Lib.AddICECandidate(&pc.ICECandidate{
+						Candidate:     init.Candidate,
+						SDPMid:        *init.SDPMid,
+						SDPMLineIndex: uint16(*init.SDPMLineIndex),
+					})
+				}
+			}
 		}
 	}
 }
@@ -249,6 +277,11 @@ func (pp *PeerPair) WaitForConnection(timeout time.Duration) bool {
 	wg.Add(2)
 
 	pp.Lib.SetOnConnectionStateChange(func(state pc.PeerConnectionState) {
+		select {
+		case <-pp.stopICE:
+			return
+		default:
+		}
 		pp.t.Logf("libwebrtc connection state: %v", state)
 		pp.mu.Lock()
 		if state == pc.PeerConnectionStateConnected && !pp.libConnected {
@@ -257,8 +290,14 @@ func (pp *PeerPair) WaitForConnection(timeout time.Duration) bool {
 		}
 		pp.mu.Unlock()
 	})
+	defer pp.Lib.SetOnConnectionStateChange(nil)
 
 	pp.Pion.OnConnectionStateChange(func(state pionwebrtc.PeerConnectionState) {
+		select {
+		case <-pp.stopICE:
+			return
+		default:
+		}
 		pp.t.Logf("Pion connection state: %v", state)
 		pp.mu.Lock()
 		if state == pionwebrtc.PeerConnectionStateConnected && !pp.pionConnected {
@@ -267,6 +306,7 @@ func (pp *PeerPair) WaitForConnection(timeout time.Duration) bool {
 		}
 		pp.mu.Unlock()
 	})
+	defer pp.Pion.OnConnectionStateChange(nil)
 
 	done := make(chan struct{})
 	go func() {
@@ -284,12 +324,21 @@ func (pp *PeerPair) WaitForConnection(timeout time.Duration) bool {
 
 // Close closes both PeerConnections.
 func (pp *PeerPair) Close() {
-	if pp.Lib != nil {
-		pp.Lib.Close()
-	}
-	if pp.Pion != nil {
-		pp.Pion.Close()
-	}
+	pp.closeOnce.Do(func() {
+		close(pp.stopICE)
+		pp.iceWG.Wait()
+
+		if pp.Lib != nil {
+			pp.Lib.SetOnICECandidate(nil)
+			pp.Lib.SetOnConnectionStateChange(nil)
+			pp.Lib.Close()
+		}
+		if pp.Pion != nil {
+			pp.Pion.OnICECandidate(nil)
+			pp.Pion.OnConnectionStateChange(nil)
+			pp.Pion.Close()
+		}
+	})
 }
 
 // DataChannelPair holds a pair of data channels for testing.
