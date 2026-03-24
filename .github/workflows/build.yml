@@ -54,6 +54,24 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Rewrite manifest for published shim tag
+        if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'shim-v') }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+
+          path = pathlib.Path("internal/ffi/shim_manifest.json")
+          manifest = json.loads(path.read_text())
+          release_tag = "${{ github.event.release.tag_name }}"
+          for flavor in manifest["flavors"].values():
+              flavor["release_tag"] = release_tag
+              for asset in flavor["assets"].values():
+                  asset["sha256"] = ""
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
       - name: Verify docs contract
         shell: bash
         run: bash ./scripts/check_docs_contract.sh
@@ -109,6 +127,24 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Rewrite manifest for published shim tag
+        if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'shim-v') }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+
+          path = pathlib.Path("internal/ffi/shim_manifest.json")
+          manifest = json.loads(path.read_text())
+          release_tag = "${{ github.event.release.tag_name }}"
+          for flavor in manifest["flavors"].values():
+              flavor["release_tag"] = release_tag
+              for asset in flavor["assets"].values():
+                  asset["sha256"] = ""
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
       - name: Verify docs contract
         shell: bash
         run: bash ./scripts/check_docs_contract.sh
@@ -161,6 +197,24 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Rewrite manifest for published shim tag
+        if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'shim-v') }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+
+          path = pathlib.Path("internal/ffi/shim_manifest.json")
+          manifest = json.loads(path.read_text())
+          release_tag = "${{ github.event.release.tag_name }}"
+          for flavor in manifest["flavors"].values():
+              flavor["release_tag"] = release_tag
+              for asset in flavor["assets"].values():
+                  asset["sha256"] = ""
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
       - name: Validate linux_386 release in Docker
         run: ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 
@@ -178,6 +232,24 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+
+      - name: Rewrite manifest for published shim tag
+        if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'shim-v') }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+
+          path = pathlib.Path("internal/ffi/shim_manifest.json")
+          manifest = json.loads(path.read_text())
+          release_tag = "${{ github.event.release.tag_name }}"
+          for flavor in manifest["flavors"].values():
+              flavor["release_tag"] = release_tag
+              for asset in flavor["assets"].values():
+                  asset["sha256"] = ""
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
 
       - name: Validate linux_amd64 release in Docker
         run: ./scripts/validate_linux_docker.sh --target linux_amd64 --download-only
