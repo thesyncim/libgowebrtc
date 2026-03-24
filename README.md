@@ -338,18 +338,19 @@ preset := pioncodec.BrowserPreset(
     pioncodec.PresetModeSupported,
 )
 
-videoTrack, _ := track.NewVideoTrackFromPreset(preset, track.VideoTrackConfig{
-    ID:      "video",
-    Width:   1280,
-    Height:  720,
-    Bitrate: 2_000_000,
-    FPS:     30,
+videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
+    ID:               "video",
+    Width:            1280,
+    Height:           720,
+    Bitrate:          2_000_000,
+    FPS:              30,
+    CodecPreferences: preset.SupportedOnly().VideoCodecs(),
 })
 
 // Apply the same supported subset to libgowebrtc's native PeerConnection wrapper.
 pc, _ := pc.NewPeerConnection(pc.DefaultConfiguration())
 transceiver, _ := pc.AddTransceiver("video", &pc.TransceiverInit{Direction: pc.TransceiverDirectionSendOnly})
-_ = transceiver.SetCodecSet(preset)
+_ = transceiver.SetCodecPreferences(preset.SupportedOnly().VideoCodecs())
 
 // For direct Pion use, keep the full browser-shaped RTP codec list.
 pionPC, _ := webrtc.NewPeerConnection(webrtc.Configuration{})
@@ -361,6 +362,30 @@ _ = recv.SetCodecPreferences(
         pioncodec.PresetModeNegotiation,
     ).VideoCodecs(),
 )
+```
+
+### Migration Notes
+
+```go
+// CreateVideoTrack no longer accepts a codec selector.
+videoTrack, _ := peerConnection.CreateVideoTrack("video", 1280, 720)
+
+// Prefer typed policies in pc.Configuration.
+cfg := pc.Configuration{
+    BundlePolicy:  pc.BundlePolicyMaxBundle,
+    RTCPMuxPolicy: pc.RTCPMuxPolicyRequire,
+    SDPSemantics:  pc.SDPSemanticsUnifiedPlan,
+}
+
+// The advanced codec path is raw Pion RTP codec parameters everywhere.
+prefs := pioncodec.BrowserPreset(
+    pioncodec.BrowserChrome,
+    pioncodec.DirectionEncode,
+    pioncodec.PresetModeSupported,
+).SupportedOnly().VideoCodecs()
+
+_ = transceiver.SetCodecPreferences(prefs)
+_ = sender.SetPreferredCodec(prefs[0])
 ```
 
 ### Pion Receive Integration
