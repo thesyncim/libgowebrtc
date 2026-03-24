@@ -232,6 +232,12 @@ func TestVideoTrackBindDoubleBindAndWriteRTPError(t *testing.T) {
 	if _, err := track.Bind(ctx); err != ErrAlreadyBound {
 		t.Fatalf("second Bind error = %v, want %v", err, ErrAlreadyBound)
 	}
+	if err := track.WriteFrame(nil, false); err != ErrNilVideoFrame {
+		t.Fatalf("WriteFrame(nil) error = %v, want %v", err, ErrNilVideoFrame)
+	}
+	if err := track.WriteRTP(nil); err != ErrNilRTPPacket {
+		t.Fatalf("WriteRTP(nil) error = %v, want %v", err, ErrNilRTPPacket)
+	}
 
 	track.writer = &collectingWriter{err: errors.New("write failure")}
 	rtpPacket := &rtp.Packet{
@@ -387,6 +393,9 @@ func TestAudioTrackBindWriteAndUnbind(t *testing.T) {
 
 	if err := track.SetBitrate(96_000); err != nil {
 		t.Fatalf("SetBitrate while bound: %v", err)
+	}
+	if err := track.WriteFrame(nil); err != ErrNilAudioFrame {
+		t.Fatalf("WriteFrame(nil) error = %v, want %v", err, ErrNilAudioFrame)
 	}
 	if err := track.WriteFrame(testutil.CreateTestAudioFrame(48_000, 2, 960)); err != nil {
 		t.Fatalf("WriteFrame: %v", err)
