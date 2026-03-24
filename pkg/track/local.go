@@ -135,9 +135,12 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 	if cfg.MTU == 0 {
 		cfg.MTU = 1200
 	}
-	if cfg.Codec == 0 && len(cfg.CodecPreferences) > 0 {
-		if codecType, ok := codec.ParseMimeType(cfg.CodecPreferences[0].MimeType); ok {
-			cfg.Codec = codecType
+	if len(cfg.CodecPreferences) > 0 {
+		for _, preferred := range cfg.CodecPreferences {
+			if codecType, ok := codec.ParseMimeType(preferred.MimeType); ok {
+				cfg.Codec = codecType
+				break
+			}
 		}
 	}
 
@@ -1058,29 +1061,6 @@ func cloneAudioTrackConfig(cfg AudioTrackConfig) AudioTrackConfig {
 		cloned.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), cfg.CodecPreferences...)
 	}
 	return cloned
-}
-
-// NewVideoTrackFromPreset creates a video track using the preset's supported encode subset.
-func NewVideoTrackFromPreset(set pioncodec.CodecSet, cfg VideoTrackConfig) (*VideoTrack, error) {
-	video := set.SupportedOnly().VideoCodecs()
-	if len(video) == 0 {
-		return nil, ErrInvalidConfig
-	}
-	if codecType, ok := codec.ParseMimeType(video[0].MimeType); ok {
-		cfg.Codec = codecType
-	}
-	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), video...)
-	return NewVideoTrack(cfg)
-}
-
-// NewAudioTrackFromPreset creates an audio track using the preset's supported encode subset.
-func NewAudioTrackFromPreset(set pioncodec.CodecSet, cfg AudioTrackConfig) (*AudioTrack, error) {
-	audio := set.SupportedOnly().AudioCodecs()
-	if len(audio) == 0 {
-		return nil, ErrInvalidConfig
-	}
-	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), audio...)
-	return NewAudioTrack(cfg)
 }
 
 // Unbind is called when the track is removed from the PeerConnection.

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/pion/webrtc/v4"
+
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
@@ -332,5 +334,65 @@ func TestGetDisplayMediaRejectsConflictingTargets(t *testing.T) {
 	}
 	if stream != nil {
 		t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
+	}
+}
+
+func TestNewVideoStreamTrackCodecPreferencesOverrideCodec(t *testing.T) {
+	video, err := newVideoStreamTrack(
+		VideoConstraints{
+			Codec: codec.H264,
+			CodecPreferences: []webrtc.RTPCodecParameters{{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeVP8,
+					ClockRate: 90000,
+				},
+				PayloadType: 96,
+			}},
+		},
+		VideoTrackSettings{
+			Width:     640,
+			Height:    480,
+			FrameRate: 30,
+		},
+		"camera",
+	)
+	if err != nil {
+		t.Fatalf("newVideoStreamTrack: %v", err)
+	}
+
+	constraints := video.GetConstraints()
+	if constraints.Codec != codec.VP8 {
+		t.Fatalf("constraints.Codec = %v, want %v", constraints.Codec, codec.VP8)
+	}
+	if len(constraints.CodecPreferences) != 1 || constraints.CodecPreferences[0].MimeType != webrtc.MimeTypeVP8 {
+		t.Fatalf("constraints.CodecPreferences = %+v, want VP8 preference", constraints.CodecPreferences)
+	}
+}
+
+func TestNewAudioStreamTrackPreservesCodecPreferences(t *testing.T) {
+	audio, err := newAudioStreamTrack(
+		AudioConstraints{
+			CodecPreferences: []webrtc.RTPCodecParameters{{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeOpus,
+					ClockRate: 48000,
+					Channels:  2,
+				},
+				PayloadType: 111,
+			}},
+		},
+		AudioTrackSettings{
+			SampleRate:   48000,
+			ChannelCount: 2,
+		},
+		"microphone",
+	)
+	if err != nil {
+		t.Fatalf("newAudioStreamTrack: %v", err)
+	}
+
+	constraints := audio.GetConstraints()
+	if len(constraints.CodecPreferences) != 1 || constraints.CodecPreferences[0].MimeType != webrtc.MimeTypeOpus {
+		t.Fatalf("constraints.CodecPreferences = %+v, want Opus preference", constraints.CodecPreferences)
 	}
 }

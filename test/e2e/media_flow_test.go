@@ -25,7 +25,7 @@ func TestVideoTrackCreation(t *testing.T) {
 	defer p.Close()
 
 	// Create video track
-	track, err := p.CreateVideoTrack("video-test", codec.VP8, 640, 480)
+	track, err := p.CreateVideoTrack("video-test", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestVideoFrameWrite(t *testing.T) {
 	defer p.Close()
 
 	// Create and add video track
-	track, err := p.CreateVideoTrack("video-write", codec.H264, 640, 480)
+	track, err := p.CreateVideoTrack("video-write", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestOfferAnswerWithTracks(t *testing.T) {
 	defer pp.Close()
 
 	// Add video track to sender
-	videoTrack, err := pp.Sender.CreateVideoTrack("video-0", codec.VP8, 640, 480)
+	videoTrack, err := pp.Sender.CreateVideoTrack("video-0", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestTrackReception(t *testing.T) {
 	defer pp.Close()
 
 	// Add video track to sender
-	videoTrack, err := pp.Sender.CreateVideoTrack("video-e2e", codec.VP8, 640, 480)
+	videoTrack, err := pp.Sender.CreateVideoTrack("video-e2e", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestVideoFrameReceiving(t *testing.T) {
 	defer pp.Close()
 
 	// Add video track to sender
-	videoTrack, err := pp.Sender.CreateVideoTrack("video-recv-test", codec.VP8, 640, 480)
+	videoTrack, err := pp.Sender.CreateVideoTrack("video-recv-test", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}
@@ -342,7 +342,7 @@ func TestMultipleCodecs(t *testing.T) {
 			}
 			defer p.Close()
 
-			track, err := p.CreateVideoTrack("video-"+c.String(), c, 640, 480)
+			track, err := p.CreateVideoTrack("video-"+c.String(), 640, 480)
 			if err != nil {
 				t.Fatalf("CreateVideoTrack with %s failed: %v", c, err)
 			}
@@ -373,7 +373,7 @@ func TestTrackDisable(t *testing.T) {
 	}
 	defer p.Close()
 
-	track, err := p.CreateVideoTrack("video-disable", codec.VP8, 640, 480)
+	track, err := p.CreateVideoTrack("video-disable", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}
@@ -409,7 +409,7 @@ func BenchmarkVideoFrameWrite(b *testing.B) {
 	p, _ := pc.NewPeerConnection(defaultTestConfig())
 	defer p.Close()
 
-	track, _ := p.CreateVideoTrack("video-bench", codec.VP8, 1280, 720)
+	track, _ := p.CreateVideoTrack("video-bench", 1280, 720)
 	p.AddTrack(track, "stream-0")
 
 	frame := CreateTestFrame(1280, 720, 0)
@@ -453,7 +453,7 @@ func TestPeerConnectionLifecycle(t *testing.T) {
 	}
 
 	// Add track
-	track, _ := p.CreateVideoTrack("video-lifecycle", codec.H264, 640, 480)
+	track, _ := p.CreateVideoTrack("video-lifecycle", 640, 480)
 	p.AddTrack(track, "stream-0")
 
 	// Create offer
@@ -495,7 +495,7 @@ func TestConcurrentFrameWrites(t *testing.T) {
 	}
 	defer p.Close()
 
-	track, _ := p.CreateVideoTrack("video-concurrent", codec.VP8, 640, 480)
+	track, _ := p.CreateVideoTrack("video-concurrent", 640, 480)
 	p.AddTrack(track, "stream-0")
 
 	// Write frames from multiple goroutines

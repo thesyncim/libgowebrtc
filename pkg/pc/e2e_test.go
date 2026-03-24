@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
-	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
 // End-to-end tests for PeerConnection that require the shim library.
@@ -52,9 +51,9 @@ func TestPeerConnectionWithICEServers(t *testing.T) {
 				Credential: "testpass",
 			},
 		},
-		BundlePolicy:  "max-bundle",
-		RTCPMuxPolicy: "require",
-		SDPSemantics:  "unified-plan",
+		BundlePolicy:  BundlePolicyMaxBundle,
+		RTCPMuxPolicy: RTCPMuxPolicyRequire,
+		SDPSemantics:  SDPSemanticsUnifiedPlan,
 	}
 
 	pc, err := NewPeerConnection(cfg)
@@ -97,7 +96,7 @@ func TestCreateOfferWithTrack(t *testing.T) {
 	defer pc.Close()
 
 	// Add a video track first
-	track, err := pc.CreateVideoTrack("video-0", codec.H264, 640, 480)
+	track, err := pc.CreateVideoTrack("video-0", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}
@@ -216,7 +215,7 @@ func TestAddTrack(t *testing.T) {
 	defer pc.Close()
 
 	// Create video track
-	videoTrack, err := pc.CreateVideoTrack("video-0", codec.VP8, 640, 480)
+	videoTrack, err := pc.CreateVideoTrack("video-0", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}
@@ -263,7 +262,7 @@ func TestAddTrackPreservesMultipleStreamIDs(t *testing.T) {
 		}
 	})
 
-	videoTrack, err := senderPC.CreateVideoTrack("video-multi", codec.VP8, 64, 64)
+	videoTrack, err := senderPC.CreateVideoTrack("video-multi", 64, 64)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack: %v", err)
 	}
@@ -311,7 +310,7 @@ func TestRemoveTrack(t *testing.T) {
 	defer pc.Close()
 
 	// Add track
-	track, _ := pc.CreateVideoTrack("video-0", codec.H264, 640, 480)
+	track, _ := pc.CreateVideoTrack("video-0", 640, 480)
 	sender, _ := pc.AddTrack(track, "stream-0")
 
 	// Verify added
@@ -422,7 +421,7 @@ func TestPeerConnectionClose(t *testing.T) {
 	}
 
 	// Add some tracks
-	track, _ := pc.CreateVideoTrack("video-0", codec.H264, 640, 480)
+	track, _ := pc.CreateVideoTrack("video-0", 640, 480)
 	pc.AddTrack(track, "stream-0")
 	pc.CreateDataChannel("dc", nil)
 
@@ -457,7 +456,7 @@ func TestMultipleTracks(t *testing.T) {
 	defer pc.Close()
 
 	// Add video track
-	videoTrack, _ := pc.CreateVideoTrack("video-0", codec.VP9, 640, 480)
+	videoTrack, _ := pc.CreateVideoTrack("video-0", 640, 480)
 	pc.AddTrack(videoTrack, "stream-0")
 
 	// Add audio track

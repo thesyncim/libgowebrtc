@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pion/webrtc/v4"
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/decoder"
@@ -164,9 +165,9 @@ func (s *Session) run() error {
 	// Setup callbacks
 	s.setupCallbacks()
 
-	// Create video track with destination codec
+	// Create video track; codec negotiation is driven by transceiver preferences.
 	dstCodecType := parseCodec(*dstCodec)
-	videoTrack, err := peerConn.CreateVideoTrack("transcoded-video", dstCodecType, *width, *height)
+	videoTrack, err := peerConn.CreateVideoTrack("transcoded-video", *width, *height)
 	if err != nil {
 		return fmt.Errorf("create video track: %w", err)
 	}
@@ -174,6 +175,9 @@ func (s *Session) run() error {
 
 	if _, err := peerConn.AddTrack(videoTrack); err != nil {
 		return fmt.Errorf("add track: %w", err)
+	}
+	if err := applyVideoCodecPreference(peerConn, dstCodecType); err != nil {
+		return fmt.Errorf("apply video codec preference: %w", err)
 	}
 
 	// Create data channel for stats
@@ -444,6 +448,34 @@ func parseCodec(name string) codec.Type {
 	default:
 		return codec.VP8
 	}
+}
+
+func applyVideoCodecPreference(peerConn *pc.PeerConnection, codecType codec.Type) error {
+	supported, err := pc.GetSupportedVideoCodecs()
+	if err != nil {
+		return err
+	}
+
+	targetMime := codecType.MimeType()
+	preferences := make([]webrtc.RTPCodecParameters, 0, len(supported))
+	for _, candidate := range supported {
+		if candidate.MimeType == targetMime {
+			preferences = append(preferences, candidate)
+		}
+	}
+	if len(preferences) == 0 {
+		return fmt.Errorf("no supported codec preferences found for %s", targetMime)
+	}
+
+	for _, transceiver := range peerConn.GetTransceivers() {
+		if !transceiver.IsValid() || transceiver.Kind() != "video" {
+			continue
+		}
+		if err := transceiver.SetCodecPreferences(preferences); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func fillAnimatedPattern(f *frame.VideoFrame, frameNum uint32) {

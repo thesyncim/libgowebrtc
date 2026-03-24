@@ -322,7 +322,7 @@ func TestLibToPionVideoInterop(t *testing.T) {
 	defer pp.Close()
 
 	// Create video track on lib
-	track, err := pp.Lib.CreateVideoTrack("video-interop", codec.VP8, 640, 480)
+	track, err := pp.Lib.CreateVideoTrack("video-interop", 640, 480)
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestBidirectionalVideoInterop(t *testing.T) {
 	defer pp.Close()
 
 	// Create video track on lib
-	libTrack, err := pp.Lib.CreateVideoTrack("video-lib-to-pion", codec.VP8, 320, 240)
+	libTrack, err := pp.Lib.CreateVideoTrack("video-lib-to-pion", 320, 240)
 	if err != nil {
 		t.Fatalf("Failed to create lib video track: %v", err)
 	}
@@ -621,7 +621,7 @@ func TestCodecNegotiation(t *testing.T) {
 			defer pp.Close()
 
 			// Create track with specific codec on lib
-			track, err := pp.Lib.CreateVideoTrack("video-"+tc.name, tc.libCodec, 320, 240)
+			track, err := pp.Lib.CreateVideoTrack("video-"+tc.name, 320, 240)
 			if err != nil {
 				t.Fatalf("Failed to create track: %v", err)
 			}
@@ -658,7 +658,7 @@ func TestMultipleTracksInterop(t *testing.T) {
 	defer pp.Close()
 
 	// Create video track on lib
-	videoTrack, err := pp.Lib.CreateVideoTrack("video-multi", codec.VP8, 320, 240)
+	videoTrack, err := pp.Lib.CreateVideoTrack("video-multi", 320, 240)
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
 	}
@@ -705,7 +705,7 @@ func TestRenegotiationInterop(t *testing.T) {
 	defer pp.Close()
 
 	// Create initial video track on lib
-	track1, err := pp.Lib.CreateVideoTrack("video-initial", codec.VP8, 320, 240)
+	track1, err := pp.Lib.CreateVideoTrack("video-initial", 320, 240)
 	if err != nil {
 		t.Fatalf("Failed to create first video track: %v", err)
 	}
@@ -724,7 +724,7 @@ func TestRenegotiationInterop(t *testing.T) {
 	}
 
 	// Add second track
-	track2, err := pp.Lib.CreateVideoTrack("video-renegotiate", codec.VP9, 640, 480)
+	track2, err := pp.Lib.CreateVideoTrack("video-renegotiate", 640, 480)
 	if err != nil {
 		t.Fatalf("Failed to create second video track: %v", err)
 	}
@@ -806,7 +806,7 @@ func TestSDPParsing(t *testing.T) {
 	defer pp.Close()
 
 	// Create a track to have something in the SDP
-	track, err := pp.Lib.CreateVideoTrack("sdp-test", codec.VP8, 640, 480)
+	track, err := pp.Lib.CreateVideoTrack("sdp-test", 640, 480)
 	if err != nil {
 		t.Fatalf("Failed to create track: %v", err)
 	}
@@ -883,7 +883,7 @@ func TestConnectionStateInterop(t *testing.T) {
 	})
 
 	// Add a track to have media
-	track, _ := pp.Lib.CreateVideoTrack("state-test", codec.VP8, 320, 240)
+	track, _ := pp.Lib.CreateVideoTrack("state-test", 320, 240)
 	_, _ = pp.Lib.AddTrack(track)
 
 	// Connect
@@ -947,7 +947,7 @@ func TestICECandidateExchange(t *testing.T) {
 	})
 
 	// Add a track
-	track, _ := pp.Lib.CreateVideoTrack("ice-test", codec.VP8, 320, 240)
+	track, _ := pp.Lib.CreateVideoTrack("ice-test", 320, 240)
 	_, _ = pp.Lib.AddTrack(track)
 
 	// Perform offer/answer without waiting for gathering

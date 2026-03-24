@@ -15,7 +15,7 @@ func TestVideoAndAudioTrackReception(t *testing.T) {
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
 
-	videoTrack, err := pp.Sender.CreateVideoTrack("video-multi", codec.VP8, 640, 480)
+	videoTrack, err := pp.Sender.CreateVideoTrack("video-multi", 640, 480)
 	if err != nil {
 		t.Fatalf("CreateVideoTrack failed: %v", err)
 	}

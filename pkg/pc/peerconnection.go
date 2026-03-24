@@ -12,9 +12,7 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
-	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 // Errors
@@ -26,6 +24,11 @@ var (
 	ErrSetDescriptionFailed  = errors.New("set description failed")
 	ErrAddICECandidateFailed = errors.New("add ice candidate failed")
 	ErrTrackNotFound         = errors.New("track not found")
+	ErrNilSessionDescription = errors.New("session description is nil")
+	ErrNilTrack              = errors.New("track is nil")
+	ErrNilSender             = errors.New("sender is nil")
+	ErrNilVideoFrame         = errors.New("video frame is nil")
+	ErrNilAudioFrame         = errors.New("audio frame is nil")
 	// ErrNotSupported reports APIs that are intentionally exposed but not yet
 	// backed by the current shim/runtime implementation.
 	ErrNotSupported = ffi.ErrNotSupported
@@ -200,14 +203,37 @@ type ICEServer struct {
 	Credential string
 }
 
+// BundlePolicy represents the bundle policy used during negotiation.
+type BundlePolicy string
+
+const (
+	BundlePolicyBalanced  BundlePolicy = "balanced"
+	BundlePolicyMaxCompat BundlePolicy = "max-compat"
+	BundlePolicyMaxBundle BundlePolicy = "max-bundle"
+)
+
+// RTCPMuxPolicy represents the RTCP mux policy used during negotiation.
+type RTCPMuxPolicy string
+
+const (
+	RTCPMuxPolicyRequire   RTCPMuxPolicy = "require"
+	RTCPMuxPolicyNegotiate RTCPMuxPolicy = "negotiate"
+)
+
+// SDPSemantics represents the SDP semantics used by the peer connection.
+type SDPSemantics string
+
+const (
+	SDPSemanticsUnifiedPlan SDPSemantics = "unified-plan"
+	SDPSemanticsPlanB       SDPSemantics = "plan-b"
+)
+
 // Configuration for PeerConnection.
 type Configuration struct {
 	ICEServers           []ICEServer
-	ICETransportPolicy   string // "all" or "relay"
-	BundlePolicy         string // "balanced", "max-compat", "max-bundle"
-	RTCPMuxPolicy        string // "require" or "negotiate"
-	PeerIdentity         string
-	SDPSemantics         string // "unified-plan" or "plan-b"
+	BundlePolicy         BundlePolicy
+	RTCPMuxPolicy        RTCPMuxPolicy
+	SDPSemantics         SDPSemantics
 	ICECandidatePoolSize int
 }
 
@@ -217,9 +243,9 @@ func DefaultConfiguration() Configuration {
 		ICEServers: []ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		},
-		BundlePolicy:  "max-bundle",
-		RTCPMuxPolicy: "require",
-		SDPSemantics:  "unified-plan",
+		BundlePolicy:  BundlePolicyMaxBundle,
+		RTCPMuxPolicy: RTCPMuxPolicyRequire,
+		SDPSemantics:  SDPSemanticsUnifiedPlan,
 	}
 }
 
@@ -234,31 +260,22 @@ type AnswerOptions struct {
 	VoiceActivityDetection bool
 }
 
-// CodecCapability represents a supported codec.
-type CodecCapability struct {
-	MimeType    string
-	ClockRate   int
-	Channels    int
-	SDPFmtpLine string
-	PayloadType int
-}
-
 // GetSupportedVideoCodecs returns a list of supported video codecs.
-func GetSupportedVideoCodecs() ([]CodecCapability, error) {
+func GetSupportedVideoCodecs() ([]webrtc.RTPCodecParameters, error) {
 	ffiCodecs, err := ffi.GetSupportedVideoCodecs()
 	if err != nil {
 		return nil, err
 	}
-	return convertCodecCapabilities(ffiCodecs), nil
+	return codecParametersFromFFICapabilities(ffiCodecs), nil
 }
 
 // GetSupportedAudioCodecs returns a list of supported audio codecs.
-func GetSupportedAudioCodecs() ([]CodecCapability, error) {
+func GetSupportedAudioCodecs() ([]webrtc.RTPCodecParameters, error) {
 	ffiCodecs, err := ffi.GetSupportedAudioCodecs()
 	if err != nil {
 		return nil, err
 	}
-	return convertCodecCapabilities(ffiCodecs), nil
+	return codecParametersFromFFICapabilities(ffiCodecs), nil
 }
 
 // IsCodecSupported checks if a specific codec is supported.
@@ -266,18 +283,36 @@ func IsCodecSupported(mimeType string) bool {
 	return ffi.IsCodecSupported(mimeType)
 }
 
-func convertCodecCapabilities(ffiCodecs []ffi.CodecCapability) []CodecCapability {
-	codecs := make([]CodecCapability, len(ffiCodecs))
+func codecParametersFromFFICapabilities(ffiCodecs []ffi.CodecCapability) []webrtc.RTPCodecParameters {
+	codecs := make([]webrtc.RTPCodecParameters, len(ffiCodecs))
 	for i, c := range ffiCodecs {
-		codecs[i] = CodecCapability{
-			MimeType:    ffi.CStringToGo(c.MimeType[:]),
-			ClockRate:   int(c.ClockRate),
-			Channels:    int(c.Channels),
-			SDPFmtpLine: ffi.CStringToGo(c.SDPFmtpLine[:]),
-			PayloadType: int(c.PayloadType),
+		codecs[i] = webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:    ffi.CStringToGo(c.MimeType[:]),
+				ClockRate:   uint32(c.ClockRate),
+				Channels:    uint16(c.Channels),
+				SDPFmtpLine: ffi.CStringToGo(c.SDPFmtpLine[:]),
+			},
+			PayloadType: webrtc.PayloadType(c.PayloadType),
 		}
 	}
 	return codecs
+}
+
+func ffiCodecCapabilitiesFromParameters(codecs []webrtc.RTPCodecParameters) []ffi.CodecCapability {
+	if len(codecs) == 0 {
+		return nil
+	}
+
+	out := make([]ffi.CodecCapability, len(codecs))
+	for i, c := range codecs {
+		copy(out[i].MimeType[:], c.MimeType)
+		out[i].ClockRate = int32(c.ClockRate)
+		out[i].Channels = int32(c.Channels)
+		copy(out[i].SDPFmtpLine[:], c.SDPFmtpLine)
+		out[i].PayloadType = int32(c.PayloadType)
+	}
+	return out
 }
 
 // RTPSender represents an RTP sender.
@@ -496,7 +531,7 @@ func (s *RTPSender) GetScalabilityMode() (string, error) {
 
 // GetNegotiatedCodecs returns the list of codecs negotiated in SDP for this sender.
 // These are the codecs available for use with SetPreferredCodec.
-func (s *RTPSender) GetNegotiatedCodecs() ([]CodecCapability, error) {
+func (s *RTPSender) GetNegotiatedCodecs() ([]webrtc.RTPCodecParameters, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -509,25 +544,27 @@ func (s *RTPSender) GetNegotiatedCodecs() ([]CodecCapability, error) {
 		return nil, err
 	}
 
-	return convertCodecCapabilities(ffiCodecs), nil
+	return codecParametersFromFFICapabilities(ffiCodecs), nil
 }
 
 // SetPreferredCodec sets the preferred codec for this sender.
 // The codec must have been negotiated in the initial SDP (check GetNegotiatedCodecs).
-// Pass payloadType=0 to auto-select based on mimeType.
 //
 // Note: Due to WebRTC limitations, this may require renegotiation to take effect.
 // If renegotiation is needed, returns ErrRenegotiationNeeded.
 // After setting, call CreateOffer/SetLocalDescription to apply the change.
-func (s *RTPSender) SetPreferredCodec(mimeType string, payloadType int) error {
+func (s *RTPSender) SetPreferredCodec(codec webrtc.RTPCodecParameters) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.handle == 0 {
 		return errors.New("sender not initialized")
 	}
+	if strings.TrimSpace(codec.MimeType) == "" {
+		return errors.New("codec mime type is required")
+	}
 
-	return ffi.RTPSenderSetPreferredCodec(s.handle, mimeType, payloadType)
+	return ffi.RTPSenderSetPreferredCodec(s.handle, codec.MimeType, int(codec.PayloadType))
 }
 
 // ErrRenegotiationNeeded is returned when codec switching requires SDP renegotiation.
@@ -833,57 +870,12 @@ func (t *RTPTransceiver) Kind() string {
 // SetCodecPreferences sets which codecs are negotiated for this transceiver.
 // Must be called before creating offer/answer.
 // This allows specifying which codecs should be included in SDP negotiation.
-func (t *RTPTransceiver) SetCodecPreferences(codecs []CodecCapability) error {
+func (t *RTPTransceiver) SetCodecPreferences(codecs []webrtc.RTPCodecParameters) error {
 	if t.handle == 0 {
 		return errors.New("transceiver not initialized")
 	}
 
-	// Convert to FFI format
-	ffiCodecs := make([]ffi.CodecCapability, len(codecs))
-	for i, c := range codecs {
-		copy(ffiCodecs[i].MimeType[:], c.MimeType)
-		ffiCodecs[i].ClockRate = int32(c.ClockRate)
-		ffiCodecs[i].Channels = int32(c.Channels)
-		copy(ffiCodecs[i].SDPFmtpLine[:], c.SDPFmtpLine)
-		ffiCodecs[i].PayloadType = int32(c.PayloadType)
-	}
-
-	return ffi.TransceiverSetCodecPreferences(t.handle, ffiCodecs)
-}
-
-// SetCodecSet applies the supported subset of a Pion-native codec set.
-func (t *RTPTransceiver) SetCodecSet(set pioncodec.CodecSet) error {
-	kind := t.Kind()
-	if kind == "" {
-		kind = inferTransceiverKind(t.handle)
-		t.kind = kind
-	}
-	if kind == "" {
-		return errors.New("transceiver media kind is unknown")
-	}
-
-	supported := set.SupportedOnly()
-	var codecs []webrtc.RTPCodecParameters
-	switch kind {
-	case "audio":
-		codecs = supported.AudioCodecs()
-	case "video":
-		codecs = supported.VideoCodecs()
-	default:
-		return fmt.Errorf("unsupported transceiver kind %q", kind)
-	}
-
-	caps := make([]CodecCapability, 0, len(codecs))
-	for _, codec := range codecs {
-		caps = append(caps, CodecCapability{
-			MimeType:    codec.MimeType,
-			ClockRate:   int(codec.ClockRate),
-			Channels:    int(codec.Channels),
-			SDPFmtpLine: codec.SDPFmtpLine,
-			PayloadType: int(codec.PayloadType),
-		})
-	}
-	return t.SetCodecPreferences(caps)
+	return ffi.TransceiverSetCodecPreferences(t.handle, ffiCodecCapabilitiesFromParameters(codecs))
 }
 
 func inferTransceiverKind(handle uintptr) string {
@@ -932,7 +924,6 @@ type Track struct {
 	id      string
 	kind    string // "video" or "audio"
 	label   string
-	codec   codec.Type
 	enabled atomic.Bool
 	muted   atomic.Bool
 	pc      *PeerConnection
@@ -1061,6 +1052,9 @@ func (t *Track) WriteVideoFrame(f *frame.VideoFrame) error {
 	if t.kind != "video" {
 		return errors.New("not a video track")
 	}
+	if f == nil {
+		return ErrNilVideoFrame
+	}
 	if !t.enabled.Load() {
 		return nil
 	}
@@ -1097,6 +1091,9 @@ func (t *Track) WriteVideoFrame(f *frame.VideoFrame) error {
 func (t *Track) WriteAudioFrame(f *frame.AudioFrame) error {
 	if t.kind != "audio" {
 		return errors.New("not an audio track")
+	}
+	if f == nil {
+		return ErrNilAudioFrame
 	}
 	if !t.enabled.Load() {
 		return nil
@@ -1387,17 +1384,17 @@ func buildFFIConfig(config *Configuration) *ffiConfigData {
 
 	// Set policies
 	if config.BundlePolicy != "" {
-		bundleStr := ffi.CString(config.BundlePolicy)
+		bundleStr := ffi.CString(string(config.BundlePolicy))
 		data.strings = append(data.strings, bundleStr)
 		data.config.BundlePolicy = &bundleStr[0]
 	}
 	if config.RTCPMuxPolicy != "" {
-		rtcpStr := ffi.CString(config.RTCPMuxPolicy)
+		rtcpStr := ffi.CString(string(config.RTCPMuxPolicy))
 		data.strings = append(data.strings, rtcpStr)
 		data.config.RTCPMuxPolicy = &rtcpStr[0]
 	}
 	if config.SDPSemantics != "" {
-		sdpStr := ffi.CString(config.SDPSemantics)
+		sdpStr := ffi.CString(string(config.SDPSemantics))
 		data.strings = append(data.strings, sdpStr)
 		data.config.SDPSemantics = &sdpStr[0]
 	}
@@ -1627,7 +1624,13 @@ func (pc *PeerConnection) CreateAnswer(options *AnswerOptions) (*SessionDescript
 
 // SetLocalDescription sets the local description.
 func (pc *PeerConnection) SetLocalDescription(desc *SessionDescription) error {
+	if desc == nil {
+		return ErrNilSessionDescription
+	}
 	if pc.closed.Load() {
+		return ErrPeerConnectionClosed
+	}
+	if pc.handle == 0 {
 		return ErrPeerConnectionClosed
 	}
 
@@ -1644,7 +1647,13 @@ func (pc *PeerConnection) SetLocalDescription(desc *SessionDescription) error {
 
 // SetRemoteDescription sets the remote description.
 func (pc *PeerConnection) SetRemoteDescription(desc *SessionDescription) error {
+	if desc == nil {
+		return ErrNilSessionDescription
+	}
 	if pc.closed.Load() {
+		return ErrPeerConnectionClosed
+	}
+	if pc.handle == 0 {
 		return ErrPeerConnectionClosed
 	}
 
@@ -1727,7 +1736,13 @@ func (pc *PeerConnection) ConnectionState() PeerConnectionState {
 
 // AddTrack adds a track to the connection (mirrors browser's addTrack).
 func (pc *PeerConnection) AddTrack(track *Track, streams ...string) (*RTPSender, error) {
+	if track == nil {
+		return nil, ErrNilTrack
+	}
 	if pc.closed.Load() {
+		return nil, ErrPeerConnectionClosed
+	}
+	if pc.handle == 0 {
 		return nil, ErrPeerConnectionClosed
 	}
 
@@ -1798,17 +1813,20 @@ func (pc *PeerConnection) AddTrack(track *Track, streams ...string) (*RTPSender,
 
 // RemoveTrack removes a track from the connection.
 func (pc *PeerConnection) RemoveTrack(sender *RTPSender) error {
+	if sender == nil {
+		return ErrNilSender
+	}
 	if pc.closed.Load() {
+		return ErrPeerConnectionClosed
+	}
+	if pc.handle == 0 {
 		return ErrPeerConnectionClosed
 	}
 
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
-	var trackToRemove *Track
-	if sender != nil {
-		trackToRemove = sender.track
-	}
+	trackToRemove := sender.track
 
 	// Call FFI to remove track
 	if sender.handle != 0 {
@@ -2328,7 +2346,7 @@ func (pc *PeerConnection) Close() error {
 
 // CreateVideoTrack creates a video track for this peer connection.
 // Width and height specify the video dimensions for the track source.
-func (pc *PeerConnection) CreateVideoTrack(id string, codecType codec.Type, width, height int) (*Track, error) {
+func (pc *PeerConnection) CreateVideoTrack(id string, width, height int) (*Track, error) {
 	if width <= 0 || height <= 0 {
 		return nil, errors.New("invalid video dimensions")
 	}
@@ -2337,7 +2355,6 @@ func (pc *PeerConnection) CreateVideoTrack(id string, codecType codec.Type, widt
 		id:     id,
 		kind:   "video",
 		label:  "libwebrtc-video-" + id,
-		codec:  codecType,
 		pc:     pc,
 		width:  width,
 		height: height,
@@ -2364,7 +2381,6 @@ func (pc *PeerConnection) CreateAudioTrackWithOptions(id string, sampleRate, cha
 		id:         id,
 		kind:       "audio",
 		label:      "libwebrtc-audio-" + id,
-		codec:      codec.Opus,
 		pc:         pc,
 		sampleRate: sampleRate,
 		channels:   channels,

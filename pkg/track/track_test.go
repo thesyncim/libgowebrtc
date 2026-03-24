@@ -140,6 +140,36 @@ func TestVideoTrackProperties(t *testing.T) {
 	}
 }
 
+func TestVideoTrackCodecPreferencesOverrideCodec(t *testing.T) {
+	input := []webrtc.RTPCodecParameters{{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:  webrtc.MimeTypeVP8,
+			ClockRate: 90000,
+		},
+		PayloadType: 96,
+	}}
+
+	track, err := NewVideoTrack(VideoTrackConfig{
+		ID:               "video-pref",
+		Codec:            codec.H264,
+		Width:            1280,
+		Height:           720,
+		CodecPreferences: input,
+	})
+	if err != nil {
+		t.Fatalf("NewVideoTrack: %v", err)
+	}
+
+	if track.codec != codec.VP8 {
+		t.Fatalf("track.codec = %v, want %v", track.codec, codec.VP8)
+	}
+
+	input[0].MimeType = webrtc.MimeTypeH264
+	if got := track.config.CodecPreferences[0].MimeType; got != webrtc.MimeTypeVP8 {
+		t.Fatalf("track.config.CodecPreferences[0].MimeType = %q, want %q", got, webrtc.MimeTypeVP8)
+	}
+}
+
 func TestVideoTrackNotBound(t *testing.T) {
 	track, _ := NewVideoTrack(VideoTrackConfig{
 		ID:     "video-0",

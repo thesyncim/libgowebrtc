@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
-	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
@@ -27,7 +26,7 @@ func TestRemoteStreamRegistryBindPCTrackIntegration(t *testing.T) {
 	}
 	defer func() { _ = receiver.Close() }()
 
-	videoTrack, err := sender.CreateVideoTrack("remote-video", codec.VP8, 96, 64)
+	videoTrack, err := sender.CreateVideoTrack("remote-video", 96, 64)
 	if err != nil {
 		t.Fatalf("sender.CreateVideoTrack: %v", err)
 	}
