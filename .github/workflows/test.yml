@@ -101,8 +101,12 @@ jobs:
       - name: Run race suite
         shell: bash
         run: |
-          go test -race ./pkg/... ./internal/ffi ./test/e2e ./test/interop
+          # The purego backend is covered by the deterministic test matrix above.
+          # Run the race detector against the CGO FFI path here because the
+          # purego trampoline is not stable under race instrumentation.
+          go test -race -tags ffigo_cgo ./pkg/... ./internal/ffi ./test/e2e ./test/interop
         env:
+          CGO_ENABLED: "1"
           LIBWEBRTC_SHIM_PATH: ${{ github.workspace }}/lib/linux_amd64/libwebrtc_shim.so
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 

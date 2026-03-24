@@ -242,6 +242,28 @@ Release flow:
 - Upload the prepared `release/shim-vX.Y.Z/` directory with `./scripts/release.sh`
 - CI downloads the published artifacts and runs the smoke tests; it does not rebuild the shim
 
+### Versioning And Releases
+
+`libgowebrtc` now uses two release tracks:
+
+- `vX.Y.Z` for Go module/API releases
+- `shim-vX.Y.Z` for native shim asset releases
+
+Examples:
+
+```bash
+# Preview the next module patch release
+./scripts/release-module.sh patch --dry-run
+
+# Create and push the first public module tag
+./scripts/release-module.sh v0.1.0 --push
+
+# Publish shim assets
+./scripts/release.sh 0.4.5 --release-dir release/shim-v0.4.5
+```
+
+See [VERSIONING.md](VERSIONING.md) for the bump policy and release flow details.
+
 ## Quick Start
 
 ### Browser-Like API
