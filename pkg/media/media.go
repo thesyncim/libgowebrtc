@@ -445,6 +445,16 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 	if constraints.Video == nil && constraints.Audio == nil {
 		return nil, ErrInvalidConstraints
 	}
+	if constraints.Video != nil {
+		if err := validateVideoConstraints(*constraints.Video); err != nil {
+			return nil, err
+		}
+	}
+	if constraints.Audio != nil {
+		if err := validateAudioConstraints(*constraints.Audio); err != nil {
+			return nil, err
+		}
+	}
 	if err := ensureCaptureBackend(); err != nil {
 		return nil, err
 	}
@@ -487,6 +497,14 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 func GetDisplayMedia(c DisplayConstraints) (*MediaStream, error) {
 	if c.Video == nil {
 		return nil, ErrInvalidConstraints
+	}
+	if err := validateDisplayVideoConstraints(*c.Video); err != nil {
+		return nil, err
+	}
+	if c.Audio != nil {
+		if err := validateAudioConstraints(*c.Audio); err != nil {
+			return nil, err
+		}
 	}
 	if err := ensureCaptureBackend(); err != nil {
 		return nil, err

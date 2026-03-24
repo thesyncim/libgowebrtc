@@ -310,6 +310,17 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 }
 
 func TestGetDisplayMediaRejectsConflictingTargets(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error {
+			t.Fatal("GetDisplayMedia should validate conflicting targets before loading the capture backend")
+			return nil
+		},
+		enumerateScreen: func() ([]ffi.ScreenInfo, error) {
+			t.Fatal("GetDisplayMedia should validate conflicting targets before enumerating screens")
+			return nil, nil
+		},
+	})
+
 	stream, err := GetDisplayMedia(DisplayConstraints{
 		Video: &DisplayVideoConstraints{
 			ScreenID: 1,
