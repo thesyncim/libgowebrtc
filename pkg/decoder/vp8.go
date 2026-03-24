@@ -67,15 +67,7 @@ func (d *vp8Decoder) DecodeInto(src []byte, dst *frame.VideoFrame, timestamp uin
 		return normalizeVideoDecodeError(err, isKeyframe)
 	}
 
-	dst.Width = width
-	dst.Height = height
-	dst.Stride[0] = yStride
-	dst.Stride[1] = uStride
-	dst.Stride[2] = vStride
-	dst.PTS = timestamp
-	dst.Format = frame.PixelFormatI420
-
-	return nil
+	return applyVideoDecodeOutput(dst, width, height, yStride, uStride, vStride, timestamp)
 }
 
 func (d *vp8Decoder) Codec() codec.Type {

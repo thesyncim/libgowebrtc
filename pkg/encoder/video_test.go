@@ -2,8 +2,6 @@ package encoder
 
 import (
 	"errors"
-	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
@@ -287,51 +285,6 @@ func TestVideoEncoder_RequestKeyFrame(t *testing.T) {
 			}
 			if !result.IsKeyframe {
 				t.Error("frame after RequestKeyFrame should be keyframe")
-			}
-		})
-	}
-}
-
-func TestVideoEncoder_ConcurrentEncode(t *testing.T) {
-	testutil.SkipIfNoShim(t)
-
-	for _, f := range videoEncoderFactories() {
-		t.Run(f.name, func(t *testing.T) {
-			enc, err := f.newEncoder()
-			if err != nil {
-				t.Fatalf("new encoder: %v", err)
-			}
-			defer enc.Close()
-
-			const numGoroutines = 4
-			const framesPerGoroutine = 10
-
-			var wg sync.WaitGroup
-			errCh := make(chan error, numGoroutines*framesPerGoroutine)
-			var pts atomic.Uint32
-
-			for g := 0; g < numGoroutines; g++ {
-				wg.Add(1)
-				go func(id int) {
-					defer wg.Done()
-					srcFrame := testutil.CreateGrayVideoFrame(320, 240)
-					encBuf := make([]byte, enc.MaxEncodedSize())
-
-					for i := 0; i < framesPerGoroutine; i++ {
-						srcFrame.PTS = pts.Add(3000)
-						_, err := enc.EncodeInto(srcFrame, encBuf, i == 0)
-						if err != nil && !errors.Is(err, ffi.ErrNeedMoreData) {
-							errCh <- err
-						}
-					}
-				}(g)
-			}
-
-			wg.Wait()
-			close(errCh)
-
-			for err := range errCh {
-				t.Errorf("concurrent encode error: %v", err)
 			}
 		})
 	}

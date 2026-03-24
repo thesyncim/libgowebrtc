@@ -175,7 +175,7 @@ func TestOpusEncodeDecode(t *testing.T) {
 	src := frame.NewAudioFrameS16(48000, 2, 960)
 
 	encodedBuf := make([]byte, enc.MaxEncodedSize())
-	n, err := enc.EncodeInto(src, encodedBuf)
+	n, err := encodeAudioUntilOutput(t, enc, src, encodedBuf)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestOpusEncodeDecode(t *testing.T) {
 
 	// Decoder requires buffer for MaxSamplesPerFrame (5760 samples per channel)
 	dst := frame.NewAudioFrameS16(48000, 2, 5760)
-	numSamples, err := dec.DecodeInto(encoded, dst)
+	numSamples, err := decodeAudioUntilOutput(t, dec, encoded, dst)
 	if err != nil {
 		t.Fatalf("DecodeInto: %v", err)
 	}

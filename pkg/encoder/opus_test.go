@@ -33,16 +33,13 @@ func TestOpus_RoundTrip(t *testing.T) {
 	srcFrame := testutil.CreateSilentAudioFrame(48000, 2, 960)
 	encBuf := make([]byte, enc.MaxEncodedSize())
 
-	n, err := enc.EncodeInto(srcFrame, encBuf)
+	n, err := encodeAudioUntilOutput(t, enc, srcFrame, encBuf)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}
-	if n == 0 {
-		t.Fatal("encoded size is 0")
-	}
 
 	dstFrame := frame.NewAudioFrameS16(48000, 2, dec.MaxSamplesPerFrame())
-	samples, err := dec.DecodeInto(encBuf[:n], dstFrame)
+	samples, err := decodeAudioUntilOutput(t, dec, encBuf[:n], dstFrame)
 	if err != nil {
 		t.Fatalf("DecodeInto: %v", err)
 	}
@@ -75,15 +72,12 @@ func TestOpus_MultiFrameSequence(t *testing.T) {
 	dstFrame := frame.NewAudioFrameS16(48000, 2, dec.MaxSamplesPerFrame())
 
 	for i := 0; i < 50; i++ {
-		n, err := enc.EncodeInto(srcFrame, encBuf)
+		n, err := encodeAudioUntilOutput(t, enc, srcFrame, encBuf)
 		if err != nil {
 			t.Fatalf("frame %d: EncodeInto: %v", i, err)
 		}
-		if n == 0 {
-			t.Fatalf("frame %d: encoded size is 0", i)
-		}
 
-		samples, err := dec.DecodeInto(encBuf[:n], dstFrame)
+		samples, err := decodeAudioUntilOutput(t, dec, encBuf[:n], dstFrame)
 		if err != nil {
 			t.Fatalf("frame %d: DecodeInto: %v", i, err)
 		}

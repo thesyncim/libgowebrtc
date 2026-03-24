@@ -42,6 +42,8 @@ type AudioDecoder interface {
 	// DecodeInto decodes encoded audio data into the destination frame.
 	// The dst frame must have pre-allocated Samples buffer of sufficient size.
 	// Returns the number of samples decoded per channel.
+	// Returns ErrNeedMoreData if the decoder accepted input but has not
+	// produced PCM output yet.
 	DecodeInto(src []byte, dst *frame.AudioFrame) (numSamples int, err error)
 
 	// MaxSamplesPerFrame returns the maximum samples per channel that can
@@ -94,4 +96,33 @@ func normalizeVideoDecodeError(err error, isKeyframe bool) error {
 	default:
 		return err
 	}
+}
+
+func applyVideoDecodeOutput(dst *frame.VideoFrame, width, height, yStride, uStride, vStride int, timestamp uint32) error {
+	if width <= 0 || height <= 0 {
+		return ErrNeedMoreData
+	}
+
+	dst.Width = width
+	dst.Height = height
+	dst.Stride[0] = yStride
+	dst.Stride[1] = uStride
+	dst.Stride[2] = vStride
+	dst.PTS = timestamp
+	dst.Format = frame.PixelFormatI420
+
+	return nil
+}
+
+func applyAudioDecodeOutput(dst *frame.AudioFrame, sampleRate, channels, numSamples int) (int, error) {
+	if numSamples <= 0 {
+		return 0, ErrNeedMoreData
+	}
+
+	dst.SampleRate = sampleRate
+	dst.Channels = channels
+	dst.Format = frame.AudioFormatS16
+	dst.NumSamples = numSamples
+
+	return numSamples, nil
 }

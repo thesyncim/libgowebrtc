@@ -272,7 +272,7 @@ func TestOpusEncoderEncode(t *testing.T) {
 
 	dst := make([]byte, enc.MaxEncodedSize())
 
-	n, err := enc.EncodeInto(src, dst)
+	n, err := encodeAudioUntilOutput(t, enc, src, dst)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}

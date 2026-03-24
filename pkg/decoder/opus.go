@@ -73,12 +73,7 @@ func (d *opusDecoder) DecodeInto(src []byte, dst *frame.AudioFrame) (int, error)
 		return 0, err
 	}
 
-	dst.SampleRate = d.sampleRate
-	dst.Channels = d.channels
-	dst.Format = frame.AudioFormatS16
-	dst.NumSamples = numSamples / d.channels
-
-	return dst.NumSamples, nil
+	return applyAudioDecodeOutput(dst, d.sampleRate, d.channels, numSamples/d.channels)
 }
 
 func (d *opusDecoder) MaxSamplesPerFrame() int {

@@ -13,6 +13,7 @@ const (
 	encodeRetryStep     = 3000
 	encodeRetryAttempts = 5
 	decodeRetryAttempts = 5
+	audioRetryAttempts  = 5
 )
 
 func encodeUntilOutput(t testing.TB, enc VideoEncoder, src *frame.VideoFrame, dst []byte, forceKeyframe bool) (EncodeResult, error) {
@@ -59,4 +60,44 @@ func decodeUntilOutput(t testing.TB, dec decoder.VideoDecoder, encoded []byte, d
 	}
 
 	return decoder.ErrNeedMoreData
+}
+
+func encodeAudioUntilOutput(t testing.TB, enc AudioEncoder, src *frame.AudioFrame, dst []byte) (int, error) {
+	t.Helper()
+
+	if src == nil {
+		return 0, ErrInvalidFrame
+	}
+
+	for i := 0; i < audioRetryAttempts; i++ {
+		n, err := enc.EncodeInto(src, dst)
+		if err != nil {
+			return 0, err
+		}
+		if n > 0 {
+			return n, nil
+		}
+	}
+
+	return 0, ffi.ErrNeedMoreData
+}
+
+func decodeAudioUntilOutput(t testing.TB, dec decoder.AudioDecoder, encoded []byte, dst *frame.AudioFrame) (int, error) {
+	t.Helper()
+
+	for i := 0; i < audioRetryAttempts; i++ {
+		numSamples, err := dec.DecodeInto(encoded, dst)
+		if err == nil {
+			if numSamples > 0 {
+				return numSamples, nil
+			}
+			continue
+		}
+		if errors.Is(err, decoder.ErrNeedMoreData) {
+			continue
+		}
+		return 0, err
+	}
+
+	return 0, decoder.ErrNeedMoreData
 }
