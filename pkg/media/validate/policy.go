@@ -63,8 +63,6 @@ func PolicyForBrowser(browser pioncodec.Browser) BrowserPolicy {
 			DefaultHeartbeatInterval:       2 * time.Second,
 			DefaultHeartbeatTimeout:        6 * time.Second,
 		}
-	case pioncodec.BrowserChrome:
-		fallthrough
 	default:
 		return BrowserPolicy{
 			Browser:                        pioncodec.BrowserChrome,

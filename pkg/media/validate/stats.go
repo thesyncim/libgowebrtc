@@ -40,7 +40,7 @@ func (s *Session) applyStatsReportLocked(report webrtc.StatsReport) {
 			s.transportSamples = appendLimited(s.transportSamples, sample, s.cfg.EventHistory)
 
 		case webrtc.InboundRTPStreamStats:
-			s.matchRTPStatsLocked(inboundSample(typed), "")
+			s.matchRTPStatsLocked(inboundSample(typed))
 
 		case webrtc.OutboundRTPStreamStats:
 			sample := outboundSample(typed)
@@ -48,7 +48,7 @@ func (s *Session) applyStatsReportLocked(report webrtc.StatsReport) {
 				sample.RemoteRoundTripTime = durationSeconds(remote.RoundTripTime)
 				sample.FractionLost = remote.FractionLost
 			}
-			s.matchRTPStatsLocked(sample, typed.RemoteID)
+			s.matchRTPStatsLocked(sample)
 
 		case webrtc.DataChannelStats:
 			key := dataChannelKey(typed.Label, int(typed.DataChannelIdentifier))
@@ -74,8 +74,22 @@ func (s *Session) applyStatsReportLocked(report webrtc.StatsReport) {
 	}
 }
 
-func (s *Session) matchRTPStatsLocked(sample RTPStatsSample, remoteID string) {
+func (s *Session) matchRTPStatsLocked(sample RTPStatsSample) {
 	if state := s.matchVideoTrackLocked(sample); state != nil {
+		if sample.MID != "" {
+			state.currentMID = sample.MID
+		}
+		if sample.RID != "" {
+			state.currentRID = sample.RID
+		}
+		if sample.FrameWidth > 0 && sample.FrameHeight > 0 {
+			if state.currentWidth > 0 && state.currentHeight > 0 &&
+				(state.currentWidth != sample.FrameWidth || state.currentHeight != sample.FrameHeight) {
+				state.resolutionChanges++
+			}
+			state.currentWidth = sample.FrameWidth
+			state.currentHeight = sample.FrameHeight
+		}
 		state.stats = appendLimited(state.stats, sample, s.cfg.EventHistory)
 		return
 	}
@@ -88,10 +102,19 @@ func (s *Session) matchRTPStatsLocked(sample RTPStatsSample, remoteID string) {
 
 func (s *Session) matchVideoTrackLocked(sample RTPStatsSample) *videoTrackState {
 	for _, state := range s.videoTracks {
+		if sample.TrackID != "" && state.id == sample.TrackID {
+			return state
+		}
 		if state.ssrc != 0 && state.ssrc == sample.SSRC {
 			return state
 		}
 		if sample.RID != "" && state.rid != "" && sample.RID == state.rid {
+			return state
+		}
+		if sample.RID != "" && state.currentRID != "" && sample.RID == state.currentRID {
+			return state
+		}
+		if sample.MID != "" && state.currentMID != "" && sample.MID == state.currentMID {
 			return state
 		}
 		if state.monitor != nil {
@@ -109,6 +132,9 @@ func (s *Session) matchVideoTrackLocked(sample RTPStatsSample) *videoTrackState 
 
 func (s *Session) matchAudioTrackLocked(sample RTPStatsSample) *audioTrackState {
 	for _, state := range s.audioTracks {
+		if sample.TrackID != "" && state.id == sample.TrackID {
+			return state
+		}
 		if state.ssrc != 0 && state.ssrc == sample.SSRC {
 			return state
 		}

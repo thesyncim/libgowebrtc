@@ -1,8 +1,9 @@
 package validate
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
-	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -42,6 +43,11 @@ type RelayConfig struct {
 	RandomSeed int64
 }
 
+type relayRandomSource interface {
+	Float64() float64
+	Int63n(int64) int64
+}
+
 // ICEEdgeRelay is a UDP proxy suitable for ICE-edge impairment injection.
 type ICEEdgeRelay struct {
 	inbound  *net.UDPConn
@@ -51,7 +57,7 @@ type ICEEdgeRelay struct {
 	mu        sync.Mutex
 	client    *net.UDPAddr
 	profile   ImpairmentProfile
-	rng       *rand.Rand
+	rng       relayRandomSource
 	closed    bool
 	pendingUp []byte
 	pendingDn []byte
@@ -81,15 +87,11 @@ func NewICEEdgeRelay(cfg RelayConfig) (*ICEEdgeRelay, error) {
 		return nil, err
 	}
 
-	seed := cfg.RandomSeed
-	if seed == 0 {
-		seed = time.Now().UnixNano()
-	}
 	relay := &ICEEdgeRelay{
 		inbound:  inbound,
 		outbound: outbound,
 		target:   target,
-		rng:      rand.New(rand.NewSource(seed)),
+		rng:      newRelayRandomSource(cfg.RandomSeed),
 	}
 	go relay.clientLoop()
 	go relay.targetLoop()
@@ -286,6 +288,9 @@ func (r *ICEEdgeRelay) storePending(direction NetworkDirection, payload []byte) 
 func (r *ICEEdgeRelay) randomFloat() float64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.rng == nil {
+		r.rng = newRelayRandomSource(0)
+	}
 	return r.rng.Float64()
 }
 
@@ -295,7 +300,79 @@ func (r *ICEEdgeRelay) randomInt63n(n int64) int64 {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.rng == nil {
+		r.rng = newRelayRandomSource(0)
+	}
 	return r.rng.Int63n(n)
+}
+
+func newRelayRandomSource(seed int64) relayRandomSource {
+	if seed != 0 {
+		return &seededRelayRandom{state: uint64(seed)}
+	}
+	return cryptoRelayRandom{}
+}
+
+type cryptoRelayRandom struct{}
+
+func (cryptoRelayRandom) Float64() float64 {
+	const denominator = float64(uint64(1) << 53)
+	return float64(cryptoUint64()>>11) / denominator
+}
+
+func (cryptoRelayRandom) Int63n(n int64) int64 {
+	if n <= 0 {
+		return 0
+	}
+	limit := uint64(n)
+	maxValue := ^uint64(0) - (^uint64(0) % limit)
+	for {
+		value := cryptoUint64()
+		if value < maxValue {
+			return int64(value % limit)
+		}
+	}
+}
+
+type seededRelayRandom struct {
+	state uint64
+}
+
+func (r *seededRelayRandom) next() uint64 {
+	if r.state == 0 {
+		r.state = 0x9e3779b97f4a7c15
+	}
+	r.state ^= r.state >> 12
+	r.state ^= r.state << 25
+	r.state ^= r.state >> 27
+	return r.state * 2685821657736338717
+}
+
+func (r *seededRelayRandom) Float64() float64 {
+	const denominator = float64(uint64(1) << 53)
+	return float64(r.next()>>11) / denominator
+}
+
+func (r *seededRelayRandom) Int63n(n int64) int64 {
+	if n <= 0 {
+		return 0
+	}
+	limit := uint64(n)
+	maxValue := ^uint64(0) - (^uint64(0) % limit)
+	for {
+		value := r.next()
+		if value < maxValue {
+			return int64(value % limit)
+		}
+	}
+}
+
+func cryptoUint64() uint64 {
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return uint64(time.Now().UnixNano())
+	}
+	return binary.LittleEndian.Uint64(buf[:])
 }
 
 func mustResolveUDPAddr(addr string) *net.UDPAddr {

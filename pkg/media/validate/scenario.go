@@ -118,12 +118,20 @@ func (l *ScenarioLab) Run(ctx context.Context, script ScenarioScript) error {
 func (l *ScenarioLab) runStep(ctx context.Context, step ScenarioStep) error {
 	switch step.Action {
 	case ScenarioActionSetLayerActive:
+		if !l.session.policy.SupportsSimulcast && !l.session.policy.SupportsLayeredVP9 && !l.session.policy.SupportsLayeredAV1 {
+			l.session.recordSkip(fmt.Sprintf("layer activation scenarios are not guaranteed for browser profile %q", l.session.policy.Browser))
+			return nil
+		}
 		if step.Video == nil {
 			return errors.New("missing video publisher")
 		}
 		return step.Video.SetLayerActive(step.LayerIndex, step.Active)
 
 	case ScenarioActionSetLayerBitrate:
+		if !l.session.policy.SupportsSimulcast && !l.session.policy.SupportsLayeredVP9 && !l.session.policy.SupportsLayeredAV1 {
+			l.session.recordSkip(fmt.Sprintf("layer bitrate scenarios are not guaranteed for browser profile %q", l.session.policy.Browser))
+			return nil
+		}
 		if step.Video == nil {
 			return errors.New("missing video publisher")
 		}
@@ -137,6 +145,10 @@ func (l *ScenarioLab) runStep(ctx context.Context, step ScenarioStep) error {
 		return nil
 
 	case ScenarioActionCodecRenegotiation, ScenarioActionICERestart, ScenarioActionTrackAdd, ScenarioActionTrackRemove, ScenarioActionExternal:
+		if step.Action == ScenarioActionCodecRenegotiation && !l.session.policy.SupportsCodecSwitchAssertions {
+			l.session.recordSkip(fmt.Sprintf("codec renegotiation assertions are not guaranteed for browser profile %q", l.session.policy.Browser))
+			return nil
+		}
 		if step.Callback == nil {
 			return errors.New("missing external callback")
 		}

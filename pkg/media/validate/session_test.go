@@ -11,6 +11,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/media"
+	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 	"github.com/thesyncim/libgowebrtc/pkg/pionsend"
 )
 
@@ -342,5 +343,88 @@ func TestSessionDataChannelHeartbeatsAndScenarioLab(t *testing.T) {
 	defer dc.mu.Unlock()
 	if len(dc.sent) < 2 || dc.sent[len(dc.sent)-2] != "hello" || dc.sent[len(dc.sent)-1] != "world" {
 		t.Fatalf("sent data channel messages = %v, want hello/world", dc.sent)
+	}
+}
+
+func TestSessionBrowserPolicySkipsUnsupportedAssertions(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{Browser: "safari"})
+	session.mu.Lock()
+	session.videoTracks["video-1"] = &videoTrackState{id: "video-1"}
+	session.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	if err := session.WaitForCodecSwitch(ctx, "video-1", webrtc.MimeTypeH264); err != nil {
+		t.Fatalf("WaitForCodecSwitch() error = %v, want nil skip", err)
+	}
+	if err := session.WaitForVideoRID(ctx, "video-1", "f"); err != nil {
+		t.Fatalf("WaitForVideoRID() error = %v, want nil skip", err)
+	}
+	if err := session.WaitForVideoLayer(ctx, "video-1", 2, 0); err != nil {
+		t.Fatalf("WaitForVideoLayer() error = %v, want nil skip", err)
+	}
+
+	snapshot := session.Snapshot()
+	if len(snapshot.SkippedExpectations) != 3 {
+		t.Fatalf("len(SkippedExpectations) = %d, want 3", len(snapshot.SkippedExpectations))
+	}
+}
+
+func TestSessionVideoSpecificWaiters(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{})
+	session.mu.Lock()
+	session.videoTracks["video-1"] = &videoTrackState{
+		id:              "video-1",
+		currentCodec:    codec.VP9,
+		currentMime:     webrtc.MimeTypeVP9,
+		frameCount:      1,
+		currentWidth:    640,
+		currentHeight:   360,
+		currentRID:      "h",
+		hasCurrentLayer: true,
+		currentLayer:    pionrecv.VideoLayer{Spatial: 1, Temporal: 0},
+	}
+	session.signalLocked()
+	session.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := session.WaitForVideoRID(ctx, "video-1", "h"); err != nil {
+		t.Fatalf("WaitForVideoRID: %v", err)
+	}
+	if err := session.WaitForVideoLayer(ctx, "video-1", 1, 0); err != nil {
+		t.Fatalf("WaitForVideoLayer: %v", err)
+	}
+	if err := session.WaitForVideoResolution(ctx, "video-1", 640, 360); err != nil {
+		t.Fatalf("WaitForVideoResolution: %v", err)
+	}
+}
+
+func TestScenarioLabSkipsUnsupportedLayerScenarios(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{Browser: "safari"})
+	lab := NewScenarioLab(session, LabConfig{})
+	video := &fakePublishedVideo{}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := lab.Run(ctx, ScenarioScript{
+		Steps: []ScenarioStep{
+			{Action: ScenarioActionSetLayerActive, Video: video, LayerIndex: 1, Active: true},
+			{Action: ScenarioActionSetLayerBitrate, Video: video, LayerIndex: 1, Bitrate: 1000},
+			{Action: ScenarioActionCodecRenegotiation, Callback: func(context.Context, *Session) error {
+				t.Fatal("codec renegotiation callback should have been skipped")
+				return nil
+			}},
+		},
+	}); err != nil {
+		t.Fatalf("ScenarioLab.Run: %v", err)
+	}
+	if len(video.layerCalls) != 0 || len(video.bitrateCalls) != 0 {
+		t.Fatalf("video calls = %+v %+v, want skipped without invocations", video.layerCalls, video.bitrateCalls)
+	}
+	snapshot := session.Snapshot()
+	if len(snapshot.SkippedExpectations) != 3 {
+		t.Fatalf("len(SkippedExpectations) = %d, want 3", len(snapshot.SkippedExpectations))
 	}
 }

@@ -1,9 +1,9 @@
 package validate
 
 import (
-	"math/rand"
 	"net"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 )
@@ -93,9 +93,12 @@ func TestICEEdgeRelayDelayAndDirectionalRules(t *testing.T) {
 func TestICEEdgeRelayApplyImpairmentLossDuplicateAndReorder(t *testing.T) {
 	relay := &ICEEdgeRelay{rng: randSourceForTest(1)}
 
+	var mu sync.Mutex
 	var sent [][]byte
 	send := func(packet []byte) {
+		mu.Lock()
 		sent = append(sent, append([]byte(nil), packet...))
+		mu.Unlock()
 	}
 
 	relay.profile = ImpairmentProfile{
@@ -103,40 +106,54 @@ func TestICEEdgeRelayApplyImpairmentLossDuplicateAndReorder(t *testing.T) {
 	}
 	relay.applyImpairment(DirectionUpstream, []byte("drop"), send)
 	time.Sleep(20 * time.Millisecond)
+	mu.Lock()
 	if len(sent) != 0 {
+		mu.Unlock()
 		t.Fatalf("loss profile sent %d packets, want 0", len(sent))
 	}
+	mu.Unlock()
 
 	relay.profile = ImpairmentProfile{
 		Rules: []NetworkImpairment{{Direction: DirectionUpstream, DuplicateProbability: 1}},
 	}
 	relay.applyImpairment(DirectionUpstream, []byte("dup"), send)
 	time.Sleep(20 * time.Millisecond)
+	mu.Lock()
 	if len(sent) != 2 {
+		mu.Unlock()
 		t.Fatalf("duplicate profile sent %d packets, want 2", len(sent))
 	}
+	mu.Unlock()
 
+	mu.Lock()
 	sent = nil
+	mu.Unlock()
 	relay.profile = ImpairmentProfile{
 		Rules: []NetworkImpairment{{Direction: DirectionUpstream, ReorderProbability: 1}},
 	}
 	relay.applyImpairment(DirectionUpstream, []byte("a"), send)
 	time.Sleep(20 * time.Millisecond)
+	mu.Lock()
 	if len(sent) != 0 {
+		mu.Unlock()
 		t.Fatalf("first reordered packet sent immediately, got %d packets", len(sent))
 	}
+	mu.Unlock()
 	relay.applyImpairment(DirectionUpstream, []byte("b"), send)
 	time.Sleep(20 * time.Millisecond)
+	mu.Lock()
 	if len(sent) != 2 {
+		mu.Unlock()
 		t.Fatalf("reorder profile sent %d packets after second input, want 2", len(sent))
 	}
 	payloads := []string{string(sent[0]), string(sent[1])}
+	mu.Unlock()
 	slices.Sort(payloads)
 	if !slices.Equal(payloads, []string{"a", "b"}) {
 		t.Fatalf("reordered payloads = %v, want [a b]", payloads)
 	}
 }
 
-func randSourceForTest(seed int64) *rand.Rand {
-	return rand.New(rand.NewSource(seed))
+func randSourceForTest(seed int64) relayRandomSource {
+	return newRelayRandomSource(seed)
 }

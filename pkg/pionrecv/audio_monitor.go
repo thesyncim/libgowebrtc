@@ -250,7 +250,7 @@ func (m *AudioSubscriberMonitor) WaitForSilence(ctx context.Context) error {
 	})
 }
 
-func (m *AudioSubscriberMonitor) bind(track trackReader, receiver *webrtc.RTPReceiver, codecType codec.Type, params webrtc.RTPCodecParameters) {
+func (m *AudioSubscriberMonitor) bind(track trackReader, _ *webrtc.RTPReceiver, codecType codec.Type, params webrtc.RTPCodecParameters) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -53,13 +53,13 @@ type nativePeerAdapter struct {
 
 func (n *nativePeerAdapter) GetStats() (webrtc.StatsReport, error) { return n.pc.GetStats() }
 func (n *nativePeerAdapter) ConnectionState() webrtc.PeerConnectionState {
-	return webrtc.PeerConnectionState(n.pc.ConnectionState())
+	return n.pc.ConnectionState()
 }
 func (n *nativePeerAdapter) ICEConnectionState() webrtc.ICEConnectionState {
-	return webrtc.ICEConnectionState(n.pc.ICEConnectionState())
+	return n.pc.ICEConnectionState()
 }
 func (n *nativePeerAdapter) SignalingState() webrtc.SignalingState {
-	return webrtc.SignalingState(n.pc.SignalingState())
+	return n.pc.SignalingState()
 }
 
 type dataChannelAdapter interface {
@@ -130,6 +130,12 @@ type videoTrackState struct {
 	currentWidth      int
 	currentHeight     int
 	resolutionChanges uint64
+	currentMID        string
+	currentRID        string
+	hasCurrentLayer   bool
+	currentLayer      pionrecv.VideoLayer
+	hasMaxActiveLayer bool
+	maxActiveLayer    pionrecv.VideoLayer
 
 	codecSwitches []pionrecv.CodecSwitchObservation
 	freezeEvents  []pionrecv.FreezeEvent
@@ -748,13 +754,63 @@ func (s *Session) WaitForAudioContinuous(ctx context.Context, trackID string) er
 }
 
 // WaitForCodecSwitch waits until the target track reflects the requested MIME type.
-func (s *Session) WaitForCodecSwitch(ctx context.Context, trackID string, mime string) error {
+func (s *Session) WaitForCodecSwitch(ctx context.Context, trackID, mime string) error {
+	if !s.policy.SupportsCodecSwitchAssertions {
+		s.recordSkip(fmt.Sprintf("codec switch assertions are not guaranteed for browser profile %q", s.policy.Browser))
+		return nil
+	}
 	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
 		if track, ok := snapshot.VideoTracks[trackID]; ok {
 			return strings.EqualFold(track.CurrentMimeType, mime)
 		}
 		if track, ok := snapshot.AudioTracks[trackID]; ok {
 			return strings.EqualFold(track.CurrentMimeType, mime)
+		}
+		return false
+	})
+}
+
+// WaitForVideoLayer waits until the target video track reports the desired
+// spatial/temporal layer through the subscriber-visible monitor.
+func (s *Session) WaitForVideoLayer(ctx context.Context, trackID string, spatial, temporal int) error {
+	if !s.policy.SupportsDependencyDescriptor {
+		s.recordSkip(fmt.Sprintf("dependency-descriptor layer assertions are not guaranteed for browser profile %q", s.policy.Browser))
+		return nil
+	}
+	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		track, ok := snapshot.VideoTracks[trackID]
+		return ok && track.HasCurrentLayer && track.CurrentLayer == (pionrecv.VideoLayer{Spatial: spatial, Temporal: temporal})
+	})
+}
+
+// WaitForVideoRID waits until the target video track reports the desired RID.
+func (s *Session) WaitForVideoRID(ctx context.Context, trackID, rid string) error {
+	if !s.policy.SupportsRID {
+		s.recordSkip(fmt.Sprintf("RID assertions are not guaranteed for browser profile %q", s.policy.Browser))
+		return nil
+	}
+	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		track, ok := snapshot.VideoTracks[trackID]
+		return ok && track.CurrentRID == rid
+	})
+}
+
+// WaitForVideoResolution waits until the target video track reports the desired resolution.
+func (s *Session) WaitForVideoResolution(ctx context.Context, trackID string, width, height int) error {
+	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		track, ok := snapshot.VideoTracks[trackID]
+		return ok && track.CurrentWidth == width && track.CurrentHeight == height
+	})
+}
+
+// WaitForDataChannelOpen waits until the named data channel reports an open state.
+func (s *Session) WaitForDataChannelOpen(ctx context.Context, label string) error {
+	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		for _, dc := range snapshot.DataChannels {
+			if label != "" && dc.Label != label {
+				continue
+			}
+			return dc.State == "open"
 		}
 		return false
 	})
@@ -880,6 +936,12 @@ func (s *Session) recordFailure(message string) {
 	s.recordFailureLocked(message)
 }
 
+func (s *Session) recordSkip(message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recordSkipLocked(message)
+}
+
 func (s *Session) recordFailureLocked(message string) {
 	s.failures = appendUniqueLimited(s.failures, message, s.cfg.EventHistory)
 	s.signalLocked()
@@ -887,6 +949,11 @@ func (s *Session) recordFailureLocked(message string) {
 
 func (s *Session) recordWarningLocked(message string) {
 	s.warnings = appendUniqueLimited(s.warnings, message, s.cfg.EventHistory)
+	s.signalLocked()
+}
+
+func (s *Session) recordSkipLocked(message string) {
+	s.skipped = appendUniqueLimited(s.skipped, message, s.cfg.EventHistory)
 	s.signalLocked()
 }
 
@@ -985,6 +1052,12 @@ func (t *videoTrackState) snapshotLocked() VideoTrackSnapshot {
 		CurrentWidth:      t.currentWidth,
 		CurrentHeight:     t.currentHeight,
 		ResolutionChanges: t.resolutionChanges,
+		CurrentMID:        t.currentMID,
+		CurrentRID:        t.currentRID,
+		HasCurrentLayer:   t.hasCurrentLayer,
+		CurrentLayer:      t.currentLayer,
+		HasMaxActiveLayer: t.hasMaxActiveLayer,
+		MaxActiveLayer:    t.maxActiveLayer,
 		Continuous:        t.frameCount > 0 && t.freezeCount == 0,
 		CodecSwitches:     append([]pionrecv.CodecSwitchObservation(nil), t.codecSwitches...),
 		FreezeEvents:      append([]pionrecv.FreezeEvent(nil), t.freezeEvents...),
@@ -1001,6 +1074,12 @@ func (t *videoTrackState) resetLocked() {
 	t.currentWidth = 0
 	t.currentHeight = 0
 	t.resolutionChanges = 0
+	t.currentMID = ""
+	t.currentRID = ""
+	t.hasCurrentLayer = false
+	t.currentLayer = pionrecv.VideoLayer{}
+	t.hasMaxActiveLayer = false
+	t.maxActiveLayer = pionrecv.VideoLayer{}
 	t.codecSwitches = nil
 	t.freezeEvents = nil
 	t.stats = nil
