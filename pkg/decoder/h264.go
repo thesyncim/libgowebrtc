@@ -20,6 +20,7 @@ type h264Decoder struct {
 	lastPPS []byte
 }
 
+// NewH264Decoder creates an H.264 video decoder backed by libwebrtc.
 func NewH264Decoder() (VideoDecoder, error) {
 	if err := ffi.LoadLibrary(); err != nil {
 		return nil, err

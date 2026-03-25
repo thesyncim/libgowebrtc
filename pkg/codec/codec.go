@@ -6,6 +6,7 @@ import "strings"
 // Type represents a video or audio codec type.
 type Type int
 
+// Type values identify the codecs supported by libgowebrtc.
 const (
 	// Video codecs
 	H264 Type = iota
@@ -128,6 +129,7 @@ func (t Type) ClockRate() uint32 {
 // RateControlMode specifies the encoder rate control strategy.
 type RateControlMode int
 
+// RateControlMode values control encoder bitrate behavior.
 const (
 	RateControlCBR RateControlMode = iota // Constant bitrate
 	RateControlVBR                        // Variable bitrate
@@ -138,6 +140,7 @@ const (
 // L = spatial Layers, T = Temporal layers, S = Simulcast, K = Key-frame dependent
 type SVCMode int
 
+// SVCMode values describe supported scalability and simulcast layouts.
 const (
 	SVCModeNone SVCMode = iota // No SVC
 
@@ -348,6 +351,7 @@ func SVCPresetFirefox() *SVCConfig {
 // H264Profile represents H.264 profile levels.
 type H264Profile string
 
+// H264Profile values identify canonical H.264 profile-level-id prefixes.
 const (
 	H264ProfileBaseline        H264Profile = "42001f" // Baseline Level 3.1
 	H264ProfileConstrainedBase H264Profile = "42e01f" // Constrained Baseline Level 3.1
@@ -360,13 +364,13 @@ const (
 type H264Config struct {
 	// Required
 	Width  int
-	Height int
+	Height int // Height is the target frame height in pixels.
 
 	// Bitrate control
 	Bitrate     uint32          // Target bitrate in bps (0 = auto based on resolution)
 	MaxBitrate  uint32          // Max bitrate for VBR mode (0 = 1.5x Bitrate)
 	MinBitrate  uint32          // Min bitrate for VBR mode (0 = 0.5x Bitrate)
-	RateControl RateControlMode // CBR, VBR, or CQ
+	RateControl RateControlMode // RateControl selects CBR, VBR, or CQ mode.
 
 	// Quality
 	FPS         float64     // Target framerate (0 = 30)
@@ -397,12 +401,12 @@ func (c H264Config) FPSOrDefault() float64 {
 type VP8Config struct {
 	// Required
 	Width  int
-	Height int
+	Height int // Height is the target frame height in pixels.
 
 	// Bitrate control
-	Bitrate     uint32 // Target bitrate in bps
-	MaxBitrate  uint32 // Max bitrate for VBR
-	RateControl RateControlMode
+	Bitrate     uint32          // Target bitrate in bps
+	MaxBitrate  uint32          // Max bitrate for VBR
+	RateControl RateControlMode // RateControl selects CBR, VBR, or CQ mode.
 
 	// Quality
 	FPS         float64 // Target framerate
@@ -420,6 +424,7 @@ type VP8Config struct {
 // VP9Profile represents VP9 profiles.
 type VP9Profile int
 
+// VP9Profile values identify the standard VP9 bitstream profiles.
 const (
 	VP9Profile0 VP9Profile = 0 // 8-bit 4:2:0
 	VP9Profile1 VP9Profile = 1 // 8-bit 4:2:2/4:4:4
@@ -431,12 +436,12 @@ const (
 type VP9Config struct {
 	// Required
 	Width  int
-	Height int
+	Height int // Height is the target frame height in pixels.
 
 	// Bitrate control
-	Bitrate     uint32 // Target bitrate in bps
-	MaxBitrate  uint32 // Max bitrate for VBR
-	RateControl RateControlMode
+	Bitrate     uint32          // Target bitrate in bps
+	MaxBitrate  uint32          // Max bitrate for VBR
+	RateControl RateControlMode // RateControl selects CBR, VBR, or CQ mode.
 
 	// Quality
 	FPS         float64    // Target framerate
@@ -460,6 +465,7 @@ type VP9Config struct {
 // AV1Profile represents AV1 profiles.
 type AV1Profile int
 
+// AV1Profile values identify the standard AV1 bitstream profiles.
 const (
 	AV1ProfileMain         AV1Profile = 0 // 8/10-bit 4:2:0
 	AV1ProfileHigh         AV1Profile = 1 // 8/10-bit 4:4:4
@@ -470,12 +476,12 @@ const (
 type AV1Config struct {
 	// Required
 	Width  int
-	Height int
+	Height int // Height is the target frame height in pixels.
 
 	// Bitrate control
-	Bitrate     uint32 // Target bitrate in bps
-	MaxBitrate  uint32 // Max bitrate for VBR
-	RateControl RateControlMode
+	Bitrate     uint32          // Target bitrate in bps
+	MaxBitrate  uint32          // Max bitrate for VBR
+	RateControl RateControlMode // RateControl selects CBR, VBR, or CQ mode.
 
 	// Quality
 	FPS         float64    // Target framerate
@@ -500,6 +506,7 @@ type AV1Config struct {
 // OpusApplication specifies the Opus encoder application type.
 type OpusApplication int
 
+// OpusApplication values select Opus tuning for speech, music, or low delay.
 const (
 	OpusApplicationVoIP     OpusApplication = 2048 // Voice over IP (speech)
 	OpusApplicationAudio    OpusApplication = 2049 // Audio (music, mixed content)
@@ -509,6 +516,7 @@ const (
 // OpusBandwidth specifies the audio bandwidth.
 type OpusBandwidth int
 
+// OpusBandwidth values select the Opus encoder audio bandwidth hint.
 const (
 	OpusBandwidthAuto      OpusBandwidth = -1000 // Auto-detect
 	OpusBandwidthNarrow    OpusBandwidth = 1101  // 4kHz (narrowband)

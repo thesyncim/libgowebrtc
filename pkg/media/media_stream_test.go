@@ -1,6 +1,7 @@
 package media
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/pion/webrtc/v4"
@@ -124,6 +125,24 @@ func TestMediaStreamTrackCollectionOperations(t *testing.T) {
 	}
 }
 
+func TestMediaStreamTrackCollectionIgnoresNilAndDuplicates(t *testing.T) {
+	stream := NewMediaStream()
+	video := newTestVideoTrack(t)
+
+	stream.AddTrack(nil)
+	stream.AddTrack(video)
+	stream.AddTrack(video)
+
+	if got := len(stream.GetTracks()); got != 1 {
+		t.Fatalf("GetTracks() len after nil/duplicate add = %d, want 1", got)
+	}
+
+	stream.RemoveTrack(nil)
+	if got := len(stream.GetTracks()); got != 1 {
+		t.Fatalf("GetTracks() len after nil remove = %d, want 1", got)
+	}
+}
+
 func TestMediaStreamClonePreservesTopology(t *testing.T) {
 	stream := NewMediaStream()
 	video := newTestVideoTrack(t)
@@ -155,6 +174,39 @@ func TestMediaStreamClonePreservesTopology(t *testing.T) {
 	}
 	if !clone.Active() {
 		t.Fatal("clone should remain active when original stops")
+	}
+}
+
+func TestMediaStreamClonePreservesTrackState(t *testing.T) {
+	stream := NewMediaStream()
+	video := newTestVideoTrack(t)
+	audio := newTestAudioTrack(t)
+	stream.AddTrack(video)
+	stream.AddTrack(audio)
+
+	video.SetEnabled(false)
+	audio.SetEnabled(false)
+	video.Stop()
+
+	clone := stream.Clone()
+	if clone == nil {
+		t.Fatal("Clone() returned nil")
+	}
+
+	clonedVideo := clone.GetVideoTracks()[0]
+	clonedAudio := clone.GetAudioTracks()[0]
+
+	if clonedVideo.Enabled() {
+		t.Fatal("cloned video track should preserve disabled state")
+	}
+	if clonedAudio.Enabled() {
+		t.Fatal("cloned audio track should preserve disabled state")
+	}
+	if got := clonedVideo.ReadyState(); got != "ended" {
+		t.Fatalf("cloned video ReadyState() = %q, want ended", got)
+	}
+	if got := clonedAudio.ReadyState(); got != "live" {
+		t.Fatalf("cloned audio ReadyState() = %q, want live", got)
 	}
 }
 
@@ -309,5 +361,23 @@ func TestPionTrackLocalAndAddTracksToPionPeerConnection(t *testing.T) {
 		if got := sender.Track().StreamID(); got != stream.ID() {
 			t.Fatalf("sender.Track().StreamID() = %q, want %q", got, stream.ID())
 		}
+	}
+}
+
+func TestAddTracksToPionPeerConnectionNilGuards(t *testing.T) {
+	stream := NewMediaStream()
+
+	if _, err := AddTracksToPionPeerConnection(nil, stream); !errors.Is(err, ErrNilPeerConnection) {
+		t.Fatalf("AddTracksToPionPeerConnection(nil, stream) error = %v, want %v", err, ErrNilPeerConnection)
+	}
+
+	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("NewPeerConnection() error = %v", err)
+	}
+	defer pc.Close()
+
+	if _, err := AddTracksToPionPeerConnection(pc, nil); !errors.Is(err, ErrNilMediaStream) {
+		t.Fatalf("AddTracksToPionPeerConnection(pc, nil) error = %v, want %v", err, ErrNilMediaStream)
 	}
 }

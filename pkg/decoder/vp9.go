@@ -15,6 +15,7 @@ type vp9Decoder struct {
 	mu     sync.Mutex
 }
 
+// NewVP9Decoder creates a VP9 video decoder backed by libwebrtc.
 func NewVP9Decoder() (VideoDecoder, error) {
 	if err := ffi.LoadLibrary(); err != nil {
 		return nil, err

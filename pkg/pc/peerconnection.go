@@ -33,6 +33,10 @@ var (
 	ErrNotSupported = ffi.ErrNotSupported
 )
 
+// Compatibility notes kept alongside the thin API surface:
+// The current shim does not implement sender stats and returns ErrNotSupported.
+// The current shim does not implement this surface and returns ErrNotSupported.
+
 // Constants
 const (
 	maxSDPSize = 64 * 1024 // 64KB should be sufficient for SDP

@@ -13,19 +13,19 @@ import (
 
 // VideoFactoryConfig configures libgowebrtc-backed Pion video factories.
 type VideoFactoryConfig struct {
-	Width       int
-	Height      int
-	Bitrate     uint32
-	FPS         float64
-	KeyInterval int
-	PreferHW    *bool
+	Width       int     // Width is the expected input frame width in pixels.
+	Height      int     // Height is the expected input frame height in pixels.
+	Bitrate     uint32  // Bitrate overrides the encoder target bitrate in bps.
+	FPS         float64 // FPS overrides the encoder target frame rate.
+	KeyInterval int     // KeyInterval overrides the keyframe cadence in frames.
+	PreferHW    *bool   // PreferHW overrides whether hardware encoding should be preferred.
 }
 
 // AudioFactoryConfig configures libgowebrtc-backed Pion audio factories.
 type AudioFactoryConfig struct {
-	SampleRate int
-	Channels   int
-	Bitrate    uint32
+	SampleRate int    // SampleRate is the decoded PCM sample rate in Hz.
+	Channels   int    // Channels is the number of PCM channels to encode.
+	Bitrate    uint32 // Bitrate overrides the encoder target bitrate in bps.
 }
 
 // NewVideoEncoder creates a libgowebrtc encoder from Pion codec parameters.

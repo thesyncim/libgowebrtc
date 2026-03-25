@@ -22,11 +22,11 @@ var (
 
 // Config configures an RTP packetizer.
 type Config struct {
-	Codec       codec.Type
-	SSRC        uint32
-	PayloadType uint8
-	MTU         uint16 // Maximum transmission unit (typically 1200)
-	ClockRate   uint32 // RTP clock rate (90000 for video, 48000 for Opus)
+	Codec       codec.Type // Codec selects the RTP payloader and timestamp behavior.
+	SSRC        uint32     // SSRC is the synchronization source written into output packets.
+	PayloadType uint8      // PayloadType is the negotiated RTP payload type to emit.
+	MTU         uint16     // Maximum transmission unit (typically 1200)
+	ClockRate   uint32     // RTP clock rate (90000 for video, 48000 for Opus)
 }
 
 // PacketInfo describes a single RTP packet in the output buffer.

@@ -19,9 +19,9 @@ var (
 
 // FrameInfo contains metadata about a reassembled frame.
 type FrameInfo struct {
-	Size       int
-	Timestamp  uint32
-	IsKeyframe bool
+	Size       int    // Size is the number of frame bytes written into the caller buffer.
+	Timestamp  uint32 // Timestamp is the RTP timestamp associated with the frame.
+	IsKeyframe bool   // IsKeyframe reports whether the frame begins a keyframe sample.
 }
 
 // Depacketizer reassembles RTP packets into complete frames.

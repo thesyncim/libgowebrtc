@@ -17,6 +17,7 @@ type vp9Encoder struct {
 	mu            sync.Mutex
 }
 
+// NewVP9Encoder creates a new VP9 video encoder.
 func NewVP9Encoder(cfg codec.VP9Config) (VideoEncoder, error) {
 	if err := validateVP9Config(cfg); err != nil {
 		return nil, err

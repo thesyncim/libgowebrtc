@@ -272,6 +272,27 @@ func TestPionRemoteTrackCloneFanoutAndStop(t *testing.T) {
 	waitForCondition(t, 2*time.Second, func() bool { return videoDecoded.closed.Load() })
 }
 
+func TestPionRemoteTrackClonePreservesState(t *testing.T) {
+	registry := NewRemoteStreamRegistry()
+	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
+
+	track, _, err := registry.bindSource(videoDecoded)
+	if err != nil {
+		t.Fatalf("bindSource() error = %v", err)
+	}
+	videoTrack := track.(PionRemoteVideoTrack)
+	videoTrack.SetEnabled(false)
+	videoTrack.Stop()
+
+	clone := videoTrack.Clone().(PionRemoteVideoTrack)
+	if clone.Enabled() {
+		t.Fatal("clone should preserve disabled state")
+	}
+	if got := clone.ReadyState(); got != "ended" {
+		t.Fatalf("clone ReadyState() = %q, want ended", got)
+	}
+}
+
 func TestPionRemoteTrackCodecChangeAndNaturalEnd(t *testing.T) {
 	registry := NewRemoteStreamRegistry()
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "stream-2", webrtc.RTPCodecTypeVideo, codec.VP8, 96)

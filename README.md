@@ -130,6 +130,9 @@ log.Printf("shim source=%s path=%s checksum=%s", report.Shim.Source, report.Shim
 
 `diagnostics.Check()` reports resolved shim/OpenH264 paths, source (`local` vs
 `downloaded`), cache directories, version/checksum status, and blocking issues.
+Unsupported shim-backed surfaces return `ErrNotSupported` instead of silently
+degrading, so the zero-config path stays explicit when a runtime capability is
+missing.
 
 ### FFI Variants
 
@@ -200,7 +203,7 @@ Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 |------------|---------|--------|
 | libwebrtc (pre-compiled) | 141.7390.2.0 | [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) |
 | libwebrtc (Linux source build) | branch-heads/7390 @ `d2eaa5570fc9959f8dbde32912a16366b8ee75f4` | [webrtc.googlesource.com/src](https://webrtc.googlesource.com/src) |
-| libwebrtc_shim | shim-v0.4.5 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
+| libwebrtc_shim | shim-v0.5.0 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
 | OpenH264 | 2.5.1 | [Cisco OpenH264](https://github.com/cisco/openh264/releases) |
 
 ### Building the Shim
@@ -225,7 +228,7 @@ The shim is built using Bazel.
 ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 
 # Publish a prepared local release directory
-./scripts/release.sh 0.4.5 --release-dir release/shim-v0.4.5
+./scripts/release.sh 0.5.0 --release-dir release/shim-v0.5.0
 ```
 
 Environment variables:
@@ -259,7 +262,7 @@ Examples:
 ./scripts/release-module.sh v0.1.0 --push
 
 # Publish shim assets
-./scripts/release.sh 0.4.5 --release-dir release/shim-v0.4.5
+./scripts/release.sh 0.5.0 --release-dir release/shim-v0.5.0
 ```
 
 See [VERSIONING.md](VERSIONING.md) for the bump policy and release flow details.
@@ -421,7 +424,7 @@ _ = report
 
 ### Shim Release Note
 
-This wave changes the shim ABI. After updating Go code, publish a fresh shim asset at version `0.3.0` before consuming the branch outside a local build.
+This wave changes the shim ABI. After updating Go code, publish a fresh shim asset at version `0.5.0` before consuming the branch outside a local build.
 
 ### Pion Receive Integration
 
