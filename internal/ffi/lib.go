@@ -66,6 +66,16 @@ var (
 	libMu     sync.Mutex  // Still used for load/unload operations
 )
 
+var (
+	resolveLibraryFunc            = resolveLibrary
+	downloadShimFunc              = downloadShim
+	dlopenLibraryFunc             = dlopenLibrary
+	dlcloseLibraryFunc            = dlcloseLibrary
+	retryLoadLibraryFunc          = retryLoadLibrary
+	registerFunctionsFunc         = registerFunctions
+	checkLoadedLibraryVersionFunc = checkLoadedLibraryVersion
+)
+
 // Function pointers are defined in func_vars.go and populated by registerFunctions() in
 // either func_bind_purego.go or func_bind_cgo.go depending on build tags.
 
@@ -98,27 +108,39 @@ func LoadLibrary() error {
 		preloadLinuxDeps()
 	}
 
-	libPath, downloadErr, err := resolveLibrary()
+	libPath, downloadErr, err := resolveLibraryFunc()
 	if err != nil {
 		return err
 	}
 
-	handle, err := dlopenLibrary(libPath, RTLD_NOW|RTLD_GLOBAL)
+	handle, resolvedPath, err := openLibraryHandle(libPath)
 	if err != nil {
-		if retryHandle, retryPath, retryErr := retryLoadLibrary(libPath); retryErr == nil {
-			handle = retryHandle
-			libPath = retryPath
+		if fallbackHandle, fallbackPath, fallbackErr := tryFallbackToDownloadedShim(libPath, err); fallbackErr == nil {
+			handle = fallbackHandle
+			libPath = fallbackPath
 			err = nil
+		} else {
+			libPath = fallbackPath
+			err = fallbackErr
 		}
+	} else {
+		libPath = resolvedPath
 	}
 	if err != nil {
 		return wrapLibraryLoadError(libPath, err, downloadErr)
 	}
 
 	libHandle = handle
-	if err := registerFunctions(); err != nil {
-		_ = dlcloseLibrary(handle)
-		return err
+	if err := initializeLoadedLibrary(); err != nil {
+		_ = dlcloseLibraryFunc(handle)
+		libHandle = 0
+		if fallbackHandle, fallbackPath, fallbackErr := tryFallbackToDownloadedShim(libPath, err); fallbackErr == nil {
+			libHandle = fallbackHandle
+			handle = fallbackHandle
+			libPath = fallbackPath
+		} else {
+			return fallbackErr
+		}
 	}
 
 	libLoaded.Store(true)
@@ -147,7 +169,7 @@ func Close() error {
 		return nil
 	}
 
-	if err := dlcloseLibrary(libHandle); err != nil {
+	if err := dlcloseLibraryFunc(libHandle); err != nil {
 		return err
 	}
 
@@ -173,6 +195,10 @@ func ShimVersion() string {
 	if !libLoaded.Load() {
 		return ""
 	}
+	return currentShimVersion()
+}
+
+func currentShimVersion() string {
 	ptr := shimVersion()
 	if ptr == 0 {
 		return ""
@@ -186,6 +212,10 @@ func LibWebRTCVersion() string {
 	if !libLoaded.Load() {
 		return ""
 	}
+	return currentLibWebRTCVersion()
+}
+
+func currentLibWebRTCVersion() string {
 	ptr := shimLibwebrtcVersion()
 	if ptr == 0 {
 		return ""
@@ -200,8 +230,12 @@ func CheckVersion() error {
 		return ErrLibraryNotLoaded
 	}
 
-	shimVer := ShimVersion()
-	webrtcVer := LibWebRTCVersion()
+	return checkLoadedLibraryVersion()
+}
+
+func checkLoadedLibraryVersion() error {
+	shimVer := currentShimVersion()
+	webrtcVer := currentLibWebRTCVersion()
 
 	if shimVer != ExpectedShimVersion {
 		return fmt.Errorf("%w: shim version %q, expected %q", ErrVersionMismatch, shimVer, ExpectedShimVersion)
@@ -364,6 +398,85 @@ func linuxLoadFailureHintFor(goos string, err error) string {
 	return ""
 }
 
+func openLibraryHandle(libPath string) (uintptr, string, error) {
+	handle, err := dlopenLibraryFunc(libPath, RTLD_NOW|RTLD_GLOBAL)
+	if err != nil {
+		if retryHandle, retryPath, retryErr := retryLoadLibraryFunc(libPath); retryErr == nil {
+			return retryHandle, retryPath, nil
+		}
+		return 0, libPath, err
+	}
+	return handle, libPath, nil
+}
+
+func initializeLoadedLibrary() (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			switch value := recovered.(type) {
+			case error:
+				err = fmt.Errorf("register shim functions: %w", value)
+			default:
+				err = fmt.Errorf("register shim functions: %v", value)
+			}
+		}
+	}()
+
+	if err := registerFunctionsFunc(); err != nil {
+		return fmt.Errorf("register shim functions: %w", err)
+	}
+	if err := checkLoadedLibraryVersionFunc(); err != nil {
+		return fmt.Errorf("verify shim compatibility: %w", err)
+	}
+	return nil
+}
+
+func tryFallbackToDownloadedShim(currentPath string, currentErr error) (uintptr, string, error) {
+	if !shouldFallbackToDownloadedShim(currentPath) {
+		return 0, currentPath, currentErr
+	}
+
+	downloadedPath, err := downloadShimFunc()
+	if err != nil {
+		return 0, currentPath, fmt.Errorf("%w (fallback download failed: %v)", currentErr, err)
+	}
+	if downloadedPath == "" || sameLibraryPath(downloadedPath, currentPath) {
+		return 0, currentPath, currentErr
+	}
+
+	handle, resolvedPath, err := openLibraryHandle(downloadedPath)
+	if err != nil {
+		return 0, resolvedPath, fmt.Errorf("%w (failed to load downloaded shim %s: %v)", currentErr, resolvedPath, err)
+	}
+
+	libHandle = handle
+	if err := initializeLoadedLibrary(); err != nil {
+		_ = dlcloseLibraryFunc(handle)
+		libHandle = 0
+		return 0, resolvedPath, fmt.Errorf("%w (downloaded shim %s is incompatible: %v)", currentErr, resolvedPath, err)
+	}
+
+	return handle, resolvedPath, nil
+}
+
+func shouldFallbackToDownloadedShim(path string) bool {
+	if path == "" || strings.TrimSpace(os.Getenv("LIBWEBRTC_SHIM_PATH")) != "" || isDownloadDisabled() {
+		return false
+	}
+
+	cacheRoot, err := shimCacheRoot()
+	if err != nil {
+		return true
+	}
+	return !isPathWithin(path, filepath.Join(cacheRoot, "shim"))
+}
+
+func sameLibraryPath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
+}
+
 func retryLoadLibrary(libPath string) (uintptr, string, error) {
 	if libPath == "" || !filepath.IsAbs(libPath) {
 		return 0, libPath, ErrLibraryNotFound
@@ -378,7 +491,7 @@ func retryLoadLibrary(libPath string) (uintptr, string, error) {
 	// transiently fail their first dlopen even though the bytes are correct.
 	for _, delay := range []time.Duration{250 * time.Millisecond, time.Second} {
 		time.Sleep(delay)
-		if handle, err := dlopenLibrary(libPath, RTLD_NOW|RTLD_GLOBAL); err == nil {
+		if handle, err := dlopenLibraryFunc(libPath, RTLD_NOW|RTLD_GLOBAL); err == nil {
 			return handle, libPath, nil
 		} else {
 			lastErr = err
@@ -393,7 +506,7 @@ func retryLoadLibrary(libPath string) (uintptr, string, error) {
 
 	for _, delay := range []time.Duration{250 * time.Millisecond, time.Second} {
 		time.Sleep(delay)
-		handle, err := dlopenLibrary(retryPath, RTLD_NOW|RTLD_GLOBAL)
+		handle, err := dlopenLibraryFunc(retryPath, RTLD_NOW|RTLD_GLOBAL)
 		if err == nil {
 			return handle, retryPath, nil
 		}
