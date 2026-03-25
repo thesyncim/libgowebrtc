@@ -25,9 +25,14 @@
 #include "api/video_codecs/builtin_video_encoder_factory.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
 #include "api/video_codecs/scalability_mode.h"
+#include "api/video_codecs/scalability_mode_helper.h"
 #include "api/video/i420_buffer.h"
 #include "api/video/video_frame.h"
 #include "api/video/encoded_image.h"
+#include "modules/rtp_rtcp/source/rtp_dependency_descriptor_extension.h"
+#include "modules/video_coding/chain_diff_calculator.h"
+#include "modules/video_coding/frame_dependencies_calculator.h"
+#include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/include/video_error_codes.h"
 // InternalEncoderFactory provides all codecs when libwebrtc is built with rtc_use_h264=true
 #include "media/engine/internal_encoder_factory.h"
@@ -96,6 +101,20 @@ webrtc::SdpVideoFormat DefaultH264Format() {
     return format;
 }
 
+absl::InlinedVector<int, 4> FrameDiffsFromDependencies(
+    int64_t frame_id,
+    const absl::InlinedVector<int64_t, 5>& dependencies
+) {
+    absl::InlinedVector<int, 4> diffs;
+    for (int64_t dependency : dependencies) {
+        if (frame_id <= dependency) {
+            continue;
+        }
+        diffs.push_back(static_cast<int>(frame_id - dependency));
+    }
+    return diffs;
+}
+
 }  // namespace
 
 /* ============================================================================
@@ -120,6 +139,13 @@ struct ShimVideoEncoder {
     std::mutex output_mutex;       // Protects output data
     std::condition_variable output_cv;
     std::atomic<bool> force_keyframe{false};
+    std::optional<webrtc::FrameDependencyStructure> dd_structure;
+    std::vector<uint8_t> dependency_descriptor;
+    bool dependency_structure_announced = false;
+    bool has_dependency_descriptor = false;
+    int64_t dependency_descriptor_frame_id = 0;
+    webrtc::FrameDependenciesCalculator frame_dependencies_calculator;
+    webrtc::ChainDiffCalculator chain_diff_calculator;
 
     // Encoded frame callback storage (protected by output_mutex)
     std::vector<uint8_t> encoded_data;
@@ -143,6 +169,9 @@ public:
             encoded_image.data() + encoded_image.size()
         );
         encoder_->is_keyframe = (encoded_image._frameType == webrtc::VideoFrameType::kVideoFrameKey);
+        encoder_->has_dependency_descriptor = false;
+        encoder_->dependency_descriptor.clear();
+        MaybeBuildDependencyDescriptor(encoded_image, codec_specific_info);
         encoder_->has_output = true;
         encoder_->output_cv.notify_one();
 
@@ -151,6 +180,78 @@ public:
     }
 
 private:
+    void MaybeBuildDependencyDescriptor(
+        const webrtc::EncodedImage& encoded_image,
+        const webrtc::CodecSpecificInfo* codec_specific_info
+    ) {
+        if (codec_specific_info == nullptr || !codec_specific_info->generic_frame_info.has_value()) {
+            return;
+        }
+
+        const bool is_keyframe = encoded_image._frameType == webrtc::VideoFrameType::kVideoFrameKey;
+        webrtc::GenericFrameInfo frame_info = *codec_specific_info->generic_frame_info;
+
+        if (codec_specific_info->template_structure.has_value()) {
+            encoder_->dd_structure = *codec_specific_info->template_structure;
+            encoder_->dependency_structure_announced = false;
+        }
+        if (!encoder_->dd_structure.has_value()) {
+            return;
+        }
+
+        if (frame_info.frame_diffs.empty() && !frame_info.encoder_buffers.empty()) {
+            frame_info.frame_diffs = FrameDiffsFromDependencies(
+                encoder_->dependency_descriptor_frame_id,
+                encoder_->frame_dependencies_calculator.FromBuffersUsage(
+                    encoder_->dependency_descriptor_frame_id,
+                    frame_info.encoder_buffers
+                )
+            );
+        }
+
+        if (is_keyframe && !frame_info.part_of_chain.empty()) {
+            encoder_->chain_diff_calculator.Reset(frame_info.part_of_chain);
+        }
+        if (frame_info.chain_diffs.empty() && !frame_info.part_of_chain.empty() && encoder_->dd_structure->num_chains > 0) {
+            frame_info.chain_diffs = encoder_->chain_diff_calculator.From(
+                encoder_->dependency_descriptor_frame_id,
+                frame_info.part_of_chain
+            );
+        }
+
+        webrtc::DependencyDescriptor descriptor;
+        descriptor.first_packet_in_frame = true;
+        descriptor.last_packet_in_frame = true;
+        descriptor.frame_number = static_cast<int>(encoder_->dependency_descriptor_frame_id & 0xffff);
+        descriptor.frame_dependencies.spatial_id = frame_info.spatial_id;
+        descriptor.frame_dependencies.temporal_id = frame_info.temporal_id;
+        descriptor.frame_dependencies.decode_target_indications = frame_info.decode_target_indications;
+        descriptor.frame_dependencies.frame_diffs = frame_info.frame_diffs;
+        descriptor.frame_dependencies.chain_diffs = frame_info.chain_diffs;
+        descriptor.active_decode_targets_bitmask = static_cast<uint32_t>(frame_info.active_decode_targets.to_ulong());
+        if (!encoder_->dependency_structure_announced) {
+            descriptor.attached_structure = std::make_unique<webrtc::FrameDependencyStructure>(*encoder_->dd_structure);
+            encoder_->dependency_structure_announced = true;
+        }
+
+        const size_t dd_size = webrtc::RtpDependencyDescriptorExtension::ValueSize(*encoder_->dd_structure, descriptor);
+        if (dd_size == 0) {
+            return;
+        }
+
+        encoder_->dependency_descriptor.assign(dd_size, 0);
+        if (!webrtc::RtpDependencyDescriptorExtension::Write(
+                encoder_->dependency_descriptor,
+                *encoder_->dd_structure,
+                descriptor)) {
+            encoder_->dependency_descriptor.clear();
+            return;
+        }
+
+        encoder_->has_dependency_descriptor = true;
+        encoder_->dependency_descriptor_frame_id++;
+    }
+
     ShimVideoEncoder* encoder_;
 };
 
@@ -265,6 +366,16 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
         // AV1 requires scalability mode and qpMax to be set
         settings.SetScalabilityMode(webrtc::ScalabilityMode::kL1T1);
         settings.qpMax = 63;
+    }
+
+    if (config->scalability_mode && config->scalability_mode[0] != '\0') {
+        std::optional<webrtc::ScalabilityMode> scalability_mode =
+            webrtc::ScalabilityModeStringToEnum(config->scalability_mode);
+        if (!scalability_mode.has_value()) {
+            shim::SetErrorMessage(error_out, std::string("unsupported scalability mode: ") + config->scalability_mode, SHIM_ERROR_INVALID_PARAM);
+            return nullptr;
+        }
+        settings.SetScalabilityMode(*scalability_mode);
     }
 
     // Initialize encoder
@@ -495,6 +606,29 @@ SHIM_EXPORT int shim_video_encoder_request_keyframe(ShimVideoEncoder* encoder) {
     }
 
     encoder->force_keyframe = true;
+    return SHIM_OK;
+}
+
+SHIM_EXPORT int shim_video_encoder_get_last_dependency_descriptor(
+    ShimVideoEncoder* encoder,
+    ShimVideoEncoderGetLastDependencyDescriptorParams* params
+) {
+    if (!encoder || !params || !params->dst_buffer || params->dst_buffer_size < 0) {
+        return SHIM_ERROR_INVALID_PARAM;
+    }
+
+    params->out_size = 0;
+
+    std::lock_guard<std::mutex> lock(encoder->output_mutex);
+    if (!encoder->has_dependency_descriptor || encoder->dependency_descriptor.empty()) {
+        return SHIM_OK;
+    }
+    if (static_cast<int>(encoder->dependency_descriptor.size()) > params->dst_buffer_size) {
+        return SHIM_ERROR_BUFFER_TOO_SMALL;
+    }
+
+    memcpy(params->dst_buffer, encoder->dependency_descriptor.data(), encoder->dependency_descriptor.size());
+    params->out_size = static_cast<int>(encoder->dependency_descriptor.size());
     return SHIM_OK;
 }
 

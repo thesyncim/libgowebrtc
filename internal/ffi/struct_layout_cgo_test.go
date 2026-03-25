@@ -666,6 +666,8 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkSizeEqual(t, "ShimRTPSendParameters", unsafe.Sizeof(goCfg), layout.size)
 		checkOffsetEqual(t, "ShimRTPSendParameters.Encodings", unsafe.Offsetof(goCfg.Encodings), layout.offsets["Encodings"])
 		checkOffsetEqual(t, "ShimRTPSendParameters.EncodingCount", unsafe.Offsetof(goCfg.EncodingCount), layout.offsets["EncodingCount"])
+		checkOffsetEqual(t, "ShimRTPSendParameters.HeaderExtensions", unsafe.Offsetof(goCfg.HeaderExtensions), layout.offsets["HeaderExtensions"])
+		checkOffsetEqual(t, "ShimRTPSendParameters.HeaderExtensionCount", unsafe.Offsetof(goCfg.HeaderExtensionCount), layout.offsets["HeaderExtensionCount"])
 		checkOffsetEqual(t, "ShimRTPSendParameters.TransactionID", unsafe.Offsetof(goCfg.TransactionID), layout.offsets["TransactionID"])
 	})
 
@@ -695,6 +697,8 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.Sender", unsafe.Offsetof(goCfg.Sender), layout.offsets["Sender"])
 		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.Encodings", unsafe.Offsetof(goCfg.Encodings), layout.offsets["Encodings"])
 		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.MaxEncodings", unsafe.Offsetof(goCfg.MaxEncodings), layout.offsets["MaxEncodings"])
+		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.HeaderExtensions", unsafe.Offsetof(goCfg.HeaderExtensions), layout.offsets["HeaderExtensions"])
+		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.MaxHeaderExtensions", unsafe.Offsetof(goCfg.MaxHeaderExtensions), layout.offsets["MaxHeaderExtensions"])
 		checkOffsetEqual(t, "ShimRTPSenderGetParametersParams.OutParams", unsafe.Offsetof(goCfg.OutParams), layout.offsets["OutParams"])
 	})
 
@@ -941,6 +945,7 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		checkOffsetEqual(t, "ShimVideoEncoderConfig.H264Profile", unsafe.Offsetof(goCfg.H264Profile), layout.offsets["H264Profile"])
 		checkOffsetEqual(t, "ShimVideoEncoderConfig.VP9Profile", unsafe.Offsetof(goCfg.VP9Profile), layout.offsets["VP9Profile"])
 		checkOffsetEqual(t, "ShimVideoEncoderConfig.PreferHW", unsafe.Offsetof(goCfg.PreferHW), layout.offsets["PreferHW"])
+		checkOffsetEqual(t, "ShimVideoEncoderConfig.ScalabilityMode", unsafe.Offsetof(goCfg.ScalabilityMode), layout.offsets["ScalabilityMode"])
 	})
 
 	t.Run("ShimVideoEncoderCreateParams", func(t *testing.T) {

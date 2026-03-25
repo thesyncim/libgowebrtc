@@ -312,10 +312,17 @@ func ffiSendParametersFromWebRTC(params webrtc.RTPSendParameters) *ffi.RTPSendPa
 	return ffiParams
 }
 
-func webRTCSendParametersFromFFI(encodings []ffi.RTPEncodingParameters, count int, codecs []webrtc.RTPCodecParameters) webrtc.RTPSendParameters {
+func webRTCSendParametersFromFFI(
+	encodings []ffi.RTPEncodingParameters,
+	count int,
+	headerExtensions []ffi.RTPHeaderExtensionParameter,
+	headerExtensionCount int,
+	codecs []webrtc.RTPCodecParameters,
+) webrtc.RTPSendParameters {
 	params := webrtc.RTPSendParameters{
 		RTPParameters: webrtc.RTPParameters{
-			Codecs: codecs,
+			Codecs:           codecs,
+			HeaderExtensions: make([]webrtc.RTPHeaderExtensionParameter, headerExtensionCount),
 		},
 		Encodings: make([]webrtc.RTPEncodingParameters, count),
 	}
@@ -324,6 +331,12 @@ func webRTCSendParametersFromFFI(encodings []ffi.RTPEncodingParameters, count in
 			RTPCodingParameters: webrtc.RTPCodingParameters{
 				RID: ffi.ByteArrayToString(encodings[i].RID[:]),
 			},
+		}
+	}
+	for i := 0; i < headerExtensionCount; i++ {
+		params.HeaderExtensions[i] = webrtc.RTPHeaderExtensionParameter{
+			URI: ffi.ByteArrayToString(headerExtensions[i].URI[:]),
+			ID:  int(headerExtensions[i].ID),
 		}
 	}
 	return params

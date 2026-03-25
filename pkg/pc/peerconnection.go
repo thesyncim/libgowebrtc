@@ -256,8 +256,10 @@ func (s *RTPSender) GetParameters() webrtc.RTPSendParameters {
 	}
 
 	const maxEncodings = 8
+	const maxHeaderExtensions = 32
 	ffiEncodings := make([]ffi.RTPEncodingParameters, maxEncodings)
-	ffiParams, count, err := ffi.RTPSenderGetParameters(s.handle, ffiEncodings)
+	ffiHeaderExtensions := make([]ffi.RTPHeaderExtensionParameter, maxHeaderExtensions)
+	ffiParams, count, headerExtensionCount, err := ffi.RTPSenderGetParameters(s.handle, ffiEncodings, ffiHeaderExtensions)
 	if err != nil || ffiParams == nil {
 		return webrtc.RTPSendParameters{}
 	}
@@ -266,7 +268,13 @@ func (s *RTPSender) GetParameters() webrtc.RTPSendParameters {
 	if err != nil {
 		return webrtc.RTPSendParameters{}
 	}
-	return webRTCSendParametersFromFFI(ffiEncodings[:count], count, codecParametersFromFFICapabilities(ffiCodecs))
+	return webRTCSendParametersFromFFI(
+		ffiEncodings[:count],
+		count,
+		ffiHeaderExtensions[:headerExtensionCount],
+		headerExtensionCount,
+		codecParametersFromFFICapabilities(ffiCodecs),
+	)
 }
 
 // SetLayerActive enables or disables a simulcast layer.

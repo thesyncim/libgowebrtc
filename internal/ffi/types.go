@@ -112,6 +112,7 @@ type VideoEncoderConfig struct {
 	H264Profile      *byte // C string pointer
 	VP9Profile       int32
 	PreferHW         int32 // bool as int
+	ScalabilityMode  *byte // C string pointer
 }
 
 // AudioEncoderConfig matches ShimAudioEncoderConfig in shim.h

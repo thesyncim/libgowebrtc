@@ -347,6 +347,54 @@ func TestDecodedTrackPayloadTypeChangeDoesNotEmitCodecChange(t *testing.T) {
 	}
 }
 
+func TestDecodedTrackInvokesRTPPacketHandler(t *testing.T) {
+	track := newFakeTrackReader(webrtc.RTPCodecTypeVideo, mustCodecParams(t, codec.VP8, 96), 0x55660009)
+	packets := mustEncodeVideoPackets(t, codec.VP8, 96, track.SSRC(), []uint32{0, 3000})
+	track.enqueuePackets(packets, track.Codec(), track.PayloadType())
+	track.close()
+
+	var (
+		mu       sync.Mutex
+		observed []*rtp.Packet
+	)
+	decoded, err := newDecodedTrack(track, nil, nil, WithRTPPacketHandler(func(pkt *rtp.Packet) {
+		mu.Lock()
+		defer mu.Unlock()
+		observed = append(observed, pkt)
+		if pkt != nil {
+			pkt.Payload[0] ^= 0xff
+		}
+	}))
+	if err != nil {
+		t.Fatalf("newDecodedTrack: %v", err)
+	}
+
+	if err := decoded.SetOnVideoFrame(func(*frame.VideoFrame) {}); err != nil {
+		t.Fatalf("SetOnVideoFrame: %v", err)
+	}
+
+	if err := decoded.Run(); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(observed) != len(packets) {
+		t.Fatalf("observed packets = %d, want %d", len(observed), len(packets))
+	}
+	for i, pkt := range observed {
+		if pkt == nil {
+			t.Fatalf("observed packet %d is nil", i)
+		}
+		if pkt.PayloadType != packets[i].PayloadType {
+			t.Fatalf("observed payload type = %d, want %d", pkt.PayloadType, packets[i].PayloadType)
+		}
+		if slices.Equal(pkt.Payload, packets[i].Payload) {
+			t.Fatalf("handler saw shared payload backing for packet %d", i)
+		}
+	}
+}
+
 func TestDecodedTrackRequestKeyframe(t *testing.T) {
 	t.Run("NoWriter", func(t *testing.T) {
 		track := newFakeTrackReader(webrtc.RTPCodecTypeVideo, mustCodecParams(t, codec.VP8, 96), 0x55660003)

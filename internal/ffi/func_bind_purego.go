@@ -13,6 +13,7 @@ func registerFunctions() error {
 	registerLibFunc(&shimVideoEncoderSetBitrate, libHandle, "shim_video_encoder_set_bitrate")
 	registerLibFunc(&shimVideoEncoderSetFramerate, libHandle, "shim_video_encoder_set_framerate")
 	registerLibFunc(&shimVideoEncoderRequestKeyframe, libHandle, "shim_video_encoder_request_keyframe")
+	registerLibFunc(&shimVideoEncoderGetLastDependencyDescriptor, libHandle, "shim_video_encoder_get_last_dependency_descriptor")
 	registerLibFunc(&shimVideoEncoderDestroy, libHandle, "shim_video_encoder_destroy")
 
 	// VideoDecoder

@@ -14,6 +14,8 @@ type vp9Encoder struct {
 	config        codec.VP9Config
 	closed        atomic.Bool
 	forceKeyframe atomic.Bool
+	lastDD        [256]byte
+	lastDDLen     int
 	mu            sync.Mutex
 }
 
@@ -49,6 +51,12 @@ func (e *vp9Encoder) init() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	var scalabilityModeCStr []byte
+	var scalabilityModePtr *byte
+	if e.config.SVC != nil {
+		scalabilityModeCStr = ffi.CString(e.config.SVC.Mode.String())
+		scalabilityModePtr = &scalabilityModeCStr[0]
+	}
 	ffiConfig := &ffi.VideoEncoderConfig{
 		Width:            int32(e.config.Width),
 		Height:           int32(e.config.Height),
@@ -57,6 +65,7 @@ func (e *vp9Encoder) init() error {
 		KeyframeInterval: int32(e.config.KeyInterval),
 		VP9Profile:       int32(e.config.Profile),
 		PreferHW:         boolToInt32(e.config.PreferHW),
+		ScalabilityMode:  scalabilityModePtr,
 	}
 
 	handle, err := ffi.CreateVideoEncoder(ffi.CodecVP9, ffiConfig)
@@ -99,6 +108,10 @@ func (e *vp9Encoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyframe
 	if err != nil {
 		return EncodeResult{}, err
 	}
+	e.lastDDLen = 0
+	if ddLen, ddErr := ffi.VideoEncoderGetLastDependencyDescriptor(e.handle, e.lastDD[:]); ddErr == nil && ddLen > 0 {
+		e.lastDDLen = ddLen
+	}
 
 	return EncodeResult{N: n, IsKeyframe: isKeyframe}, nil
 }
@@ -137,6 +150,15 @@ func (e *vp9Encoder) RequestKeyFrame() {
 
 func (e *vp9Encoder) Codec() codec.Type {
 	return codec.VP9
+}
+
+func (e *vp9Encoder) LastDependencyDescriptor() []byte {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.lastDDLen == 0 {
+		return nil
+	}
+	return e.lastDD[:e.lastDDLen]
 }
 
 func (e *vp9Encoder) Close() error {
