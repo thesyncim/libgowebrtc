@@ -100,6 +100,7 @@ type config struct {
 	keyframeRequestGap   time.Duration
 	rtpPacketHandler     RTPPacketHandler
 	videoMonitor         *VideoSubscriberMonitor
+	audioMonitor         *AudioSubscriberMonitor
 }
 
 // Option configures a decoded Pion remote track.
@@ -180,6 +181,15 @@ func WithRTPPacketHandler(handler RTPPacketHandler) Option {
 func WithVideoSubscriberMonitor(monitor *VideoSubscriberMonitor) Option {
 	return func(cfg *config) {
 		cfg.videoMonitor = monitor
+	}
+}
+
+// WithAudioSubscriberMonitor configures a passive subscriber-side monitor that
+// observes packet continuity, freezes, decoded audio config changes, and
+// activity/silence transitions.
+func WithAudioSubscriberMonitor(monitor *AudioSubscriberMonitor) Option {
+	return func(cfg *config) {
+		cfg.audioMonitor = monitor
 	}
 }
 
@@ -363,6 +373,9 @@ func newDecodedTrack(track trackReader, source *webrtc.TrackRemote, receiver *we
 	if cfg.videoMonitor != nil && track.Kind() == webrtc.RTPCodecTypeVideo {
 		cfg.videoMonitor.bind(track, receiver, codecType, codecParams)
 	}
+	if cfg.audioMonitor != nil && track.Kind() == webrtc.RTPCodecTypeAudio {
+		cfg.audioMonitor.bind(track, receiver, codecType, codecParams)
+	}
 	return d, nil
 }
 
@@ -496,6 +509,9 @@ func (d *DecodedTrack) Run() error {
 		}
 		if d.cfg.videoMonitor != nil {
 			d.cfg.videoMonitor.observePacket(pkt)
+		}
+		if d.cfg.audioMonitor != nil {
+			d.cfg.audioMonitor.observePacket(pkt)
 		}
 
 		if err := d.refreshPipelineIfNeeded(); err != nil {
@@ -712,6 +728,9 @@ func (d *DecodedTrack) handleAudioSample(pipe *pipeline, sample *pionmedia.Sampl
 	}
 
 	out := cloneAudioFrame(pipe.audioScratch, pipe.clockRate, numSamples)
+	if d.cfg.audioMonitor != nil {
+		d.cfg.audioMonitor.observeFrame(out)
+	}
 	d.callbackMu.RLock()
 	handler := d.onAudio
 	d.callbackMu.RUnlock()
@@ -724,6 +743,9 @@ func (d *DecodedTrack) handleAudioSample(pipe *pipeline, sample *pionmedia.Sampl
 func (d *DecodedTrack) emitCodecChange(change CodecChange) {
 	if d.cfg.videoMonitor != nil {
 		d.cfg.videoMonitor.observeCodecChange(change)
+	}
+	if d.cfg.audioMonitor != nil {
+		d.cfg.audioMonitor.observeCodecChange(change)
 	}
 	d.callbackMu.RLock()
 	handler := d.onSwitch

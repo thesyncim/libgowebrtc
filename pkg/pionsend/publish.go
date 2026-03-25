@@ -25,6 +25,7 @@ var (
 	ErrNilPeerConnection       = errors.New("pionsend: peer connection is nil")
 	ErrInvalidConfig           = errors.New("pionsend: invalid config")
 	ErrNilVideoFrame           = errors.New("pionsend: video frame is nil")
+	ErrNilAudioFrame           = errors.New("pionsend: audio frame is nil")
 	ErrInvalidLayerIndex       = errors.New("pionsend: invalid layer index")
 	ErrUnsupportedLayeredCodec = errors.New("pionsend: automatic DD layering requires VP9 or AV1")
 )

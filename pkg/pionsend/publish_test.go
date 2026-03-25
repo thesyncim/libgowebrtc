@@ -10,6 +10,25 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
+func TestDefaultAudioCodecPreferencesFollowBrowserBehavior(t *testing.T) {
+	got := defaultAudioCodecPreferences(pioncodec.BrowserChrome)
+	if len(got) == 0 {
+		t.Fatal("defaultAudioCodecPreferences() returned no codecs")
+	}
+	if got[0].MimeType != webrtc.MimeTypeOpus {
+		t.Fatalf("defaultAudioCodecPreferences()[0] = %q, want %q", got[0].MimeType, webrtc.MimeTypeOpus)
+	}
+}
+
+func TestPublishAudioValidationAndDefaults(t *testing.T) {
+	if _, err := PublishAudio(nil, AudioPublishConfig{TrackID: "audio"}); err != ErrNilPeerConnection {
+		t.Fatalf("PublishAudio(nil) error = %v, want %v", err, ErrNilPeerConnection)
+	}
+	if _, err := PublishAudio(&webrtc.PeerConnection{}, AudioPublishConfig{}); err != ErrInvalidConfig {
+		t.Fatalf("PublishAudio(empty cfg) error = %v, want %v", err, ErrInvalidConfig)
+	}
+}
+
 func TestRequiredVideoHeaderExtensionURIs(t *testing.T) {
 	t.Run("NoSVC", func(t *testing.T) {
 		got := RequiredVideoHeaderExtensionURIs(VideoPublishConfig{})
