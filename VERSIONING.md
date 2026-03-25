@@ -52,7 +52,7 @@ artifacts.
 Examples:
 
 ```bash
-./scripts/release.sh 0.5.0 --release-dir release/shim-v0.5.0
+./scripts/release.sh 0.5.1 --release-dir release/shim-v0.5.1
 ```
 
 Shim releases remain binary-asset releases. They are validated by the

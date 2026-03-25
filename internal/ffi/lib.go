@@ -184,7 +184,7 @@ const ExpectedLibWebRTCVersion = "M141"
 
 // ExpectedShimVersion is the shim API version this Go code expects.
 // Must match kShimVersion in shim/shim_common.cc.
-const ExpectedShimVersion = "0.5.0"
+const ExpectedShimVersion = "0.5.1"
 
 // ErrVersionMismatch is returned when the shim version doesn't match.
 var ErrVersionMismatch = errors.New("shim version mismatch")
