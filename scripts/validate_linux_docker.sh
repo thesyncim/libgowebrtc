@@ -400,6 +400,7 @@ if normalize(highest) > normalize(allowed):
 print(f"verified {lib} max GLIBC requirement <= GLIBC_{allowed_raw} (found GLIBC_{highest_raw})")
 PY
 RUN python3 - <<'PY'
+import hashlib
 import json
 import pathlib
 import shutil
@@ -409,11 +410,11 @@ manifest = json.loads((workspace / "internal/ffi/shim_manifest.json").read_text(
 flavor = manifest["flavors"]["basic"]
 release_tag = flavor["release_tag"]
 asset_name = flavor["assets"]["TARGET_PLACEHOLDER"]["file"]
-asset_sha256 = flavor["assets"]["TARGET_PLACEHOLDER"]["sha256"]
 release_dir = workspace / "release" / release_tag
 release_dir.mkdir(parents=True, exist_ok=True)
 archive_path = pathlib.Path("/tmp") / asset_name
 shutil.copyfile(archive_path, release_dir / asset_name)
+asset_sha256 = hashlib.sha256(archive_path.read_bytes()).hexdigest()
 (release_dir / f"{asset_name}.sha256").write_text(f"{asset_sha256}  {asset_name}\n")
 PY
 EOF
