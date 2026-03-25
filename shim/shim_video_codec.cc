@@ -71,6 +71,51 @@ static std::string VideoCodecErrorString(int code) {
 
 namespace {
 
+std::optional<webrtc::ScalabilityMode> ParseScalabilityMode(const char* mode) {
+    if (mode == nullptr || mode[0] == '\0') {
+        return std::nullopt;
+    }
+
+    std::string_view value(mode);
+
+    if (value == "L1T1") return webrtc::ScalabilityMode::kL1T1;
+    if (value == "L1T2") return webrtc::ScalabilityMode::kL1T2;
+    if (value == "L1T3") return webrtc::ScalabilityMode::kL1T3;
+    if (value == "L2T1") return webrtc::ScalabilityMode::kL2T1;
+    if (value == "L2T1h") return webrtc::ScalabilityMode::kL2T1h;
+    if (value == "L2T1_KEY") return webrtc::ScalabilityMode::kL2T1_KEY;
+    if (value == "L2T2") return webrtc::ScalabilityMode::kL2T2;
+    if (value == "L2T2h") return webrtc::ScalabilityMode::kL2T2h;
+    if (value == "L2T2_KEY") return webrtc::ScalabilityMode::kL2T2_KEY;
+    if (value == "L2T2_KEY_SHIFT") return webrtc::ScalabilityMode::kL2T2_KEY_SHIFT;
+    if (value == "L2T3") return webrtc::ScalabilityMode::kL2T3;
+    if (value == "L2T3h") return webrtc::ScalabilityMode::kL2T3h;
+    if (value == "L2T3_KEY") return webrtc::ScalabilityMode::kL2T3_KEY;
+    if (value == "L3T1") return webrtc::ScalabilityMode::kL3T1;
+    if (value == "L3T1h") return webrtc::ScalabilityMode::kL3T1h;
+    if (value == "L3T1_KEY") return webrtc::ScalabilityMode::kL3T1_KEY;
+    if (value == "L3T2") return webrtc::ScalabilityMode::kL3T2;
+    if (value == "L3T2h") return webrtc::ScalabilityMode::kL3T2h;
+    if (value == "L3T2_KEY") return webrtc::ScalabilityMode::kL3T2_KEY;
+    if (value == "L3T3") return webrtc::ScalabilityMode::kL3T3;
+    if (value == "L3T3h") return webrtc::ScalabilityMode::kL3T3h;
+    if (value == "L3T3_KEY") return webrtc::ScalabilityMode::kL3T3_KEY;
+    if (value == "S2T1") return webrtc::ScalabilityMode::kS2T1;
+    if (value == "S2T1h") return webrtc::ScalabilityMode::kS2T1h;
+    if (value == "S2T2") return webrtc::ScalabilityMode::kS2T2;
+    if (value == "S2T2h") return webrtc::ScalabilityMode::kS2T2h;
+    if (value == "S2T3") return webrtc::ScalabilityMode::kS2T3;
+    if (value == "S2T3h") return webrtc::ScalabilityMode::kS2T3h;
+    if (value == "S3T1") return webrtc::ScalabilityMode::kS3T1;
+    if (value == "S3T1h") return webrtc::ScalabilityMode::kS3T1h;
+    if (value == "S3T2") return webrtc::ScalabilityMode::kS3T2;
+    if (value == "S3T2h") return webrtc::ScalabilityMode::kS3T2h;
+    if (value == "S3T3") return webrtc::ScalabilityMode::kS3T3;
+    if (value == "S3T3h") return webrtc::ScalabilityMode::kS3T3h;
+
+    return std::nullopt;
+}
+
 bool HasFormat(const std::vector<webrtc::SdpVideoFormat>& formats, const webrtc::SdpVideoFormat& candidate) {
     for (const auto& format : formats) {
         if (strcasecmp(format.name.c_str(), candidate.name.c_str()) != 0) {
@@ -370,7 +415,7 @@ SHIM_EXPORT ShimVideoEncoder* shim_video_encoder_create(
 
     if (config->scalability_mode && config->scalability_mode[0] != '\0') {
         std::optional<webrtc::ScalabilityMode> scalability_mode =
-            webrtc::ScalabilityModeStringToEnum(config->scalability_mode);
+            ParseScalabilityMode(config->scalability_mode);
         if (!scalability_mode.has_value()) {
             shim::SetErrorMessage(error_out, std::string("unsupported scalability mode: ") + config->scalability_mode, SHIM_ERROR_INVALID_PARAM);
             return nullptr;
