@@ -269,10 +269,11 @@ func (m *VideoSubscriberMonitor) Reset() {
 	m.signalLocked()
 }
 
-// WaitForFrames waits until at least min decoded frames have been observed.
-func (m *VideoSubscriberMonitor) WaitForFrames(ctx context.Context, min uint64) error {
+// WaitForFrames waits until at least the target number of decoded frames have
+// been observed.
+func (m *VideoSubscriberMonitor) WaitForFrames(ctx context.Context, targetFrames uint64) error {
 	return m.waitFor(ctx, func(snapshot VideoSubscriberSnapshot) bool {
-		return snapshot.FrameCount >= min
+		return snapshot.FrameCount >= targetFrames
 	})
 }
 
@@ -473,7 +474,7 @@ func (m *VideoSubscriberMonitor) observeFrame(f *frame.VideoFrame) {
 	}
 
 	if m.hasLastFramePTS {
-		clockRate := uint32(m.currentParams.ClockRate)
+		clockRate := m.currentParams.ClockRate
 		if clockRate == 0 {
 			clockRate = 90000
 		}

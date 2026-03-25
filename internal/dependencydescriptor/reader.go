@@ -158,16 +158,20 @@ func (r *descriptorReader) readAttachedStructure() error {
 
 	r.descriptor.AttachedStructure = structure
 
-	if err := r.readTemplateLayers(structure); err != nil {
+	err = r.readTemplateLayers(structure)
+	if err != nil {
 		return err
 	}
-	if err := r.readTemplateDTIs(structure); err != nil {
+	err = r.readTemplateDTIs(structure)
+	if err != nil {
 		return err
 	}
-	if err := r.readTemplateFrameDiffs(structure); err != nil {
+	err = r.readTemplateFrameDiffs(structure)
+	if err != nil {
 		return err
 	}
-	if err := r.readTemplateChains(structure); err != nil {
+	err = r.readTemplateChains(structure)
+	if err != nil {
 		return err
 	}
 

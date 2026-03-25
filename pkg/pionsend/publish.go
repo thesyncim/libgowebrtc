@@ -140,7 +140,9 @@ func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedV
 			SVC:              layer.SVC,
 		})
 		if err != nil {
-			closePublishedTracks(runtimeEncodings)
+			if closeErr := closePublishedTracks(runtimeEncodings); closeErr != nil {
+				return nil, errors.Join(err, closeErr)
+			}
 			return nil, err
 		}
 
@@ -162,12 +164,16 @@ func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedV
 
 	sender, err := pc.AddTrack(runtimeEncodings[0].videoTrack)
 	if err != nil {
-		closePublishedTracks(runtimeEncodings)
+		if closeErr := closePublishedTracks(runtimeEncodings); closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
 		return nil, err
 	}
 	for i := 1; i < len(runtimeEncodings); i++ {
 		if err := sender.AddEncoding(runtimeEncodings[i].videoTrack); err != nil {
-			closePublishedTracks(runtimeEncodings)
+			if closeErr := closePublishedTracks(runtimeEncodings); closeErr != nil {
+				return nil, errors.Join(err, closeErr)
+			}
 			return nil, err
 		}
 	}

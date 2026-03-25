@@ -14,6 +14,7 @@ func TestLoadLibraryFallsBackToDownloadedShimWhenImplicitLocalShimIsIncompatible
 
 	t.Setenv(envOpenH264DisableDownload, "1")
 	t.Setenv(envShimCacheDir, t.TempDir())
+	t.Setenv("LIBWEBRTC_SHIM_PATH", "")
 
 	const (
 		localHandle      = uintptr(11)
