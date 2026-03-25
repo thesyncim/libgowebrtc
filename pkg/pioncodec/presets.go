@@ -13,6 +13,7 @@ import (
 // Browser identifies a browser-shaped codec preset.
 type Browser string
 
+// Browser values identify the browser compatibility profile to emulate.
 const (
 	BrowserChrome  Browser = "chrome"
 	BrowserFirefox Browser = "firefox"
@@ -22,6 +23,7 @@ const (
 // Direction identifies whether a preset is intended for encode or decode.
 type Direction string
 
+// Direction values identify whether codec ordering is meant for encoding or decoding.
 const (
 	DirectionEncode Direction = "encode"
 	DirectionDecode Direction = "decode"
@@ -30,6 +32,7 @@ const (
 // PresetMode controls whether a preset is factory-backed or negotiation-shaped.
 type PresetMode string
 
+// PresetMode values control whether a preset is filtered for local support or full negotiation.
 const (
 	PresetModeSupported   PresetMode = "supported"
 	PresetModeNegotiation PresetMode = "negotiation"
@@ -37,16 +40,16 @@ const (
 
 // CodecEntry describes a single codec entry in a preset.
 type CodecEntry struct {
-	Kind      webrtc.RTPCodecType
-	Codec     webrtc.RTPCodecParameters
-	Supported bool
+	Kind      webrtc.RTPCodecType       // Kind identifies whether Codec is audio or video.
+	Codec     webrtc.RTPCodecParameters // Codec is the canonical RTP codec description for the entry.
+	Supported bool                      // Supported reports whether libgowebrtc can instantiate this codec locally.
 }
 
 // CodecSet is a browser-shaped codec preset or a caller-provided preference list.
 type CodecSet struct {
-	Browser   Browser
-	Direction Direction
-	Mode      PresetMode
+	Browser   Browser    // Browser records the source browser profile when preset-derived.
+	Direction Direction  // Direction records whether the set targets encode or decode ordering.
+	Mode      PresetMode // Mode records whether the set is support-filtered or negotiation-shaped.
 
 	entries []CodecEntry
 }

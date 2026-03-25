@@ -13,18 +13,18 @@ import (
 
 // EncodedVideoSample describes a Pion-shaped encoded video sample.
 type EncodedVideoSample struct {
-	Data            []byte
-	CodecParameters webrtc.RTPCodecParameters
-	PayloadType     webrtc.PayloadType
-	Timestamp       uint32
-	IsKeyframe      bool
+	Data            []byte                    // Data contains the encoded access unit bytes.
+	CodecParameters webrtc.RTPCodecParameters // CodecParameters identifies the codec that produced Data.
+	PayloadType     webrtc.PayloadType        // PayloadType is the RTP payload type associated with the sample.
+	Timestamp       uint32                    // Timestamp is the RTP timestamp associated with the sample.
+	IsKeyframe      bool                      // IsKeyframe reports whether the sample starts a keyframe.
 }
 
 // EncodedAudioSample describes a Pion-shaped encoded audio sample.
 type EncodedAudioSample struct {
-	Data            []byte
-	CodecParameters webrtc.RTPCodecParameters
-	PayloadType     webrtc.PayloadType
+	Data            []byte                    // Data contains the encoded audio access unit bytes.
+	CodecParameters webrtc.RTPCodecParameters // CodecParameters identifies the codec that produced Data.
+	PayloadType     webrtc.PayloadType        // PayloadType is the RTP payload type associated with the sample.
 }
 
 // MultiVideoEncoder lazily creates and switches between multiple video encoders.

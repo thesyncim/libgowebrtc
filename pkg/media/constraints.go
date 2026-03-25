@@ -5,10 +5,10 @@ import "fmt"
 // IntConstraint supports browser-like exact/ideal/min/max constraint patterns.
 // Use the constructor functions Exact(), Ideal(), Min(), Max() for convenience.
 type IntConstraint struct {
-	Exact *int
-	Ideal *int
-	Min   *int
-	Max   *int
+	Exact *int // Exact requires one exact value.
+	Ideal *int // Ideal expresses a preferred value.
+	Min   *int // Min sets the inclusive lower bound.
+	Max   *int // Max sets the inclusive upper bound.
 }
 
 // IsSet returns true if any constraint value is present.
@@ -61,10 +61,10 @@ func (c IntConstraint) Validate(value int) error {
 
 // FloatConstraint supports browser-like exact/ideal/min/max for floating-point values.
 type FloatConstraint struct {
-	Exact *float64
-	Ideal *float64
-	Min   *float64
-	Max   *float64
+	Exact *float64 // Exact requires one exact value.
+	Ideal *float64 // Ideal expresses a preferred value.
+	Min   *float64 // Min sets the inclusive lower bound.
+	Max   *float64 // Max sets the inclusive upper bound.
 }
 
 // IsSet returns true if any constraint value is present.
@@ -117,8 +117,8 @@ func (c FloatConstraint) Validate(value float64) error {
 
 // StringConstraint supports browser-like exact/ideal matching for string values.
 type StringConstraint struct {
-	Exact *string
-	Ideal *string
+	Exact *string // Exact requires one exact value.
+	Ideal *string // Ideal expresses a preferred value.
 }
 
 // Value returns the effective value, preferring exact > ideal.
@@ -151,8 +151,8 @@ func (c StringConstraint) Validate(value string) error {
 
 // BoolConstraint supports browser-like exact/ideal matching for boolean values.
 type BoolConstraint struct {
-	Exact *bool
-	Ideal *bool
+	Exact *bool // Exact requires one exact value.
+	Ideal *bool // Ideal expresses a preferred value.
 }
 
 // Value returns the effective value, preferring exact > ideal.
@@ -239,10 +239,11 @@ func (s DisplaySurface) IsValid() bool {
 // OverconstrainedError is returned when constraints cannot be satisfied.
 // Matches browser's OverconstrainedError interface.
 type OverconstrainedError struct {
-	Constraint string
-	Message    string
+	Constraint string // Constraint is the browser-shaped constraint name that failed.
+	Message    string // Message describes why the constraint could not be satisfied.
 }
 
+// Error implements the error interface.
 func (e *OverconstrainedError) Error() string {
 	return fmt.Sprintf("overconstrained: %s - %s", e.Constraint, e.Message)
 }

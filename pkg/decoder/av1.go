@@ -15,6 +15,7 @@ type av1Decoder struct {
 	mu     sync.Mutex
 }
 
+// NewAV1Decoder creates an AV1 video decoder backed by libwebrtc.
 func NewAV1Decoder() (VideoDecoder, error) {
 	if err := ffi.LoadLibrary(); err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import "github.com/thesyncim/libgowebrtc/internal/ffi"
 // Status describes the outcome of a runtime diagnostic check.
 type Status = ffi.DiagnosticStatus
 
+// Status values summarize how healthy a runtime dependency check is.
 const (
 	StatusUnknown    Status = ffi.DiagnosticStatusUnknown
 	StatusOK         Status = ffi.DiagnosticStatusOK

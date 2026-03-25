@@ -102,14 +102,14 @@ type VideoEncoderSVC interface {
 
 // LayerInfo describes an SVC/simulcast layer.
 type LayerInfo struct {
-	SpatialID  int    // Spatial layer ID (0 = lowest resolution)
-	TemporalID int    // Temporal layer ID (0 = lowest framerate)
-	Width      int    // Layer resolution width
-	Height     int    // Layer resolution height
-	Bitrate    uint32 // Current bitrate
-	FPS        float64
-	Active     bool
-	IsKeyframe bool // For encoded result
+	SpatialID  int     // Spatial layer ID (0 = lowest resolution)
+	TemporalID int     // Temporal layer ID (0 = lowest framerate)
+	Width      int     // Layer resolution width
+	Height     int     // Layer resolution height
+	Bitrate    uint32  // Current bitrate
+	FPS        float64 // FPS is the current output frame rate for the layer.
+	Active     bool    // Active reports whether the layer is currently enabled.
+	IsKeyframe bool    // For encoded result
 }
 
 // EncoderStats contains encoder runtime statistics.

@@ -50,6 +50,34 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_sha256(base_url: str, release_tag: str, asset_name: str, expected_sha256: str) -> str:
+    expected_sha256 = expected_sha256.strip().lower()
+    if expected_sha256:
+        return expected_sha256
+
+    sha_url = f"{base_url}/{release_tag}/{asset_name}.sha256"
+    request = urllib.request.Request(
+        sha_url,
+        headers={"User-Agent": "libgowebrtc-shim-downloader"},
+    )
+    try:
+        with urllib.request.urlopen(request) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        raise SystemExit(f"Failed to download {sha_url}: HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"Failed to download {sha_url}: {exc.reason}") from exc
+
+    fields = body.split()
+    if not fields:
+        raise SystemExit(f"Checksum file was empty for {asset_name}: {sha_url}")
+
+    digest = fields[0].strip().lower()
+    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        raise SystemExit(f"Checksum file did not start with a valid SHA256 digest for {asset_name}: {sha_url}")
+    return digest
+
+
 def sha256_file(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -83,12 +111,9 @@ def main() -> int:
 
     asset = assets[args.platform]
     asset_name = asset["file"]
-    expected_sha256 = asset.get("sha256", "").strip().lower()
-    if not expected_sha256:
-        raise SystemExit(f"Manifest checksum is empty for platform {args.platform}")
-
     release_tag = args.release_tag or flavor["release_tag"]
     base_url = (args.base_url or manifest["base_url"]).rstrip("/")
+    expected_sha256 = resolve_sha256(base_url, release_tag, asset_name, asset.get("sha256", ""))
     download_url = f"{base_url}/{release_tag}/{asset_name}"
 
     output_dir = pathlib.Path(args.output_dir)

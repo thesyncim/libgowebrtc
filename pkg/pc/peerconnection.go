@@ -42,6 +42,7 @@ const (
 // SignalingState represents the signaling state.
 type SignalingState int
 
+// SignalingState values mirror the WebRTC signaling state machine.
 const (
 	SignalingStateStable SignalingState = iota
 	SignalingStateHaveLocalOffer
@@ -51,6 +52,7 @@ const (
 	SignalingStateClosed
 )
 
+// String returns the browser-shaped token for the signaling state.
 func (s SignalingState) String() string {
 	switch s {
 	case SignalingStateStable:
@@ -73,6 +75,7 @@ func (s SignalingState) String() string {
 // ICEConnectionState represents the ICE connection state.
 type ICEConnectionState int
 
+// ICEConnectionState values mirror the WebRTC ICE connection state machine.
 const (
 	ICEConnectionStateNew ICEConnectionState = iota
 	ICEConnectionStateChecking
@@ -83,6 +86,7 @@ const (
 	ICEConnectionStateClosed
 )
 
+// String returns the browser-shaped token for the ICE connection state.
 func (s ICEConnectionState) String() string {
 	switch s {
 	case ICEConnectionStateNew:
@@ -107,12 +111,14 @@ func (s ICEConnectionState) String() string {
 // ICEGatheringState represents the ICE gathering state.
 type ICEGatheringState int
 
+// ICEGatheringState values mirror the WebRTC ICE gathering state machine.
 const (
 	ICEGatheringStateNew ICEGatheringState = iota
 	ICEGatheringStateGathering
 	ICEGatheringStateComplete
 )
 
+// String returns the browser-shaped token for the ICE gathering state.
 func (s ICEGatheringState) String() string {
 	switch s {
 	case ICEGatheringStateNew:
@@ -129,6 +135,7 @@ func (s ICEGatheringState) String() string {
 // PeerConnectionState represents the overall connection state.
 type PeerConnectionState int
 
+// PeerConnectionState values mirror the overall WebRTC connection state machine.
 const (
 	PeerConnectionStateNew PeerConnectionState = iota
 	PeerConnectionStateConnecting
@@ -138,6 +145,7 @@ const (
 	PeerConnectionStateClosed
 )
 
+// String returns the browser-shaped token for the PeerConnection state.
 func (s PeerConnectionState) String() string {
 	switch s {
 	case PeerConnectionStateNew:
@@ -160,6 +168,7 @@ func (s PeerConnectionState) String() string {
 // SDPType represents the type of session description.
 type SDPType int
 
+// SDPType values describe the type of SDP carried in a session description.
 const (
 	SDPTypeOffer SDPType = iota
 	SDPTypePranswer
@@ -167,6 +176,7 @@ const (
 	SDPTypeRollback
 )
 
+// String returns the SDP token for the description type.
 func (t SDPType) String() string {
 	switch t {
 	case SDPTypeOffer:
@@ -184,23 +194,23 @@ func (t SDPType) String() string {
 
 // SessionDescription represents an SDP session description.
 type SessionDescription struct {
-	Type SDPType
-	SDP  string
+	Type SDPType // Type identifies whether SDP is an offer, answer, pranswer, or rollback.
+	SDP  string  // SDP contains the raw session description.
 }
 
 // ICECandidate represents an ICE candidate.
 type ICECandidate struct {
-	Candidate        string
-	SDPMid           string
-	SDPMLineIndex    uint16
-	UsernameFragment string
+	Candidate        string // Candidate contains the raw ICE candidate attribute.
+	SDPMid           string // SDPMid identifies the media section associated with the candidate.
+	SDPMLineIndex    uint16 // SDPMLineIndex identifies the media section index associated with the candidate.
+	UsernameFragment string // UsernameFragment carries the ICE username fragment when supplied.
 }
 
 // ICEServer represents an ICE server configuration.
 type ICEServer struct {
-	URLs       []string
-	Username   string
-	Credential string
+	URLs       []string // URLs lists STUN or TURN server URLs.
+	Username   string   // Username carries the TURN username when required.
+	Credential string   // Credential carries the TURN password or token when required.
 }
 
 // BundlePolicy represents the bundle policy used during negotiation.
@@ -230,11 +240,11 @@ const (
 
 // Configuration for PeerConnection.
 type Configuration struct {
-	ICEServers           []ICEServer
-	BundlePolicy         BundlePolicy
-	RTCPMuxPolicy        RTCPMuxPolicy
-	SDPSemantics         SDPSemantics
-	ICECandidatePoolSize int
+	ICEServers           []ICEServer   // ICEServers lists the STUN/TURN servers available to the agent.
+	BundlePolicy         BundlePolicy  // BundlePolicy controls how media sections are bundled during negotiation.
+	RTCPMuxPolicy        RTCPMuxPolicy // RTCPMuxPolicy controls whether RTP and RTCP share a transport.
+	SDPSemantics         SDPSemantics  // SDPSemantics selects unified-plan or plan-b SDP handling.
+	ICECandidatePoolSize int           // ICECandidatePoolSize pre-allocates local ICE candidates when supported.
 }
 
 // DefaultConfiguration returns a default configuration.
@@ -251,13 +261,13 @@ func DefaultConfiguration() Configuration {
 
 // OfferOptions for createOffer.
 type OfferOptions struct {
-	ICERestart             bool
-	VoiceActivityDetection bool
+	ICERestart             bool // ICERestart requests fresh ICE credentials in the generated offer.
+	VoiceActivityDetection bool // VoiceActivityDetection enables or disables VAD in the offer.
 }
 
 // AnswerOptions for createAnswer.
 type AnswerOptions struct {
-	VoiceActivityDetection bool
+	VoiceActivityDetection bool // VoiceActivityDetection enables or disables VAD in the answer.
 }
 
 // GetSupportedVideoCodecs returns a list of supported video codecs.
@@ -576,12 +586,14 @@ var ErrNotFound = ffi.ErrNotFound
 // RTCPFeedbackType represents the type of RTCP feedback.
 type RTCPFeedbackType int
 
+// RTCPFeedbackType values identify the RTCP feedback message received for a sender.
 const (
 	RTCPFeedbackTypePLI  RTCPFeedbackType = 0
 	RTCPFeedbackTypeFIR  RTCPFeedbackType = 1
 	RTCPFeedbackTypeNACK RTCPFeedbackType = 2
 )
 
+// String returns the human-readable RTCP feedback type.
 func (t RTCPFeedbackType) String() string {
 	switch t {
 	case RTCPFeedbackTypePLI:
@@ -597,59 +609,60 @@ func (t RTCPFeedbackType) String() string {
 
 // RTCStats represents connection statistics.
 type RTCStats struct {
-	TimestampUs              int64
-	BytesSent                int64
-	BytesReceived            int64
-	PacketsSent              int64
-	PacketsReceived          int64
-	PacketsLost              int64
-	RoundTripTimeMs          float64
-	JitterMs                 float64
-	AvailableOutgoingBitrate float64
-	AvailableIncomingBitrate float64
-	CurrentRTTMs             int64
-	TotalRTTMs               int64
-	ResponsesReceived        int64
-	FramesEncoded            int
-	FramesDecoded            int
-	FramesDropped            int
-	KeyFramesEncoded         int
-	KeyFramesDecoded         int
-	NACKCount                int
-	PLICount                 int
-	FIRCount                 int
-	QPSum                    int
-	AudioLevel               float64
-	TotalAudioEnergy         float64
-	ConcealmentEvents        int
+	TimestampUs              int64   // TimestampUs is when the stats snapshot was taken, in microseconds.
+	BytesSent                int64   // BytesSent is the total number of RTP bytes sent.
+	BytesReceived            int64   // BytesReceived is the total number of RTP bytes received.
+	PacketsSent              int64   // PacketsSent is the total number of RTP packets sent.
+	PacketsReceived          int64   // PacketsReceived is the total number of RTP packets received.
+	PacketsLost              int64   // PacketsLost is the cumulative number of lost RTP packets.
+	RoundTripTimeMs          float64 // RoundTripTimeMs is the latest measured round-trip time in milliseconds.
+	JitterMs                 float64 // JitterMs is the estimated interarrival jitter in milliseconds.
+	AvailableOutgoingBitrate float64 // AvailableOutgoingBitrate is the estimated available send bitrate in bps.
+	AvailableIncomingBitrate float64 // AvailableIncomingBitrate is the estimated available receive bitrate in bps.
+	CurrentRTTMs             int64   // CurrentRTTMs is the most recent RTT estimate in milliseconds.
+	TotalRTTMs               int64   // TotalRTTMs is the cumulative RTT over all responses in milliseconds.
+	ResponsesReceived        int64   // ResponsesReceived counts transport responses used for RTT calculation.
+	FramesEncoded            int     // FramesEncoded is the total number of encoded video frames.
+	FramesDecoded            int     // FramesDecoded is the total number of decoded video frames.
+	FramesDropped            int     // FramesDropped is the total number of dropped video frames.
+	KeyFramesEncoded         int     // KeyFramesEncoded is the total number of encoded keyframes.
+	KeyFramesDecoded         int     // KeyFramesDecoded is the total number of decoded keyframes.
+	NACKCount                int     // NACKCount is the number of received NACK feedback messages.
+	PLICount                 int     // PLICount is the number of received PLI feedback messages.
+	FIRCount                 int     // FIRCount is the number of received FIR feedback messages.
+	QPSum                    int     // QPSum is the cumulative quantizer sum for encoded video.
+	AudioLevel               float64 // AudioLevel is the current audio level estimate.
+	TotalAudioEnergy         float64 // TotalAudioEnergy is the cumulative captured audio energy.
+	ConcealmentEvents        int     // ConcealmentEvents counts audio concealment events.
 
 	// SCTP/DataChannel stats
-	DataChannelsOpened       int64
-	DataChannelsClosed       int64
-	MessagesSent             int64
-	MessagesReceived         int64
-	BytesSentDataChannel     int64
-	BytesReceivedDataChannel int64
+	DataChannelsOpened       int64 // DataChannelsOpened is the number of data channels opened.
+	DataChannelsClosed       int64 // DataChannelsClosed is the number of data channels closed.
+	MessagesSent             int64 // MessagesSent is the number of data-channel messages sent.
+	MessagesReceived         int64 // MessagesReceived is the number of data-channel messages received.
+	BytesSentDataChannel     int64 // BytesSentDataChannel is the number of SCTP data bytes sent.
+	BytesReceivedDataChannel int64 // BytesReceivedDataChannel is the number of SCTP data bytes received.
 
 	// Quality limitation
-	QualityLimitationReason     QualityLimitationReason
-	QualityLimitationDurationMs int
+	QualityLimitationReason     QualityLimitationReason // QualityLimitationReason explains why quality was reduced.
+	QualityLimitationDurationMs int                     // QualityLimitationDurationMs is the cumulative limited time in milliseconds.
 
 	// Remote inbound/outbound RTP stats
-	RemotePacketsLost     int64
-	RemoteJitterMs        float64
-	RemoteRoundTripTimeMs float64
+	RemotePacketsLost     int64   // RemotePacketsLost is the far-end view of packets lost.
+	RemoteJitterMs        float64 // RemoteJitterMs is the far-end reported jitter in milliseconds.
+	RemoteRoundTripTimeMs float64 // RemoteRoundTripTimeMs is the far-end reported round-trip time in milliseconds.
 
 	// Jitter buffer stats (from RTCInboundRtpStreamStats)
-	JitterBufferDelayMs        float64 // Total time spent in jitter buffer / emitted count
-	JitterBufferTargetDelayMs  float64 // Target delay for adaptive buffer
-	JitterBufferMinimumDelayMs float64 // User-configured minimum delay
-	JitterBufferEmittedCount   int64   // Number of samples/frames emitted from buffer
+	JitterBufferDelayMs        float64 // JitterBufferDelayMs is the average time samples spend in the jitter buffer.
+	JitterBufferTargetDelayMs  float64 // JitterBufferTargetDelayMs is the current adaptive target delay.
+	JitterBufferMinimumDelayMs float64 // JitterBufferMinimumDelayMs is the configured minimum jitter-buffer delay.
+	JitterBufferEmittedCount   int64   // JitterBufferEmittedCount counts samples or frames emitted from the buffer.
 }
 
 // QualityLimitationReason indicates why quality is limited.
 type QualityLimitationReason int
 
+// QualityLimitationReason values explain why encoder quality was reduced.
 const (
 	QualityLimitationNone      QualityLimitationReason = 0
 	QualityLimitationCPU       QualityLimitationReason = 1
@@ -657,6 +670,7 @@ const (
 	QualityLimitationOther     QualityLimitationReason = 3
 )
 
+// String returns the browser-shaped token for the quality limitation reason.
 func (r QualityLimitationReason) String() string {
 	switch r {
 	case QualityLimitationNone:
@@ -789,6 +803,7 @@ func (t *RTPTransceiver) IsValid() bool {
 // TransceiverDirection represents the transceiver direction.
 type TransceiverDirection int
 
+// TransceiverDirection values mirror the SDP transceiver direction attributes.
 const (
 	TransceiverDirectionSendRecv TransceiverDirection = iota
 	TransceiverDirectionSendOnly
@@ -796,6 +811,7 @@ const (
 	TransceiverDirectionInactive
 )
 
+// String returns the SDP token for the transceiver direction.
 func (d TransceiverDirection) String() string {
 	switch d {
 	case TransceiverDirectionSendRecv:
@@ -899,7 +915,7 @@ func inferTransceiverKind(handle uintptr) string {
 
 // RTPSendParameters for sender configuration.
 type RTPSendParameters struct {
-	Encodings []RTPEncodingParameters
+	Encodings []RTPEncodingParameters // Encodings contains the per-encoding send parameters.
 }
 
 // RTPEncodingParameters for per-encoding configuration.
@@ -1159,48 +1175,56 @@ func (pc *PeerConnection) IsValid() bool {
 	return pc.handle != 0
 }
 
+// SetOnICECandidate installs the callback invoked for newly gathered local ICE candidates.
 func (pc *PeerConnection) SetOnICECandidate(cb func(candidate *ICECandidate)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onICECandidate = cb
 }
 
+// SetOnICEConnectionStateChange installs the callback invoked when the ICE connection state changes.
 func (pc *PeerConnection) SetOnICEConnectionStateChange(cb func(state ICEConnectionState)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onICEConnectionStateChange = cb
 }
 
+// SetOnICEGatheringStateChange installs the callback invoked when ICE gathering state changes.
 func (pc *PeerConnection) SetOnICEGatheringStateChange(cb func(state ICEGatheringState)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onICEGatheringStateChange = cb
 }
 
+// SetOnSignalingStateChange installs the callback invoked when signaling state changes.
 func (pc *PeerConnection) SetOnSignalingStateChange(cb func(state SignalingState)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onSignalingStateChange = cb
 }
 
+// SetOnConnectionStateChange installs the callback invoked when the overall connection state changes.
 func (pc *PeerConnection) SetOnConnectionStateChange(cb func(state PeerConnectionState)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onConnectionStateChange = cb
 }
 
+// SetOnTrack installs the callback invoked for newly received remote tracks.
 func (pc *PeerConnection) SetOnTrack(cb func(track *Track, receiver *RTPReceiver, streams []string)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onTrack = cb
 }
 
+// SetOnNegotiationNeeded installs the callback invoked when renegotiation is required.
 func (pc *PeerConnection) SetOnNegotiationNeeded(cb func()) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onNegotiationNeeded = cb
 }
 
+// SetOnDataChannel installs the callback invoked for newly created remote data channels.
 func (pc *PeerConnection) SetOnDataChannel(cb func(dc *DataChannel)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
@@ -1210,6 +1234,7 @@ func (pc *PeerConnection) SetOnDataChannel(cb func(dc *DataChannel)) {
 // DataChannelState represents the state of a data channel.
 type DataChannelState int
 
+// DataChannelState values mirror the WebRTC data-channel lifecycle.
 const (
 	DataChannelStateConnecting DataChannelState = iota
 	DataChannelStateOpen
@@ -1217,6 +1242,7 @@ const (
 	DataChannelStateClosed
 )
 
+// String returns the browser-shaped token for the data-channel state.
 func (s DataChannelState) String() string {
 	switch s {
 	case DataChannelStateConnecting:
@@ -1300,7 +1326,9 @@ func (dc *DataChannel) SetOnMessage(cb func(data []byte)) {
 	}
 }
 
-// SetOnError sets the callback for errors.
+// SetOnError stores a callback for DataChannel errors.
+// The current shim does not emit asynchronous DataChannel error events yet, so
+// this is retained for forward compatibility.
 func (dc *DataChannel) SetOnError(cb func(err error)) {
 	dc.onError = cb
 }
@@ -1917,7 +1945,7 @@ func (pc *PeerConnection) AddTransceiver(kind string, init *TransceiverInit) (*R
 
 // TransceiverInit for AddTransceiver.
 type TransceiverInit struct {
-	Direction TransceiverDirection
+	Direction TransceiverDirection // Direction is the initial direction of the new transceiver.
 }
 
 // GetTransceivers returns all transceivers.
@@ -2071,12 +2099,12 @@ func (pc *PeerConnection) CreateDataChannel(label string, options *DataChannelIn
 
 // DataChannelInit for CreateDataChannel.
 type DataChannelInit struct {
-	Ordered           *bool
-	MaxPacketLifeTime *uint16
-	MaxRetransmits    *uint16
-	Protocol          string
-	Negotiated        bool
-	ID                *uint16
+	Ordered           *bool   // Ordered overrides ordered delivery when non-nil.
+	MaxPacketLifeTime *uint16 // MaxPacketLifeTime caps retransmission time in milliseconds.
+	MaxRetransmits    *uint16 // MaxRetransmits caps the number of retransmission attempts.
+	Protocol          string  // Protocol names the subprotocol used by the data channel.
+	Negotiated        bool    // Negotiated reports whether out-of-band negotiation is used.
+	ID                *uint16 // ID overrides the SCTP stream identifier when negotiated.
 }
 
 func splitStreamIDs(streams string) []string {
@@ -2432,13 +2460,13 @@ func (pc *PeerConnection) RestartICE() error {
 
 // BandwidthEstimate contains bandwidth estimation data from libwebrtc's BWE engine.
 type BandwidthEstimate struct {
-	TimestampUs      int64
-	TargetBitrateBps int64
-	AvailableSendBps int64
-	AvailableRecvBps int64
-	PacingRateBps    int64
-	CongestionWindow int32
-	LossRate         float64
+	TimestampUs      int64   // TimestampUs is when the estimate was produced, in microseconds.
+	TargetBitrateBps int64   // TargetBitrateBps is libwebrtc's target send bitrate in bps.
+	AvailableSendBps int64   // AvailableSendBps is the estimated available uplink bitrate in bps.
+	AvailableRecvBps int64   // AvailableRecvBps is the estimated available downlink bitrate in bps.
+	PacingRateBps    int64   // PacingRateBps is the suggested packet pacing rate in bps.
+	CongestionWindow int32   // CongestionWindow is the estimated congestion window in bytes.
+	LossRate         float64 // LossRate is the recent packet loss fraction in the range [0,1].
 }
 
 // SetOnBandwidthEstimate sets a callback for bandwidth estimation updates from libwebrtc.

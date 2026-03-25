@@ -20,6 +20,7 @@ type opusDecoder struct {
 	mu         sync.Mutex
 }
 
+// NewOpusDecoder creates an Opus audio decoder for the requested output format.
 func NewOpusDecoder(sampleRate, channels int) (AudioDecoder, error) {
 	if err := ffi.LoadLibrary(); err != nil {
 		return nil, err

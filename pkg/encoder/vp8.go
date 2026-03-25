@@ -17,6 +17,7 @@ type vp8Encoder struct {
 	mu            sync.Mutex
 }
 
+// NewVP8Encoder creates a new VP8 video encoder.
 func NewVP8Encoder(cfg codec.VP8Config) (VideoEncoder, error) {
 	if err := validateVP8Config(cfg); err != nil {
 		return nil, err

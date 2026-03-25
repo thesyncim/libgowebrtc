@@ -4,6 +4,17 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      build_assets:
+        description: Build shim release assets instead of validating a published release
+        required: false
+        default: false
+        type: boolean
+      shim_version:
+        description: Shim release version used for artifact naming (for example 0.4.6)
+        required: false
+        default: ""
+        type: string
 
 env:
   GO_VERSION: '1.26.1'
@@ -11,7 +22,7 @@ env:
 
 jobs:
   validate:
-    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -42,6 +53,24 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+
+      - name: Rewrite manifest for published shim tag
+        if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'shim-v') }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+
+          path = pathlib.Path("internal/ffi/shim_manifest.json")
+          manifest = json.loads(path.read_text())
+          release_tag = "${{ github.event.release.tag_name }}"
+          for flavor in manifest["flavors"].values():
+              flavor["release_tag"] = release_tag
+              for asset in flavor["assets"].values():
+                  asset["sha256"] = ""
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
 
       - name: Verify docs contract
         shell: bash
@@ -77,7 +106,7 @@ jobs:
           LIBWEBRTC_PREFER_SOFTWARE_CODECS: "1"
 
   validate-darwin-amd64-rosetta:
-    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
     name: darwin_amd64 (Rosetta)
     runs-on: macos-latest
     steps:
@@ -97,6 +126,24 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+
+      - name: Rewrite manifest for published shim tag
+        if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'shim-v') }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+
+          path = pathlib.Path("internal/ffi/shim_manifest.json")
+          manifest = json.loads(path.read_text())
+          release_tag = "${{ github.event.release.tag_name }}"
+          for flavor in manifest["flavors"].values():
+              flavor["release_tag"] = release_tag
+              for asset in flavor["assets"].values():
+                  asset["sha256"] = ""
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
 
       - name: Verify docs contract
         shell: bash
@@ -136,7 +183,7 @@ jobs:
           GOOS: darwin
 
   validate-linux-386-docker:
-    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
     name: linux_386 (Docker)
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -150,11 +197,29 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Rewrite manifest for published shim tag
+        if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'shim-v') }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+
+          path = pathlib.Path("internal/ffi/shim_manifest.json")
+          manifest = json.loads(path.read_text())
+          release_tag = "${{ github.event.release.tag_name }}"
+          for flavor in manifest["flavors"].values():
+              flavor["release_tag"] = release_tag
+              for asset in flavor["assets"].values():
+                  asset["sha256"] = ""
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
       - name: Validate linux_386 release in Docker
         run: ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 
   validate-linux-amd64-docker:
-    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')
+    if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
     name: linux_amd64 (Docker compatibility)
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -168,5 +233,145 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Rewrite manifest for published shim tag
+        if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'shim-v') }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+
+          path = pathlib.Path("internal/ffi/shim_manifest.json")
+          manifest = json.loads(path.read_text())
+          release_tag = "${{ github.event.release.tag_name }}"
+          for flavor in manifest["flavors"].values():
+              flavor["release_tag"] = release_tag
+              for asset in flavor["assets"].values():
+                  asset["sha256"] = ""
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
       - name: Validate linux_amd64 release in Docker
         run: ./scripts/validate_linux_docker.sh --target linux_amd64 --download-only
+
+  build-macos-assets:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_assets }}
+    name: build ${{ matrix.platform }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [darwin_arm64, darwin_amd64]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Bazelisk
+        shell: bash
+        run: |
+          GOBIN="$HOME/go/bin" go install github.com/bazelbuild/bazelisk@latest
+
+      - name: Build release asset
+        shell: bash
+        run: |
+          PATH="$HOME/go/bin:$PATH" ./scripts/build.sh --target ${{ matrix.platform }} --release
+
+      - name: Collect release asset
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          mv "libwebrtc_shim_${{ matrix.platform }}.tar.gz" release-assets/
+          mv "libwebrtc_shim_${{ matrix.platform }}.tar.gz.sha256" release-assets/
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: shim-${{ matrix.platform }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  build-linux-assets:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_assets }}
+    name: build ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux_amd64, linux_386]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Build release asset in Docker
+        shell: bash
+        run: |
+          ./scripts/validate_linux_docker.sh --target ${{ matrix.platform }} --artifact-dir build-output/${{ matrix.platform }}
+
+      - name: Package release asset
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          asset="libwebrtc_shim_${{ matrix.platform }}.tar.gz"
+          tar -C "build-output/${{ matrix.platform }}" -czf "release-assets/${asset}" .
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "release-assets/${asset}" > "release-assets/${asset}.sha256"
+          else
+            shasum -a 256 "release-assets/${asset}" > "release-assets/${asset}.sha256"
+          fi
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: shim-${{ matrix.platform }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  build-windows-asset:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_assets }}
+    name: build windows_amd64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Bazelisk
+        shell: bash
+        run: |
+          GOBIN="$HOME/go/bin" go install github.com/bazelbuild/bazelisk@latest
+
+      - name: Build release asset
+        shell: bash
+        run: |
+          PATH="$HOME/go/bin:$PATH" ./scripts/build.sh --target windows_amd64 --release
+
+      - name: Collect release asset
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          mv "libwebrtc_shim_windows_amd64.tar.gz" release-assets/
+          mv "libwebrtc_shim_windows_amd64.tar.gz.sha256" release-assets/
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: shim-windows_amd64
+          path: release-assets/*
+          if-no-files-found: error
