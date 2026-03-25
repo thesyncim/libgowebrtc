@@ -1599,8 +1599,8 @@ func PeerConnectionGetStatsJSON(pc uintptr) ([]byte, error) {
 	var errBuf ShimErrorBuffer
 	params := shimPeerConnectionGetStatsJSONParams{
 		PC:          pc,
-		JsonOut:     ByteSlicePtr(jsonBuf),
-		JsonOutSize: int32(len(jsonBuf)),
+		JSONOut:     ByteSlicePtr(jsonBuf),
+		JSONOutSize: int32(len(jsonBuf)),
 		ErrorOut:    errBuf.Ptr(),
 	}
 	result := shimPeerConnectionGetStatsJSON(uintptr(unsafe.Pointer(&params)))
@@ -1610,7 +1610,7 @@ func PeerConnectionGetStatsJSON(pc uintptr) ([]byte, error) {
 		return nil, err
 	}
 
-	return append([]byte(nil), jsonBuf[:params.OutJsonLen]...), nil
+	return append([]byte(nil), jsonBuf[:params.OutJSONLen]...), nil
 }
 
 // ============================================================================

@@ -432,7 +432,7 @@ func (t *RTPTransceiver) Receiver() *RTPReceiver { return t.receiver }
 func (t *RTPTransceiver) Direction() TransceiverDirection {
 	if t.handle != 0 {
 		dir := ffi.TransceiverGetDirection(t.handle)
-		return transceiverDirectionFromFFI(ffi.TransceiverDirection(dir))
+		return transceiverDirectionFromFFI(dir)
 	}
 	return t.direction
 }
@@ -456,7 +456,7 @@ func (t *RTPTransceiver) SetDirection(d TransceiverDirection) error {
 func (t *RTPTransceiver) CurrentDirection() TransceiverDirection {
 	if t.handle != 0 {
 		dir := ffi.TransceiverGetCurrentDirection(t.handle)
-		return transceiverDirectionFromFFI(ffi.TransceiverDirection(dir))
+		return transceiverDirectionFromFFI(dir)
 	}
 	return t.direction
 }
@@ -958,34 +958,37 @@ func buildFFIConfig(config *webrtc.Configuration) (*ffiConfigData, error) {
 	}
 
 	// Set policies
-	if bundlePolicy, err := bundlePolicyString(config.BundlePolicy); err != nil {
+	bundlePolicy, err := bundlePolicyString(config.BundlePolicy)
+	if err != nil {
 		return nil, err
-	} else {
-		bundleStr := ffi.CString(bundlePolicy)
-		data.strings = append(data.strings, bundleStr)
-		data.config.BundlePolicy = &bundleStr[0]
 	}
-	if rtcpMuxPolicy, err := rtcpMuxPolicyString(config.RTCPMuxPolicy); err != nil {
+	bundleStr := ffi.CString(bundlePolicy)
+	data.strings = append(data.strings, bundleStr)
+	data.config.BundlePolicy = &bundleStr[0]
+
+	rtcpMuxPolicy, err := rtcpMuxPolicyString(config.RTCPMuxPolicy)
+	if err != nil {
 		return nil, err
-	} else {
-		rtcpStr := ffi.CString(rtcpMuxPolicy)
-		data.strings = append(data.strings, rtcpStr)
-		data.config.RTCPMuxPolicy = &rtcpStr[0]
 	}
-	if iceTransportPolicy, err := iceTransportPolicyString(config.ICETransportPolicy); err != nil {
+	rtcpStr := ffi.CString(rtcpMuxPolicy)
+	data.strings = append(data.strings, rtcpStr)
+	data.config.RTCPMuxPolicy = &rtcpStr[0]
+
+	iceTransportPolicy, err := iceTransportPolicyString(config.ICETransportPolicy)
+	if err != nil {
 		return nil, err
-	} else {
-		iceStr := ffi.CString(iceTransportPolicy)
-		data.strings = append(data.strings, iceStr)
-		data.config.ICETransportPolicy = &iceStr[0]
 	}
-	if sdpSemantics, err := sdpSemanticsString(config.SDPSemantics); err != nil {
+	iceStr := ffi.CString(iceTransportPolicy)
+	data.strings = append(data.strings, iceStr)
+	data.config.ICETransportPolicy = &iceStr[0]
+
+	sdpSemantics, err := sdpSemanticsString(config.SDPSemantics)
+	if err != nil {
 		return nil, err
-	} else {
-		sdpStr := ffi.CString(sdpSemantics)
-		data.strings = append(data.strings, sdpStr)
-		data.config.SDPSemantics = &sdpStr[0]
 	}
+	sdpStr := ffi.CString(sdpSemantics)
+	data.strings = append(data.strings, sdpStr)
+	data.config.SDPSemantics = &sdpStr[0]
 
 	return data, nil
 }
@@ -1502,8 +1505,8 @@ func (pc *PeerConnection) addTransceiver(kind webrtc.RTPCodecType, kindString st
 	if init != nil {
 		direction = init.Direction
 		for _, encoding := range init.SendEncodings {
-			if err := validateEncodingParameters(encoding); err != nil {
-				return nil, err
+			if validationErr := validateEncodingParameters(encoding); validationErr != nil {
+				return nil, validationErr
 			}
 		}
 	}

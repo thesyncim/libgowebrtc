@@ -995,15 +995,15 @@
         },
         {
           "c_name": "json_out",
-          "go_name": "JsonOut"
+          "go_name": "JSONOut"
         },
         {
           "c_name": "json_out_size",
-          "go_name": "JsonOutSize"
+          "go_name": "JSONOutSize"
         },
         {
           "c_name": "out_json_len",
-          "go_name": "OutJsonLen"
+          "go_name": "OutJSONLen"
         },
         {
           "c_name": "error_out",

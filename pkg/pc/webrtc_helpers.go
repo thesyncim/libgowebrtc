@@ -346,7 +346,7 @@ func iceCandidateInitFromParts(candidate, sdpMid string, sdpMLineIndex int) *web
 	return out
 }
 
-func candidateParts(init webrtc.ICECandidateInit) (candidate string, sdpMid string, sdpMLineIndex int) {
+func candidateParts(init webrtc.ICECandidateInit) (candidate, sdpMid string, sdpMLineIndex int) {
 	sdpMLineIndex = -1
 	candidate = init.Candidate
 	if init.SDPMid != nil {

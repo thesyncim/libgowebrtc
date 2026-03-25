@@ -584,9 +584,9 @@ func cShimPeerConnectionGetStatsJSONParamsLayout() cStructLayout {
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
 			"PC":          unsafe.Offsetof(cCfg.pc),
-			"JsonOut":     unsafe.Offsetof(cCfg.json_out),
-			"JsonOutSize": unsafe.Offsetof(cCfg.json_out_size),
-			"OutJsonLen":  unsafe.Offsetof(cCfg.out_json_len),
+			"JSONOut":     unsafe.Offsetof(cCfg.json_out),
+			"JSONOutSize": unsafe.Offsetof(cCfg.json_out_size),
+			"OutJSONLen":  unsafe.Offsetof(cCfg.out_json_len),
 			"ErrorOut":    unsafe.Offsetof(cCfg.error_out),
 		},
 	}

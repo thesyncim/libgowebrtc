@@ -451,9 +451,9 @@ func TestShimStructLayoutCgo(t *testing.T) {
 		layout := cShimPeerConnectionGetStatsJSONParamsLayout()
 		checkSizeEqual(t, "ShimPeerConnectionGetStatsJSONParams", unsafe.Sizeof(goCfg), layout.size)
 		checkOffsetEqual(t, "ShimPeerConnectionGetStatsJSONParams.PC", unsafe.Offsetof(goCfg.PC), layout.offsets["PC"])
-		checkOffsetEqual(t, "ShimPeerConnectionGetStatsJSONParams.JsonOut", unsafe.Offsetof(goCfg.JsonOut), layout.offsets["JsonOut"])
-		checkOffsetEqual(t, "ShimPeerConnectionGetStatsJSONParams.JsonOutSize", unsafe.Offsetof(goCfg.JsonOutSize), layout.offsets["JsonOutSize"])
-		checkOffsetEqual(t, "ShimPeerConnectionGetStatsJSONParams.OutJsonLen", unsafe.Offsetof(goCfg.OutJsonLen), layout.offsets["OutJsonLen"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetStatsJSONParams.JSONOut", unsafe.Offsetof(goCfg.JSONOut), layout.offsets["JSONOut"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetStatsJSONParams.JSONOutSize", unsafe.Offsetof(goCfg.JSONOutSize), layout.offsets["JSONOutSize"])
+		checkOffsetEqual(t, "ShimPeerConnectionGetStatsJSONParams.OutJSONLen", unsafe.Offsetof(goCfg.OutJSONLen), layout.offsets["OutJSONLen"])
 		checkOffsetEqual(t, "ShimPeerConnectionGetStatsJSONParams.ErrorOut", unsafe.Offsetof(goCfg.ErrorOut), layout.offsets["ErrorOut"])
 	})
 

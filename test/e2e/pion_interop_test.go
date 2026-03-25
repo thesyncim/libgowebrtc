@@ -974,12 +974,7 @@ func TestICECandidateExchange(t *testing.T) {
 	pionCandidatesMu.Lock()
 	for _, c := range pionCandidates {
 		cJSON := c.ToJSON()
-		if err := pp.Lib.AddICECandidate(pc.ICECandidate{
-			Candidate:        cJSON.Candidate,
-			SDPMid:           cJSON.SDPMid,
-			SDPMLineIndex:    cJSON.SDPMLineIndex,
-			UsernameFragment: cJSON.UsernameFragment,
-		}); err != nil {
+		if err := pp.Lib.AddICECandidate(cJSON); err != nil {
 			t.Logf("Failed to add pion candidate to lib: %v", err)
 		}
 	}

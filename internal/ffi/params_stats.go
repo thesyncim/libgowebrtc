@@ -31,9 +31,9 @@ type shimPeerConnectionGetStatsParams struct {
 // shimPeerConnectionGetStatsJSONParams matches ShimPeerConnectionGetStatsJSONParams in shim.h.
 type shimPeerConnectionGetStatsJSONParams struct {
 	PC          uintptr
-	JsonOut     uintptr
-	JsonOutSize int32
-	OutJsonLen  int32
+	JSONOut     uintptr
+	JSONOutSize int32
+	OutJSONLen  int32
 	ErrorOut    uintptr
 }
 
