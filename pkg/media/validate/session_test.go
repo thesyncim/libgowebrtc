@@ -2,6 +2,7 @@ package validate
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -341,8 +342,15 @@ func TestSessionDataChannelHeartbeatsAndScenarioLab(t *testing.T) {
 
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
-	if len(dc.sent) < 2 || dc.sent[len(dc.sent)-2] != "hello" || dc.sent[len(dc.sent)-1] != "world" {
-		t.Fatalf("sent data channel messages = %v, want hello/world", dc.sent)
+	var userMessages []string
+	for _, message := range dc.sent {
+		if strings.HasPrefix(message, heartbeatPingPrefix) || strings.HasPrefix(message, heartbeatAckPrefix) {
+			continue
+		}
+		userMessages = append(userMessages, message)
+	}
+	if len(userMessages) != 2 || userMessages[0] != "hello" || userMessages[1] != "world" {
+		t.Fatalf("sent user data channel messages = %v (all sent=%v), want hello/world", userMessages, dc.sent)
 	}
 }
 

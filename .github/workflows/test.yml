@@ -54,8 +54,16 @@ jobs:
       - name: Run golangci-lint
         shell: bash
         run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          "$(go env GOPATH)/bin/golangci-lint" run --new-from-rev "origin/${{ github.base_ref }}" ./...
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            base_rev="origin/${{ github.base_ref }}"
+          else
+            base_rev="${{ github.event.before }}"
+            if [[ -z "$base_rev" || "$base_rev" == "0000000000000000000000000000000000000000" ]]; then
+              base_rev="$(git rev-parse HEAD^)"
+            fi
+          fi
+          "$(go env GOPATH)/bin/golangci-lint" run --new-from-rev "$base_rev" ./...
 
   security:
     name: Security
