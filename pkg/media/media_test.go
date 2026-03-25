@@ -190,8 +190,8 @@ func TestGetUserMediaResolvesDevicesAndSettings(t *testing.T) {
 		t.Fatalf("GetAudioTracks() len = %d, want 1", len(audioTracks))
 	}
 
-	video := videoTracks[0].(VideoStreamTrack)
-	audio := audioTracks[0].(AudioStreamTrack)
+	video := videoTracks[0]
+	audio := audioTracks[0]
 
 	if got := video.Label(); got != "Rear Camera" {
 		t.Fatalf("video Label() = %q, want %q", got, "Rear Camera")
@@ -306,7 +306,7 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 	if got := video.GetCapabilities().DisplaySurface; len(got) != 1 || got[0] != DisplaySurfaceWindow {
 		t.Fatalf("display surface capability = %v, want [%q]", got, DisplaySurfaceWindow)
 	}
-	if got := audioTracks[0].(AudioStreamTrack).GetSettings().DeviceID; got != "mic-1" {
+	if got := audioTracks[0].GetSettings().DeviceID; got != "mic-1" {
 		t.Fatalf("audio DeviceID = %q, want %q", got, "mic-1")
 	}
 }

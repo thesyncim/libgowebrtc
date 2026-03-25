@@ -398,6 +398,7 @@ typedef struct {
     ShimICEServer* ice_servers;
     int ice_server_count;
     int ice_candidate_pool_size;
+    const char* ice_transport_policy; /* "all", "relay" */
     const char* bundle_policy;      /* "balanced", "max-compat", "max-bundle" */
     const char* rtcp_mux_policy;    /* "require", "negotiate" */
     const char* sdp_semantics;      /* "unified-plan", "plan-b" */
@@ -526,6 +527,9 @@ typedef struct {
     char* sdp_out;              /* Caller-provided buffer for SDP */
     int sdp_out_size;
     int out_sdp_len;
+    int ice_restart;
+    int voice_activity_detection;
+    int ice_trickling_supported;
     ShimErrorBuffer* error_out; /* Optional: buffer for error message */
 } ShimPeerConnectionCreateOfferParams;
 
@@ -538,6 +542,8 @@ typedef struct {
     char* sdp_out;
     int sdp_out_size;
     int out_sdp_len;
+    int voice_activity_detection;
+    int ice_trickling_supported;
     ShimErrorBuffer* error_out; /* Optional: buffer for error message */
 } ShimPeerConnectionCreateAnswerParams;
 
@@ -812,6 +818,7 @@ typedef struct {
     ShimPeerConnection* pc;
     int kind;
     int direction;
+    const ShimRTPSendParameters* send_parameters;
     ShimErrorBuffer* error_out; /* Optional: buffer for error message */
 } ShimPeerConnectionAddTransceiverParams;
 
@@ -1157,6 +1164,18 @@ typedef struct {
 
 SHIM_EXPORT int shim_peer_connection_get_stats(
     ShimPeerConnectionGetStatsParams* params
+);
+
+typedef struct {
+    ShimPeerConnection* pc;
+    char* json_out;
+    int json_out_size;
+    int out_json_len;
+    ShimErrorBuffer* error_out;
+} ShimPeerConnectionGetStatsJSONParams;
+
+SHIM_EXPORT int shim_peer_connection_get_stats_json(
+    ShimPeerConnectionGetStatsJSONParams* params
 );
 
 /*

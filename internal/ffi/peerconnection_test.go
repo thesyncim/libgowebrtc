@@ -32,7 +32,7 @@ func TestPeerConnectionCreateOffer(t *testing.T) {
 
 	// Create offer
 	sdpBuf := make([]byte, 64*1024)
-	sdpLen, err := PeerConnectionCreateOffer(handle, sdpBuf)
+	sdpLen, err := PeerConnectionCreateOffer(handle, sdpBuf, nil)
 	if err != nil {
 		t.Fatalf("CreateOffer failed: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestPeerConnectionSetLocalDescription(t *testing.T) {
 
 	// Create offer
 	sdpBuf := make([]byte, 64*1024)
-	sdpLen, err := PeerConnectionCreateOffer(handle, sdpBuf)
+	sdpLen, err := PeerConnectionCreateOffer(handle, sdpBuf, nil)
 	if err != nil {
 		t.Fatalf("CreateOffer failed: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestOfferAnswerExchange(t *testing.T) {
 
 	// PC1 creates offer
 	offerBuf := make([]byte, 64*1024)
-	offerLen, err := PeerConnectionCreateOffer(pc1, offerBuf)
+	offerLen, err := PeerConnectionCreateOffer(pc1, offerBuf, nil)
 	if err != nil {
 		t.Fatalf("CreateOffer failed: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestOfferAnswerExchange(t *testing.T) {
 
 	// PC2 creates answer
 	answerBuf := make([]byte, 64*1024)
-	answerLen, err := PeerConnectionCreateAnswer(pc2, answerBuf)
+	answerLen, err := PeerConnectionCreateAnswer(pc2, answerBuf, nil)
 	if err != nil {
 		t.Fatalf("CreateAnswer failed: %v", err)
 	}
@@ -346,7 +346,7 @@ func BenchmarkFFICreateOffer(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = PeerConnectionCreateOffer(handle, sdpBuf)
+		_, _ = PeerConnectionCreateOffer(handle, sdpBuf, nil)
 	}
 }
 

@@ -456,7 +456,7 @@ func TestPeerConnectionNativeWrapperCoverage(t *testing.T) {
 		t.Fatalf("PeerConnectionGetReceivers: %v", err)
 	}
 
-	transceiver := PeerConnectionAddTransceiver(pc, MediaKindVideo, TransceiverDirectionSendRecv)
+	transceiver := PeerConnectionAddTransceiver(pc, MediaKindVideo, TransceiverDirectionSendRecv, nil)
 	if transceiver == 0 {
 		t.Fatal("PeerConnectionAddTransceiver returned 0")
 	}

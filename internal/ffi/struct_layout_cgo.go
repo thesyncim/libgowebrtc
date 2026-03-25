@@ -425,10 +425,11 @@ func cShimPeerConnectionAddTransceiverParamsLayout() cStructLayout {
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"PC":        unsafe.Offsetof(cCfg.pc),
-			"Kind":      unsafe.Offsetof(cCfg.kind),
-			"Direction": unsafe.Offsetof(cCfg.direction),
-			"ErrorOut":  unsafe.Offsetof(cCfg.error_out),
+			"PC":             unsafe.Offsetof(cCfg.pc),
+			"Kind":           unsafe.Offsetof(cCfg.kind),
+			"Direction":      unsafe.Offsetof(cCfg.direction),
+			"SendParameters": unsafe.Offsetof(cCfg.send_parameters),
+			"ErrorOut":       unsafe.Offsetof(cCfg.error_out),
 		},
 	}
 }
@@ -455,6 +456,7 @@ func cShimPeerConnectionConfigLayout() cStructLayout {
 			"ICEServers":           unsafe.Offsetof(cCfg.ice_servers),
 			"ICEServerCount":       unsafe.Offsetof(cCfg.ice_server_count),
 			"ICECandidatePoolSize": unsafe.Offsetof(cCfg.ice_candidate_pool_size),
+			"ICETransportPolicy":   unsafe.Offsetof(cCfg.ice_transport_policy),
 			"BundlePolicy":         unsafe.Offsetof(cCfg.bundle_policy),
 			"RTCPMuxPolicy":        unsafe.Offsetof(cCfg.rtcp_mux_policy),
 			"SDPSemantics":         unsafe.Offsetof(cCfg.sdp_semantics),
@@ -467,11 +469,31 @@ func cShimPeerConnectionCreateAnswerParamsLayout() cStructLayout {
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"PC":         unsafe.Offsetof(cCfg.pc),
-			"SDPOut":     unsafe.Offsetof(cCfg.sdp_out),
-			"SDPOutSize": unsafe.Offsetof(cCfg.sdp_out_size),
-			"OutSDPLen":  unsafe.Offsetof(cCfg.out_sdp_len),
-			"ErrorOut":   unsafe.Offsetof(cCfg.error_out),
+			"PC":                     unsafe.Offsetof(cCfg.pc),
+			"SDPOut":                 unsafe.Offsetof(cCfg.sdp_out),
+			"SDPOutSize":             unsafe.Offsetof(cCfg.sdp_out_size),
+			"OutSDPLen":              unsafe.Offsetof(cCfg.out_sdp_len),
+			"VoiceActivityDetection": unsafe.Offsetof(cCfg.voice_activity_detection),
+			"ICETricklingSupported":  unsafe.Offsetof(cCfg.ice_trickling_supported),
+			"ErrorOut":               unsafe.Offsetof(cCfg.error_out),
+		},
+	}
+}
+
+func cShimPeerConnectionCreateDataChannelExParamsLayout() cStructLayout {
+	var cCfg C.ShimPeerConnectionCreateDataChannelExParams
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"PC":                unsafe.Offsetof(cCfg.pc),
+			"Label":             unsafe.Offsetof(cCfg.label),
+			"Ordered":           unsafe.Offsetof(cCfg.ordered),
+			"MaxPacketLifetime": unsafe.Offsetof(cCfg.max_packet_lifetime),
+			"MaxRetransmits":    unsafe.Offsetof(cCfg.max_retransmits),
+			"Protocol":          unsafe.Offsetof(cCfg.protocol),
+			"Negotiated":        unsafe.Offsetof(cCfg.negotiated),
+			"ID":                unsafe.Offsetof(cCfg.id),
+			"ErrorOut":          unsafe.Offsetof(cCfg.error_out),
 		},
 	}
 }
@@ -491,34 +513,19 @@ func cShimPeerConnectionCreateDataChannelParamsLayout() cStructLayout {
 	}
 }
 
-func cShimPeerConnectionCreateDataChannelExParamsLayout() cStructLayout {
-	var cCfg C.ShimPeerConnectionCreateDataChannelExParams
-	return cStructLayout{
-		size: unsafe.Sizeof(cCfg),
-		offsets: map[string]uintptr{
-			"PC":                unsafe.Offsetof(cCfg.pc),
-			"Label":             unsafe.Offsetof(cCfg.label),
-			"Ordered":           unsafe.Offsetof(cCfg.ordered),
-			"MaxPacketLifeTime": unsafe.Offsetof(cCfg.max_packet_lifetime),
-			"MaxRetransmits":    unsafe.Offsetof(cCfg.max_retransmits),
-			"Protocol":          unsafe.Offsetof(cCfg.protocol),
-			"Negotiated":        unsafe.Offsetof(cCfg.negotiated),
-			"ID":                unsafe.Offsetof(cCfg.id),
-			"ErrorOut":          unsafe.Offsetof(cCfg.error_out),
-		},
-	}
-}
-
 func cShimPeerConnectionCreateOfferParamsLayout() cStructLayout {
 	var cCfg C.ShimPeerConnectionCreateOfferParams
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"PC":         unsafe.Offsetof(cCfg.pc),
-			"SDPOut":     unsafe.Offsetof(cCfg.sdp_out),
-			"SDPOutSize": unsafe.Offsetof(cCfg.sdp_out_size),
-			"OutSDPLen":  unsafe.Offsetof(cCfg.out_sdp_len),
-			"ErrorOut":   unsafe.Offsetof(cCfg.error_out),
+			"PC":                     unsafe.Offsetof(cCfg.pc),
+			"SDPOut":                 unsafe.Offsetof(cCfg.sdp_out),
+			"SDPOutSize":             unsafe.Offsetof(cCfg.sdp_out_size),
+			"OutSDPLen":              unsafe.Offsetof(cCfg.out_sdp_len),
+			"ICERestart":             unsafe.Offsetof(cCfg.ice_restart),
+			"VoiceActivityDetection": unsafe.Offsetof(cCfg.voice_activity_detection),
+			"ICETricklingSupported":  unsafe.Offsetof(cCfg.ice_trickling_supported),
+			"ErrorOut":               unsafe.Offsetof(cCfg.error_out),
 		},
 	}
 }
@@ -567,6 +574,20 @@ func cShimPeerConnectionGetSendersParamsLayout() cStructLayout {
 			"Senders":    unsafe.Offsetof(cCfg.senders),
 			"MaxSenders": unsafe.Offsetof(cCfg.max_senders),
 			"OutCount":   unsafe.Offsetof(cCfg.out_count),
+		},
+	}
+}
+
+func cShimPeerConnectionGetStatsJSONParamsLayout() cStructLayout {
+	var cCfg C.ShimPeerConnectionGetStatsJSONParams
+	return cStructLayout{
+		size: unsafe.Sizeof(cCfg),
+		offsets: map[string]uintptr{
+			"PC":          unsafe.Offsetof(cCfg.pc),
+			"JSONOut":     unsafe.Offsetof(cCfg.json_out),
+			"JSONOutSize": unsafe.Offsetof(cCfg.json_out_size),
+			"OutJSONLen":  unsafe.Offsetof(cCfg.out_json_len),
+			"ErrorOut":    unsafe.Offsetof(cCfg.error_out),
 		},
 	}
 }

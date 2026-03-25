@@ -26,6 +26,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
+	"github.com/thesyncim/libgowebrtc/internal/examplesupport"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
@@ -46,12 +47,12 @@ var upgrader = websocket.Upgrader{
 
 // SignalingMessage represents a WebSocket signaling message.
 type SignalingMessage struct {
-	Type      string          `json:"type"`
-	SDP       string          `json:"sdp,omitempty"`
-	Candidate json.RawMessage `json:"candidate,omitempty"`
-	Error     string          `json:"error,omitempty"`
-	Stats     *pc.RTCStats    `json:"stats,omitempty"`
-	Message   string          `json:"message,omitempty"`
+	Type      string                                     `json:"type"`
+	SDP       string                                     `json:"sdp,omitempty"`
+	Candidate json.RawMessage                            `json:"candidate,omitempty"`
+	Error     string                                     `json:"error,omitempty"`
+	Stats     *examplesupport.PeerConnectionStatsSummary `json:"stats,omitempty"`
+	Message   string                                     `json:"message,omitempty"`
 }
 
 // Session manages a single WebRTC session with a browser.
@@ -113,7 +114,7 @@ func (s *Session) run() error {
 
 	// Create PeerConnection
 	peerConn, err := pc.NewPeerConnection(pc.Configuration{
-		ICEServers: []pc.ICEServer{
+		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{*stunServer}},
 		},
 	})
@@ -239,7 +240,7 @@ func (s *Session) handleOffer(sdp string) error {
 	// DEBUG: Log browser offer (first 500 chars)
 	log.Printf("DEBUG: Browser offer (first 500 chars):\n%s...", sdp[:min(500, len(sdp))])
 
-	if err := s.peerConn.SetRemoteDescription(&pc.SessionDescription{
+	if err := s.peerConn.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeOffer,
 		SDP:  sdp,
 	}); err != nil {
@@ -265,7 +266,7 @@ func (s *Session) handleOffer(sdp string) error {
 }
 
 func (s *Session) handleAnswer(sdp string) error {
-	return s.peerConn.SetRemoteDescription(&pc.SessionDescription{
+	return s.peerConn.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  sdp,
 	})
@@ -276,7 +277,7 @@ func (s *Session) handleCandidate(candidateJSON json.RawMessage) error {
 	if err := json.Unmarshal(candidateJSON, &candidate); err != nil {
 		return fmt.Errorf("parse candidate: %w", err)
 	}
-	return s.peerConn.AddICECandidate(&candidate)
+	return s.peerConn.AddICECandidate(candidate)
 }
 
 func (s *Session) createAndSendOffer() error {
@@ -422,24 +423,26 @@ func (s *Session) reportStats(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			stats, err := s.peerConn.GetStats()
+			report, err := s.peerConn.GetStats()
 			if err != nil {
 				continue
 			}
 
+			summary := examplesupport.SummarizePeerConnectionStats(report)
+
 			// Send stats to browser
 			s.sendJSON(SignalingMessage{
 				Type:  "stats",
-				Stats: stats,
+				Stats: summary,
 			})
 
 			// Log to console
-			if stats.PacketsSent > 0 {
+			if summary != nil && summary.PacketsSent > 0 {
 				log.Printf("Stats: sent=%d pkts, %d KB | RTT=%.1fms | loss=%d",
-					stats.PacketsSent,
-					stats.BytesSent/1024,
-					stats.RoundTripTimeMs,
-					stats.PacketsLost)
+					summary.PacketsSent,
+					summary.BytesSent/1024,
+					summary.RoundTripTimeMs,
+					summary.PacketsLost)
 			}
 		}
 	}

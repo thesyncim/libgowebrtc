@@ -178,7 +178,7 @@ func (pp *PionLibPeerPair) ConnectPionOffersLibAnswers() error {
 	<-gatherComplete
 
 	// Lib sets remote description
-	offerDesc := &pc.SessionDescription{
+	offerDesc := pc.SessionDescription{
 		Type: pc.SDPTypeOffer,
 		SDP:  pp.Pion.LocalDescription().SDP,
 	}
@@ -257,7 +257,7 @@ func (pp *PionLibPeerPair) ConnectLibOffersPionAnswers() error {
 	<-gatherComplete
 
 	// Lib sets remote description
-	answerDesc := &pc.SessionDescription{
+	answerDesc := pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  pp.Pion.LocalDescription().SDP,
 	}
@@ -276,17 +276,17 @@ func (pp *PionLibPeerPair) ConnectLibOffersPionAnswers() error {
 		idx := c.SDPMLineIndex
 		pp.Pion.AddICECandidate(webrtc.ICECandidateInit{
 			Candidate:     c.Candidate,
-			SDPMid:        &c.SDPMid,
-			SDPMLineIndex: &idx,
+			SDPMid:        c.SDPMid,
+			SDPMLineIndex: idx,
 		})
 	}
 
 	for _, c := range pionCandidates {
 		cJSON := c.ToJSON()
-		pp.Lib.AddICECandidate(&pc.ICECandidate{
+		pp.Lib.AddICECandidate(pc.ICECandidate{
 			Candidate:     cJSON.Candidate,
-			SDPMid:        *cJSON.SDPMid,
-			SDPMLineIndex: *cJSON.SDPMLineIndex,
+			SDPMid:        cJSON.SDPMid,
+			SDPMLineIndex: cJSON.SDPMLineIndex,
 		})
 	}
 
@@ -369,7 +369,7 @@ func TestLibToPionVideoInterop(t *testing.T) {
 	}
 	<-gatherComplete // Wait for ICE gathering
 
-	if err = pp.Lib.SetRemoteDescription(&pc.SessionDescription{
+	if err = pp.Lib.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  pp.Pion.LocalDescription().SDP,
 	}); err != nil {
@@ -759,7 +759,7 @@ func TestRenegotiationInterop(t *testing.T) {
 	}
 	<-gatherComplete
 
-	if err = pp.Lib.SetRemoteDescription(&pc.SessionDescription{
+	if err = pp.Lib.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  pp.Pion.LocalDescription().SDP,
 	}); err != nil {
@@ -847,7 +847,7 @@ func TestSDPParsing(t *testing.T) {
 	t.Logf("Pion generated SDP:\n%s", answer.SDP)
 
 	// Verify lib can parse it
-	err = pp.Lib.SetRemoteDescription(&pc.SessionDescription{
+	err = pp.Lib.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  answer.SDP,
 	})
@@ -962,7 +962,7 @@ func TestICECandidateExchange(t *testing.T) {
 	answer, _ := pp.Pion.CreateAnswer(nil)
 	pp.Pion.SetLocalDescription(answer)
 
-	pp.Lib.SetRemoteDescription(&pc.SessionDescription{
+	pp.Lib.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  answer.SDP,
 	})
@@ -974,16 +974,7 @@ func TestICECandidateExchange(t *testing.T) {
 	pionCandidatesMu.Lock()
 	for _, c := range pionCandidates {
 		cJSON := c.ToJSON()
-		ufrag := ""
-		if cJSON.UsernameFragment != nil {
-			ufrag = *cJSON.UsernameFragment
-		}
-		if err := pp.Lib.AddICECandidate(&pc.ICECandidate{
-			Candidate:        cJSON.Candidate,
-			SDPMid:           *cJSON.SDPMid,
-			SDPMLineIndex:    *cJSON.SDPMLineIndex,
-			UsernameFragment: ufrag,
-		}); err != nil {
+		if err := pp.Lib.AddICECandidate(cJSON); err != nil {
 			t.Logf("Failed to add pion candidate to lib: %v", err)
 		}
 	}
@@ -995,9 +986,9 @@ func TestICECandidateExchange(t *testing.T) {
 		ufrag := c.UsernameFragment
 		if err := pp.Pion.AddICECandidate(webrtc.ICECandidateInit{
 			Candidate:        c.Candidate,
-			SDPMid:           &c.SDPMid,
-			SDPMLineIndex:    &idx,
-			UsernameFragment: &ufrag,
+			SDPMid:           c.SDPMid,
+			SDPMLineIndex:    idx,
+			UsernameFragment: ufrag,
 		}); err != nil {
 			t.Logf("Failed to add lib candidate to pion: %v", err)
 		}

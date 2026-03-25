@@ -23,6 +23,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/pion/webrtc/v4"
+	"github.com/thesyncim/libgowebrtc/internal/examplesupport"
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
@@ -46,15 +48,15 @@ type DeviceInfo struct {
 
 // SignalingMessage represents a WebSocket message.
 type SignalingMessage struct {
-	Type       string          `json:"type"`
-	SDP        string          `json:"sdp,omitempty"`
-	Candidate  json.RawMessage `json:"candidate,omitempty"`
-	Error      string          `json:"error,omitempty"`
-	Devices    []DeviceInfo    `json:"devices,omitempty"`
-	DeviceID   string          `json:"deviceId,omitempty"`
-	DeviceKind string          `json:"deviceKind,omitempty"`
-	Stats      *pc.RTCStats    `json:"stats,omitempty"`
-	Message    string          `json:"message,omitempty"`
+	Type       string                                     `json:"type"`
+	SDP        string                                     `json:"sdp,omitempty"`
+	Candidate  json.RawMessage                            `json:"candidate,omitempty"`
+	Error      string                                     `json:"error,omitempty"`
+	Devices    []DeviceInfo                               `json:"devices,omitempty"`
+	DeviceID   string                                     `json:"deviceId,omitempty"`
+	DeviceKind string                                     `json:"deviceKind,omitempty"`
+	Stats      *examplesupport.PeerConnectionStatsSummary `json:"stats,omitempty"`
+	Message    string                                     `json:"message,omitempty"`
 }
 
 // Session manages a single WebRTC session with device capture.
@@ -142,7 +144,7 @@ func (s *Session) run() error {
 
 	// Create PeerConnection
 	peerConn, err := pc.NewPeerConnection(pc.Configuration{
-		ICEServers: []pc.ICEServer{
+		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{*stunServer}},
 		},
 	})
@@ -414,7 +416,7 @@ func (s *Session) handleSelectAudioDevice(deviceID string) error {
 }
 
 func (s *Session) handleOffer(sdp string) error {
-	if err := s.peerConn.SetRemoteDescription(&pc.SessionDescription{
+	if err := s.peerConn.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeOffer,
 		SDP:  sdp,
 	}); err != nil {
@@ -437,7 +439,7 @@ func (s *Session) handleOffer(sdp string) error {
 }
 
 func (s *Session) handleAnswer(sdp string) error {
-	return s.peerConn.SetRemoteDescription(&pc.SessionDescription{
+	return s.peerConn.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  sdp,
 	})
@@ -448,7 +450,7 @@ func (s *Session) handleCandidate(candidateJSON json.RawMessage) error {
 	if err := json.Unmarshal(candidateJSON, &candidate); err != nil {
 		return fmt.Errorf("parse candidate: %w", err)
 	}
-	return s.peerConn.AddICECandidate(&candidate)
+	return s.peerConn.AddICECandidate(candidate)
 }
 
 func (s *Session) createAndSendOffer() error {

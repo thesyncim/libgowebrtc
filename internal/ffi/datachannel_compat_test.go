@@ -49,8 +49,8 @@ func TestPeerConnectionCreateDataChannelSelectsAvailableShimPath(t *testing.T) {
 		if got.Ordered != 0 {
 			t.Fatalf("Ordered = %d, want 0", got.Ordered)
 		}
-		if got.MaxPacketLifeTime != 250 {
-			t.Fatalf("MaxPacketLifeTime = %d, want 250", got.MaxPacketLifeTime)
+		if got.MaxPacketLifetime != 250 {
+			t.Fatalf("MaxPacketLifetime = %d, want 250", got.MaxPacketLifetime)
 		}
 		if got.MaxRetransmits != 7 {
 			t.Fatalf("MaxRetransmits = %d, want 7", got.MaxRetransmits)

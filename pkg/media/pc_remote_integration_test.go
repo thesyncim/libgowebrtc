@@ -215,12 +215,12 @@ func connectMediaRemotePeers(offerer, answerer *pc.PeerConnection) error {
 	answererCandidatesCopy := append([]*pc.ICECandidate(nil), answererCandidates...)
 	mu.Unlock()
 	for _, candidate := range offererCandidatesCopy {
-		if err := answerer.AddICECandidate(candidate); err != nil {
+		if err := answerer.AddICECandidate(*candidate); err != nil {
 			return err
 		}
 	}
 	for _, candidate := range answererCandidatesCopy {
-		if err := offerer.AddICECandidate(candidate); err != nil {
+		if err := offerer.AddICECandidate(*candidate); err != nil {
 			return err
 		}
 	}

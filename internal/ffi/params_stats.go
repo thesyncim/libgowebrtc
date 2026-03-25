@@ -28,6 +28,15 @@ type shimPeerConnectionGetStatsParams struct {
 	OutStats RTCStats
 }
 
+// shimPeerConnectionGetStatsJSONParams matches ShimPeerConnectionGetStatsJSONParams in shim.h.
+type shimPeerConnectionGetStatsJSONParams struct {
+	PC          uintptr
+	JSONOut     uintptr
+	JSONOutSize int32
+	OutJSONLen  int32
+	ErrorOut    uintptr
+}
+
 // shimRTPSenderGetStatsParams matches ShimRTPSenderGetStatsParams in shim.h.
 type shimRTPSenderGetStatsParams struct {
 	Sender   uintptr

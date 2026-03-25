@@ -130,6 +130,9 @@ log.Printf("shim source=%s path=%s checksum=%s", report.Shim.Source, report.Shim
 
 `diagnostics.Check()` reports resolved shim/OpenH264 paths, source (`local` vs
 `downloaded`), cache directories, version/checksum status, and blocking issues.
+Unsupported shim-backed surfaces return `ErrNotSupported` instead of silently
+degrading, so the zero-config path stays explicit when a runtime capability is
+missing.
 
 ### FFI Variants
 
@@ -200,7 +203,7 @@ Cisco keeps libgowebrtc MIT/BSD, but users must accept Cisco's license.
 |------------|---------|--------|
 | libwebrtc (pre-compiled) | 141.7390.2.0 | [crow-misia/libwebrtc-bin](https://github.com/crow-misia/libwebrtc-bin) |
 | libwebrtc (Linux source build) | branch-heads/7390 @ `d2eaa5570fc9959f8dbde32912a16366b8ee75f4` | [webrtc.googlesource.com/src](https://webrtc.googlesource.com/src) |
-| libwebrtc_shim | shim-v0.4.7 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
+| libwebrtc_shim | shim-v0.5.0 | [thesyncim/libgowebrtc releases](https://github.com/thesyncim/libgowebrtc/releases) |
 | OpenH264 | 2.5.1 | [Cisco OpenH264](https://github.com/cisco/openh264/releases) |
 
 ### Building the Shim
@@ -225,7 +228,7 @@ The shim is built using Bazel.
 ./scripts/validate_linux_docker.sh --target linux_386 --download-only
 
 # Publish a prepared local release directory
-./scripts/release.sh 0.4.7 --release-dir release/shim-v0.4.7
+./scripts/release.sh 0.5.0 --release-dir release/shim-v0.5.0
 ```
 
 Environment variables:
@@ -259,7 +262,7 @@ Examples:
 ./scripts/release-module.sh v0.1.0 --push
 
 # Publish shim assets
-./scripts/release.sh 0.4.7 --release-dir release/shim-v0.4.7
+./scripts/release.sh 0.5.0 --release-dir release/shim-v0.5.0
 ```
 
 See [VERSIONING.md](VERSIONING.md) for the bump policy and release flow details.
@@ -392,12 +395,17 @@ _ = recv.SetCodecPreferences(
 // CreateVideoTrack no longer accepts a codec selector.
 videoTrack, _ := peerConnection.CreateVideoTrack("video", 1280, 720)
 
-// Prefer typed policies in pc.Configuration.
-cfg := pc.Configuration{
-    BundlePolicy:  pc.BundlePolicyMaxBundle,
-    RTCPMuxPolicy: pc.RTCPMuxPolicyRequire,
-    SDPSemantics:  pc.SDPSemanticsUnifiedPlan,
+// pc.NewPeerConnection and DefaultConfiguration now use Pion types directly.
+cfg := webrtc.Configuration{
+    BundlePolicy:       webrtc.BundlePolicyBalanced,
+    RTCPMuxPolicy:      webrtc.RTCPMuxPolicyRequire,
+    ICETransportPolicy: webrtc.ICETransportPolicyAll,
+    SDPSemantics:       webrtc.SDPSemanticsUnifiedPlan,
 }
+
+// Session descriptions and ICE candidates are value-based Pion types.
+_ = peerConnection.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offerSDP})
+_ = peerConnection.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
 
 // The advanced codec path is raw Pion RTP codec parameters everywhere.
 prefs := pioncodec.BrowserPreset(
@@ -408,7 +416,15 @@ prefs := pioncodec.BrowserPreset(
 
 _ = transceiver.SetCodecPreferences(prefs)
 _ = sender.SetPreferredCodec(prefs[0])
+
+// PeerConnection stats now come back as a full StatsReport.
+report, _ := peerConnection.GetStats()
+_ = report
 ```
+
+### Shim Release Note
+
+This wave changes the shim ABI. After updating Go code, publish a fresh shim asset at version `0.5.0` before consuming the branch outside a local build.
 
 ### Pion Receive Integration
 
@@ -603,9 +619,9 @@ libgowebrtc/
 |----------|--------|--------------|
 | **Encoding/Decoding** | ✅ Complete | H.264, VP8, VP9, AV1, Opus - allocation-free |
 | **PeerConnection** | ✅ Complete | Offer/answer, ICE, tracks, data channels |
-| **RTP Control** | ⚠️ Partial | Sender/receiver/transceiver, simulcast layers; RTCP feedback callback not yet supported |
+| **RTP Control** | ✅ Strong | Sender/receiver/transceiver, codec preferences, simulcast layer control |
 | **Media Capture** | ✅ Complete | Camera, microphone, screen/window |
-| **Statistics** | ⚠️ Partial | PeerConnection and RTPReceiver stats; sender stats and BWE are not yet supported |
+| **Statistics** | ✅ Structured | `PeerConnection.GetStats()` returns `webrtc.StatsReport` with RTP/transport/data-channel entries |
 
 <details>
 <summary><strong>Core Encoding/Decoding</strong></summary>
@@ -625,7 +641,7 @@ libgowebrtc/
 - Frame receiving from remote tracks (`SetOnVideoFrame`/`SetOnAudioFrame`)
 - Browser-style `addTrack(track, streamA, streamB, ...)` stream identity preservation
 - DataChannel communication
-- `GetStats()` - connection statistics
+- `GetStats()` - structured `webrtc.StatsReport` for the full connection
 - `RestartICE()` - ICE restart trigger
 - `AddTransceiver()` - add transceivers with direction control
 </details>
@@ -639,10 +655,8 @@ libgowebrtc/
 | `SetParameters()` / `GetParameters()` | Encoding parameters |
 | `SetLayerActive()` / `SetLayerBitrate()` | Simulcast layer control |
 | `GetActiveLayers()` | Get active layer count |
-| `SetOnRTCPFeedback()` | Returns `pc.ErrNotSupported` in the current shim |
 | `SetScalabilityMode()` / `GetScalabilityMode()` | Runtime SVC mode control |
 | `StreamIDs()` | MediaStream IDs associated with the sender |
-| `GetStats()` | Returns `pc.ErrNotSupported` in the current shim |
 </details>
 
 <details>
@@ -650,7 +664,6 @@ libgowebrtc/
 
 | Method | Description |
 |--------|-------------|
-| `GetStats()` | Receiver statistics |
 | `SetJitterBufferMinDelay()` | Set minimum jitter buffer delay |
 </details>
 
@@ -688,7 +701,7 @@ libgowebrtc/
 </details>
 
 <details>
-<summary><strong>Statistics (RTCStats)</strong></summary>
+<summary><strong>Statistics (`webrtc.StatsReport`)</strong></summary>
 
 - Transport stats (bytes/packets sent/received)
 - Quality metrics (RTT, jitter, packet loss)
@@ -707,9 +720,6 @@ libgowebrtc/
 - `GetSupportedAudioCodecs()` - enumerate audio codecs (Opus, PCMU, PCMA)
 - `IsCodecSupported(mimeType)` - check codec support
 
-**Bandwidth Estimation:**
-- `GetCurrentBandwidthEstimate()` currently returns `pc.ErrNotSupported`
-- `SetOnBandwidthEstimate(callback)` currently returns `pc.ErrNotSupported`
 </details>
 
 ### Jitter Buffer Control
@@ -722,12 +732,18 @@ receiver := transceiver.Receiver()
 // Low latency floor (gaming, live streaming)
 _ = receiver.SetJitterBufferMinDelay(50)
 
-stats, _ := receiver.GetStats()
-log.Printf("buffer target=%.2fms minimum=%.2fms emitted=%d",
-    stats.JitterBufferTargetDelayMs,
-    stats.JitterBufferMinimumDelayMs,
-    stats.JitterBufferEmittedCount,
-)
+report, _ := peerConnection.GetStats()
+for _, stats := range report {
+    inbound, ok := stats.(webrtc.InboundRTPStreamStats)
+    if !ok {
+        continue
+    }
+    log.Printf("buffer target=%.2fms minimum=%.2fms emitted=%d",
+        inbound.JitterBufferTargetDelay*1000,
+        inbound.JitterBufferMinimumDelay*1000,
+        inbound.JitterBufferEmittedCount,
+    )
+}
 ```
 
 ## Browser Example

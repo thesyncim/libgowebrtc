@@ -77,7 +77,7 @@ func NewPeerPair(t *testing.T, cfg PeerPairConfig) (*PeerPair, error) {
 	pionConfig := pionwebrtc.Configuration{}
 
 	if cfg.UseSTUN {
-		libConfig.ICEServers = []pc.ICEServer{
+		libConfig.ICEServers = []pionwebrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		}
 		pionConfig.ICEServers = []pionwebrtc.ICEServer{
@@ -169,8 +169,8 @@ func (pp *PeerPair) forwardLibToPion() {
 			}
 			_ = pp.Pion.AddICECandidate(pionwebrtc.ICECandidateInit{
 				Candidate:     candidate.Candidate,
-				SDPMid:        &candidate.SDPMid,
-				SDPMLineIndex: &candidate.SDPMLineIndex,
+				SDPMid:        candidate.SDPMid,
+				SDPMLineIndex: candidate.SDPMLineIndex,
 			})
 		}
 	}
@@ -193,18 +193,10 @@ func (pp *PeerPair) forwardPionToLib() {
 			}
 			if pp.Lib.IsValid() {
 				init := candidate.ToJSON()
-				sdpMid := ""
-				if init.SDPMid != nil {
-					sdpMid = *init.SDPMid
-				}
-				sdpMLineIndex := uint16(0)
-				if init.SDPMLineIndex != nil {
-					sdpMLineIndex = uint16(*init.SDPMLineIndex)
-				}
-				_ = pp.Lib.AddICECandidate(&pc.ICECandidate{
+				_ = pp.Lib.AddICECandidate(pc.ICECandidate{
 					Candidate:     init.Candidate,
-					SDPMid:        sdpMid,
-					SDPMLineIndex: sdpMLineIndex,
+					SDPMid:        init.SDPMid,
+					SDPMLineIndex: init.SDPMLineIndex,
 				})
 			}
 		}
@@ -251,7 +243,7 @@ func (pp *PeerPair) libOffers() error {
 		return err
 	}
 
-	if err := pp.Lib.SetRemoteDescription(&pc.SessionDescription{
+	if err := pp.Lib.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeAnswer,
 		SDP:  answer.SDP,
 	}); err != nil {
@@ -272,7 +264,7 @@ func (pp *PeerPair) pionOffers() error {
 		return err
 	}
 
-	if err := pp.Lib.SetRemoteDescription(&pc.SessionDescription{
+	if err := pp.Lib.SetRemoteDescription(pc.SessionDescription{
 		Type: pc.SDPTypeOffer,
 		SDP:  offer.SDP,
 	}); err != nil {
