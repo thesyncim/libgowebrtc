@@ -854,9 +854,11 @@ func cShimRTPSendParametersLayout() cStructLayout {
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"Encodings":     unsafe.Offsetof(cCfg.encodings),
-			"EncodingCount": unsafe.Offsetof(cCfg.encoding_count),
-			"TransactionID": unsafe.Offsetof(cCfg.transaction_id),
+			"Encodings":            unsafe.Offsetof(cCfg.encodings),
+			"EncodingCount":        unsafe.Offsetof(cCfg.encoding_count),
+			"HeaderExtensions":     unsafe.Offsetof(cCfg.header_extensions),
+			"HeaderExtensionCount": unsafe.Offsetof(cCfg.header_extension_count),
+			"TransactionID":        unsafe.Offsetof(cCfg.transaction_id),
 		},
 	}
 }
@@ -891,10 +893,12 @@ func cShimRTPSenderGetParametersParamsLayout() cStructLayout {
 	return cStructLayout{
 		size: unsafe.Sizeof(cCfg),
 		offsets: map[string]uintptr{
-			"Sender":       unsafe.Offsetof(cCfg.sender),
-			"Encodings":    unsafe.Offsetof(cCfg.encodings),
-			"MaxEncodings": unsafe.Offsetof(cCfg.max_encodings),
-			"OutParams":    unsafe.Offsetof(cCfg.out_params),
+			"Sender":              unsafe.Offsetof(cCfg.sender),
+			"Encodings":           unsafe.Offsetof(cCfg.encodings),
+			"MaxEncodings":        unsafe.Offsetof(cCfg.max_encodings),
+			"HeaderExtensions":    unsafe.Offsetof(cCfg.header_extensions),
+			"MaxHeaderExtensions": unsafe.Offsetof(cCfg.max_header_extensions),
+			"OutParams":           unsafe.Offsetof(cCfg.out_params),
 		},
 	}
 }
@@ -1215,6 +1219,7 @@ func cShimVideoEncoderConfigLayout() cStructLayout {
 			"H264Profile":      unsafe.Offsetof(cCfg.h264_profile),
 			"VP9Profile":       unsafe.Offsetof(cCfg.vp9_profile),
 			"PreferHW":         unsafe.Offsetof(cCfg.prefer_hw),
+			"ScalabilityMode":  unsafe.Offsetof(cCfg.scalability_mode),
 		},
 	}
 }

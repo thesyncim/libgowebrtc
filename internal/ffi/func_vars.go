@@ -6,12 +6,13 @@ package ffi
 // NOTE: All int/uint types are explicitly sized to match C ABI
 var (
 	// VideoEncoder
-	shimVideoEncoderCreate          func(params uintptr) uintptr
-	shimVideoEncoderEncode          func(encoder uintptr, params uintptr) int32
-	shimVideoEncoderSetBitrate      func(params uintptr) int32
-	shimVideoEncoderSetFramerate    func(params uintptr) int32
-	shimVideoEncoderRequestKeyframe func(encoder uintptr) int32
-	shimVideoEncoderDestroy         func(encoder uintptr)
+	shimVideoEncoderCreate                      func(params uintptr) uintptr
+	shimVideoEncoderEncode                      func(encoder uintptr, params uintptr) int32
+	shimVideoEncoderSetBitrate                  func(params uintptr) int32
+	shimVideoEncoderSetFramerate                func(params uintptr) int32
+	shimVideoEncoderRequestKeyframe             func(encoder uintptr) int32
+	shimVideoEncoderGetLastDependencyDescriptor func(encoder uintptr, params uintptr) int32
+	shimVideoEncoderDestroy                     func(encoder uintptr)
 
 	// VideoDecoder
 	shimVideoDecoderCreate  func(params uintptr) uintptr

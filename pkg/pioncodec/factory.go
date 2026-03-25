@@ -13,12 +13,13 @@ import (
 
 // VideoFactoryConfig configures libgowebrtc-backed Pion video factories.
 type VideoFactoryConfig struct {
-	Width       int     // Width is the expected input frame width in pixels.
-	Height      int     // Height is the expected input frame height in pixels.
-	Bitrate     uint32  // Bitrate overrides the encoder target bitrate in bps.
-	FPS         float64 // FPS overrides the encoder target frame rate.
-	KeyInterval int     // KeyInterval overrides the keyframe cadence in frames.
-	PreferHW    *bool   // PreferHW overrides whether hardware encoding should be preferred.
+	Width       int                 // Width is the expected input frame width in pixels.
+	Height      int                 // Height is the expected input frame height in pixels.
+	Bitrate     uint32              // Bitrate overrides the encoder target bitrate in bps.
+	FPS         float64             // FPS overrides the encoder target frame rate.
+	KeyInterval int                 // KeyInterval overrides the keyframe cadence in frames.
+	PreferHW    *bool               // PreferHW overrides whether hardware encoding should be preferred.
+	SVC         *libcodec.SVCConfig // SVC configures temporal/spatial layering when supported.
 }
 
 // AudioFactoryConfig configures libgowebrtc-backed Pion audio factories.
@@ -61,6 +62,7 @@ func NewVideoEncoder(params webrtc.RTPCodecParameters, cfg VideoFactoryConfig) (
 		vp9Cfg := libcodec.DefaultVP9Config(cfg.Width, cfg.Height)
 		overrideCommonVideoConfig(&vp9Cfg.Width, &vp9Cfg.Height, &vp9Cfg.Bitrate, &vp9Cfg.FPS, &vp9Cfg.KeyInterval, cfg)
 		vp9Cfg.Profile = libcodec.VP9ProfileIDFromFMTP(params.SDPFmtpLine)
+		vp9Cfg.SVC = cfg.SVC
 		if cfg.PreferHW != nil {
 			vp9Cfg.PreferHW = *cfg.PreferHW
 		}
@@ -68,6 +70,7 @@ func NewVideoEncoder(params webrtc.RTPCodecParameters, cfg VideoFactoryConfig) (
 	case libcodec.AV1:
 		av1Cfg := libcodec.DefaultAV1Config(cfg.Width, cfg.Height)
 		overrideCommonVideoConfig(&av1Cfg.Width, &av1Cfg.Height, &av1Cfg.Bitrate, &av1Cfg.FPS, &av1Cfg.KeyInterval, cfg)
+		av1Cfg.SVC = cfg.SVC
 		if cfg.PreferHW != nil {
 			av1Cfg.PreferHW = *cfg.PreferHW
 		}

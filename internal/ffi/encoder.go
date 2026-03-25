@@ -101,6 +101,29 @@ func VideoEncoderEncodeInto(
 	return int(params.OutSize), params.OutIsKeyframe != 0, nil
 }
 
+// VideoEncoderGetLastDependencyDescriptor returns the serialized dependency
+// descriptor payload for the most recent encoded frame, if available.
+func VideoEncoderGetLastDependencyDescriptor(encoder uintptr, dst []byte) (int, error) {
+	if !libLoaded.Load() {
+		return 0, ErrLibraryNotLoaded
+	}
+	if len(dst) == 0 {
+		return 0, nil
+	}
+
+	params := shimVideoEncoderGetLastDependencyDescriptorParams{
+		DstBuffer:     ByteSlicePtr(dst),
+		DstBufferSize: int32(len(dst)),
+	}
+	result := shimVideoEncoderGetLastDependencyDescriptor(encoder, uintptr(unsafe.Pointer(&params)))
+	runtime.KeepAlive(&params)
+	runtime.KeepAlive(dst)
+	if err := ShimError(result); err != nil {
+		return 0, err
+	}
+	return int(params.OutSize), nil
+}
+
 // VideoEncoderSetBitrate updates the encoder bitrate.
 func VideoEncoderSetBitrate(encoder uintptr, bitrate uint32) error {
 	if !libLoaded.Load() {

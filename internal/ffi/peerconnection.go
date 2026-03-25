@@ -996,34 +996,46 @@ type RTPEncodingParameters struct {
 	ScalabilityMode       [32]byte
 }
 
+// RTPHeaderExtensionParameter matches ShimRTPHeaderExtensionParameter in shim.h
+type RTPHeaderExtensionParameter struct {
+	URI [256]byte
+	ID  int32
+}
+
 // RTPSendParameters matches ShimRTPSendParameters in shim.h
 type RTPSendParameters struct {
-	Encodings     uintptr
-	EncodingCount int32
-	TransactionID [64]byte
+	Encodings            uintptr
+	EncodingCount        int32
+	_                    int32
+	HeaderExtensions     uintptr
+	HeaderExtensionCount int32
+	TransactionID        [64]byte
 }
 
 // RTPSenderGetParameters gets the current RTP send parameters.
-func RTPSenderGetParameters(sender uintptr, encodings []RTPEncodingParameters) (*RTPSendParameters, int, error) {
+func RTPSenderGetParameters(sender uintptr, encodings []RTPEncodingParameters, headerExtensions []RTPHeaderExtensionParameter) (*RTPSendParameters, int, int, error) {
 	if !libLoaded.Load() || shimRTPSenderGetParameters == nil {
-		return nil, 0, ErrLibraryNotLoaded
+		return nil, 0, 0, ErrLibraryNotLoaded
 	}
 
 	params := shimRTPSenderGetParametersParams{
-		Sender:       sender,
-		Encodings:    uintptr(unsafe.Pointer(&encodings[0])),
-		MaxEncodings: int32(len(encodings)),
+		Sender:              sender,
+		Encodings:           uintptr(unsafe.Pointer(&encodings[0])),
+		MaxEncodings:        int32(len(encodings)),
+		HeaderExtensions:    uintptr(unsafe.Pointer(&headerExtensions[0])),
+		MaxHeaderExtensions: int32(len(headerExtensions)),
 	}
 	result := shimRTPSenderGetParameters(uintptr(unsafe.Pointer(&params)))
 	runtime.KeepAlive(encodings)
+	runtime.KeepAlive(headerExtensions)
 	runtime.KeepAlive(&params)
 
 	if err := ShimError(result); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	out := params.OutParams
-	return &out, int(out.EncodingCount), nil
+	return &out, int(out.EncodingCount), int(out.HeaderExtensionCount), nil
 }
 
 // RTPSenderSetParameters sets the RTP send parameters.

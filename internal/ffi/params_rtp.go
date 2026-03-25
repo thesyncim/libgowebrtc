@@ -15,10 +15,14 @@ type shimRTPSenderReplaceTrackParams struct {
 
 // shimRTPSenderGetParametersParams matches ShimRTPSenderGetParametersParams in shim.h.
 type shimRTPSenderGetParametersParams struct {
-	Sender      uintptr
-	Encodings   uintptr
-	MaxEncodings int32
-	OutParams   RTPSendParameters
+	Sender              uintptr
+	Encodings           uintptr
+	MaxEncodings        int32
+	_                   int32
+	HeaderExtensions    uintptr
+	MaxHeaderExtensions int32
+	_                   int32
+	OutParams           RTPSendParameters
 }
 
 // shimRTPSenderSetParametersParams matches ShimRTPSenderSetParametersParams in shim.h.
@@ -45,24 +49,24 @@ type shimRTPSenderSetLayerActiveParams struct {
 
 // shimRTPSenderSetLayerBitrateParams matches ShimRTPSenderSetLayerBitrateParams in shim.h.
 type shimRTPSenderSetLayerBitrateParams struct {
-	Sender       uintptr
-	RID          uintptr
+	Sender        uintptr
+	RID           uintptr
 	MaxBitrateBps uint32
-	ErrorOut     uintptr
+	ErrorOut      uintptr
 }
 
 // shimRTPSenderGetActiveLayersParams matches ShimRTPSenderGetActiveLayersParams in shim.h.
 type shimRTPSenderGetActiveLayersParams struct {
-	Sender     uintptr
-	OutSpatial int32
+	Sender      uintptr
+	OutSpatial  int32
 	OutTemporal int32
 }
 
 // shimRTPSenderSetScalabilityModeParams matches ShimRTPSenderSetScalabilityModeParams in shim.h.
 type shimRTPSenderSetScalabilityModeParams struct {
-	Sender           uintptr
-	ScalabilityMode  uintptr
-	ErrorOut         uintptr
+	Sender          uintptr
+	ScalabilityMode uintptr
+	ErrorOut        uintptr
 }
 
 // shimRTPSenderGetScalabilityModeParams matches ShimRTPSenderGetScalabilityModeParams in shim.h.
@@ -74,15 +78,15 @@ type shimRTPSenderGetScalabilityModeParams struct {
 
 // shimRTPSenderSetPreferredCodecParams matches ShimRTPSenderSetPreferredCodecParams in shim.h.
 type shimRTPSenderSetPreferredCodecParams struct {
-	Sender     uintptr
-	MimeType   uintptr
+	Sender      uintptr
+	MimeType    uintptr
 	PayloadType int32
-	ErrorOut   uintptr
+	ErrorOut    uintptr
 }
 
 // shimRTPReceiverSetJitterBufferMinDelayParams matches ShimRTPReceiverSetJitterBufferMinDelayParams in shim.h.
 type shimRTPReceiverSetJitterBufferMinDelayParams struct {
-	Receiver  uintptr
+	Receiver   uintptr
 	MinDelayMs int32
 }
 

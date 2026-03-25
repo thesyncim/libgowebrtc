@@ -58,6 +58,10 @@ type VideoFrameHandler func(*frame.VideoFrame)
 // AudioFrameHandler receives decoded audio frames from a remote track.
 type AudioFrameHandler func(*frame.AudioFrame)
 
+// RTPPacketHandler receives cloned RTP packets before they enter the decode
+// pipeline. Handlers must return quickly.
+type RTPPacketHandler func(*rtp.Packet)
+
 // CodecChangeHandler is invoked when Pion updates the codec for the same
 // TrackRemote while packets are being read.
 type CodecChangeHandler func(CodecChange)
@@ -94,6 +98,9 @@ type config struct {
 	maxVideoDecodeHeight int
 	keyframeRequester    KeyframeRequester
 	keyframeRequestGap   time.Duration
+	rtpPacketHandler     RTPPacketHandler
+	videoMonitor         *VideoSubscriberMonitor
+	audioMonitor         *AudioSubscriberMonitor
 }
 
 // Option configures a decoded Pion remote track.
@@ -158,6 +165,31 @@ func WithWriteRTCP(writeRTCP WriteRTCPFunc) Option {
 func WithKeyframeRequestGap(gap time.Duration) Option {
 	return func(cfg *config) {
 		cfg.keyframeRequestGap = gap
+	}
+}
+
+// WithRTPPacketHandler configures a callback that observes cloned RTP packets
+// before they are fed into the depacketizer/sample builder.
+func WithRTPPacketHandler(handler RTPPacketHandler) Option {
+	return func(cfg *config) {
+		cfg.rtpPacketHandler = handler
+	}
+}
+
+// WithVideoSubscriberMonitor configures a passive subscriber-side monitor that
+// observes packet continuity, freezes, layer transitions, and codec switches.
+func WithVideoSubscriberMonitor(monitor *VideoSubscriberMonitor) Option {
+	return func(cfg *config) {
+		cfg.videoMonitor = monitor
+	}
+}
+
+// WithAudioSubscriberMonitor configures a passive subscriber-side monitor that
+// observes packet continuity, freezes, decoded audio config changes, and
+// activity/silence transitions.
+func WithAudioSubscriberMonitor(monitor *AudioSubscriberMonitor) Option {
+	return func(cfg *config) {
+		cfg.audioMonitor = monitor
 	}
 }
 
@@ -338,6 +370,12 @@ func newDecodedTrack(track trackReader, source *webrtc.TrackRemote, receiver *we
 	case webrtc.RTPCodecTypeAudio:
 		d.audioDecoder = pioncodec.NewMultiAudioDecoder()
 	}
+	if cfg.videoMonitor != nil && track.Kind() == webrtc.RTPCodecTypeVideo {
+		cfg.videoMonitor.bind(track, receiver, codecType, codecParams)
+	}
+	if cfg.audioMonitor != nil && track.Kind() == webrtc.RTPCodecTypeAudio {
+		cfg.audioMonitor.bind(track, receiver, codecType, codecParams)
+	}
 	return d, nil
 }
 
@@ -465,6 +503,15 @@ func (d *DecodedTrack) Run() error {
 		}
 		if pkt == nil {
 			continue
+		}
+		if d.cfg.rtpPacketHandler != nil {
+			d.cfg.rtpPacketHandler(clonePacketForHandler(pkt))
+		}
+		if d.cfg.videoMonitor != nil {
+			d.cfg.videoMonitor.observePacket(pkt)
+		}
+		if d.cfg.audioMonitor != nil {
+			d.cfg.audioMonitor.observePacket(pkt)
 		}
 
 		if err := d.refreshPipelineIfNeeded(); err != nil {
@@ -655,6 +702,9 @@ func (d *DecodedTrack) handleVideoSample(pipe *pipeline, sample *pionmedia.Sampl
 	d.stateMu.Unlock()
 
 	out := cloneVideoFrame(pipe.videoScratch, pipe.clockRate, isKeyframe)
+	if d.cfg.videoMonitor != nil {
+		d.cfg.videoMonitor.observeFrame(out)
+	}
 	d.callbackMu.RLock()
 	handler := d.onVideo
 	d.callbackMu.RUnlock()
@@ -678,6 +728,9 @@ func (d *DecodedTrack) handleAudioSample(pipe *pipeline, sample *pionmedia.Sampl
 	}
 
 	out := cloneAudioFrame(pipe.audioScratch, pipe.clockRate, numSamples)
+	if d.cfg.audioMonitor != nil {
+		d.cfg.audioMonitor.observeFrame(out)
+	}
 	d.callbackMu.RLock()
 	handler := d.onAudio
 	d.callbackMu.RUnlock()
@@ -688,6 +741,12 @@ func (d *DecodedTrack) handleAudioSample(pipe *pipeline, sample *pionmedia.Sampl
 }
 
 func (d *DecodedTrack) emitCodecChange(change CodecChange) {
+	if d.cfg.videoMonitor != nil {
+		d.cfg.videoMonitor.observeCodecChange(change)
+	}
+	if d.cfg.audioMonitor != nil {
+		d.cfg.audioMonitor.observeCodecChange(change)
+	}
 	d.callbackMu.RLock()
 	handler := d.onSwitch
 	d.callbackMu.RUnlock()
@@ -905,6 +964,23 @@ func newRTPDepacketizer(codecType codec.Type) (rtp.Depacketizer, error) {
 	default:
 		return nil, decoder.ErrUnsupportedCodec
 	}
+}
+
+func clonePacketForHandler(pkt *rtp.Packet) *rtp.Packet {
+	if pkt == nil {
+		return nil
+	}
+
+	raw, err := pkt.Marshal()
+	if err != nil {
+		return nil
+	}
+
+	clone := &rtp.Packet{}
+	if err := clone.Unmarshal(raw); err != nil {
+		return nil
+	}
+	return clone
 }
 
 func isDepacketizerKeyframe(codecType codec.Type, head any) bool {

@@ -13,6 +13,7 @@ static void* fn_shim_video_encoder_encode;
 static void* fn_shim_video_encoder_set_bitrate;
 static void* fn_shim_video_encoder_set_framerate;
 static void* fn_shim_video_encoder_request_keyframe;
+static void* fn_shim_video_encoder_get_last_dependency_descriptor;
 static void* fn_shim_video_encoder_destroy;
 static void* fn_shim_video_decoder_create;
 static void* fn_shim_video_decoder_decode;
@@ -146,6 +147,7 @@ void set_fn_shim_video_encoder_encode(void* fn) { fn_shim_video_encoder_encode =
 void set_fn_shim_video_encoder_set_bitrate(void* fn) { fn_shim_video_encoder_set_bitrate = fn; }
 void set_fn_shim_video_encoder_set_framerate(void* fn) { fn_shim_video_encoder_set_framerate = fn; }
 void set_fn_shim_video_encoder_request_keyframe(void* fn) { fn_shim_video_encoder_request_keyframe = fn; }
+void set_fn_shim_video_encoder_get_last_dependency_descriptor(void* fn) { fn_shim_video_encoder_get_last_dependency_descriptor = fn; }
 void set_fn_shim_video_encoder_destroy(void* fn) { fn_shim_video_encoder_destroy = fn; }
 void set_fn_shim_video_decoder_create(void* fn) { fn_shim_video_decoder_create = fn; }
 void set_fn_shim_video_decoder_decode(void* fn) { fn_shim_video_decoder_decode = fn; }
@@ -293,6 +295,10 @@ int32_t call_shim_video_encoder_set_framerate(uintptr_t params) {
 int32_t call_shim_video_encoder_request_keyframe(uintptr_t encoder) {
     typedef int32_t (*fn_t)(uintptr_t);
     return ((fn_t)fn_shim_video_encoder_request_keyframe)(encoder);
+}
+int32_t call_shim_video_encoder_get_last_dependency_descriptor(uintptr_t encoder, uintptr_t params) {
+    typedef int32_t (*fn_t)(uintptr_t, uintptr_t);
+    return ((fn_t)fn_shim_video_encoder_get_last_dependency_descriptor)(encoder, params);
 }
 void call_shim_video_encoder_destroy(uintptr_t encoder) {
     typedef void (*fn_t)(uintptr_t);
@@ -809,6 +815,7 @@ func registerFunctions() error {
 	C.set_fn_shim_video_encoder_set_bitrate(unsafe.Pointer(mustDlsym(libHandle, "shim_video_encoder_set_bitrate")))
 	C.set_fn_shim_video_encoder_set_framerate(unsafe.Pointer(mustDlsym(libHandle, "shim_video_encoder_set_framerate")))
 	C.set_fn_shim_video_encoder_request_keyframe(unsafe.Pointer(mustDlsym(libHandle, "shim_video_encoder_request_keyframe")))
+	C.set_fn_shim_video_encoder_get_last_dependency_descriptor(unsafe.Pointer(mustDlsym(libHandle, "shim_video_encoder_get_last_dependency_descriptor")))
 	C.set_fn_shim_video_encoder_destroy(unsafe.Pointer(mustDlsym(libHandle, "shim_video_encoder_destroy")))
 
 	// VideoDecoder
@@ -998,6 +1005,9 @@ func registerFunctions() error {
 	}
 	shimVideoEncoderRequestKeyframe = func(encoder uintptr) int32 {
 		return int32(C.call_shim_video_encoder_request_keyframe(C.uintptr_t(encoder)))
+	}
+	shimVideoEncoderGetLastDependencyDescriptor = func(encoder uintptr, params uintptr) int32 {
+		return int32(C.call_shim_video_encoder_get_last_dependency_descriptor(C.uintptr_t(encoder), C.uintptr_t(params)))
 	}
 	shimVideoEncoderDestroy = func(encoder uintptr) {
 		C.call_shim_video_encoder_destroy(C.uintptr_t(encoder))

@@ -95,6 +95,7 @@ typedef struct {
     const char* h264_profile;   /* For H.264: profile-level-id hex string */
     int32_t vp9_profile;        /* For VP9: 0, 1, 2, or 3 */
     int32_t prefer_hw;          /* Non-zero to prefer hardware encoder */
+    const char* scalability_mode; /* Optional: "L3T3_KEY", "L1T3", etc. */
 } ShimVideoEncoderConfig;
 
 /* ============================================================================
@@ -161,6 +162,17 @@ SHIM_EXPORT int shim_video_encoder_set_framerate(
 );
 SHIM_EXPORT int shim_video_encoder_request_keyframe(ShimVideoEncoder* encoder);
 SHIM_EXPORT void shim_video_encoder_destroy(ShimVideoEncoder* encoder);
+
+typedef struct {
+    uint8_t* dst_buffer;
+    int dst_buffer_size;
+    int out_size;
+} ShimVideoEncoderGetLastDependencyDescriptorParams;
+
+SHIM_EXPORT int shim_video_encoder_get_last_dependency_descriptor(
+    ShimVideoEncoder* encoder,
+    ShimVideoEncoderGetLastDependencyDescriptorParams* params
+);
 
 /* ============================================================================
  * Video Decoder API (Allocation-Free)
@@ -687,8 +699,15 @@ typedef struct {
 } ShimRTPEncodingParameters;
 
 typedef struct {
+    char uri[256];
+    int id;
+} ShimRTPHeaderExtensionParameter;
+
+typedef struct {
     ShimRTPEncodingParameters* encodings;
     int encoding_count;
+    ShimRTPHeaderExtensionParameter* header_extensions;
+    int header_extension_count;
     char transaction_id[64];
 } ShimRTPSendParameters;
 
@@ -696,6 +715,8 @@ typedef struct {
     ShimRTPSender* sender;
     ShimRTPEncodingParameters* encodings;
     int max_encodings;
+    ShimRTPHeaderExtensionParameter* header_extensions;
+    int max_header_extensions;
     ShimRTPSendParameters out_params;
 } ShimRTPSenderGetParametersParams;
 

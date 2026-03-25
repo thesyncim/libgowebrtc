@@ -64,6 +64,13 @@ type shimVideoEncoderEncodeParams struct {
 	ErrorOut      uintptr
 }
 
+// shimVideoEncoderGetLastDependencyDescriptorParams matches ShimVideoEncoderGetLastDependencyDescriptorParams in shim.h.
+type shimVideoEncoderGetLastDependencyDescriptorParams struct {
+	DstBuffer     uintptr
+	DstBufferSize int32
+	OutSize       int32
+}
+
 // shimVideoDecoderDecodeParams matches ShimVideoDecoderDecodeParams in shim.h.
 type shimVideoDecoderDecodeParams struct {
 	Data       uintptr

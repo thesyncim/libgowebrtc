@@ -42,6 +42,7 @@ var (
 type VideoTrackConfig struct {
 	ID       string     // ID is the stable media track identifier.
 	StreamID string     // StreamID is the MediaStream identifier exposed to the remote peer.
+	RID      string     // RID is the RTP stream identifier used for simulcast encodings.
 	Codec    codec.Type // Codec is the preferred libgowebrtc video codec.
 	Width    int        // Width is the source frame width in pixels.
 	Height   int        // Height is the source frame height in pixels.
@@ -66,6 +67,9 @@ type VideoTrackConfig struct {
 	// Optional codec preferences used during TrackLocal binding.
 	// When provided, Bind selects the best negotiated codec from this list.
 	CodecPreferences []webrtc.RTPCodecParameters
+
+	// SVC configures scalable or simulcast encoder output when supported.
+	SVC *codec.SVCConfig
 }
 
 // BandwidthEstimate contains bandwidth estimation data from the network.
@@ -115,6 +119,10 @@ type VideoTrack struct {
 	codecParams webrtc.RTPCodecParameters
 	ssrc        webrtc.SSRC
 	payloadType webrtc.PayloadType
+	headerExts  []webrtc.RTPHeaderExtensionParameter
+
+	rtpPacketMutator RTPPacketMutator
+	rtpPacketObs     RTPPacketObserver
 
 	// Pre-allocated buffers for allocation-free encoding
 	encBuf     []byte
@@ -203,7 +211,7 @@ func (t *VideoTrack) ID() string {
 
 // RID returns the RTP stream ID (empty for non-simulcast).
 func (t *VideoTrack) RID() string {
-	return ""
+	return t.config.RID
 }
 
 // StreamID returns the stream ID.
@@ -272,6 +280,7 @@ func (t *VideoTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParamete
 	t.codecParams = *selected
 	t.ssrc = ctx.SSRC()
 	t.payloadType = webrtc.PayloadType(selected.PayloadType)
+	t.headerExts = cloneRTPHeaderExtensions(ctx.HeaderExtensions())
 
 	t.bound.Store(true)
 
@@ -297,6 +306,7 @@ func (t *VideoTrack) Unbind(ctx webrtc.TrackLocalContext) error {
 	}
 
 	t.writer = nil
+	t.headerExts = nil
 	return nil
 }
 
@@ -358,12 +368,21 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 		return err
 	}
 
+	var dependencyDescriptorExtID uint8
+	var dependencyDescriptor []byte
+	if provider, ok := t.enc.(encoder.DependencyDescriptorProvider); ok {
+		if extID, found := headerExtensionIDFromParameters(t.headerExts, DependencyDescriptorRTPHeaderExtensionURI); found {
+			dependencyDescriptorExtID = extID
+			dependencyDescriptor = provider.LastDependencyDescriptor()
+		}
+	}
+
 	// Write each RTP packet
 	for i := 0; i < numPackets; i++ {
 		info := t.packetInfo[i]
 		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
 
-		if _, err := t.writer.Write(pktData); err != nil {
+		if err := t.writePacketDataWithHooks(pktData, i, numPackets, dependencyDescriptorExtID, dependencyDescriptor); err != nil {
 			return err
 		}
 	}
@@ -405,7 +424,7 @@ func (t *VideoTrack) WriteEncodedData(data []byte, timestamp uint32, isKeyframe 
 		info := t.packetInfo[i]
 		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
 
-		if _, err := t.writer.Write(pktData); err != nil {
+		if err := t.writePacketDataWithHooks(pktData, i, numPackets, 0, nil); err != nil {
 			return err
 		}
 	}
@@ -426,20 +445,11 @@ func (t *VideoTrack) WriteRTP(pkt *rtp.Packet) error {
 	}
 
 	t.mu.Lock()
-	writer := t.writer
-	t.mu.Unlock()
-
-	if writer == nil {
+	defer t.mu.Unlock()
+	if t.writer == nil {
 		return ErrNotBound
 	}
-
-	buf, err := pkt.Marshal()
-	if err != nil {
-		return err
-	}
-
-	_, err = writer.Write(buf)
-	return err
+	return t.writeRTPPacketWithHooks(pkt)
 }
 
 // RequestKeyFrame requests the encoder to generate a keyframe.
@@ -825,6 +835,7 @@ func (t *VideoTrack) createEncoder() (encoder.VideoEncoder, error) {
 		if t.config.FPS != 0 {
 			cfg.FPS = t.config.FPS
 		}
+		cfg.SVC = t.config.SVC
 		return encoder.NewVP9Encoder(cfg)
 	case codec.AV1:
 		cfg := codec.DefaultAV1Config(t.config.Width, t.config.Height)
@@ -834,6 +845,7 @@ func (t *VideoTrack) createEncoder() (encoder.VideoEncoder, error) {
 		if t.config.FPS != 0 {
 			cfg.FPS = t.config.FPS
 		}
+		cfg.SVC = t.config.SVC
 		return encoder.NewAV1Encoder(cfg)
 	default:
 		return nil, ErrInvalidConfig
@@ -881,6 +893,7 @@ func (t *VideoTrack) createVideoEncoderForSelection(selected webrtc.RTPCodecPara
 			Bitrate:     t.config.Bitrate,
 			FPS:         t.config.FPS,
 			KeyInterval: int(t.config.FPS * 2),
+			SVC:         t.config.SVC,
 		})
 	}
 	return t.createEncoder()
@@ -890,6 +903,13 @@ func cloneVideoTrackConfig(cfg VideoTrackConfig) VideoTrackConfig {
 	cloned := cfg
 	if len(cfg.CodecPreferences) > 0 {
 		cloned.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), cfg.CodecPreferences...)
+	}
+	if cfg.SVC != nil {
+		svc := *cfg.SVC
+		if len(cfg.SVC.Layers) > 0 {
+			svc.Layers = append([]codec.SVCLayerConfig(nil), cfg.SVC.Layers...)
+		}
+		cloned.SVC = &svc
 	}
 	return cloned
 }
@@ -920,6 +940,10 @@ type AudioTrack struct {
 	codecParams webrtc.RTPCodecParameters
 	ssrc        webrtc.SSRC
 	payloadType webrtc.PayloadType
+	headerExts  []webrtc.RTPHeaderExtensionParameter
+
+	rtpPacketMutator RTPPacketMutator
+	rtpPacketObs     RTPPacketObserver
 
 	// Pre-allocated buffers
 	encBuf     []byte
@@ -1032,6 +1056,7 @@ func (t *AudioTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParamete
 	t.codecParams = *selected
 	t.ssrc = ctx.SSRC()
 	t.payloadType = webrtc.PayloadType(selected.PayloadType)
+	t.headerExts = cloneRTPHeaderExtensions(ctx.HeaderExtensions())
 
 	t.bound.Store(true)
 
@@ -1103,6 +1128,7 @@ func (t *AudioTrack) Unbind(ctx webrtc.TrackLocalContext) error {
 	}
 
 	t.writer = nil
+	t.headerExts = nil
 	return nil
 }
 
@@ -1151,7 +1177,7 @@ func (t *AudioTrack) WriteFrame(f *frame.AudioFrame) error {
 		info := t.packetInfo[i]
 		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
 
-		if _, err := t.writer.Write(pktData); err != nil {
+		if err := t.writePacketDataWithHooks(pktData, i, numPackets, 0, nil); err != nil {
 			return err
 		}
 	}
@@ -1190,7 +1216,7 @@ func (t *AudioTrack) WriteEncodedData(data []byte, timestamp uint32) error {
 		info := t.packetInfo[i]
 		pktData := t.packetBuf[info.Offset : info.Offset+info.Size]
 
-		if _, err := t.writer.Write(pktData); err != nil {
+		if err := t.writePacketDataWithHooks(pktData, i, numPackets, 0, nil); err != nil {
 			return err
 		}
 	}

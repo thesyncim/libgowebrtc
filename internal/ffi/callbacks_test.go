@@ -500,7 +500,8 @@ func TestPeerConnectionNativeWrapperCoverage(t *testing.T) {
 	}
 
 	encodings := make([]RTPEncodingParameters, 8)
-	params, count, err := RTPSenderGetParameters(videoSender, encodings)
+	headerExtensions := make([]RTPHeaderExtensionParameter, 8)
+	params, count, _, err := RTPSenderGetParameters(videoSender, encodings, headerExtensions)
 	if err != nil {
 		t.Fatalf("RTPSenderGetParameters: %v", err)
 	}

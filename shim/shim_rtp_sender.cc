@@ -58,7 +58,8 @@ SHIM_EXPORT void shim_rtp_sender_destroy(ShimRTPSender* sender) {
 }
 
 SHIM_EXPORT int shim_rtp_sender_get_parameters(ShimRTPSenderGetParametersParams* params) {
-    if (!params || !params->sender || !params->encodings || params->max_encodings <= 0) {
+    if (!params || !params->sender || !params->encodings || params->max_encodings <= 0 ||
+        !params->header_extensions || params->max_header_extensions <= 0) {
         return SHIM_ERROR_INVALID_PARAM;
     }
 
@@ -92,6 +93,19 @@ SHIM_EXPORT int shim_rtp_sender_get_parameters(ShimRTPSenderGetParametersParams*
         } else {
             out.scalability_mode[0] = '\0';
         }
+    }
+
+    int header_extension_count = std::min(static_cast<int>(rtp_params.header_extensions.size()), params->max_header_extensions);
+    params->out_params.header_extension_count = header_extension_count;
+    params->out_params.header_extensions = params->header_extensions;
+
+    for (int i = 0; i < header_extension_count; i++) {
+        const auto& ext = rtp_params.header_extensions[i];
+        auto& out = params->header_extensions[i];
+        memset(&out, 0, sizeof(ShimRTPHeaderExtensionParameter));
+        strncpy(out.uri, ext.uri.c_str(), sizeof(out.uri) - 1);
+        out.uri[sizeof(out.uri) - 1] = '\0';
+        out.id = ext.id;
     }
 
     strncpy(params->out_params.transaction_id, rtp_params.transaction_id.c_str(), sizeof(params->out_params.transaction_id) - 1);

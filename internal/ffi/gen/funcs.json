@@ -65,6 +65,22 @@
       "category": "VideoEncoder"
     },
     {
+      "go_name": "shimVideoEncoderGetLastDependencyDescriptor",
+      "c_name": "shim_video_encoder_get_last_dependency_descriptor",
+      "params": [
+        {
+          "name": "encoder",
+          "type": "uintptr"
+        },
+        {
+          "name": "params",
+          "type": "uintptr"
+        }
+      ],
+      "return": "int32",
+      "category": "VideoEncoder"
+    },
+    {
       "go_name": "shimVideoEncoderDestroy",
       "c_name": "shim_video_encoder_destroy",
       "params": [

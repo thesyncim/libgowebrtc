@@ -100,6 +100,13 @@ type VideoEncoderSVC interface {
 	RequestLayerKeyFrame(spatialLayer int)
 }
 
+// DependencyDescriptorProvider exposes the serialized dependency descriptor
+// payload for the most recently encoded frame when the encoder supports it.
+// The returned slice is only valid until the next EncodeInto call.
+type DependencyDescriptorProvider interface {
+	LastDependencyDescriptor() []byte
+}
+
 // LayerInfo describes an SVC/simulcast layer.
 type LayerInfo struct {
 	SpatialID  int     // Spatial layer ID (0 = lowest resolution)
