@@ -60,42 +60,97 @@ type fakeDataChannel struct {
 	onMessage func([]byte)
 	onError   func(error)
 	sent      []string
+	sendErr   error
+
+	suppressPingAck bool
 }
 
-func (f *fakeDataChannel) Label() string            { return f.label }
-func (f *fakeDataChannel) ID() int                  { return f.id }
-func (f *fakeDataChannel) ReadyStateString() string { return f.state }
-func (f *fakeDataChannel) SetOnOpen(cb func())      { f.onOpen = cb }
-func (f *fakeDataChannel) SetOnClose(cb func())     { f.onClose = cb }
+func (f *fakeDataChannel) Label() string { return f.label }
+func (f *fakeDataChannel) ID() int       { return f.id }
+func (f *fakeDataChannel) ReadyStateString() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.state
+}
+func (f *fakeDataChannel) SetOnOpen(cb func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.onOpen = cb
+}
+func (f *fakeDataChannel) SetOnClose(cb func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.onClose = cb
+}
 func (f *fakeDataChannel) SetOnMessage(cb func([]byte)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.onMessage = cb
 }
-func (f *fakeDataChannel) SetOnError(cb func(error)) { f.onError = cb }
+func (f *fakeDataChannel) SetOnError(cb func(error)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.onError = cb
+}
 func (f *fakeDataChannel) SendText(text string) error {
-	if f.state == "closed" {
+	f.mu.Lock()
+	state := f.state
+	sendErr := f.sendErr
+	onMessage := f.onMessage
+	suppressPingAck := f.suppressPingAck
+	if state != "closed" && sendErr == nil {
+		f.sent = append(f.sent, text)
+	}
+	f.mu.Unlock()
+
+	if state == "closed" {
 		return errors.New("closed")
 	}
-	f.mu.Lock()
-	f.sent = append(f.sent, text)
-	f.mu.Unlock()
-	if len(text) > len(heartbeatPingPrefix) && text[:len(heartbeatPingPrefix)] == heartbeatPingPrefix && f.onMessage != nil {
+	if sendErr != nil {
+		return sendErr
+	}
+	if !suppressPingAck && strings.HasPrefix(text, heartbeatPingPrefix) && onMessage != nil {
 		token := text[len(heartbeatPingPrefix):]
-		f.onMessage([]byte(heartbeatAckPrefix + token))
+		onMessage([]byte(heartbeatAckPrefix + token))
 	}
 	return nil
 }
 func (f *fakeDataChannel) open() {
+	f.mu.Lock()
 	f.state = "open"
-	if f.onOpen != nil {
-		f.onOpen()
+	onOpen := f.onOpen
+	f.mu.Unlock()
+	if onOpen != nil {
+		onOpen()
 	}
 }
 
 func (f *fakeDataChannel) close() {
+	f.mu.Lock()
 	f.state = "closed"
-	if f.onClose != nil {
-		f.onClose()
+	onClose := f.onClose
+	f.mu.Unlock()
+	if onClose != nil {
+		onClose()
 	}
+}
+
+func (f *fakeDataChannel) setSendErr(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sendErr = err
+}
+
+func (f *fakeDataChannel) setSuppressPingAck(suppress bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.suppressPingAck = suppress
+}
+
+func (f *fakeDataChannel) sentMessages() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.sent...)
 }
 
 type fakePublishedVideo struct {
@@ -153,6 +208,46 @@ func TestPolicyForBrowser(t *testing.T) {
 	safari := PolicyForBrowser("safari")
 	if safari.SupportsDependencyDescriptor || safari.SupportsLayeredVP9 {
 		t.Fatalf("safari policy = %+v, want conservative layered support flags disabled", safari)
+	}
+}
+
+func TestNewSessionsAndTrackWrappers(t *testing.T) {
+	pionPC := mustNewPionPeerConnection(t)
+	pionSession := NewPionSession(pionPC, nil, SessionConfig{})
+	if pionSession == nil {
+		t.Fatal("NewPionSession() = nil")
+	}
+	if got := pionSession.Snapshot().Browser; got != "chrome" {
+		t.Fatalf("pionSession browser = %q, want chrome", got)
+	}
+
+	dc, err := pionPC.CreateDataChannel("control", nil)
+	if err != nil {
+		t.Fatalf("CreateDataChannel: %v", err)
+	}
+	pionSession.ObservePionDataChannel(dc)
+	snapshot := pionSession.Snapshot()
+	if len(snapshot.DataChannels) != 1 {
+		t.Fatalf("len(DataChannels) = %d, want 1", len(snapshot.DataChannels))
+	}
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+	defer waitCancel()
+	if err := pionSession.WaitForDataChannelOpen(waitCtx, ""); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForDataChannelOpen(any) error = %v, want deadline exceeded on unopened pion data channel", err)
+	}
+
+	pionSession.PionOnTrack()(nil, nil)
+	if failures := pionSession.Snapshot().Failures; len(failures) == 0 || !strings.Contains(failures[0], "nil pion remote track") {
+		t.Fatalf("pion failures = %v, want nil-track failure", failures)
+	}
+
+	pcSession := NewPCSession(nil, nil, SessionConfig{})
+	if pcSession == nil {
+		t.Fatal("NewPCSession() = nil")
+	}
+	pcSession.PCOnTrack()(nil, nil, nil)
+	if failures := pcSession.Snapshot().Failures; len(failures) == 0 || !strings.Contains(failures[0], "nil pc remote track") {
+		t.Fatalf("pc failures = %v, want nil-track failure", failures)
 	}
 }
 
@@ -292,6 +387,71 @@ func TestSessionWaitersAndCodecSwitch(t *testing.T) {
 	}
 }
 
+func TestSessionObserveRemoteTracks(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{
+		FreezeThreshold:   5 * time.Millisecond,
+		AudioGapThreshold: 5 * time.Millisecond,
+		EventHistory:      8,
+	})
+
+	video := newFakeRemoteVideoTrack("video-1", "stream-1", "h", codec.VP8, webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
+		PayloadType:        96,
+	})
+	audio := newFakeRemoteAudioTrack("audio-1", "stream-1", "", codec.Opus, webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
+		PayloadType:        111,
+	})
+
+	session.ObserveRemoteTrack(nil)
+	session.ObserveRemoteTrack(video)
+	session.ObserveRemoteTrack(audio)
+
+	video.emitFrame(&frame.VideoFrame{Width: 640, Height: 360, IsKeyframe: true})
+	video.emitCodecChange(pionrecv.CodecChange{
+		PreviousType:        codec.VP8,
+		CurrentType:         codec.H264,
+		PreviousCodec:       video.CodecParameters(),
+		CurrentCodec:        webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}, PayloadType: 102},
+		PreviousPayloadType: video.PayloadType(),
+		CurrentPayloadType:  102,
+	})
+	audio.emitFrame(frame.NewAudioFrameFromS16([]int16{100, -100, 200, -200}, 48000, 2))
+	audio.emitCodecChange(pionrecv.CodecChange{
+		PreviousType:        codec.Opus,
+		CurrentType:         codec.PCMU,
+		PreviousCodec:       audio.CodecParameters(),
+		CurrentCodec:        webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU}, PayloadType: 0},
+		PreviousPayloadType: audio.PayloadType(),
+		CurrentPayloadType:  0,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := session.WaitForVideoContinuous(ctx, "video-1"); err != nil {
+		t.Fatalf("WaitForVideoContinuous: %v", err)
+	}
+	if err := session.WaitForAudioContinuous(ctx, "audio-1"); err != nil {
+		t.Fatalf("WaitForAudioContinuous: %v", err)
+	}
+
+	snapshot := session.Snapshot()
+	videoSnap := snapshot.VideoTracks["video-1"]
+	if videoSnap.Source != "manual" || videoSnap.FrameCount != 1 || videoSnap.KeyframeCount != 1 {
+		t.Fatalf("video snapshot = %+v", videoSnap)
+	}
+	if videoSnap.CurrentMimeType != webrtc.MimeTypeH264 || videoSnap.CurrentRID != "" {
+		t.Fatalf("video mime/rid = %q/%q, want %q/empty", videoSnap.CurrentMimeType, videoSnap.CurrentRID, webrtc.MimeTypeH264)
+	}
+	audioSnap := snapshot.AudioTracks["audio-1"]
+	if audioSnap.Source != "manual" || audioSnap.FrameCount != 1 {
+		t.Fatalf("audio snapshot = %+v", audioSnap)
+	}
+	if audioSnap.CurrentMimeType != webrtc.MimeTypePCMU || audioSnap.CurrentSampleRate != 48000 || audioSnap.CurrentChannels != 2 {
+		t.Fatalf("audio snapshot codec/config = %+v", audioSnap)
+	}
+}
+
 func TestSessionDataChannelHeartbeatsAndScenarioLab(t *testing.T) {
 	session := newSession(nil, nil, SessionConfig{
 		EnableDataChannelHeartbeats: true,
@@ -408,6 +568,216 @@ func TestSessionDataChannelReobserveReplacesAdapterAndRestartsHeartbeats(t *test
 		return ok && dc.State == "open" && dc.HeartbeatAcked > ackedBefore
 	}); err != nil {
 		t.Fatalf("wait for replacement heartbeat ack: %v", err)
+	}
+}
+
+func TestSessionWaitForAudioContinuousAndDataChannelOpen(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{})
+	session.mu.Lock()
+	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1"}
+	session.signalLocked()
+	session.mu.Unlock()
+
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer timeoutCancel()
+	if err := session.WaitForAudioContinuous(timeoutCtx, "audio-1"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForAudioContinuous(timeout) error = %v, want deadline exceeded", err)
+	}
+
+	session.mu.Lock()
+	session.audioTracks["audio-1"].frameCount = 1
+	session.signalLocked()
+	session.mu.Unlock()
+
+	successCtx, successCancel := context.WithTimeout(context.Background(), time.Second)
+	defer successCancel()
+	if err := session.WaitForAudioContinuous(successCtx, "audio-1"); err != nil {
+		t.Fatalf("WaitForAudioContinuous(success): %v", err)
+	}
+
+	dc := &fakeDataChannel{label: "chat", id: 9, state: "connecting"}
+	session.observeDataChannel(dc)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		dc.open()
+	}()
+	if err := session.WaitForDataChannelOpen(successCtx, "chat"); err != nil {
+		t.Fatalf("WaitForDataChannelOpen(chat): %v", err)
+	}
+	if err := session.WaitForDataChannelOpen(successCtx, ""); err != nil {
+		t.Fatalf("WaitForDataChannelOpen(any): %v", err)
+	}
+
+	missingCtx, missingCancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer missingCancel()
+	if err := session.WaitForDataChannelOpen(missingCtx, "missing"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForDataChannelOpen(missing) error = %v, want deadline exceeded", err)
+	}
+}
+
+func TestSessionValidateAggregation(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{EnableDataChannelHeartbeats: true, EventHistory: 8})
+	session.recordFailure("boom")
+
+	session.mu.Lock()
+	session.appendConnectionStateLocked(time.Now(), webrtc.PeerConnectionStateDisconnected)
+	session.appendSignalingStateLocked(time.Now(), webrtc.SignalingStateHaveLocalOffer)
+	session.videoTracks["video-1"] = &videoTrackState{id: "video-1"}
+	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1", frameCount: 1, freezeCount: 1}
+	session.dataChannels[dataChannelKey("control", 7)] = &dataChannelState{
+		label:           "control",
+		id:              7,
+		state:           "open",
+		heartbeatMissed: 2,
+		pendingAcks:     make(map[string]time.Time),
+	}
+	session.recordWarningLocked("warn")
+	snapshot := session.snapshotLocked()
+	session.mu.Unlock()
+
+	if len(snapshot.Failures) != 1 || snapshot.Failures[0] != "boom" {
+		t.Fatalf("snapshot failures = %v, want [boom]", snapshot.Failures)
+	}
+	if len(snapshot.Warnings) != 1 || snapshot.Warnings[0] != "warn" {
+		t.Fatalf("snapshot warnings = %v, want [warn]", snapshot.Warnings)
+	}
+
+	err := session.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want aggregated error")
+	}
+	for _, want := range []string{
+		"peer connection state is disconnected",
+		"signaling state is have-local-offer",
+		`video track "video-1" has no decoded frames`,
+		`audio track "audio-1" experienced freezes`,
+		`data channel "control" missed 2 heartbeats`,
+		"boom",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("Validate() error = %q, want substring %q", err.Error(), want)
+		}
+	}
+}
+
+func TestSessionHandleDataChannelMessageBranches(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{})
+	dc := &fakeDataChannel{label: "control", id: 7, state: "open"}
+	session.observeDataChannel(dc)
+
+	session.mu.Lock()
+	state := session.dataChannels[dataChannelKey("control", 7)]
+	state.pendingAcks["ack-token"] = time.Now().Add(-10 * time.Millisecond)
+	session.mu.Unlock()
+
+	session.handleDataChannelMessage(state, []byte(heartbeatPingPrefix+"ping-token"))
+	session.handleDataChannelMessage(state, []byte(heartbeatAckPrefix+"ack-token"))
+	session.handleDataChannelMessage(state, []byte("hello"))
+
+	snapshot := session.Snapshot().DataChannels[dataChannelKey("control", 7)]
+	if snapshot.HeartbeatReceived != 1 || snapshot.HeartbeatAcked != 1 {
+		t.Fatalf("heartbeat counts = %+v, want received=1 acked=1", snapshot)
+	}
+	if snapshot.UserMessagesReceived != 1 || snapshot.UserBytesReceived != uint64(len("hello")) {
+		t.Fatalf("user counts = %+v, want one received message", snapshot)
+	}
+	if snapshot.LastHeartbeatRTT <= 0 {
+		t.Fatalf("LastHeartbeatRTT = %v, want > 0", snapshot.LastHeartbeatRTT)
+	}
+	sent := dc.sentMessages()
+	if len(sent) != 1 || sent[0] != heartbeatAckPrefix+"ping-token" {
+		t.Fatalf("sent = %v, want heartbeat ack", sent)
+	}
+}
+
+func TestSessionHeartbeatMissAndSendError(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{
+		EnableDataChannelHeartbeats: true,
+		HeartbeatInterval:           10 * time.Millisecond,
+		HeartbeatTimeout:            10 * time.Millisecond,
+	})
+	dc := &fakeDataChannel{label: "control", id: 11, state: "open"}
+	dc.setSuppressPingAck(true)
+	session.observeDataChannel(dc)
+	defer dc.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dcSnap, ok := snapshot.DataChannels[dataChannelKey("control", 11)]
+		return ok && dcSnap.HeartbeatMissed > 0
+	}); err != nil {
+		t.Fatalf("wait for heartbeat miss: %v", err)
+	}
+
+	dc.setSendErr(errors.New("send failed"))
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dcSnap, ok := snapshot.DataChannels[dataChannelKey("control", 11)]
+		return ok && dcSnap.LastError == "send failed"
+	}); err != nil {
+		t.Fatalf("wait for heartbeat send error: %v", err)
+	}
+}
+
+func TestSessionTrackStateHelpersAndAudioLevels(t *testing.T) {
+	videoState := &videoTrackState{
+		id:            "video-1",
+		streamID:      "stream-1",
+		rid:           "f",
+		source:        "manual",
+		currentWidth:  320,
+		currentHeight: 180,
+		lastFrameAt:   time.Now().Add(-20 * time.Millisecond),
+	}
+	videoState.observeFrameLocked(&frame.VideoFrame{Width: 640, Height: 360, IsKeyframe: true}, 5*time.Millisecond, 4)
+	videoState.observeCodecChangeLocked(pionrecv.CodecChange{
+		CurrentType:  codec.H264,
+		CurrentCodec: webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}},
+	}, 4)
+	videoSnap := videoState.snapshotLocked()
+	if videoSnap.FrameCount != 1 || videoSnap.KeyframeCount != 1 || videoSnap.FreezeCount != 1 || videoSnap.ResolutionChanges != 1 {
+		t.Fatalf("video snapshot = %+v", videoSnap)
+	}
+	if videoSnap.CurrentMimeType != webrtc.MimeTypeH264 || videoSnap.Continuous {
+		t.Fatalf("video snapshot codec/continuous = %+v", videoSnap)
+	}
+	videoState.resetLocked()
+	if snap := videoState.snapshotLocked(); snap.FrameCount != 0 || snap.CurrentWidth != 0 || snap.CurrentMimeType != webrtc.MimeTypeH264 {
+		t.Fatalf("video snapshot after reset = %+v", snap)
+	}
+
+	silent := frame.NewAudioFrameFromS16([]int16{0, 0, 0, 0}, 48000, 2)
+	clipped := frame.NewAudioFrameFromS16([]int16{32767, -32767}, 44100, 1)
+	audioState := &audioTrackState{
+		id:       "audio-1",
+		streamID: "stream-1",
+		source:   "manual",
+	}
+	audioState.observeFrameLocked(nil, 5*time.Millisecond, 4)
+	audioState.observeFrameLocked(silent, 5*time.Millisecond, 4)
+	audioState.lastFrameAt = time.Now().Add(-20 * time.Millisecond)
+	audioState.observeFrameLocked(clipped, 5*time.Millisecond, 4)
+	audioState.observeCodecChangeLocked(pionrecv.CodecChange{
+		CurrentType:  codec.PCMU,
+		CurrentCodec: webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU}},
+	}, 4)
+	audioSnap := audioState.snapshotLocked()
+	if audioSnap.FrameCount != 2 || audioSnap.FreezeCount != 1 || len(audioSnap.ConfigSwitches) != 1 {
+		t.Fatalf("audio snapshot = %+v", audioSnap)
+	}
+	if audioSnap.ActiveFrames != 1 || audioSnap.SilentFrames != 1 || audioSnap.ClippedFrames != 1 {
+		t.Fatalf("audio activity snapshot = %+v", audioSnap)
+	}
+	peak, rms, clippedFlag := audioLevels(clipped)
+	if peak <= 0 || rms <= 0 || !clippedFlag {
+		t.Fatalf("audioLevels(clipped) = (%v, %v, %v), want positive clipped levels", peak, rms, clippedFlag)
+	}
+	if peak, rms, clippedFlag = audioLevels(nil); peak != 0 || rms != 0 || clippedFlag {
+		t.Fatalf("audioLevels(nil) = (%v, %v, %v), want zeros/false", peak, rms, clippedFlag)
+	}
+	audioState.resetLocked()
+	if snap := audioState.snapshotLocked(); snap.FrameCount != 0 || snap.CurrentSampleRate != 0 || snap.CurrentMimeType != webrtc.MimeTypePCMU {
+		t.Fatalf("audio snapshot after reset = %+v", snap)
 	}
 }
 

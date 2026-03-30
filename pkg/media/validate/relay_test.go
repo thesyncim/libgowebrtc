@@ -157,3 +157,66 @@ func TestICEEdgeRelayApplyImpairmentLossDuplicateAndReorder(t *testing.T) {
 func randSourceForTest(seed int64) relayRandomSource {
 	return newRelayRandomSource(seed)
 }
+
+func TestRelayRandomHelpersAndFallbacks(t *testing.T) {
+	relay := &ICEEdgeRelay{rng: randSourceForTest(2)}
+	if got := relay.randomInt63n(0); got != 0 {
+		t.Fatalf("randomInt63n(0) = %d, want 0", got)
+	}
+	if got := relay.randomInt63n(5); got < 0 || got >= 5 {
+		t.Fatalf("randomInt63n(5) = %d, want [0,5)", got)
+	}
+	if _, ok := newRelayRandomSource(0).(cryptoRelayRandom); !ok {
+		t.Fatal("newRelayRandomSource(0) did not return cryptoRelayRandom")
+	}
+	if _, ok := newRelayRandomSource(1).(*seededRelayRandom); !ok {
+		t.Fatal("newRelayRandomSource(1) did not return *seededRelayRandom")
+	}
+
+	cryptoSource := cryptoRelayRandom{}
+	if got := cryptoSource.Int63n(0); got != 0 {
+		t.Fatalf("crypto Int63n(0) = %d, want 0", got)
+	}
+	if got := cryptoSource.Int63n(9); got < 0 || got >= 9 {
+		t.Fatalf("crypto Int63n(9) = %d, want [0,9)", got)
+	}
+	if got := cryptoSource.Float64(); got < 0 || got >= 1 {
+		t.Fatalf("crypto Float64() = %v, want [0,1)", got)
+	}
+
+	seeded := &seededRelayRandom{state: 1}
+	if got := seeded.Int63n(7); got < 0 || got >= 7 {
+		t.Fatalf("seeded Int63n(7) = %d, want [0,7)", got)
+	}
+	if got := seeded.Float64(); got < 0 || got >= 1 {
+		t.Fatalf("seeded Float64() = %v, want [0,1)", got)
+	}
+
+	_ = cryptoUint64()
+
+	addr := mustResolveUDPAddr("definitely-not-an-address")
+	if addr == nil || !addr.IP.Equal(net.IPv4(127, 0, 0, 1)) {
+		t.Fatalf("mustResolveUDPAddr fallback = %+v, want 127.0.0.1", addr)
+	}
+}
+
+func TestICEEdgeRelayScheduleSendBitrateCap(t *testing.T) {
+	relay := &ICEEdgeRelay{rng: randSourceForTest(3)}
+	sentAt := make(chan time.Time, 1)
+	start := time.Now()
+	relay.scheduleSend(NetworkImpairment{
+		Delay:         5 * time.Millisecond,
+		BitrateCapBps: 8000,
+	}, []byte("1234567890"), func([]byte) {
+		sentAt <- time.Now()
+	})
+
+	select {
+	case at := <-sentAt:
+		if elapsed := at.Sub(start); elapsed < 10*time.Millisecond {
+			t.Fatalf("scheduleSend elapsed = %v, want bitrate/delay scheduling", elapsed)
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("scheduleSend timed out")
+	}
+}
