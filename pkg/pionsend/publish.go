@@ -126,12 +126,13 @@ func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedV
 	}
 
 	runtimeEncodings := make([]*encodingRuntime, 0, len(layers))
+	selectedCodec := codecFromPreferences(codecPreferences)
 	for i, layer := range layers {
 		videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
 			ID:               cfg.TrackID,
 			StreamID:         cfg.StreamID,
 			RID:              layer.RID,
-			Codec:            codecFromPreferences(codecPreferences),
+			Codec:            selectedCodec,
 			Width:            layer.Width,
 			Height:           layer.Height,
 			Bitrate:          layer.Bitrate,

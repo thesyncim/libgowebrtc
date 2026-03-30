@@ -2,6 +2,7 @@ package validate
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -71,6 +72,9 @@ func (f *fakeDataChannel) SetOnMessage(cb func([]byte)) {
 }
 func (f *fakeDataChannel) SetOnError(cb func(error)) { f.onError = cb }
 func (f *fakeDataChannel) SendText(text string) error {
+	if f.state == "closed" {
+		return errors.New("closed")
+	}
 	f.mu.Lock()
 	f.sent = append(f.sent, text)
 	f.mu.Unlock()
@@ -84,6 +88,13 @@ func (f *fakeDataChannel) open() {
 	f.state = "open"
 	if f.onOpen != nil {
 		f.onOpen()
+	}
+}
+
+func (f *fakeDataChannel) close() {
+	f.state = "closed"
+	if f.onClose != nil {
+		f.onClose()
 	}
 }
 
@@ -351,6 +362,92 @@ func TestSessionDataChannelHeartbeatsAndScenarioLab(t *testing.T) {
 	}
 	if len(userMessages) != 2 || userMessages[0] != "hello" || userMessages[1] != "world" {
 		t.Fatalf("sent user data channel messages = %v (all sent=%v), want hello/world", userMessages, dc.sent)
+	}
+}
+
+func TestSessionDataChannelReobserveReplacesAdapterAndRestartsHeartbeats(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{
+		EnableDataChannelHeartbeats: true,
+		HeartbeatInterval:           10 * time.Millisecond,
+		HeartbeatTimeout:            50 * time.Millisecond,
+	})
+
+	first := &fakeDataChannel{label: "control", id: 7, state: "connecting"}
+	session.observeDataChannel(first)
+	first.open()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.HeartbeatAcked > 0
+	}); err != nil {
+		t.Fatalf("wait for first heartbeat ack: %v", err)
+	}
+
+	first.close()
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.State == "closed"
+	}); err != nil {
+		t.Fatalf("wait for close state: %v", err)
+	}
+
+	second := &fakeDataChannel{label: "control", id: 7, state: "connecting"}
+	session.observeDataChannel(second)
+
+	snapshot := session.Snapshot()
+	if got := snapshot.DataChannels[dataChannelKey("control", 7)].State; got != "connecting" {
+		t.Fatalf("state after re-observe = %q, want connecting", got)
+	}
+
+	ackedBefore := snapshot.DataChannels[dataChannelKey("control", 7)].HeartbeatAcked
+	second.open()
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.State == "open" && dc.HeartbeatAcked > ackedBefore
+	}); err != nil {
+		t.Fatalf("wait for replacement heartbeat ack: %v", err)
+	}
+}
+
+func TestSessionResetUsesCurrentDataChannelReadyState(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{})
+	dc := &fakeDataChannel{label: "control", id: 7, state: "open"}
+	session.observeDataChannel(dc)
+
+	dc.state = "closed"
+	session.Reset()
+
+	snapshot := session.Snapshot()
+	dcSnap, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+	if !ok {
+		t.Fatal("data channel snapshot missing after reset")
+	}
+	if dcSnap.State != "closed" {
+		t.Fatalf("State after reset = %q, want closed", dcSnap.State)
+	}
+	if len(dcSnap.StateHistory) != 1 || dcSnap.StateHistory[0].State != "closed" {
+		t.Fatalf("StateHistory after reset = %+v, want single closed state", dcSnap.StateHistory)
+	}
+}
+
+func TestHasOpenDataChannel(t *testing.T) {
+	snapshot := SessionSnapshot{
+		DataChannels: map[string]DataChannelSnapshot{
+			dataChannelKey("control", 7): {Label: "control", ID: 7, State: "closed"},
+			dataChannelKey("chat", 9):    {Label: "chat", ID: 9, State: "open"},
+		},
+	}
+
+	if !hasOpenDataChannel(snapshot, "") {
+		t.Fatal("hasOpenDataChannel(empty label) = false, want true when any channel is open")
+	}
+	if hasOpenDataChannel(snapshot, "control") {
+		t.Fatal("hasOpenDataChannel(control) = true, want false for closed channel")
+	}
+	if !hasOpenDataChannel(snapshot, "chat") {
+		t.Fatal("hasOpenDataChannel(chat) = false, want true for open channel")
 	}
 }
 

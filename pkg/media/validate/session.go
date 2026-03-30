@@ -497,6 +497,7 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 	}
 
 	key := dataChannelKey(adapter.Label(), adapter.ID())
+	readyState := adapter.ReadyStateString()
 
 	s.mu.Lock()
 	state, ok := s.dataChannels[key]
@@ -505,11 +506,22 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 			adapter:     adapter,
 			label:       adapter.Label(),
 			id:          adapter.ID(),
-			state:       adapter.ReadyStateString(),
+			state:       readyState,
 			pendingAcks: make(map[string]time.Time),
 		}
 		state.appendStateLocked(state.state, s.cfg.EventHistory)
 		s.dataChannels[key] = state
+	} else {
+		state.adapter = adapter
+		state.label = adapter.Label()
+		state.id = adapter.ID()
+		if readyState == "" {
+			readyState = state.state
+		}
+		if state.state != readyState || len(state.stateHistory) == 0 {
+			state.state = readyState
+			state.appendStateLocked(readyState, s.cfg.EventHistory)
+		}
 	}
 	s.signalLocked()
 	s.mu.Unlock()
@@ -522,6 +534,7 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 		if state.openedAt.IsZero() {
 			state.openedAt = time.Now()
 		}
+		clear(state.pendingAcks)
 		state.appendStateLocked("open", s.cfg.EventHistory)
 		s.signalLocked()
 		if s.cfg.EnableDataChannelHeartbeats && !state.heartbeatOn {
@@ -535,6 +548,8 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 		state.state = "closed"
 		state.closeTransitions++
 		state.closedAt = time.Now()
+		state.heartbeatOn = false
+		clear(state.pendingAcks)
 		state.appendStateLocked("closed", s.cfg.EventHistory)
 		s.signalLocked()
 	})
@@ -598,6 +613,7 @@ func (s *Session) runHeartbeatLoop(state *dataChannelState) {
 	for range ticker.C {
 		s.mu.Lock()
 		if state.state == "closed" {
+			state.heartbeatOn = false
 			s.mu.Unlock()
 			return
 		}
@@ -806,13 +822,7 @@ func (s *Session) WaitForVideoResolution(ctx context.Context, trackID string, wi
 // WaitForDataChannelOpen waits until the named data channel reports an open state.
 func (s *Session) WaitForDataChannelOpen(ctx context.Context, label string) error {
 	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
-		for _, dc := range snapshot.DataChannels {
-			if label != "" && dc.Label != label {
-				continue
-			}
-			return dc.State == "open"
-		}
-		return false
+		return hasOpenDataChannel(snapshot, label)
 	})
 }
 
@@ -1269,6 +1279,7 @@ func (d *dataChannelState) snapshotLocked() DataChannelSnapshot {
 }
 
 func (d *dataChannelState) resetLocked(history int) {
+	d.state = d.adapter.ReadyStateString()
 	d.openedAt = time.Time{}
 	d.closedAt = time.Time{}
 	d.openTransitions = 0
@@ -1286,9 +1297,12 @@ func (d *dataChannelState) resetLocked(history int) {
 	d.lastHeartbeatAckAt = time.Time{}
 	d.lastError = ""
 	d.stats = nil
+	if d.state == "closed" {
+		d.heartbeatOn = false
+	}
 	clear(d.pendingAcks)
 	d.stateHistory = nil
-	d.appendStateLocked(d.adapter.ReadyStateString(), history)
+	d.appendStateLocked(d.state, history)
 }
 
 func audioLevels(f *frame.AudioFrame) (peakLevel, rmsLevel float64, clipped bool) {
@@ -1349,6 +1363,24 @@ func appendLimited[T any](slice []T, value T, limit int) []T {
 
 func dataChannelKey(label string, id int) string {
 	return fmt.Sprintf("%s:%d", label, id)
+}
+
+func hasOpenDataChannel(snapshot SessionSnapshot, label string) bool {
+	if label != "" {
+		for _, dc := range snapshot.DataChannels {
+			if dc.Label == label {
+				return dc.State == "open"
+			}
+		}
+		return false
+	}
+
+	for _, dc := range snapshot.DataChannels {
+		if dc.State == "open" {
+			return true
+		}
+	}
+	return false
 }
 
 func errString(err error) string {
