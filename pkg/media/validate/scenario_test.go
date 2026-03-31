@@ -232,6 +232,55 @@ func TestScenarioLabRunStepWaitsForRecoveryExpectations(t *testing.T) {
 	}
 }
 
+func TestScenarioLabRunStepExpectationTracksFrameDeltasAndHold(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{SwitchRecoveryThreshold: 120 * time.Millisecond})
+	session.mu.Lock()
+	session.videoTracks["video-1"] = &videoTrackState{id: "video-1", frameCount: 3}
+	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1", frameCount: 5}
+	session.mu.Unlock()
+
+	dc := &fakeDataChannel{label: "control", id: 7, state: "open"}
+	session.observeDataChannel(dc)
+
+	start := time.Now()
+	lab := NewScenarioLab(session, LabConfig{})
+	err := lab.Run(context.Background(), ScenarioScript{
+		Steps: []ScenarioStep{{
+			Name:   "delta-hold",
+			Action: ScenarioActionExternal,
+			Callback: func(context.Context, *Session) error {
+				go func() {
+					time.Sleep(15 * time.Millisecond)
+					session.mu.Lock()
+					session.videoTracks["video-1"].frameCount = 5
+					session.audioTracks["audio-1"].frameCount = 7
+					session.signalLocked()
+					session.mu.Unlock()
+				}()
+				return nil
+			},
+			Expect: ScenarioExpectation{
+				Within:                   80 * time.Millisecond,
+				HoldFor:                  20 * time.Millisecond,
+				VideoTrackID:             "video-1",
+				MinNewVideoFrames:        2,
+				AudioTrackID:             "audio-1",
+				MinNewAudioFrames:        2,
+				DataChannelLabel:         "control",
+				DataChannelOpen:          true,
+				NoNewHeartbeatMisses:     true,
+				NoNewDataChannelClosures: true,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Run(delta hold expectation): %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < 30*time.Millisecond {
+		t.Fatalf("elapsed = %v, want hold-aware wait", elapsed)
+	}
+}
+
 func TestScenarioLabRunStepExpectationTimeoutIncludesReason(t *testing.T) {
 	session := newSession(nil, nil, SessionConfig{SwitchRecoveryThreshold: 20 * time.Millisecond})
 	session.mu.Lock()
@@ -265,6 +314,25 @@ func TestScenarioLabRunStepExpectationTimeoutIncludesReason(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "scenario expectation not met within") || !strings.Contains(err.Error(), `video track "video-1" RID is "q"`) {
 		t.Fatalf("Run(timeout expectation) error = %v, want detailed unmet reason", err)
+	}
+}
+
+func TestScenarioLabRunStepRejectsAmbiguousUnlabeledDataChannelActions(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{})
+	lab := NewScenarioLab(session, LabConfig{})
+	ctx := context.Background()
+
+	session.observeDataChannel(&fakeDataChannel{label: "control", id: 1, state: "open"})
+	session.observeDataChannel(&fakeDataChannel{label: "chat", id: 2, state: "open"})
+
+	for _, step := range []ScenarioStep{
+		{Action: ScenarioActionDataChannelBurst, TextMessages: []string{"hello"}},
+		{Action: ScenarioActionPauseHeartbeats},
+		{Action: ScenarioActionResumeHeartbeats},
+	} {
+		if err := lab.runStep(ctx, step); err == nil || !strings.Contains(err.Error(), "multiple data channels present; label is required") {
+			t.Fatalf("runStep(%s) error = %v, want ambiguity error", step.Action, err)
+		}
 	}
 }
 
