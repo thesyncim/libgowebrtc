@@ -4,11 +4,14 @@ import (
 	"time"
 
 	"github.com/pion/webrtc/v4"
+
+	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
 func (s *Session) applyStatsReportLocked(report webrtc.StatsReport) {
 	remoteInbound := make(map[string]webrtc.RemoteInboundRTPStreamStats)
 	candidatePairs := make(map[string]webrtc.ICECandidatePairStats)
+	codecStats := make(map[string]webrtc.CodecStats)
 
 	for _, stats := range report {
 		switch typed := stats.(type) {
@@ -16,6 +19,8 @@ func (s *Session) applyStatsReportLocked(report webrtc.StatsReport) {
 			remoteInbound[typed.ID] = typed
 		case webrtc.ICECandidatePairStats:
 			candidatePairs[typed.ID] = typed
+		case webrtc.CodecStats:
+			codecStats[typed.ID] = typed
 		}
 	}
 
@@ -40,10 +45,10 @@ func (s *Session) applyStatsReportLocked(report webrtc.StatsReport) {
 			s.transportSamples = appendLimited(s.transportSamples, sample, s.cfg.EventHistory)
 
 		case webrtc.InboundRTPStreamStats:
-			s.matchRTPStatsLocked(inboundSample(typed))
+			s.matchRTPStatsLocked(enrichCodecSample(inboundSample(typed), codecStats))
 
 		case webrtc.OutboundRTPStreamStats:
-			sample := outboundSample(typed)
+			sample := enrichCodecSample(outboundSample(typed), codecStats)
 			if remote, ok := remoteInbound[typed.RemoteID]; ok {
 				sample.RemoteRoundTripTime = durationSeconds(remote.RoundTripTime)
 				sample.FractionLost = remote.FractionLost
@@ -74,8 +79,22 @@ func (s *Session) applyStatsReportLocked(report webrtc.StatsReport) {
 	}
 }
 
+func enrichCodecSample(sample RTPStatsSample, codecStats map[string]webrtc.CodecStats) RTPStatsSample {
+	if sample.CodecID == "" {
+		return sample
+	}
+	stats, ok := codecStats[sample.CodecID]
+	if !ok {
+		return sample
+	}
+	sample.CodecMimeType = stats.MimeType
+	sample.CodecPayloadType = stats.PayloadType
+	return sample
+}
+
 func (s *Session) matchRTPStatsLocked(sample RTPStatsSample) {
 	if state := s.matchVideoTrackLocked(sample); state != nil {
+		state.observeStatsCodecLocked(sample, s.cfg.EventHistory)
 		if sample.MID != "" {
 			state.currentMID = sample.MID
 		}
@@ -94,6 +113,7 @@ func (s *Session) matchRTPStatsLocked(sample RTPStatsSample) {
 		return
 	}
 	if state := s.matchAudioTrackLocked(sample); state != nil {
+		state.observeStatsCodecLocked(sample, s.cfg.EventHistory)
 		state.stats = appendLimited(state.stats, sample, s.cfg.EventHistory)
 		return
 	}
@@ -127,6 +147,11 @@ func (s *Session) matchVideoTrackLocked(sample RTPStatsSample) *videoTrackState 
 			}
 		}
 	}
+	if sample.TrackID == "" && len(s.videoTracks) == 1 && sample.Kind == "video" {
+		for _, state := range s.videoTracks {
+			return state
+		}
+	}
 	return nil
 }
 
@@ -139,6 +164,11 @@ func (s *Session) matchAudioTrackLocked(sample RTPStatsSample) *audioTrackState 
 			return state
 		}
 		if sample.RID != "" && state.rid != "" && sample.RID == state.rid {
+			return state
+		}
+	}
+	if sample.TrackID == "" && len(s.audioTracks) == 1 && sample.Kind == "audio" {
+		for _, state := range s.audioTracks {
 			return state
 		}
 	}
@@ -206,4 +236,19 @@ func outboundSample(stats webrtc.OutboundRTPStreamStats) RTPStatsSample {
 
 func durationSeconds(seconds float64) time.Duration {
 	return time.Duration(seconds * float64(time.Second))
+}
+
+func codecParametersForStatsSample(kind, mimeType string, payloadType webrtc.PayloadType) webrtc.RTPCodecParameters {
+	params := webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType: mimeType,
+		},
+		PayloadType: payloadType,
+	}
+	if parsed, ok := codec.ParseMimeType(mimeType); ok {
+		params.ClockRate = parsed.ClockRate()
+	} else if kind == "video" {
+		params.ClockRate = 90000
+	}
+	return params
 }

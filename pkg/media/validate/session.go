@@ -121,6 +121,7 @@ type videoTrackState struct {
 
 	currentCodec codec.Type
 	currentMime  string
+	currentPT    webrtc.PayloadType
 
 	startedAt         time.Time
 	lastFrameAt       time.Time
@@ -152,6 +153,7 @@ type audioTrackState struct {
 
 	currentCodec codec.Type
 	currentMime  string
+	currentPT    webrtc.PayloadType
 
 	startedAt         time.Time
 	lastFrameAt       time.Time
@@ -268,7 +270,7 @@ func newSession(peer peerAdapter, registry *media.RemoteStreamRegistry, cfg Sess
 		dataChannels: make(map[string]*dataChannelState),
 		changed:      make(chan struct{}),
 	}
-	s.refreshLocked(time.Now())
+	s.refresh(time.Now())
 	return s
 }
 
@@ -435,6 +437,7 @@ func (s *Session) ensureVideoTrackStateLocked(track media.RemoteVideoTrack, sour
 	if codecTrack, ok := track.(media.RemoteCodecTrack); ok {
 		state.currentCodec = codecTrack.Codec()
 		state.currentMime = codecTrack.CodecParameters().MimeType
+		state.currentPT = codecTrack.PayloadType()
 	}
 	if pionTrack, ok := track.(media.PionRemoteVideoTrack); ok {
 		if decoded := pionTrack.DecodedTrack(); decoded != nil && decoded.TrackRemote() != nil {
@@ -470,6 +473,7 @@ func (s *Session) ensureAudioTrackStateLocked(track media.RemoteAudioTrack, sour
 	if codecTrack, ok := track.(media.RemoteCodecTrack); ok {
 		state.currentCodec = codecTrack.Codec()
 		state.currentMime = codecTrack.CodecParameters().MimeType
+		state.currentPT = codecTrack.PayloadType()
 	}
 	if pionTrack, ok := track.(media.PionRemoteAudioTrack); ok {
 		if decoded := pionTrack.DecodedTrack(); decoded != nil && decoded.TrackRemote() != nil {
@@ -652,17 +656,15 @@ func (s *Session) runHeartbeatLoop(state *dataChannelState) {
 
 // Snapshot returns the current validation snapshot.
 func (s *Session) Snapshot() SessionSnapshot {
+	s.refresh(time.Now())
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.refreshLocked(time.Now())
 	return s.snapshotLocked()
 }
 
 // Reset clears accumulated observations while preserving active bindings.
 func (s *Session) Reset() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.connectionStates = nil
 	s.iceConnectionStates = nil
 	s.signalingStates = nil
@@ -682,9 +684,10 @@ func (s *Session) Reset() {
 	for _, state := range s.dataChannels {
 		state.resetLocked(s.cfg.EventHistory)
 	}
-
-	s.refreshLocked(time.Now())
 	s.signalLocked()
+	s.mu.Unlock()
+
+	s.refresh(time.Now())
 }
 
 // Validate returns an aggregated validation error when the session is not in a
@@ -876,21 +879,40 @@ func (s *Session) waitFor(ctx context.Context, predicate func(SessionSnapshot) b
 	}
 }
 
-func (s *Session) refreshLocked(now time.Time) {
+func (s *Session) refresh(now time.Time) {
 	if s.peer == nil {
 		return
 	}
 
-	s.appendConnectionStateLocked(now, s.peer.ConnectionState())
-	s.appendICEConnectionStateLocked(now, s.peer.ICEConnectionState())
-	s.appendSignalingStateLocked(now, s.peer.SignalingState())
+	connectionState := s.peer.ConnectionState()
+	iceState := s.peer.ICEConnectionState()
+	signalingState := s.peer.SignalingState()
+
+	var shouldPollStats bool
+	s.mu.Lock()
+	s.appendConnectionStateLocked(now, connectionState)
+	s.appendICEConnectionStateLocked(now, iceState)
+	s.appendSignalingStateLocked(now, signalingState)
 
 	if !s.lastStatsPoll.IsZero() && now.Sub(s.lastStatsPoll) < s.cfg.StatsPollInterval {
+		s.mu.Unlock()
 		return
 	}
 	s.lastStatsPoll = now
+	shouldPollStats = true
+	s.mu.Unlock()
+
+	if !shouldPollStats {
+		return
+	}
 
 	report, err := s.peer.GetStats()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.appendConnectionStateLocked(now, connectionState)
+	s.appendICEConnectionStateLocked(now, iceState)
+	s.appendSignalingStateLocked(now, signalingState)
 	if err != nil {
 		s.recordWarningLocked(fmt.Sprintf("validate: get stats: %v", err))
 		return
@@ -1025,10 +1047,15 @@ func (t *videoTrackState) observeFrameLocked(f *frame.VideoFrame, freezeThreshol
 func (t *videoTrackState) observeCodecChangeLocked(change pionrecv.CodecChange, history int) {
 	t.currentCodec = change.CurrentType
 	t.currentMime = change.CurrentCodec.MimeType
+	t.currentPT = change.CurrentPayloadType
 	t.codecSwitches = appendLimited(t.codecSwitches, pionrecv.CodecSwitchObservation{
 		At:     time.Now(),
 		Change: change,
 	}, history)
+}
+
+func (t *videoTrackState) observeStatsCodecLocked(sample RTPStatsSample, history int) {
+	observeStatsCodecChangeLocked("video", &t.currentCodec, &t.currentMime, &t.currentPT, &t.codecSwitches, sample, history)
 }
 
 func (t *videoTrackState) snapshotLocked() VideoTrackSnapshot {
@@ -1178,10 +1205,15 @@ func (t *audioTrackState) observeFrameLocked(f *frame.AudioFrame, freezeThreshol
 func (t *audioTrackState) observeCodecChangeLocked(change pionrecv.CodecChange, history int) {
 	t.currentCodec = change.CurrentType
 	t.currentMime = change.CurrentCodec.MimeType
+	t.currentPT = change.CurrentPayloadType
 	t.codecSwitches = appendLimited(t.codecSwitches, pionrecv.CodecSwitchObservation{
 		At:     time.Now(),
 		Change: change,
 	}, history)
+}
+
+func (t *audioTrackState) observeStatsCodecLocked(sample RTPStatsSample, history int) {
+	observeStatsCodecChangeLocked("audio", &t.currentCodec, &t.currentMime, &t.currentPT, &t.codecSwitches, sample, history)
 }
 
 func (t *audioTrackState) snapshotLocked() AudioTrackSnapshot {
@@ -1265,6 +1297,53 @@ func (t *audioTrackState) resetLocked() {
 	t.configSwitches = nil
 	t.freezeEvents = nil
 	t.stats = nil
+}
+
+func observeStatsCodecChangeLocked(
+	kind string,
+	currentCodec *codec.Type,
+	currentMime *string,
+	currentPT *webrtc.PayloadType,
+	codecSwitches *[]pionrecv.CodecSwitchObservation,
+	sample RTPStatsSample,
+	history int,
+) {
+	if strings.TrimSpace(sample.CodecMimeType) == "" {
+		return
+	}
+
+	nextCodec, nextCodecOK := codec.ParseMimeType(sample.CodecMimeType)
+	if *currentMime != "" && !strings.EqualFold(*currentMime, sample.CodecMimeType) {
+		previousCodec := *currentCodec
+		if parsedPrevious, ok := codec.ParseMimeType(*currentMime); ok {
+			previousCodec = parsedPrevious
+		}
+		change := pionrecv.CodecChange{
+			PreviousType:        previousCodec,
+			CurrentType:         previousCodec,
+			PreviousCodec:       codecParametersForStatsSample(kind, *currentMime, *currentPT),
+			CurrentCodec:        codecParametersForStatsSample(kind, sample.CodecMimeType, sample.CodecPayloadType),
+			PreviousPayloadType: *currentPT,
+			CurrentPayloadType:  sample.CodecPayloadType,
+		}
+		if nextCodecOK {
+			change.CurrentType = nextCodec
+		}
+		at := sample.At
+		if at.IsZero() {
+			at = time.Now()
+		}
+		*codecSwitches = appendLimited(*codecSwitches, pionrecv.CodecSwitchObservation{
+			At:     at,
+			Change: change,
+		}, history)
+	}
+
+	if nextCodecOK {
+		*currentCodec = nextCodec
+	}
+	*currentMime = sample.CodecMimeType
+	*currentPT = sample.CodecPayloadType
 }
 
 func (d *dataChannelState) appendStateLocked(state string, history int) {
