@@ -178,6 +178,7 @@ type audioTrackState struct {
 
 type dataChannelState struct {
 	adapter dataChannelAdapter
+	gen     uint64
 
 	label string
 	id    int
@@ -512,6 +513,7 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 	if !ok {
 		state = &dataChannelState{
 			adapter:     adapter,
+			gen:         1,
 			label:       adapter.Label(),
 			id:          adapter.ID(),
 			state:       readyState,
@@ -520,6 +522,7 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 		state.appendStateLocked(state.state, s.cfg.EventHistory)
 		s.dataChannels[key] = state
 	} else {
+		state.gen++
 		state.adapter = adapter
 		state.label = adapter.Label()
 		state.id = adapter.ID()
@@ -532,11 +535,15 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 		}
 	}
 	s.signalLocked()
+	generation := state.gen
 	s.mu.Unlock()
 
 	adapter.SetOnOpen(func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if state.gen != generation {
+			return
+		}
 		state.state = "open"
 		state.openTransitions++
 		if state.openedAt.IsZero() {
@@ -553,6 +560,9 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 	adapter.SetOnClose(func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if state.gen != generation {
+			return
+		}
 		state.state = "closed"
 		state.closeTransitions++
 		state.closedAt = time.Now()
@@ -562,11 +572,20 @@ func (s *Session) observeDataChannel(adapter dataChannelAdapter) {
 		s.signalLocked()
 	})
 	adapter.SetOnMessage(func(data []byte) {
+		s.mu.Lock()
+		if state.gen != generation {
+			s.mu.Unlock()
+			return
+		}
+		s.mu.Unlock()
 		s.handleDataChannelMessage(state, data)
 	})
 	adapter.SetOnError(func(err error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if state.gen != generation {
+			return
+		}
 		state.lastError = errString(err)
 		s.signalLocked()
 	})

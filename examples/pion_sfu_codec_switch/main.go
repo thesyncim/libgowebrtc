@@ -1,10 +1,11 @@
 // Example: libgowebrtc publisher/subscriber with a Pion SFU-style relay.
 //
 // This example demonstrates:
-// 1. Producing video with libgowebrtc and switching codecs every 2 seconds
-// 2. Negotiating the full codec envelope once, up front
-// 3. Relaying raw RTP through a Pion "SFU" without renegotiation
-// 4. Consuming and decoding the changing codec stream with libgowebrtc's pionrecv bridge
+//  1. Producing video with libgowebrtc and switching codecs every 2 seconds
+//  2. Negotiating the full codec envelope once, up front
+//  3. Relaying raw RTP through a Pion "SFU" without renegotiation
+//  4. Consuming and validating the changing codec stream with libgowebrtc's
+//     browser-style session validator on the subscriber side
 //
 // Run:
 //
@@ -30,9 +31,10 @@ import (
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
+	"github.com/thesyncim/libgowebrtc/pkg/media"
+	"github.com/thesyncim/libgowebrtc/pkg/media/validate"
 	"github.com/thesyncim/libgowebrtc/pkg/packetizer"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
-	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 	libtrack "github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
@@ -61,11 +63,12 @@ type exampleConfig struct {
 }
 
 type exampleStats struct {
-	PublisherSwitches    int64
-	SFUSwitches          int64
-	SubscriberSwitches   int64
-	DecodedFrames        int64
-	PostConnectRenegotes int64
+	PublisherSwitches     int64
+	SFUSwitches           int64
+	SubscriberSwitches    int64
+	DecodedFrames         int64
+	PostConnectRenegotes  int64
+	SubscriberFreezeCount int64
 }
 
 func main() {
@@ -84,11 +87,12 @@ func main() {
 		log.Fatalf("example failed: %v", err)
 	}
 
-	log.Printf("Summary: publisher codec switches=%d, SFU observed switches=%d, subscriber decoder switches=%d, decoded frames=%d, post-connect renegotiations=%d",
+	log.Printf("Summary: publisher codec switches=%d, SFU observed switches=%d, subscriber decoder switches=%d, decoded frames=%d, freezes=%d, post-connect renegotiations=%d",
 		stats.PublisherSwitches,
 		stats.SFUSwitches,
 		stats.SubscriberSwitches,
 		stats.DecodedFrames,
+		stats.SubscriberFreezeCount,
 		stats.PostConnectRenegotes,
 	)
 }
@@ -111,6 +115,7 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	log.Printf("Codec cycle: %s", joinCodecNames(codecCycle))
 	log.Printf("Codec switches reuse the first negotiation only; no renegotiation is performed")
 	log.Printf("Subscriber decode envelope is derived from the Chrome browser preset and then filtered to the active cycle")
+	log.Printf("Subscriber validation is browser-style: each codec hop must be observed as continuous and freeze-free")
 
 	errCh := make(chan error, 8)
 	reportAsyncError := func(label string, err error) {
@@ -151,6 +156,8 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 		postConnectRenegotiation atomic.Int64
 		negotiationWatchArmed    atomic.Bool
 		shutdownOnce             sync.Once
+		subscriberValidator      *validate.Session
+		subscriberTrackID        = "relay-video"
 	)
 	shutdown := func() {
 		shutdownOnce.Do(func() {
@@ -200,6 +207,16 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	if err := subscriberRecv.SetCodecPreferences(filterCodecParametersByTypes(subscriberPreset.VideoCodecs(), codecCycle)); err != nil {
 		return exampleStats{}, fmt.Errorf("set subscriber codec preferences: %w", err)
 	}
+	subscriberValidator = validate.NewPionSession(subscriberPC, media.NewRemoteStreamRegistry(), validate.SessionConfig{
+		Browser:                 pioncodec.BrowserChrome,
+		StatsPollInterval:       250 * time.Millisecond,
+		EventHistory:            64,
+		FreezeThreshold:         750 * time.Millisecond,
+		PacketGapThreshold:      500 * time.Millisecond,
+		SwitchRecoveryThreshold: 2 * time.Second,
+	})
+	runCtx, runCancel := context.WithTimeout(context.Background(), cfg.Duration)
+	defer runCancel()
 
 	initialCodec := codecCycle[0]
 
@@ -253,49 +270,9 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 		}()
 	})
 
-	subscriberPC.OnTrack(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		log.Printf("[subscriber] track started: id=%s codec=%s pt=%d ssrc=%d", remote.ID(), remote.Codec().MimeType, remote.PayloadType(), remote.SSRC())
-		if publisher := publisherRef.Load(); publisher != nil {
-			publisher.RequestKeyframe()
-		}
+	subscriberPC.OnTrack(subscriberValidator.PionOnTrack())
 
-		decoded, err := pionrecv.BindRemoteTrack(remote, receiver, pionrecv.WithRTCPWriter(receiver.Transport()))
-		if err != nil {
-			reportAsyncError("bind subscriber track", err)
-			return
-		}
-
-		var logNextFrame atomic.Bool
-		logNextFrame.Store(true)
-
-		decoded.SetOnCodecChange(func(change pionrecv.CodecChange) {
-			subscriberSwitches.Add(1)
-			logNextFrame.Store(true)
-			if publisher := publisherRef.Load(); publisher != nil {
-				publisher.RequestKeyframe()
-			}
-			log.Printf("[subscriber] libgowebrtc decoder switched codec: %s(pt=%d) -> %s(pt=%d)",
-				change.PreviousCodec.MimeType,
-				change.PreviousPayloadType,
-				change.CurrentCodec.MimeType,
-				change.CurrentPayloadType,
-			)
-		})
-
-		if err := decoded.SetOnVideoFrame(func(f *frame.VideoFrame) {
-			n := subscriberFrames.Add(1)
-			if logNextFrame.CompareAndSwap(true, false) || n%30 == 0 {
-				log.Printf("[subscriber] decoded frame #%d via libgowebrtc: %dx%d codec=%s", n, f.Width, f.Height, decoded.Codec().String())
-			}
-		}); err != nil {
-			reportAsyncError("set subscriber frame callback", err)
-			return
-		}
-
-		go func() {
-			reportAsyncError("subscriber decoded.Run", decoded.Run())
-		}()
-	})
+	go watchSubscriberValidation(runCtx, subscriberValidator, subscriberTrackID, &subscriberFrames)
 
 	log.Printf("Negotiating subscriber leg first so the relay is ready before publisher traffic starts")
 	if err := connectPeers("sfu-downstream", sfuDownstreamPC, "subscriber", subscriberPC); err != nil {
@@ -308,6 +285,18 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	}
 
 	negotiationWatchArmed.Store(true)
+
+	validationWaitCtx, validationWaitCancel := context.WithTimeout(runCtx, 5*time.Second)
+	defer validationWaitCancel()
+	if err := subscriberValidator.WaitForConnected(validationWaitCtx); err != nil {
+		log.Printf("[subscriber] initial connected wait: %v", err)
+	}
+	if err := subscriberValidator.WaitForStable(validationWaitCtx); err != nil {
+		log.Printf("[subscriber] initial stable wait: %v", err)
+	}
+	if err := subscriberValidator.WaitForVideoContinuous(validationWaitCtx, subscriberTrackID); err != nil {
+		log.Printf("[subscriber] initial continuity wait: %v", err)
+	}
 
 	publisherCodecs := filterNegotiatedCodecs(publisherSender.GetParameters().Codecs)
 	log.Printf("[publisher] negotiated codecs: %s", formatCodecs(publisherCodecs))
@@ -329,17 +318,6 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	}
 	publisherRef.Store(publisher)
 
-	settleDuration := recommendedSettleDuration(cfg.Duration, cfg.SwitchInterval)
-	switchDuration := cfg.Duration - settleDuration
-	if switchDuration <= 0 {
-		switchDuration = cfg.Duration
-	}
-
-	runCtx, runCancel := context.WithTimeout(context.Background(), cfg.Duration)
-	defer runCancel()
-	switchCtx, switchCancel := context.WithTimeout(runCtx, switchDuration)
-	defer switchCancel()
-
 	var loops sync.WaitGroup
 	loops.Add(1)
 	go func() {
@@ -347,18 +325,15 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 		reportAsyncError("publisher loop", runPublisher(runCtx, publisher))
 	}()
 
-	switchDone := make(chan struct{})
 	loops.Add(1)
 	go func() {
 		defer loops.Done()
-		defer close(switchDone)
-		reportAsyncError("codec switch loop", runCodecSwitcher(switchCtx, publisher, codecCycle, cfg.SwitchInterval))
+		reportAsyncError("codec switch loop", runCodecSwitcher(runCtx, subscriberValidator, subscriberTrackID, publisher, codecCycle, cfg.SwitchInterval, &subscriberSwitches))
 	}()
 
 	var runErr error
 	select {
-	case <-switchCtx.Done():
-		<-switchDone
+	case <-runCtx.Done():
 		runErr = waitForSwitchConvergence(runCtx, publisher, &sfuSwitches, &subscriberSwitches)
 		if runErr == nil {
 			select {
@@ -389,6 +364,13 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 		SubscriberSwitches:   subscriberSwitches.Load(),
 		DecodedFrames:        subscriberFrames.Load(),
 		PostConnectRenegotes: postConnectRenegotiation.Load(),
+		SubscriberFreezeCount: func() int64 {
+			snap := subscriberValidator.Snapshot()
+			if track, ok := snap.VideoTracks[subscriberTrackID]; ok {
+				return int64(track.FreezeCount)
+			}
+			return 0
+		}(),
 	}, nil
 }
 
@@ -773,30 +755,98 @@ func runPublisher(ctx context.Context, publisher *codecSwitchingPublisher) error
 	}
 }
 
-func runCodecSwitcher(ctx context.Context, publisher *codecSwitchingPublisher, cycle []codec.Type, interval time.Duration) error {
+func runCodecSwitcher(ctx context.Context, validator *validate.Session, trackID string, publisher *codecSwitchingPublisher, cycle []codec.Type, interval time.Duration, subscriberSwitches *atomic.Int64) error {
 	if len(cycle) < 2 {
 		return nil
 	}
 
+	maxSwitches := len(cycle) - 1
+
+	switchover := func(next codec.Type) error {
+		step := validate.ScenarioStep{
+			Name:   fmt.Sprintf("switch-to-%s", next.String()),
+			Action: validate.ScenarioActionExternal,
+			Callback: func(context.Context, *validate.Session) error {
+				return publisher.SwitchCodec(next)
+			},
+			Expect: validate.ScenarioExpectation{
+				Within:            4 * time.Second,
+				HoldFor:           750 * time.Millisecond,
+				VideoTrackID:      trackID,
+				CodecMime:         next.MimeType(),
+				VideoContinuous:   true,
+				NoNewVideoFreezes: true,
+				MinNewVideoFrames: 10,
+			},
+		}
+		lab := validate.NewScenarioLab(validator, validate.LabConfig{})
+		if err := lab.Run(ctx, validate.ScenarioScript{Steps: []validate.ScenarioStep{step}}); err != nil {
+			return err
+		}
+		subscriberSwitches.Add(1)
+		snap := validator.Snapshot()
+		if track, ok := snap.VideoTracks[trackID]; ok {
+			log.Printf("[subscriber] validated switch to %s: frames=%d freezes=%d codec=%s",
+				next.String(),
+				track.FrameCount,
+				track.FreezeCount,
+				track.CurrentMimeType,
+			)
+		}
+		return nil
+	}
+
+	if err := switchover(cycle[1]); err != nil {
+		return err
+	}
+	if maxSwitches == 1 {
+		return nil
+	}
+
+	index := 1
+	switchesDone := 1
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	index := 0
-	deadline, hasDeadline := ctx.Deadline()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case tickTime := <-ticker.C:
-			if hasDeadline && !tickTime.Before(deadline) {
-				return nil
-			}
+		case <-ticker.C:
 			if ctx.Err() != nil {
 				return nil
 			}
 			index = (index + 1) % len(cycle)
-			if err := publisher.SwitchCodec(cycle[index]); err != nil {
+			if err := switchover(cycle[index]); err != nil {
 				return err
+			}
+			switchesDone++
+			if switchesDone >= maxSwitches {
+				return nil
+			}
+		}
+	}
+}
+
+func watchSubscriberValidation(ctx context.Context, validator *validate.Session, trackID string, frames *atomic.Int64) {
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	lastFrames := int64(0)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			snap := validator.Snapshot()
+			track, ok := snap.VideoTracks[trackID]
+			if !ok {
+				continue
+			}
+			if frameCount := int64(track.FrameCount); frameCount > lastFrames {
+				frames.Add(frameCount - lastFrames)
+				lastFrames = frameCount
 			}
 		}
 	}
@@ -815,7 +865,7 @@ func forwardRemoteRTP(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, 
 		}
 
 		currentCodec := remote.Codec().RTPCodecCapability
-		currentPayloadType := remote.PayloadType()
+		currentPayloadType := webrtc.PayloadType(packet.PayloadType)
 		if currentPayloadType != lastPayloadType || !sameCodecCapability(lastCodec, currentCodec) {
 			switchCount.Add(1)
 			log.Printf("[sfu] observed upstream codec switch: %s(pt=%d) -> %s(pt=%d)",
@@ -1007,20 +1057,19 @@ func waitForSwitchConvergence(ctx context.Context, publisher *codecSwitchingPubl
 	defer ticker.Stop()
 
 	for {
-		currentSFU := sfuSwitches.Load()
 		currentSubscriber := subscriberSwitches.Load()
-		if currentSFU >= target && currentSubscriber >= target {
+		if currentSubscriber >= target {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("codec switch convergence timeout: publisher=%d sfu=%d subscriber=%d", target, currentSFU, currentSubscriber)
+			return fmt.Errorf("codec switch convergence timeout: publisher=%d sfu=%d subscriber=%d", target, sfuSwitches.Load(), currentSubscriber)
 		default:
 		}
 		publisher.RequestKeyframe()
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("codec switch convergence timeout: publisher=%d sfu=%d subscriber=%d", target, currentSFU, currentSubscriber)
+			return fmt.Errorf("codec switch convergence timeout: publisher=%d sfu=%d subscriber=%d", target, sfuSwitches.Load(), currentSubscriber)
 		case <-ticker.C:
 		}
 	}

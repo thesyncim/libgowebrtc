@@ -135,6 +135,15 @@ func (f *fakeDataChannel) close() {
 	}
 }
 
+func (f *fakeDataChannel) emitError(err error) {
+	f.mu.Lock()
+	onError := f.onError
+	f.mu.Unlock()
+	if onError != nil {
+		onError(err)
+	}
+}
+
 func (f *fakeDataChannel) setSendErr(err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -600,6 +609,61 @@ func TestSessionDataChannelReobserveReplacesAdapterAndRestartsHeartbeats(t *test
 	}
 }
 
+func TestSessionDataChannelReobserveIgnoresStaleAdapterCallbacks(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{
+		EnableDataChannelHeartbeats: true,
+		HeartbeatInterval:           10 * time.Millisecond,
+		HeartbeatTimeout:            50 * time.Millisecond,
+	})
+
+	first := &fakeDataChannel{label: "control", id: 7, state: "connecting"}
+	session.observeDataChannel(first)
+	first.open()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.State == "open" && dc.HeartbeatAcked > 0
+	}); err != nil {
+		t.Fatalf("wait for initial heartbeat ack: %v", err)
+	}
+
+	second := &fakeDataChannel{label: "control", id: 7, state: "connecting"}
+	session.observeDataChannel(second)
+	second.open()
+
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.State == "open" && dc.OpenTransitions >= 2
+	}); err != nil {
+		t.Fatalf("wait for replacement open: %v", err)
+	}
+
+	before := session.Snapshot().DataChannels[dataChannelKey("control", 7)]
+
+	first.close()
+	first.emitError(errors.New("stale adapter error"))
+
+	snapshot := session.Snapshot().DataChannels[dataChannelKey("control", 7)]
+	if snapshot.State != "open" {
+		t.Fatalf("state after stale close = %q, want open", snapshot.State)
+	}
+	if snapshot.CloseTransitions != before.CloseTransitions {
+		t.Fatalf("close transitions after stale close = %d, want %d", snapshot.CloseTransitions, before.CloseTransitions)
+	}
+	if snapshot.LastError != before.LastError {
+		t.Fatalf("last error after stale error = %q, want %q", snapshot.LastError, before.LastError)
+	}
+
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.State == "open" && dc.HeartbeatAcked > before.HeartbeatAcked
+	}); err != nil {
+		t.Fatalf("wait for replacement heartbeat ack after stale callbacks: %v", err)
+	}
+}
+
 func TestSessionWaitForAudioContinuousAndDataChannelOpen(t *testing.T) {
 	session := newSession(nil, nil, SessionConfig{})
 	session.mu.Lock()
@@ -641,6 +705,36 @@ func TestSessionWaitForAudioContinuousAndDataChannelOpen(t *testing.T) {
 	defer missingCancel()
 	if err := session.WaitForDataChannelOpen(missingCtx, "missing"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("WaitForDataChannelOpen(missing) error = %v, want deadline exceeded", err)
+	}
+}
+
+func TestAudioTrackStateObserveFrameLockedRecordsFreezeAndConfigSwitch(t *testing.T) {
+	state := &audioTrackState{id: "audio-1"}
+
+	first := frame.NewAudioFrameS16(48000, 2, 960)
+	state.observeFrameLocked(first, 0, 8)
+
+	second := frame.NewAudioFrameS16(48000, 2, 480)
+	state.observeFrameLocked(second, 0, 8)
+
+	snapshot := state.snapshotLocked()
+	if snapshot.FrameCount != 2 {
+		t.Fatalf("frame count = %d, want 2", snapshot.FrameCount)
+	}
+	if snapshot.FreezeCount != 1 {
+		t.Fatalf("freeze count = %d, want 1 when freeze threshold is zero", snapshot.FreezeCount)
+	}
+	if len(snapshot.FreezeEvents) != 1 || snapshot.FreezeEvents[0].Kind != "frame" {
+		t.Fatalf("freeze events = %+v, want one frame freeze event", snapshot.FreezeEvents)
+	}
+	if len(snapshot.ConfigSwitches) != 1 {
+		t.Fatalf("config switches = %d, want 1", len(snapshot.ConfigSwitches))
+	}
+	if got := snapshot.CurrentPTime; got != second.Duration() {
+		t.Fatalf("current ptime = %v, want %v", got, second.Duration())
+	}
+	if snapshot.Continuous {
+		t.Fatalf("snapshot should not report continuous after a zero-threshold frame gap: %+v", snapshot)
 	}
 }
 
