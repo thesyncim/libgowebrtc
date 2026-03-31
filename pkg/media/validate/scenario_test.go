@@ -6,6 +6,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/pion/webrtc/v4"
+
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
+	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
 func TestScenarioLabRunDelaysAndCancellation(t *testing.T) {
@@ -160,5 +165,136 @@ func TestScenarioLabRunStepErrorsAndHelpers(t *testing.T) {
 	}
 	if got := relay.impairmentForDirection(DirectionUpstream); got.Delay != 0 {
 		t.Fatalf("relay impairment after clear = %+v, want zero delay", got)
+	}
+}
+
+func TestScenarioLabRunStepWaitsForRecoveryExpectations(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{SwitchRecoveryThreshold: 80 * time.Millisecond})
+	session.mu.Lock()
+	session.appendConnectionStateLocked(time.Now(), webrtc.PeerConnectionStateDisconnected)
+	session.appendSignalingStateLocked(time.Now(), webrtc.SignalingStateHaveLocalOffer)
+	session.videoTracks["video-1"] = &videoTrackState{
+		id:            "video-1",
+		currentMime:   webrtc.MimeTypeVP8,
+		currentRID:    "q",
+		frameCount:    3,
+		freezeCount:   2,
+		currentWidth:  320,
+		currentHeight: 180,
+	}
+	session.mu.Unlock()
+
+	dc := &fakeDataChannel{label: "control", id: 7, state: "connecting"}
+	session.observeDataChannel(dc)
+
+	lab := NewScenarioLab(session, LabConfig{})
+	err := lab.Run(context.Background(), ScenarioScript{
+		Steps: []ScenarioStep{{
+			Name:   "recover",
+			Action: ScenarioActionExternal,
+			Callback: func(context.Context, *Session) error {
+				session.mu.Lock()
+				session.appendConnectionStateLocked(time.Now(), webrtc.PeerConnectionStateConnected)
+				session.appendSignalingStateLocked(time.Now(), webrtc.SignalingStateStable)
+				video := session.videoTracks["video-1"]
+				video.currentMime = webrtc.MimeTypeH264
+				video.frameCount = 4
+				video.currentRID = "h"
+				video.hasCurrentLayer = true
+				video.currentLayer = pionrecv.VideoLayer{Spatial: 1, Temporal: 0}
+				video.currentWidth = 640
+				video.currentHeight = 360
+				session.signalLocked()
+				session.mu.Unlock()
+				dc.open()
+				return nil
+			},
+			Expect: ScenarioExpectation{
+				Connected:         true,
+				Stable:            true,
+				Reconnected:       true,
+				TrackID:           "video-1",
+				CodecMime:         webrtc.MimeTypeH264,
+				VideoTrackID:      "video-1",
+				NoNewVideoFreezes: true,
+				VideoRID:          "h",
+				VideoWidth:        640,
+				VideoHeight:       360,
+				HasVideoLayer:     true,
+				VideoLayer:        pionrecv.VideoLayer{Spatial: 1, Temporal: 0},
+				DataChannelLabel:  "control",
+				DataChannelOpen:   true,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Run(expectation success): %v", err)
+	}
+}
+
+func TestScenarioLabRunStepExpectationTimeoutIncludesReason(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{SwitchRecoveryThreshold: 20 * time.Millisecond})
+	session.mu.Lock()
+	session.videoTracks["video-1"] = &videoTrackState{
+		id:          "video-1",
+		currentMime: webrtc.MimeTypeVP8,
+		currentRID:  "q",
+		frameCount:  1,
+	}
+	session.mu.Unlock()
+
+	lab := NewScenarioLab(session, LabConfig{})
+	err := lab.Run(context.Background(), ScenarioScript{
+		Steps: []ScenarioStep{{
+			Name:   "timeout",
+			Action: ScenarioActionExternal,
+			Callback: func(context.Context, *Session) error {
+				return nil
+			},
+			Expect: ScenarioExpectation{
+				Within:       10 * time.Millisecond,
+				TrackID:      "video-1",
+				CodecMime:    webrtc.MimeTypeH264,
+				VideoTrackID: "video-1",
+				VideoRID:     "h",
+			},
+		}},
+	})
+	if err == nil {
+		t.Fatal("Run(timeout expectation) = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "scenario expectation not met within") || !strings.Contains(err.Error(), `video track "video-1" RID is "q"`) {
+		t.Fatalf("Run(timeout expectation) error = %v, want detailed unmet reason", err)
+	}
+}
+
+func TestScenarioLabRunStepExpectationSkipsUnsupportedBrowserAssertions(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{Browser: pioncodec.BrowserSafari})
+	lab := NewScenarioLab(session, LabConfig{})
+
+	err := lab.Run(context.Background(), ScenarioScript{
+		Steps: []ScenarioStep{{
+			Name:   "skip-unsupported",
+			Action: ScenarioActionExternal,
+			Callback: func(context.Context, *Session) error {
+				return nil
+			},
+			Expect: ScenarioExpectation{
+				TrackID:       "video-1",
+				CodecMime:     webrtc.MimeTypeH264,
+				VideoTrackID:  "video-1",
+				VideoRID:      "h",
+				HasVideoLayer: true,
+				VideoLayer:    pionrecv.VideoLayer{Spatial: 1, Temporal: 0},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Run(skip unsupported expectation): %v", err)
+	}
+
+	snapshot := session.Snapshot()
+	if len(snapshot.SkippedExpectations) != 3 {
+		t.Fatalf("SkippedExpectations = %v, want three skip notices", snapshot.SkippedExpectations)
 	}
 }
