@@ -177,21 +177,6 @@ func pumpAudioFrames(track *pc.Track, sampleRate, channels, numSamples int, stop
 	}
 }
 
-func waitForReceiverAudioCodec(t *testing.T, session *validate.Session, peer *pc.PeerConnection, trackID string, timeout time.Duration) string {
-	t.Helper()
-
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		snapshot := session.Snapshot()
-		if track, ok := snapshot.AudioTracks[trackID]; ok && strings.TrimSpace(track.CurrentMimeType) != "" {
-			return track.CurrentMimeType
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("timed out waiting for receiver audio codec on %q; snapshot=%s; stats=%s", trackID, summarizeAudioSnapshot(session, trackID), summarizePeerAudioStats(t, peer))
-	return ""
-}
-
 func waitForReceiverAudioCodecMaybe(session *validate.Session, peer *pc.PeerConnection, trackID string, timeout time.Duration) (string, bool) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
