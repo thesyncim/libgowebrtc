@@ -241,8 +241,10 @@ func (r *RemoteStreamRegistry) bindSource(source remoteFrameTrack) (RemoteTrack,
 	}
 
 	view := input.newTrack(source.ID())
+	if err := input.start(); err != nil {
+		return nil, nil, err
+	}
 	streams := r.streamsForTrack(view)
-	input.start()
 	return view, streams, nil
 }
 
@@ -476,18 +478,20 @@ func (s *remoteFrameSource) newView(id string) *remoteTrackView {
 	return view
 }
 
-func (s *remoteFrameSource) start() {
+func (s *remoteFrameSource) start() error {
 	s.mu.Lock()
 	if s.started {
 		s.mu.Unlock()
-		return
+		return nil
 	}
 	s.started = true
 	s.mu.Unlock()
 
 	if err := s.track.Start(s.end); err != nil {
 		s.end()
+		return err
 	}
+	return nil
 }
 
 func (s *remoteFrameSource) end() {
@@ -514,6 +518,9 @@ func (s *remoteFrameSource) detach(view *remoteTrackView) {
 	delete(s.views, view)
 	remaining := len(s.views)
 	closed := s.closed
+	if remaining == 0 && !closed {
+		s.closed = true
+	}
 	s.mu.Unlock()
 
 	if remaining == 0 && !closed {
