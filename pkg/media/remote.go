@@ -539,6 +539,9 @@ func (s *remoteFrameSource) snapshotViews() []*remoteTrackView {
 }
 
 func (s *remoteFrameSource) handleVideoFrame(f *frame.VideoFrame) {
+	if f == nil {
+		return
+	}
 	for _, view := range s.snapshotViews() {
 		if !view.shouldDispatch() {
 			continue
@@ -553,6 +556,9 @@ func (s *remoteFrameSource) handleVideoFrame(f *frame.VideoFrame) {
 }
 
 func (s *remoteFrameSource) handleAudioFrame(f *frame.AudioFrame) {
+	if f == nil {
+		return
+	}
 	for _, view := range s.snapshotViews() {
 		if !view.shouldDispatch() {
 			continue

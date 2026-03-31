@@ -475,6 +475,36 @@ func TestRemoteStreamRegistryPionOnTrackErrorPath(t *testing.T) {
 	}
 }
 
+func TestRemoteFrameSourceIgnoresNilFrames(t *testing.T) {
+	registry := NewRemoteStreamRegistry()
+	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "stream-1", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
+	audioDecoded := newFakeDecodedRemoteTrack("remote-audio", "stream-1", webrtc.RTPCodecTypeAudio, codec.Opus, 111)
+
+	videoTrack, _, err := registry.bindSource(videoDecoded)
+	if err != nil {
+		t.Fatalf("bindSource(video) error = %v", err)
+	}
+	audioTrack, _, err := registry.bindSource(audioDecoded)
+	if err != nil {
+		t.Fatalf("bindSource(audio) error = %v", err)
+	}
+
+	var videoFrames, audioFrames int
+	if err := videoTrack.(RemoteVideoTrack).SetOnVideoFrame(func(*frame.VideoFrame) { videoFrames++ }); err != nil {
+		t.Fatalf("SetOnVideoFrame: %v", err)
+	}
+	if err := audioTrack.(RemoteAudioTrack).SetOnAudioFrame(func(*frame.AudioFrame) { audioFrames++ }); err != nil {
+		t.Fatalf("SetOnAudioFrame: %v", err)
+	}
+
+	videoDecoded.emitVideoFrame(nil)
+	audioDecoded.emitAudioFrame(nil)
+
+	if videoFrames != 0 || audioFrames != 0 {
+		t.Fatalf("nil frame dispatch counts = (%d, %d), want (0, 0)", videoFrames, audioFrames)
+	}
+}
+
 func waitForCondition(t *testing.T, timeout time.Duration, predicate func() bool) {
 	t.Helper()
 
