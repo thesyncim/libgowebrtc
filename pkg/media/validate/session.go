@@ -850,19 +850,28 @@ func (s *Session) WaitForReconnected(ctx context.Context) error {
 }
 
 func (s *Session) waitFor(ctx context.Context, predicate func(SessionSnapshot) bool) error {
-	ticker := time.NewTicker(sessionChangePollInterval)
-	defer ticker.Stop()
-
 	for {
+		s.mu.Lock()
+		changed := s.changed
+		waitInterval := sessionChangePollInterval
+		if s.cfg.StatsPollInterval > 0 && s.cfg.StatsPollInterval < waitInterval {
+			waitInterval = s.cfg.StatsPollInterval
+		}
+		s.mu.Unlock()
+
 		snapshot := s.Snapshot()
 		if predicate(snapshot) {
 			return nil
 		}
 
+		timer := time.NewTimer(waitInterval)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return ctx.Err()
-		case <-ticker.C:
+		case <-changed:
+			timer.Stop()
+		case <-timer.C:
 		}
 	}
 }
