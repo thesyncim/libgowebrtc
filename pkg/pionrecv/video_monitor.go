@@ -185,6 +185,9 @@ type VideoSubscriberMonitor struct {
 	lastFramePTS       uint32
 	hasLastFramePTS    bool
 	estimatedFrameStep time.Duration
+	lastFreezeStart    time.Time
+	lastFreezeEnd      time.Time
+	hasFreezeWindow    bool
 
 	codecSwitches      []CodecSwitchObservation
 	resolutionSwitches []ResolutionSwitch
@@ -259,6 +262,9 @@ func (m *VideoSubscriberMonitor) Reset() {
 	m.lastFramePTS = 0
 	m.hasLastFramePTS = false
 	m.estimatedFrameStep = 0
+	m.lastFreezeStart = time.Time{}
+	m.lastFreezeEnd = time.Time{}
+	m.hasFreezeWindow = false
 	m.codecSwitches = nil
 	m.resolutionSwitches = nil
 	m.layerSwitches = nil
@@ -303,7 +309,7 @@ func (m *VideoSubscriberMonitor) WaitForRID(ctx context.Context, rid string) err
 // WaitForCodec waits until the decoded codec matches the target.
 func (m *VideoSubscriberMonitor) WaitForCodec(ctx context.Context, target codec.Type) error {
 	return m.waitFor(ctx, func(snapshot VideoSubscriberSnapshot) bool {
-		return snapshot.CurrentCodec == target
+		return snapshot.FrameCount > 0 && snapshot.CurrentCodec == target
 	})
 }
 
@@ -348,13 +354,7 @@ func (m *VideoSubscriberMonitor) observePacket(pkt *rtp.Packet) {
 			m.maxInterPacketGap = gap
 		}
 		if gap > m.packetGapThresholdLocked() {
-			m.freezeCount++
-			m.packetGapCount++
-			m.freezeEvents = appendLimited(m.freezeEvents, FreezeEvent{
-				At:   now,
-				Gap:  gap,
-				Kind: "packet",
-			}, m.cfg.EventHistory)
+			m.recordFreezeLocked(now, gap, "packet")
 		}
 	}
 	m.lastPacketAt = now
@@ -463,13 +463,7 @@ func (m *VideoSubscriberMonitor) observeFrame(f *frame.VideoFrame) {
 			m.maxInterFrameGap = gap
 		}
 		if gap > m.freezeThresholdLocked() {
-			m.freezeCount++
-			m.frameGapCount++
-			m.freezeEvents = appendLimited(m.freezeEvents, FreezeEvent{
-				At:   now,
-				Gap:  gap,
-				Kind: "frame",
-			}, m.cfg.EventHistory)
+			m.recordFreezeLocked(now, gap, "frame")
 		}
 	}
 
@@ -586,6 +580,36 @@ func (m *VideoSubscriberMonitor) snapshotLocked() VideoSubscriberSnapshot {
 func (m *VideoSubscriberMonitor) signalLocked() {
 	close(m.changed)
 	m.changed = make(chan struct{})
+}
+
+func (m *VideoSubscriberMonitor) recordFreezeLocked(now time.Time, gap time.Duration, kind string) {
+	switch kind {
+	case "packet":
+		m.packetGapCount++
+	case "frame":
+		m.frameGapCount++
+	}
+
+	m.freezeEvents = appendLimited(m.freezeEvents, FreezeEvent{
+		At:   now,
+		Gap:  gap,
+		Kind: kind,
+	}, m.cfg.EventHistory)
+
+	start := now.Add(-gap)
+	if !m.hasFreezeWindow || start.After(m.lastFreezeEnd) {
+		m.freezeCount++
+		m.lastFreezeStart = start
+		m.lastFreezeEnd = now
+		m.hasFreezeWindow = true
+		return
+	}
+	if start.Before(m.lastFreezeStart) {
+		m.lastFreezeStart = start
+	}
+	if now.After(m.lastFreezeEnd) {
+		m.lastFreezeEnd = now
+	}
 }
 
 func (m *VideoSubscriberMonitor) freezeThresholdLocked() time.Duration {
