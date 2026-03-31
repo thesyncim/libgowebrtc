@@ -1,6 +1,7 @@
 package pionsend
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -39,6 +40,8 @@ type publishedAudio struct {
 	track  *track.AudioTrack
 	sender *webrtc.RTPSender
 
+	samplesPerFrame int
+
 	mu     sync.Mutex
 	closed bool
 }
@@ -73,6 +76,10 @@ func PublishAudio(pc *webrtc.PeerConnection, cfg AudioPublishConfig) (PublishedA
 	if cfg.PTime <= 0 {
 		cfg.PTime = defaultAudioPTime
 	}
+	samplesPerFrame, ok := samplesForPTime(cfg.SampleRate, cfg.PTime)
+	if !ok {
+		return nil, ErrInvalidConfig
+	}
 
 	codecPreferences := cfg.CodecPreferences
 	if len(codecPreferences) == 0 {
@@ -100,9 +107,10 @@ func PublishAudio(pc *webrtc.PeerConnection, cfg AudioPublishConfig) (PublishedA
 	}
 
 	return &publishedAudio{
-		cfg:    cfg,
-		track:  audioTrack,
-		sender: sender,
+		cfg:             cfg,
+		track:           audioTrack,
+		sender:          sender,
+		samplesPerFrame: samplesPerFrame,
 	}, nil
 }
 
@@ -116,6 +124,9 @@ func (p *publishedAudio) WriteFrame(src *frame.AudioFrame) error {
 
 	if p.closed {
 		return nil
+	}
+	if err := p.validateFrameLocked(src); err != nil {
+		return err
 	}
 	return p.track.WriteFrame(src)
 }
@@ -144,6 +155,34 @@ func (p *publishedAudio) Close() error {
 	}
 	p.closed = true
 	return p.track.Close()
+}
+
+func (p *publishedAudio) validateFrameLocked(src *frame.AudioFrame) error {
+	if src.SampleRate != p.cfg.SampleRate {
+		return fmt.Errorf("pionsend: audio frame sample rate %d does not match configured %d", src.SampleRate, p.cfg.SampleRate)
+	}
+	if src.Channels != p.cfg.Channels {
+		return fmt.Errorf("pionsend: audio frame channels %d do not match configured %d", src.Channels, p.cfg.Channels)
+	}
+	if p.samplesPerFrame > 0 && src.NumSamples != p.samplesPerFrame {
+		return fmt.Errorf("pionsend: audio frame samples %d do not match configured ptime %s (%d samples)", src.NumSamples, p.cfg.PTime, p.samplesPerFrame)
+	}
+	return nil
+}
+
+func samplesForPTime(sampleRate int, ptime time.Duration) (int, bool) {
+	if sampleRate <= 0 || ptime <= 0 {
+		return 0, false
+	}
+	total := int64(sampleRate) * ptime.Nanoseconds()
+	if total%int64(time.Second) != 0 {
+		return 0, false
+	}
+	samples := total / int64(time.Second)
+	if samples <= 0 {
+		return 0, false
+	}
+	return int(samples), true
 }
 
 func defaultAudioCodecPreferences(browser pioncodec.Browser) []webrtc.RTPCodecParameters {
