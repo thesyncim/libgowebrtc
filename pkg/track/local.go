@@ -338,6 +338,9 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 	if t.enc == nil || t.pkt == nil || t.writer == nil {
 		return ErrNotBound
 	}
+	if err := encoder.ValidateI420Frame(f); err != nil {
+		return err
+	}
 
 	// Apply frame scaling if needed
 	frameToEncode := f

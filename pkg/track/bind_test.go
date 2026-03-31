@@ -11,6 +11,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
+	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
@@ -246,6 +247,41 @@ func TestVideoTrackBindDoubleBindAndWriteRTPError(t *testing.T) {
 	}
 	if err := track.WriteRTP(rtpPacket); err == nil {
 		t.Fatal("WriteRTP should surface writer errors")
+	}
+}
+
+func TestVideoTrackWriteFrameRejectsUnsupportedScaledInput(t *testing.T) {
+	defer testutil.WithSerialExecution(t)()
+	testutil.SkipIfNoShim(t)
+
+	track, err := NewVideoTrack(VideoTrackConfig{
+		ID:      "video-invalid-scaled",
+		Codec:   codec.VP8,
+		Width:   640,
+		Height:  360,
+		Bitrate: 400_000,
+		FPS:     30,
+	})
+	if err != nil {
+		t.Fatalf("NewVideoTrack: %v", err)
+	}
+	defer track.Close()
+
+	writer := &collectingWriter{}
+	ctx := newVideoContext(writer, codec.VP8, 98)
+	if _, err := track.Bind(ctx); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	if err := track.SetParameters(Parameters{Active: true, ScaleResolutionDownBy: 2.0}); err != nil {
+		t.Fatalf("SetParameters(scale): %v", err)
+	}
+
+	src := frame.NewNV12Frame(640, 360)
+	if err := track.WriteFrame(src, false); !errors.Is(err, encoder.ErrUnsupportedPixelFormat) {
+		t.Fatalf("WriteFrame(NV12) error = %v, want %v", err, encoder.ErrUnsupportedPixelFormat)
+	}
+	if len(writer.writes) != 0 {
+		t.Fatalf("len(writer.writes) = %d, want 0", len(writer.writes))
 	}
 }
 

@@ -71,8 +71,8 @@ func (e *vp8Encoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyframe
 	if e.closed.Load() {
 		return EncodeResult{}, ErrEncoderClosed
 	}
-	if src == nil {
-		return EncodeResult{}, ErrInvalidFrame
+	if err := ValidateI420Frame(src); err != nil {
+		return EncodeResult{}, err
 	}
 	if len(dst) < e.MaxEncodedSize() {
 		return EncodeResult{}, ErrBufferTooSmall

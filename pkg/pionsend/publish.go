@@ -10,6 +10,7 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
+	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
@@ -199,6 +200,9 @@ func (p *publishedVideo) WriteFrame(src *frame.VideoFrame, forceKeyframe bool) e
 		return nil
 	}
 	if err := p.validateNegotiatedLocked(); err != nil {
+		return err
+	}
+	if err := encoder.ValidateI420Frame(src); err != nil {
 		return err
 	}
 

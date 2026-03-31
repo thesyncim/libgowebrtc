@@ -88,8 +88,8 @@ func (e *h264Encoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyfram
 		return EncodeResult{}, ErrEncoderClosed
 	}
 
-	if src == nil {
-		return EncodeResult{}, ErrInvalidFrame
+	if err := ValidateI420Frame(src); err != nil {
+		return EncodeResult{}, err
 	}
 
 	maxSize := e.MaxEncodedSize()

@@ -7,6 +7,7 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
+	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
@@ -379,5 +380,36 @@ func TestPublishedVideoHelpers(t *testing.T) {
 	}
 	if got := maxInt(3, 4); got != 4 {
 		t.Fatalf("maxInt(3, 4) = %d, want 4", got)
+	}
+}
+
+func TestPublishedVideoRejectsUnsupportedScaledInput(t *testing.T) {
+	videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
+		ID:       "video-invalid-scaled",
+		StreamID: "stream-video",
+		Codec:    codec.VP8,
+		Width:    640,
+		Height:   360,
+		Bitrate:  300_000,
+		FPS:      30,
+	})
+	if err != nil {
+		t.Fatalf("NewVideoTrack: %v", err)
+	}
+	defer videoTrack.Close()
+
+	published := &publishedVideo{
+		encodings: []*encodingRuntime{{
+			PublishedEncoding: PublishedEncoding{Index: 0, Width: 320, Height: 180, Track: videoTrack},
+			videoTrack:        videoTrack,
+			active:            true,
+			scale:             2.0,
+			scaled:            frame.NewI420Frame(320, 180),
+		}},
+	}
+
+	src := frame.NewNV12Frame(640, 360)
+	if err := published.WriteFrame(src, false); !errors.Is(err, encoder.ErrUnsupportedPixelFormat) {
+		t.Fatalf("WriteFrame(NV12) error = %v, want %v", err, encoder.ErrUnsupportedPixelFormat)
 	}
 }

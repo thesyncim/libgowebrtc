@@ -201,6 +201,28 @@ func TestVideoEncoder_NilFrame(t *testing.T) {
 	}
 }
 
+func TestVideoEncoder_UnsupportedFormat(t *testing.T) {
+	testutil.SkipIfNoShim(t)
+
+	for _, f := range videoEncoderFactories() {
+		t.Run(f.name, func(t *testing.T) {
+			enc, err := f.newEncoder()
+			if err != nil {
+				t.Fatalf("new encoder: %v", err)
+			}
+			defer enc.Close()
+
+			srcFrame := frame.NewNV12Frame(320, 240)
+			encBuf := make([]byte, enc.MaxEncodedSize())
+
+			_, err = enc.EncodeInto(srcFrame, encBuf, false)
+			if !errors.Is(err, ErrUnsupportedPixelFormat) {
+				t.Fatalf("EncodeInto(NV12) error = %v, want %v", err, ErrUnsupportedPixelFormat)
+			}
+		})
+	}
+}
+
 func TestVideoEncoder_BufferTooSmall(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
