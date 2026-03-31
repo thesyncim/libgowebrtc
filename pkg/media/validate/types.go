@@ -12,9 +12,9 @@ import (
 
 // SessionConfig configures browser-shaped validation behavior.
 type SessionConfig struct {
-	Browser                     pioncodec.Browser
-	StatsPollInterval           time.Duration
-	EventHistory                int
+	Browser           pioncodec.Browser
+	StatsPollInterval time.Duration
+	EventHistory      int
 	// Zero threshold values use adaptive browser-shaped defaults.
 	FreezeThreshold             time.Duration
 	PacketGapThreshold          time.Duration
@@ -156,6 +156,7 @@ type AudioTrackSnapshot struct {
 	RID               string
 	Source            string
 	SSRC              uint32
+	CurrentMID        string
 	CurrentCodec      codec.Type
 	CurrentMimeType   string
 	StartedAt         time.Time

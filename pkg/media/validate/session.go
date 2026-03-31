@@ -161,6 +161,7 @@ type audioTrackState struct {
 	currentCodec codec.Type
 	currentMime  string
 	currentPT    webrtc.PayloadType
+	currentMID   string
 
 	startedAt         time.Time
 	lastFrameAt       time.Time
@@ -1320,6 +1321,7 @@ func (t *audioTrackState) snapshotLocked() AudioTrackSnapshot {
 			RID:               t.rid,
 			Source:            t.source,
 			SSRC:              t.ssrc,
+			CurrentMID:        t.currentMID,
 			CurrentCodec:      wire.CurrentCodec,
 			CurrentMimeType:   wire.CurrentCodecParameters.MimeType,
 			StartedAt:         wire.StartedAt,
@@ -1351,6 +1353,7 @@ func (t *audioTrackState) snapshotLocked() AudioTrackSnapshot {
 		RID:               t.rid,
 		Source:            t.source,
 		SSRC:              t.ssrc,
+		CurrentMID:        t.currentMID,
 		CurrentCodec:      t.currentCodec,
 		CurrentMimeType:   t.currentMime,
 		StartedAt:         t.startedAt,
@@ -1380,6 +1383,7 @@ func (t *audioTrackState) resetLocked() {
 	t.frameCount = 0
 	t.freezeCount = 0
 	t.estimatedStep = 0
+	t.currentMID = ""
 	t.currentSampleRate = 0
 	t.currentChannels = 0
 	t.currentNumSamples = 0
