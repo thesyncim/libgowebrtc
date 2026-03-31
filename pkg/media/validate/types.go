@@ -52,6 +52,8 @@ type RTPStatsSample struct {
 	TrackID                  string
 	SSRC                     uint32
 	CodecID                  string
+	CodecMimeType            string
+	CodecPayloadType         webrtc.PayloadType
 	TransportID              string
 	Packets                  uint64
 	PacketsLost              int64

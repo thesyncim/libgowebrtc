@@ -223,6 +223,13 @@ func (pp *LibPeerPair) Connect() error {
 	return pp.ExchangeICECandidates()
 }
 
+// Renegotiate performs an offer/answer exchange over an existing LibPeerPair
+// without re-exchanging ICE candidates. This is the helper path for codec
+// switches, track add/remove, and other browser-shaped mid-call changes.
+func (pp *LibPeerPair) Renegotiate() error {
+	return pp.ExchangeOfferAnswer()
+}
+
 // WaitForTrack waits for at least one track to be received.
 func (pp *LibPeerPair) WaitForTrack(timeout time.Duration) bool {
 	select {

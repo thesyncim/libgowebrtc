@@ -644,6 +644,30 @@ func TestSessionWaitForAudioContinuousAndDataChannelOpen(t *testing.T) {
 	}
 }
 
+func TestSessionWaitForRespondsToSignalsImmediately(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{})
+	session.mu.Lock()
+	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1"}
+	session.mu.Unlock()
+
+	done := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+		defer cancel()
+		done <- session.WaitForAudioContinuous(ctx, "audio-1")
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+	session.mu.Lock()
+	session.audioTracks["audio-1"].frameCount = 1
+	session.signalLocked()
+	session.mu.Unlock()
+
+	if err := <-done; err != nil {
+		t.Fatalf("WaitForAudioContinuous(signal) error = %v, want nil", err)
+	}
+}
+
 func TestSessionValidateAggregation(t *testing.T) {
 	session := newSession(nil, nil, SessionConfig{EnableDataChannelHeartbeats: true, EventHistory: 8})
 	session.recordFailure("boom")
