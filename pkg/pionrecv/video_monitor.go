@@ -18,10 +18,10 @@ const (
 	rtpStreamIDHeaderExtensionURI      = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id"
 	repairedStreamIDHeaderExtensionURI = "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id"
 	defaultEventHistory                = 32
-	defaultFreezeThreshold             = 750 * time.Millisecond
-	defaultPacketGapThreshold          = 500 * time.Millisecond
-	minAdaptiveFreezeThreshold         = 400 * time.Millisecond
-	minAdaptivePacketGapThreshold      = 250 * time.Millisecond
+	defaultFreezeThreshold             = 450 * time.Millisecond
+	defaultPacketGapThreshold          = 250 * time.Millisecond
+	minAdaptiveFreezeThreshold         = 250 * time.Millisecond
+	minAdaptivePacketGapThreshold      = 125 * time.Millisecond
 )
 
 // VideoLayer identifies a spatial/temporal layer pair as observed by a

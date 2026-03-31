@@ -39,10 +39,10 @@ func PolicyForBrowser(browser pioncodec.Browser) BrowserPolicy {
 			SupportsRID:                    true,
 			SupportsCodecSwitchAssertions:  true,
 			DefaultStatsPollInterval:       250 * time.Millisecond,
-			DefaultFreezeThreshold:         900 * time.Millisecond,
-			DefaultPacketGapThreshold:      500 * time.Millisecond,
-			DefaultAudioGapThreshold:       500 * time.Millisecond,
-			DefaultSwitchRecoveryThreshold: 2500 * time.Millisecond,
+			DefaultFreezeThreshold:         500 * time.Millisecond,
+			DefaultPacketGapThreshold:      300 * time.Millisecond,
+			DefaultAudioGapThreshold:       180 * time.Millisecond,
+			DefaultSwitchRecoveryThreshold: 1750 * time.Millisecond,
 			DefaultHeartbeatInterval:       2 * time.Second,
 			DefaultHeartbeatTimeout:        6 * time.Second,
 		}
@@ -56,10 +56,10 @@ func PolicyForBrowser(browser pioncodec.Browser) BrowserPolicy {
 			SupportsRID:                    false,
 			SupportsCodecSwitchAssertions:  false,
 			DefaultStatsPollInterval:       300 * time.Millisecond,
-			DefaultFreezeThreshold:         950 * time.Millisecond,
-			DefaultPacketGapThreshold:      600 * time.Millisecond,
-			DefaultAudioGapThreshold:       600 * time.Millisecond,
-			DefaultSwitchRecoveryThreshold: 3 * time.Second,
+			DefaultFreezeThreshold:         600 * time.Millisecond,
+			DefaultPacketGapThreshold:      350 * time.Millisecond,
+			DefaultAudioGapThreshold:       200 * time.Millisecond,
+			DefaultSwitchRecoveryThreshold: 2 * time.Second,
 			DefaultHeartbeatInterval:       2 * time.Second,
 			DefaultHeartbeatTimeout:        6 * time.Second,
 		}
@@ -73,10 +73,10 @@ func PolicyForBrowser(browser pioncodec.Browser) BrowserPolicy {
 			SupportsRID:                    true,
 			SupportsCodecSwitchAssertions:  true,
 			DefaultStatsPollInterval:       250 * time.Millisecond,
-			DefaultFreezeThreshold:         750 * time.Millisecond,
-			DefaultPacketGapThreshold:      500 * time.Millisecond,
-			DefaultAudioGapThreshold:       500 * time.Millisecond,
-			DefaultSwitchRecoveryThreshold: 2 * time.Second,
+			DefaultFreezeThreshold:         450 * time.Millisecond,
+			DefaultPacketGapThreshold:      250 * time.Millisecond,
+			DefaultAudioGapThreshold:       150 * time.Millisecond,
+			DefaultSwitchRecoveryThreshold: 1500 * time.Millisecond,
 			DefaultHeartbeatInterval:       2 * time.Second,
 			DefaultHeartbeatTimeout:        6 * time.Second,
 		}
@@ -94,14 +94,14 @@ func normalizeSessionConfig(cfg SessionConfig) (SessionConfig, BrowserPolicy) {
 	if cfg.EventHistory <= 0 {
 		cfg.EventHistory = 32
 	}
-	if cfg.FreezeThreshold <= 0 {
-		cfg.FreezeThreshold = policy.DefaultFreezeThreshold
+	if cfg.FreezeThreshold < 0 {
+		cfg.FreezeThreshold = 0
 	}
-	if cfg.PacketGapThreshold <= 0 {
-		cfg.PacketGapThreshold = policy.DefaultPacketGapThreshold
+	if cfg.PacketGapThreshold < 0 {
+		cfg.PacketGapThreshold = 0
 	}
-	if cfg.AudioGapThreshold <= 0 {
-		cfg.AudioGapThreshold = policy.DefaultAudioGapThreshold
+	if cfg.AudioGapThreshold < 0 {
+		cfg.AudioGapThreshold = 0
 	}
 	if cfg.SwitchRecoveryThreshold <= 0 {
 		cfg.SwitchRecoveryThreshold = policy.DefaultSwitchRecoveryThreshold

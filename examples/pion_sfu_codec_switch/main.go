@@ -211,9 +211,7 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 		Browser:                 pioncodec.BrowserChrome,
 		StatsPollInterval:       250 * time.Millisecond,
 		EventHistory:            64,
-		FreezeThreshold:         750 * time.Millisecond,
-		PacketGapThreshold:      500 * time.Millisecond,
-		SwitchRecoveryThreshold: 2 * time.Second,
+		SwitchRecoveryThreshold: 1500 * time.Millisecond,
 	})
 	runCtx, runCancel := context.WithTimeout(context.Background(), cfg.Duration)
 	defer runCancel()
@@ -769,12 +767,12 @@ func runCodecSwitcher(ctx context.Context, validator *validate.Session, trackID 
 			Callback: func(context.Context, *validate.Session) error {
 				return publisher.SwitchCodec(next)
 			},
-			Expect: validate.ScenarioExpectation{
-				Within:            4 * time.Second,
-				HoldFor:           750 * time.Millisecond,
-				VideoTrackID:      trackID,
-				CodecMime:         next.MimeType(),
-				VideoContinuous:   true,
+				Expect: validate.ScenarioExpectation{
+					Within:            4 * time.Second,
+					HoldFor:           400 * time.Millisecond,
+					VideoTrackID:      trackID,
+					CodecMime:         next.MimeType(),
+					VideoContinuous:   true,
 				NoNewVideoFreezes: true,
 				MinNewVideoFrames: 10,
 			},

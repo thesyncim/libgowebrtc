@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	defaultAudioFreezeThreshold        = 500 * time.Millisecond
-	defaultAudioPacketGapThreshold     = 250 * time.Millisecond
-	minAdaptiveAudioFreezeThreshold    = 120 * time.Millisecond
-	minAdaptiveAudioPacketGapThreshold = 80 * time.Millisecond
+	defaultAudioFreezeThreshold        = 200 * time.Millisecond
+	defaultAudioPacketGapThreshold     = 100 * time.Millisecond
+	minAdaptiveAudioFreezeThreshold    = 80 * time.Millisecond
+	minAdaptiveAudioPacketGapThreshold = 60 * time.Millisecond
 	defaultAudioSilenceThreshold       = 0.002
 	defaultAudioSampleRate             = 48000
 	audioClipThreshold                 = 32760

@@ -32,9 +32,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		Browser:                 pioncodec.BrowserChrome,
 		StatsPollInterval:       50 * time.Millisecond,
 		EventHistory:            64,
-		FreezeThreshold:         2 * time.Second,
-		AudioGapThreshold:       2 * time.Second,
-		SwitchRecoveryThreshold: 8 * time.Second,
+		SwitchRecoveryThreshold: 4 * time.Second,
 	})
 
 	pcOnTrack := session.PCOnTrack()
@@ -103,8 +101,8 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 					return pp.Renegotiate()
 				},
 				Expect: validate.ScenarioExpectation{
-					Within:            8 * time.Second,
-					HoldFor:           750 * time.Millisecond,
+					Within:            4 * time.Second,
+					HoldFor:           400 * time.Millisecond,
 					Connected:         true,
 					Stable:            true,
 					AudioTrackID:      "audio-codec-switch",

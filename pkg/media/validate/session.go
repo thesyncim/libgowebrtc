@@ -23,6 +23,10 @@ const (
 	heartbeatPingPrefix          = "__libgowebrtc_validate_hb_ping__:"
 	heartbeatAckPrefix           = "__libgowebrtc_validate_hb_ack__:"
 	sessionAudioSilenceThreshold = 0.002
+	sessionDefaultVideoFreezeCap = 450 * time.Millisecond
+	sessionMinVideoFreeze        = 250 * time.Millisecond
+	sessionDefaultAudioFreezeCap = 150 * time.Millisecond
+	sessionMinAudioFreeze        = 80 * time.Millisecond
 )
 
 type peerAdapter interface {
@@ -128,6 +132,9 @@ type videoTrackState struct {
 	frameCount        uint64
 	keyframeCount     uint64
 	freezeCount       uint64
+	lastFramePTS      uint32
+	hasLastFramePTS   bool
+	estimatedStep     time.Duration
 	currentWidth      int
 	currentHeight     int
 	resolutionChanges uint64
@@ -159,6 +166,7 @@ type audioTrackState struct {
 	lastFrameAt       time.Time
 	frameCount        uint64
 	freezeCount       uint64
+	estimatedStep     time.Duration
 	currentSampleRate int
 	currentChannels   int
 	currentNumSamples int
@@ -369,7 +377,7 @@ func (s *Session) observeVideoTrack(track media.RemoteVideoTrack, source string,
 	if err := track.SetOnVideoFrame(func(f *frame.VideoFrame) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		state.observeFrameLocked(f, s.cfg.FreezeThreshold, s.cfg.EventHistory)
+		state.observeFrameLocked(f, s.cfg.FreezeThreshold, s.policy.DefaultFreezeThreshold, s.cfg.EventHistory)
 		s.signalLocked()
 	}); err != nil {
 		s.recordWarning(fmt.Sprintf("validate: install video frame callback for %q: %v", track.ID(), err))
@@ -397,7 +405,7 @@ func (s *Session) observeAudioTrack(track media.RemoteAudioTrack, source string,
 	if err := track.SetOnAudioFrame(func(f *frame.AudioFrame) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		state.observeFrameLocked(f, s.cfg.AudioGapThreshold, s.cfg.EventHistory)
+		state.observeFrameLocked(f, s.cfg.AudioGapThreshold, s.policy.DefaultAudioGapThreshold, s.cfg.EventHistory)
 		s.signalLocked()
 	}); err != nil {
 		s.recordWarning(fmt.Sprintf("validate: install audio frame callback for %q: %v", track.ID(), err))
@@ -1032,25 +1040,38 @@ func (s *Session) signalLocked() {
 	s.changed = make(chan struct{})
 }
 
-func (t *videoTrackState) observeFrameLocked(f *frame.VideoFrame, freezeThreshold time.Duration, history int) {
+func (t *videoTrackState) observeFrameLocked(f *frame.VideoFrame, configuredThreshold, defaultThreshold time.Duration, history int) {
+	t.observeFrameAtLocked(f, time.Now(), configuredThreshold, defaultThreshold, history)
+}
+
+func (t *videoTrackState) observeFrameAtLocked(f *frame.VideoFrame, now time.Time, configuredThreshold, defaultThreshold time.Duration, history int) {
 	if f == nil {
 		return
 	}
-	now := time.Now()
 	if t.startedAt.IsZero() {
 		t.startedAt = now
 	}
 	if !t.lastFrameAt.IsZero() {
 		gap := now.Sub(t.lastFrameAt)
-		if gap > freezeThreshold {
+		if gap > t.freezeThresholdLocked(configuredThreshold, defaultThreshold) {
 			t.freezeCount++
 			t.freezeEvents = appendLimited(t.freezeEvents, pionrecv.FreezeEvent{
 				At:   now,
 				Gap:  gap,
 				Kind: "frame",
 			}, history)
+		} else if gap > 0 {
+			t.estimatedStep = gap
 		}
 	}
+	if t.hasLastFramePTS && f.PTS > t.lastFramePTS {
+		step := time.Duration(f.PTS-t.lastFramePTS) * time.Second / 90000
+		if step > 0 {
+			t.estimatedStep = step
+		}
+	}
+	t.lastFramePTS = f.PTS
+	t.hasLastFramePTS = true
 	t.lastFrameAt = now
 	t.frameCount++
 	if f.IsKeyframe {
@@ -1061,6 +1082,26 @@ func (t *videoTrackState) observeFrameLocked(f *frame.VideoFrame, freezeThreshol
 	}
 	t.currentWidth = f.Width
 	t.currentHeight = f.Height
+}
+
+func (t *videoTrackState) freezeThresholdLocked(configuredThreshold, defaultThreshold time.Duration) time.Duration {
+	if configuredThreshold > 0 {
+		return configuredThreshold
+	}
+	threshold := defaultThreshold
+	if threshold <= 0 {
+		threshold = sessionDefaultVideoFreezeCap
+	}
+	if t.estimatedStep > 0 {
+		adaptive := 3 * t.estimatedStep
+		if adaptive < sessionMinVideoFreeze {
+			adaptive = sessionMinVideoFreeze
+		}
+		if adaptive < threshold {
+			threshold = adaptive
+		}
+	}
+	return threshold
 }
 
 func (t *videoTrackState) observeCodecChangeLocked(change pionrecv.CodecChange, history int) {
@@ -1146,6 +1187,9 @@ func (t *videoTrackState) resetLocked() {
 	t.frameCount = 0
 	t.keyframeCount = 0
 	t.freezeCount = 0
+	t.lastFramePTS = 0
+	t.hasLastFramePTS = false
+	t.estimatedStep = 0
 	t.currentWidth = 0
 	t.currentHeight = 0
 	t.resolutionChanges = 0
@@ -1160,29 +1204,37 @@ func (t *videoTrackState) resetLocked() {
 	t.stats = nil
 }
 
-func (t *audioTrackState) observeFrameLocked(f *frame.AudioFrame, freezeThreshold time.Duration, history int) {
+func (t *audioTrackState) observeFrameLocked(f *frame.AudioFrame, configuredThreshold, defaultThreshold time.Duration, history int) {
+	t.observeFrameAtLocked(f, time.Now(), configuredThreshold, defaultThreshold, history)
+}
+
+func (t *audioTrackState) observeFrameAtLocked(f *frame.AudioFrame, now time.Time, configuredThreshold, defaultThreshold time.Duration, history int) {
 	if f == nil {
 		return
 	}
-	now := time.Now()
 	if t.startedAt.IsZero() {
 		t.startedAt = now
 	}
+	ptime := f.Duration()
 	if !t.lastFrameAt.IsZero() {
 		gap := now.Sub(t.lastFrameAt)
-		if gap > freezeThreshold {
+		if gap > t.freezeThresholdLocked(configuredThreshold, defaultThreshold, ptime) {
 			t.freezeCount++
 			t.freezeEvents = appendLimited(t.freezeEvents, pionrecv.FreezeEvent{
 				At:   now,
 				Gap:  gap,
 				Kind: "frame",
 			}, history)
+		} else if gap > 0 && ptime <= 0 {
+			t.estimatedStep = gap
 		}
 	}
 	t.lastFrameAt = now
 	t.frameCount++
 
-	ptime := f.Duration()
+	if ptime > 0 {
+		t.estimatedStep = ptime
+	}
 	peak, rms, clipped := audioLevels(f)
 	silent := rms <= sessionAudioSilenceThreshold
 
@@ -1219,6 +1271,30 @@ func (t *audioTrackState) observeFrameLocked(f *frame.AudioFrame, freezeThreshol
 	t.currentPTime = ptime
 	t.peakLevel = peak
 	t.rmsLevel = rms
+}
+
+func (t *audioTrackState) freezeThresholdLocked(configuredThreshold, defaultThreshold, ptime time.Duration) time.Duration {
+	if configuredThreshold > 0 {
+		return configuredThreshold
+	}
+	threshold := defaultThreshold
+	if threshold <= 0 {
+		threshold = sessionDefaultAudioFreezeCap
+	}
+	step := t.estimatedStep
+	if ptime > 0 {
+		step = ptime
+	}
+	if step > 0 {
+		adaptive := 3 * step
+		if adaptive < sessionMinAudioFreeze {
+			adaptive = sessionMinAudioFreeze
+		}
+		if adaptive < threshold {
+			threshold = adaptive
+		}
+	}
+	return threshold
 }
 
 func (t *audioTrackState) observeCodecChangeLocked(change pionrecv.CodecChange, history int) {
@@ -1303,6 +1379,7 @@ func (t *audioTrackState) resetLocked() {
 	t.lastFrameAt = time.Time{}
 	t.frameCount = 0
 	t.freezeCount = 0
+	t.estimatedStep = 0
 	t.currentSampleRate = 0
 	t.currentChannels = 0
 	t.currentNumSamples = 0

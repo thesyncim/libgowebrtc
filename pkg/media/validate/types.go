@@ -15,6 +15,7 @@ type SessionConfig struct {
 	Browser                     pioncodec.Browser
 	StatsPollInterval           time.Duration
 	EventHistory                int
+	// Zero threshold values use adaptive browser-shaped defaults.
 	FreezeThreshold             time.Duration
 	PacketGapThreshold          time.Duration
 	AudioGapThreshold           time.Duration
