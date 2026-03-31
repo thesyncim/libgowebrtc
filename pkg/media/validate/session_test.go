@@ -452,6 +452,35 @@ func TestSessionObserveRemoteTracks(t *testing.T) {
 	}
 }
 
+func TestSessionObserveRemoteTrackRecordsCallbackInstallWarnings(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{})
+	video := &failingRemoteVideoTrack{
+		fakeRemoteVideoTrack: newFakeRemoteVideoTrack("video-1", "stream-1", "", codec.VP8, webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
+			PayloadType:        96,
+		}),
+		err: errors.New("video callback unavailable"),
+	}
+	audio := &failingRemoteAudioTrack{
+		fakeRemoteAudioTrack: newFakeRemoteAudioTrack("audio-1", "stream-1", "", codec.Opus, webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
+			PayloadType:        111,
+		}),
+		err: errors.New("audio callback unavailable"),
+	}
+
+	session.ObserveRemoteTrack(video)
+	session.ObserveRemoteTrack(audio)
+
+	snapshot := session.Snapshot()
+	if len(snapshot.Warnings) != 2 {
+		t.Fatalf("warnings = %v, want two callback install warnings", snapshot.Warnings)
+	}
+	if !strings.Contains(snapshot.Warnings[0], "video frame callback") || !strings.Contains(snapshot.Warnings[1], "audio frame callback") {
+		t.Fatalf("warnings = %v, want callback install warnings", snapshot.Warnings)
+	}
+}
+
 func TestSessionDataChannelHeartbeatsAndScenarioLab(t *testing.T) {
 	session := newSession(nil, nil, SessionConfig{
 		EnableDataChannelHeartbeats: true,

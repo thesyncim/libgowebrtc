@@ -102,7 +102,7 @@ func newFakeRemoteVideoTrack(id, streamID, rid string, codecType codec.Type, par
 		},
 		codecType:   codecType,
 		codecParams: params,
-		payloadType: webrtc.PayloadType(params.PayloadType),
+		payloadType: params.PayloadType,
 	}
 }
 
@@ -162,7 +162,7 @@ func newFakeRemoteAudioTrack(id, streamID, rid string, codecType codec.Type, par
 		},
 		codecType:   codecType,
 		codecParams: params,
-		payloadType: webrtc.PayloadType(params.PayloadType),
+		payloadType: params.PayloadType,
 	}
 }
 
@@ -195,4 +195,22 @@ func (f *fakeRemoteAudioTrack) emitCodecChange(change pionrecv.CodecChange) {
 	if f.onCodecChange != nil {
 		f.onCodecChange(change)
 	}
+}
+
+type failingRemoteVideoTrack struct {
+	*fakeRemoteVideoTrack
+	err error
+}
+
+func (f *failingRemoteVideoTrack) SetOnVideoFrame(func(*frame.VideoFrame)) error {
+	return f.err
+}
+
+type failingRemoteAudioTrack struct {
+	*fakeRemoteAudioTrack
+	err error
+}
+
+func (f *failingRemoteAudioTrack) SetOnAudioFrame(func(*frame.AudioFrame)) error {
+	return f.err
 }

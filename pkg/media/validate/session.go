@@ -363,12 +363,14 @@ func (s *Session) observeVideoTrack(track media.RemoteVideoTrack, source string,
 		return
 	}
 
-	_ = track.SetOnVideoFrame(func(f *frame.VideoFrame) {
+	if err := track.SetOnVideoFrame(func(f *frame.VideoFrame) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		state.observeFrameLocked(f, s.cfg.FreezeThreshold, s.cfg.EventHistory)
 		s.signalLocked()
-	})
+	}); err != nil {
+		s.recordWarning(fmt.Sprintf("validate: install video frame callback for %q: %v", track.ID(), err))
+	}
 	if codecTrack, ok := track.(media.PionRemoteVideoTrack); ok {
 		codecTrack.SetOnCodecChange(func(change pionrecv.CodecChange) {
 			s.mu.Lock()
@@ -389,12 +391,14 @@ func (s *Session) observeAudioTrack(track media.RemoteAudioTrack, source string,
 		return
 	}
 
-	_ = track.SetOnAudioFrame(func(f *frame.AudioFrame) {
+	if err := track.SetOnAudioFrame(func(f *frame.AudioFrame) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		state.observeFrameLocked(f, s.cfg.AudioGapThreshold, s.cfg.EventHistory)
 		s.signalLocked()
-	})
+	}); err != nil {
+		s.recordWarning(fmt.Sprintf("validate: install audio frame callback for %q: %v", track.ID(), err))
+	}
 	if codecTrack, ok := track.(media.PionRemoteAudioTrack); ok {
 		codecTrack.SetOnCodecChange(func(change pionrecv.CodecChange) {
 			s.mu.Lock()
@@ -944,6 +948,12 @@ func (s *Session) recordFailure(message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recordFailureLocked(message)
+}
+
+func (s *Session) recordWarning(message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recordWarningLocked(message)
 }
 
 func (s *Session) recordSkip(message string) {
