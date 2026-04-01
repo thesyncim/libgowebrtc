@@ -143,32 +143,45 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 }
 
 func TestMatchAudioTrackLocked(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
-	track := &audioTrackState{id: "audio-1", ssrc: 4321, rid: "a"}
-	session.audioTracks["audio-1"] = track
+	t.Run("track id / ssrc / rid", func(t *testing.T) {
+		session := newSession(nil, nil, SessionConfig{})
+		track := &audioTrackState{id: "audio-1", ssrc: 4321, rid: "a"}
+		session.audioTracks["audio-1"] = track
 
-	if got := session.matchAudioTrackLocked(RTPStatsSample{TrackID: "audio-1"}); got != track {
-		t.Fatalf("match by track id = %p, want %p", got, track)
-	}
-	if got := session.matchAudioTrackLocked(RTPStatsSample{SSRC: 4321}); got != track {
-		t.Fatalf("match by ssrc = %p, want %p", got, track)
-	}
-	if got := session.matchAudioTrackLocked(RTPStatsSample{RID: "a"}); got != track {
-		t.Fatalf("match by rid = %p, want %p", got, track)
-	}
-	if got := session.matchAudioTrackLocked(RTPStatsSample{TrackID: "missing"}); got != nil {
-		t.Fatalf("match missing = %p, want nil", got)
-	}
+		if got := session.matchAudioTrackLocked(RTPStatsSample{TrackID: "audio-1"}); got != track {
+			t.Fatalf("match by track id = %p, want %p", got, track)
+		}
+		if got := session.matchAudioTrackLocked(RTPStatsSample{SSRC: 4321}); got != track {
+			t.Fatalf("match by ssrc = %p, want %p", got, track)
+		}
+		if got := session.matchAudioTrackLocked(RTPStatsSample{RID: "a"}); got != track {
+			t.Fatalf("match by rid = %p, want %p", got, track)
+		}
+		if got := session.matchAudioTrackLocked(RTPStatsSample{TrackID: "missing"}); got != nil {
+			t.Fatalf("match missing = %p, want nil", got)
+		}
+	})
 
-	session = newSession(nil, nil, SessionConfig{})
-	track = &audioTrackState{id: "audio-1"}
-	session.audioTracks["audio-1"] = track
-	if got := session.matchAudioTrackLocked(RTPStatsSample{Kind: "audio"}); got != track {
-		t.Fatalf("single-track fallback = %p, want %p", got, track)
-	}
-	if got := session.matchAudioTrackLocked(RTPStatsSample{Kind: "audio", TrackID: "native-track-attachment"}); got != nil {
-		t.Fatalf("single-track fallback with explicit id = %p, want nil", got)
-	}
+	t.Run("current mid", func(t *testing.T) {
+		session := newSession(nil, nil, SessionConfig{})
+		track := &audioTrackState{id: "audio-1", currentMID: "audio-mid"}
+		session.audioTracks["audio-1"] = track
+		if got := session.matchAudioTrackLocked(RTPStatsSample{MID: "audio-mid"}); got != track {
+			t.Fatalf("match by current mid = %p, want %p", got, track)
+		}
+	})
+
+	t.Run("single-track fallback", func(t *testing.T) {
+		session := newSession(nil, nil, SessionConfig{})
+		track := &audioTrackState{id: "audio-1"}
+		session.audioTracks["audio-1"] = track
+		if got := session.matchAudioTrackLocked(RTPStatsSample{Kind: "audio"}); got != track {
+			t.Fatalf("single-track fallback = %p, want %p", got, track)
+		}
+		if got := session.matchAudioTrackLocked(RTPStatsSample{Kind: "audio", TrackID: "native-track-attachment"}); got != nil {
+			t.Fatalf("single-track fallback with explicit id = %p, want nil", got)
+		}
+	})
 }
 
 func TestMatchRTPStatsLocked(t *testing.T) {
@@ -199,8 +212,17 @@ func TestMatchRTPStatsLocked(t *testing.T) {
 	}
 
 	session.matchRTPStatsLocked(RTPStatsSample{TrackID: "audio-1", Kind: "audio"})
-	if len(session.audioTracks["audio-1"].stats) != 1 {
-		t.Fatalf("len(audio stats) = %d, want 1", len(session.audioTracks["audio-1"].stats))
+	audioState := session.audioTracks["audio-1"]
+	if len(audioState.stats) != 1 {
+		t.Fatalf("len(audio stats) = %d, want 1", len(audioState.stats))
+	}
+	if audioState.currentMID != "" {
+		t.Fatalf("audio current mid = %q, want empty when sample had no MID", audioState.currentMID)
+	}
+
+	session.matchRTPStatsLocked(RTPStatsSample{TrackID: "audio-1", Kind: "audio", MID: "audio-mid"})
+	if audioState.currentMID != "audio-mid" {
+		t.Fatalf("audio current mid = %q, want %q", audioState.currentMID, "audio-mid")
 	}
 
 	session.matchRTPStatsLocked(RTPStatsSample{TrackID: "missing", Kind: "video"})
