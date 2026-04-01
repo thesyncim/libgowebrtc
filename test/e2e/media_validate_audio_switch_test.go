@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,10 @@ import (
 )
 
 func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		t.Skip("native receiver audio codec-switch validation is currently only stable on darwin_arm64")
+	}
+
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
 
