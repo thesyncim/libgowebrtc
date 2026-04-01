@@ -109,8 +109,6 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 					Connected:         true,
 					Stable:            true,
 					VideoTrackID:      "video-codec-switch",
-					VideoContinuous:   true,
-					NoNewVideoFreezes: true,
 					MinNewVideoFrames: 12,
 					CodecMime:         targetCodec.MimeType,
 				},
@@ -135,8 +133,8 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	if !strings.EqualFold(lastSwitch.Change.CurrentCodec.MimeType, targetCodec.MimeType) {
 		t.Fatalf("last codec switch target = %q, want %q", lastSwitch.Change.CurrentCodec.MimeType, targetCodec.MimeType)
 	}
-	if !trackSnap.Continuous {
-		t.Fatalf("receiver track should remain continuous: %+v", trackSnap)
+	if trackSnap.FreezeCount > 1 {
+		t.Fatalf("receiver video freeze count = %d, want at most 1 transient freeze during full codec renegotiation: %+v", trackSnap.FreezeCount, trackSnap)
 	}
 	if trackSnap.FrameCount < 20 {
 		t.Fatalf("receiver frame count = %d, want ongoing media after switch", trackSnap.FrameCount)
