@@ -296,6 +296,7 @@ func TestVideoTrackBindSelectsPreferredCodecFromPreferences(t *testing.T) {
 
 	track, err := NewVideoTrack(VideoTrackConfig{
 		ID:      "video-preset-bind",
+		Codec:   codec.H264,
 		Width:   320,
 		Height:  240,
 		Bitrate: 400_000,
@@ -322,6 +323,9 @@ func TestVideoTrackBindSelectsPreferredCodecFromPreferences(t *testing.T) {
 		t.Fatalf("NewVideoTrack: %v", err)
 	}
 	defer track.Close()
+	if track.codec != codec.H264 {
+		t.Fatalf("track.codec before Bind = %v, want %v", track.codec, codec.H264)
+	}
 
 	writer := &collectingWriter{}
 	ctx := newVideoPreferenceContext(writer, []webrtc.RTPCodecParameters{
@@ -348,6 +352,9 @@ func TestVideoTrackBindSelectsPreferredCodecFromPreferences(t *testing.T) {
 	}
 	if params.MimeType != webrtc.MimeTypeVP8 {
 		t.Fatalf("Bind mime type = %q, want %q", params.MimeType, webrtc.MimeTypeVP8)
+	}
+	if track.codec != codec.VP8 {
+		t.Fatalf("track.codec after Bind = %v, want %v", track.codec, codec.VP8)
 	}
 	if err := track.WriteFrame(testutil.CreateTestVideoFrame(320, 240), true); err != nil {
 		t.Fatalf("WriteFrame: %v", err)
