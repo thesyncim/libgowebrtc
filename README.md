@@ -501,11 +501,11 @@ func (h *subscriber) OnTrack(track receivedTrack) {
 }
 ```
 
-### Browser-Like Remote Streams
+### Browser-Like Remote Tracks
 
-When you want browser-style `ontrack` behavior, use
-`media.RemoteStreamRegistry`. It groups repeated track callbacks into stable
-`MediaStream` objects keyed by remote stream ID.
+When you want a browser-shaped remote track surface, bind the backend track
+explicitly. The helper layer is still backend-neutral, but it no longer hides
+`OnTrack` behind a registry or synthetic event wrapper.
 
 The browser-like layer is backend-neutral:
 - `media.RemoteTrack`, `media.RemoteVideoTrack`, and `media.RemoteAudioTrack`
@@ -522,21 +522,28 @@ import (
     "github.com/pion/webrtc/v4"
     "github.com/thesyncim/libgowebrtc/pkg/frame"
     "github.com/thesyncim/libgowebrtc/pkg/media"
+    "github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
-registry := media.NewRemoteStreamRegistry()
+pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+    remoteTrack, err := media.BindPionRemoteTrack(
+        track,
+        receiver,
+        pionrecv.WithRTCPWriter(receiver.Transport()),
+    )
+    if err != nil {
+        println("remote bind error:", err.Error())
+        return
+    }
 
-pc.OnTrack(registry.PionOnTrack(func(event media.PionTrackEvent) {
-    video, ok := event.Track.(media.PionRemoteVideoTrack)
+    video, ok := remoteTrack.(media.PionRemoteVideoTrack)
     if !ok {
         return
     }
 
     _ = video.SetOnVideoFrame(func(f *frame.VideoFrame) {
-        println("decoded frame", f.Width, f.Height, "from stream", event.Streams[0].ID())
+        println("decoded frame", f.Width, f.Height, "from stream", video.StreamID())
     })
-}, func(err error) {
-    println("remote bind error:", err.Error())
 }))
 ```
 
@@ -549,25 +556,27 @@ import (
     "github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
-registry := media.NewRemoteStreamRegistry()
+peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
+    remoteTrack, err := media.BindPCRemoteTrack(track, receiver, streamID)
+    if err != nil {
+        println("remote bind error:", err.Error())
+        return
+    }
 
-peer.SetOnTrack(registry.PCOnTrack(func(event media.PCTrackEvent) {
-    video, ok := event.Track.(media.PCRemoteVideoTrack)
+    video, ok := remoteTrack.(media.PCRemoteVideoTrack)
     if !ok {
         return
     }
 
     _ = video.SetOnVideoFrame(func(f *frame.VideoFrame) {
-        println("native frame", f.Width, f.Height, "streams", len(event.Streams))
+        println("native frame", f.Width, f.Height, "stream", video.StreamID())
     })
-}, func(err error) {
-    println("remote bind error:", err.Error())
 }))
 ```
 
 If you already manage the Pion receive pipeline yourself with `pionrecv.New(...)`
-or `pionrecv.BindRemoteTrack(...)`, use `registry.BindDecodedTrack(decoded)` to
-project that decoded track into the same browser-like `MediaStream` model.
+or `pionrecv.BindRemoteTrack(...)`, use `media.BindDecodedRemoteTrack(decoded)`
+to project that decoded track into the same browser-like remote-track model.
 
 ### Low-Level Encoding (Allocation-Free)
 

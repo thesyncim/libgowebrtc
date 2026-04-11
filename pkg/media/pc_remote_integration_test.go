@@ -11,7 +11,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
-func TestRemoteStreamRegistryBindPCTrackIntegration(t *testing.T) {
+func TestBindPCRemoteTrackIntegration(t *testing.T) {
 	testutil.RequireShim(t)
 
 	sender, err := newMediaRemotePeerConnection()
@@ -34,16 +34,21 @@ func TestRemoteStreamRegistryBindPCTrackIntegration(t *testing.T) {
 		t.Fatalf("sender.AddTrack: %v", err)
 	}
 
-	registry := NewRemoteStreamRegistry()
-	defer registry.Close()
-
 	frameCh := make(chan *frame.VideoFrame, 8)
-	eventCh := make(chan PCTrackEvent, 1)
-	streamsCh := make(chan []*MediaStream, 1)
+	trackCh := make(chan PCRemoteVideoTrack, 1)
 	errCh := make(chan error, 1)
 
-	receiver.SetOnTrack(registry.PCOnTrack(func(event PCTrackEvent) {
-		video := event.Track.(PCRemoteVideoTrack)
+	receiver.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
+		videoTrack, err := BindPCRemoteTrack(track, receiver, streamID)
+		if err != nil {
+			select {
+			case errCh <- err:
+			default:
+			}
+			return
+		}
+
+		video := videoTrack.(PCRemoteVideoTrack)
 		if err := video.SetOnVideoFrame(func(f *frame.VideoFrame) {
 			select {
 			case frameCh <- f:
@@ -58,19 +63,10 @@ func TestRemoteStreamRegistryBindPCTrackIntegration(t *testing.T) {
 		}
 
 		select {
-		case eventCh <- event:
+		case trackCh <- video:
 		default:
 		}
-		select {
-		case streamsCh <- event.Streams:
-		default:
-		}
-	}, func(err error) {
-		select {
-		case errCh <- err:
-		default:
-		}
-	}))
+	})
 
 	if err := connectMediaRemotePeers(sender, receiver); err != nil {
 		t.Fatalf("connectMediaRemotePeers: %v", err)
@@ -85,23 +81,13 @@ func TestRemoteStreamRegistryBindPCTrackIntegration(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	var event PCTrackEvent
+	var boundTrack PCRemoteVideoTrack
 	select {
-	case event = <-eventCh:
+	case boundTrack = <-trackCh:
 	case err := <-errCh:
-		t.Fatalf("PCOnTrack: %v", err)
+		t.Fatalf("BindPCRemoteTrack: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for bound remote track")
-	}
-	boundTrack := event.Track
-
-	var streams []*MediaStream
-	select {
-	case streams = <-streamsCh:
-	case err := <-errCh:
-		t.Fatalf("PCOnTrack: %v", err)
-	case <-time.After(10 * time.Second):
-		t.Fatal("timed out waiting for remote streams")
 	}
 
 	select {
@@ -115,7 +101,6 @@ func TestRemoteStreamRegistryBindPCTrackIntegration(t *testing.T) {
 		t.Fatal("timed out waiting for decoded frame")
 	}
 
-	video := boundTrack.(PCRemoteVideoTrack)
 	if boundTrack.ID() != "remote-video" {
 		t.Fatalf("boundTrack.ID() = %q, want %q", boundTrack.ID(), "remote-video")
 	}
@@ -127,26 +112,11 @@ func TestRemoteStreamRegistryBindPCTrackIntegration(t *testing.T) {
 			receiver.RemoteDescription().SDP,
 		)
 	}
-	if len(streams) != 1 {
-		t.Fatalf("streams len = %d, want 1", len(streams))
-	}
-	if streams[0].ID() != "remote-stream" {
-		t.Fatalf("stream ID = %q, want %q", streams[0].ID(), "remote-stream")
-	}
-	if got := streams[0].GetTrackByID(boundTrack.ID()); got == nil {
-		t.Fatal("expected bound track to be present in returned MediaStream")
-	}
-	if video.PCTrack() == nil {
+	if boundTrack.PCTrack() == nil {
 		t.Fatal("PCTrack() = nil, want native libwebrtc track")
 	}
-	if video.PCReceiver() == nil {
+	if boundTrack.PCReceiver() == nil {
 		t.Fatal("PCReceiver() = nil, want native RTP receiver")
-	}
-	if event.PCTrack == nil {
-		t.Fatal("event.PCTrack = nil, want original libwebrtc track")
-	}
-	if event.Receiver == nil {
-		t.Fatal("event.Receiver = nil, want original RTP receiver")
 	}
 
 	boundTrack.Stop()
