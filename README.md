@@ -315,9 +315,8 @@ peerConnection.SetLocalDescription(offer)
 
 `pkg/media` is capture-only. For synthetic/manual frame production, use [`pkg/track`](./pkg/track).
 For native libwebrtc-backed senders, create tracks through [`pkg/pc`](./pkg/pc).
-Use `media.GetSupportedConstraints()` and typed `GetCapabilities()` calls to
-inspect which browser-shaped knobs the library can actually honor for a given
-capture-backed track.
+Use typed `GetCapabilities()` calls on concrete capture-backed tracks to inspect
+which browser-shaped knobs the library can actually honor.
 
 ### Pion Integration
 

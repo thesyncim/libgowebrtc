@@ -1,39 +1,5 @@
 package media
 
-// SupportedConstraints mirrors browser MediaTrackSupportedConstraints for the
-// subset implemented by pkg/media.
-type SupportedConstraints struct {
-	Width            bool // Width reports support for video width constraints.
-	Height           bool // Height reports support for video height constraints.
-	FrameRate        bool // FrameRate reports support for video frame-rate constraints.
-	FacingMode       bool // FacingMode reports support for camera facing-mode constraints.
-	DeviceID         bool // DeviceID reports support for exact or preferred device selection.
-	SampleRate       bool // SampleRate reports support for audio sample-rate constraints.
-	ChannelCount     bool // ChannelCount reports support for audio channel-count constraints.
-	EchoCancellation bool // EchoCancellation reports support for echo-cancellation constraints.
-	NoiseSuppression bool // NoiseSuppression reports support for noise-suppression constraints.
-	AutoGainControl  bool // AutoGainControl reports support for automatic gain control constraints.
-	DisplaySurface   bool // DisplaySurface reports support for display-capture surface constraints.
-}
-
-// GetSupportedConstraints reports which browser-shaped constraints this
-// package understands and applies.
-func GetSupportedConstraints() SupportedConstraints {
-	return SupportedConstraints{
-		Width:            true,
-		Height:           true,
-		FrameRate:        true,
-		FacingMode:       true,
-		DeviceID:         true,
-		SampleRate:       true,
-		ChannelCount:     true,
-		EchoCancellation: true,
-		NoiseSuppression: true,
-		AutoGainControl:  true,
-		DisplaySurface:   true,
-	}
-}
-
 // IntCapabilityRange mirrors the browser pattern of reporting supported
 // numeric ranges for a track capability.
 type IntCapabilityRange struct {

@@ -240,20 +240,3 @@ func TestConstraintEnumsAndErrors(t *testing.T) {
 		t.Fatalf("Error() = %q, want %q", err, want)
 	}
 }
-
-func TestGetSupportedConstraints(t *testing.T) {
-	supported := GetSupportedConstraints()
-
-	if !supported.Width || !supported.Height || !supported.FrameRate {
-		t.Fatal("video constraints should be reported as supported")
-	}
-	if !supported.DeviceID || !supported.FacingMode || !supported.DisplaySurface {
-		t.Fatal("device/display constraints should be reported as supported")
-	}
-	if !supported.SampleRate || !supported.ChannelCount {
-		t.Fatal("audio numeric constraints should be reported as supported")
-	}
-	if !supported.EchoCancellation || !supported.NoiseSuppression || !supported.AutoGainControl {
-		t.Fatal("audio boolean constraints should be reported as supported")
-	}
-}
