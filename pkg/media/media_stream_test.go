@@ -37,19 +37,20 @@ func (f *fakeMediaTrack) Clone() MediaStreamTrack {
 func newTestVideoTrack(t *testing.T) *videoStreamTrack {
 	t.Helper()
 
+	constraints := VideoConstraints{
+		Codec:   codec.VP8,
+		Bitrate: 500_000,
+	}
+	settings := VideoTrackSettings{
+		Width:     640,
+		Height:    480,
+		FrameRate: 30,
+	}
+	cfg, resolved := buildVideoTrackConfig(constraints, settings)
 	track, err := newVideoStreamTrack(
-		VideoConstraints{
-			Width:     ExactInt(640),
-			Height:    ExactInt(480),
-			FrameRate: ExactFloat(30),
-			Codec:     codec.VP8,
-			Bitrate:   500_000,
-		},
-		VideoTrackSettings{
-			Width:     640,
-			Height:    480,
-			FrameRate: 30,
-		},
+		cfg,
+		resolved,
+		settings,
 		"camera",
 	)
 	if err != nil {
@@ -62,19 +63,18 @@ func newTestVideoTrack(t *testing.T) *videoStreamTrack {
 func newTestAudioTrack(t *testing.T) *audioStreamTrack {
 	t.Helper()
 
+	constraints := AudioConstraints{
+		Bitrate: 64_000,
+	}
+	settings := AudioTrackSettings{
+		SampleRate:   48_000,
+		ChannelCount: 2,
+	}
+	cfg, resolved := buildAudioTrackConfig(constraints, settings)
 	track, err := newAudioStreamTrack(
-		AudioConstraints{
-			SampleRate:       ExactInt(48_000),
-			ChannelCount:     ExactInt(2),
-			EchoCancellation: ExactBool(false),
-			NoiseSuppression: ExactBool(false),
-			AutoGainControl:  ExactBool(false),
-			Bitrate:          64_000,
-		},
-		AudioTrackSettings{
-			SampleRate:   48_000,
-			ChannelCount: 2,
-		},
+		cfg,
+		resolved,
+		settings,
 		"microphone",
 	)
 	if err != nil {

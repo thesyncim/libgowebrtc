@@ -711,6 +711,7 @@ libgowebrtc/
 
 - Capture-backed device/screen streams via `GetUserMedia`/`GetDisplayMedia`
 - Browser-style capture constraints with explicit per-track settings
+- `EnumerateDevices` and `EnumerateScreens` require the capture shim and return `ErrCaptureNotSupported` when it is unavailable
 - Manual frame injection lives in `pkg/track`
 - Pion interop, including MediaStream-aware `msid` preservation via `AddTracksToPC`
 </details>
