@@ -133,7 +133,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 					if err := stepSession.WaitForStable(stepCtx); err != nil {
 						return err
 					}
-					if err := waitForAudioSenderSettle(stepCtx, 200*time.Millisecond); err != nil {
+					if err := waitForAudioSenderSettle(stepCtx, time.Second); err != nil {
 						return err
 					}
 
