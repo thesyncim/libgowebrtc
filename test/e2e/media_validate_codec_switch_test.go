@@ -29,7 +29,7 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	})
 
 	pcOnTrack := session.PCOnTrack()
-	pp.Receiver.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streams []string) {
+	pp.Receiver.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streamID string) {
 		pp.receivedTracksMu.Lock()
 		pp.ReceivedTracks = append(pp.ReceivedTracks, track)
 		pp.receivedTracksMu.Unlock()
@@ -37,7 +37,7 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		case pp.trackReceived <- struct{}{}:
 		default:
 		}
-		pcOnTrack(track, recv, streams)
+		pcOnTrack(track, recv, streamID)
 	})
 
 	track, err := pp.Sender.CreateVideoTrack("video-codec-switch", 640, 360)

@@ -47,7 +47,6 @@ type fakeRemoteBaseTrack struct {
 	kind       string
 	label      string
 	streamID   string
-	streamIDs  []string
 	rid        string
 	enabled    bool
 	muted      bool
@@ -70,12 +69,6 @@ func (f *fakeRemoteBaseTrack) Stop() {}
 func (f *fakeRemoteBaseTrack) StreamID() string {
 	return f.streamID
 }
-func (f *fakeRemoteBaseTrack) StreamIDs() []string {
-	if len(f.streamIDs) == 0 && f.streamID != "" {
-		return []string{f.streamID}
-	}
-	return append([]string(nil), f.streamIDs...)
-}
 func (f *fakeRemoteBaseTrack) RID() string { return f.rid }
 
 type fakeRemoteVideoTrack struct {
@@ -94,11 +87,8 @@ func newFakeRemoteVideoTrack(id, streamID, rid string, codecType codec.Type, par
 			kind:     "video",
 			label:    id,
 			streamID: streamID,
-			streamIDs: []string{
-				streamID,
-			},
-			rid:     rid,
-			enabled: true,
+			rid:      rid,
+			enabled:  true,
 		},
 		codecType:   codecType,
 		codecParams: params,
@@ -108,7 +98,6 @@ func newFakeRemoteVideoTrack(id, streamID, rid string, codecType codec.Type, par
 
 func (f *fakeRemoteVideoTrack) Clone() media.MediaStreamTrack {
 	clone := *f
-	clone.streamIDs = append([]string(nil), f.streamIDs...)
 	clone.onVideoFrame = nil
 	clone.onCodecChange = nil
 	return &clone
@@ -154,11 +143,8 @@ func newFakeRemoteAudioTrack(id, streamID, rid string, codecType codec.Type, par
 			kind:     "audio",
 			label:    id,
 			streamID: streamID,
-			streamIDs: []string{
-				streamID,
-			},
-			rid:     rid,
-			enabled: true,
+			rid:      rid,
+			enabled:  true,
 		},
 		codecType:   codecType,
 		codecParams: params,
@@ -168,7 +154,6 @@ func newFakeRemoteAudioTrack(id, streamID, rid string, codecType codec.Type, par
 
 func (f *fakeRemoteAudioTrack) Clone() media.MediaStreamTrack {
 	clone := *f
-	clone.streamIDs = append([]string(nil), f.streamIDs...)
 	clone.onAudioFrame = nil
 	clone.onCodecChange = nil
 	return &clone

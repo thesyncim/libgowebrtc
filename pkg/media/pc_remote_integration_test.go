@@ -121,15 +121,11 @@ func TestRemoteStreamRegistryBindPCTrackIntegration(t *testing.T) {
 	}
 	if boundTrack.StreamID() != "remote-stream" {
 		t.Fatalf(
-			"boundTrack.ID()=%q StreamID()=%q StreamIDs()=%v, want remote-stream\nremote SDP:\n%s",
+			"boundTrack.ID()=%q StreamID()=%q, want remote-stream\nremote SDP:\n%s",
 			boundTrack.ID(),
 			boundTrack.StreamID(),
-			boundTrack.StreamIDs(),
 			receiver.RemoteDescription().SDP,
 		)
-	}
-	if got := boundTrack.StreamIDs(); len(got) != 1 || got[0] != "remote-stream" {
-		t.Fatalf("boundTrack.StreamIDs() = %v, want [remote-stream]", got)
 	}
 	if len(streams) != 1 {
 		t.Fatalf("streams len = %d, want 1", len(streams))

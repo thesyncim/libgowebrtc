@@ -108,8 +108,8 @@ func NewPionLibPeerPair(t *testing.T) *PionLibPeerPair {
 	})
 
 	// Setup lib OnTrack handler
-	lib.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streams []string) {
-		t.Logf("Lib received track: id=%s kind=%s", track.ID(), track.Kind())
+	lib.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streamID string) {
+		t.Logf("Lib received track: id=%s stream=%s kind=%s", track.ID(), streamID, track.Kind())
 		select {
 		case pp.libTrackReceived <- track:
 		default:
@@ -326,7 +326,7 @@ func TestLibToPionVideoInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
 	}
-	if _, err = pp.Lib.AddTrack(track); err != nil {
+	if _, err = pp.Lib.AddTrack(track, track.ID()); err != nil {
 		t.Fatalf("Failed to add track: %v", err)
 	}
 
@@ -470,7 +470,7 @@ func TestBidirectionalVideoInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create lib video track: %v", err)
 	}
-	if _, err = pp.Lib.AddTrack(libTrack); err != nil {
+	if _, err = pp.Lib.AddTrack(libTrack, libTrack.ID()); err != nil {
 		t.Fatalf("Failed to add lib track: %v", err)
 	}
 
@@ -625,7 +625,7 @@ func TestCodecNegotiation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create track: %v", err)
 			}
-			if _, err = pp.Lib.AddTrack(track); err != nil {
+			if _, err = pp.Lib.AddTrack(track, track.ID()); err != nil {
 				t.Fatalf("Failed to add track: %v", err)
 			}
 
@@ -662,7 +662,7 @@ func TestMultipleTracksInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
 	}
-	if _, err = pp.Lib.AddTrack(videoTrack); err != nil {
+	if _, err = pp.Lib.AddTrack(videoTrack, videoTrack.ID()); err != nil {
 		t.Fatalf("Failed to add video track: %v", err)
 	}
 
@@ -671,7 +671,7 @@ func TestMultipleTracksInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create audio track: %v", err)
 	}
-	if _, err = pp.Lib.AddTrack(audioTrack); err != nil {
+	if _, err = pp.Lib.AddTrack(audioTrack, audioTrack.ID()); err != nil {
 		t.Fatalf("Failed to add audio track: %v", err)
 	}
 
@@ -709,7 +709,7 @@ func TestRenegotiationInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create first video track: %v", err)
 	}
-	if _, err = pp.Lib.AddTrack(track1); err != nil {
+	if _, err = pp.Lib.AddTrack(track1, track1.ID()); err != nil {
 		t.Fatalf("Failed to add first track: %v", err)
 	}
 
@@ -728,7 +728,7 @@ func TestRenegotiationInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create second video track: %v", err)
 	}
-	if _, err = pp.Lib.AddTrack(track2); err != nil {
+	if _, err = pp.Lib.AddTrack(track2, track2.ID()); err != nil {
 		t.Fatalf("Failed to add second track: %v", err)
 	}
 
@@ -810,7 +810,7 @@ func TestSDPParsing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create track: %v", err)
 	}
-	if _, err = pp.Lib.AddTrack(track); err != nil {
+	if _, err = pp.Lib.AddTrack(track, track.ID()); err != nil {
 		t.Fatalf("Failed to add track: %v", err)
 	}
 
@@ -884,7 +884,7 @@ func TestConnectionStateInterop(t *testing.T) {
 
 	// Add a track to have media
 	track, _ := pp.Lib.CreateVideoTrack("state-test", 320, 240)
-	_, _ = pp.Lib.AddTrack(track)
+	_, _ = pp.Lib.AddTrack(track, track.ID())
 
 	// Connect
 	if err := pp.ConnectLibOffersPionAnswers(); err != nil {
@@ -948,7 +948,7 @@ func TestICECandidateExchange(t *testing.T) {
 
 	// Add a track
 	track, _ := pp.Lib.CreateVideoTrack("ice-test", 320, 240)
-	_, _ = pp.Lib.AddTrack(track)
+	_, _ = pp.Lib.AddTrack(track, track.ID())
 
 	// Perform offer/answer without waiting for gathering
 	offer, _ := pp.Lib.CreateOffer(nil)

@@ -299,7 +299,7 @@ func (s *Session) handleSelectVideoDevice(deviceID string) error {
 		}
 		s.videoTrack = track
 
-		if _, err := s.peerConn.AddTrack(track); err != nil {
+		if _, err := s.peerConn.AddTrack(track, track.ID()); err != nil {
 			return fmt.Errorf("add track: %w", err)
 		}
 	}
@@ -371,7 +371,7 @@ func (s *Session) handleSelectAudioDevice(deviceID string) error {
 		}
 		s.audioTrack = track
 
-		if _, err := s.peerConn.AddTrack(track); err != nil {
+		if _, err := s.peerConn.AddTrack(track, track.ID()); err != nil {
 			return fmt.Errorf("add track: %w", err)
 		}
 	}

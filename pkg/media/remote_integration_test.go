@@ -130,9 +130,6 @@ func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
 	if boundTrack.StreamID() != "remote-stream" {
 		t.Fatalf("boundTrack.StreamID() = %q, want %q", boundTrack.StreamID(), "remote-stream")
 	}
-	if got := boundTrack.StreamIDs(); len(got) != 1 || got[0] != "remote-stream" {
-		t.Fatalf("boundTrack.StreamIDs() = %v, want [remote-stream]", got)
-	}
 	if len(streams) != 1 {
 		t.Fatalf("streams len = %d, want 1", len(streams))
 	}
