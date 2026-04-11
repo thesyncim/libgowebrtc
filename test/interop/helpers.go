@@ -168,9 +168,10 @@ func (pp *PeerPair) forwardLibToPion() {
 				return
 			}
 			_ = pp.Pion.AddICECandidate(pionwebrtc.ICECandidateInit{
-				Candidate:     candidate.Candidate,
-				SDPMid:        candidate.SDPMid,
-				SDPMLineIndex: candidate.SDPMLineIndex,
+				Candidate:        candidate.Candidate,
+				SDPMid:           candidate.SDPMid,
+				SDPMLineIndex:    candidate.SDPMLineIndex,
+				UsernameFragment: candidate.UsernameFragment,
 			})
 		}
 	}
@@ -194,9 +195,10 @@ func (pp *PeerPair) forwardPionToLib() {
 			if pp.Lib.IsValid() {
 				init := candidate.ToJSON()
 				_ = pp.Lib.AddICECandidate(pc.ICECandidate{
-					Candidate:     init.Candidate,
-					SDPMid:        init.SDPMid,
-					SDPMLineIndex: init.SDPMLineIndex,
+					Candidate:        init.Candidate,
+					SDPMid:           init.SDPMid,
+					SDPMLineIndex:    init.SDPMLineIndex,
+					UsernameFragment: init.UsernameFragment,
 				})
 			}
 		}

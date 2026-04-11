@@ -401,9 +401,10 @@ func TestDataChannelWithICE(t *testing.T) {
 	go func() {
 		for candidate := range libCandidates {
 			pionPC.AddICECandidate(pionwebrtc.ICECandidateInit{
-				Candidate:     candidate.Candidate,
-				SDPMid:        candidate.SDPMid,
-				SDPMLineIndex: candidate.SDPMLineIndex,
+				Candidate:        candidate.Candidate,
+				SDPMid:           candidate.SDPMid,
+				SDPMLineIndex:    candidate.SDPMLineIndex,
+				UsernameFragment: candidate.UsernameFragment,
 			})
 		}
 	}()
@@ -413,9 +414,10 @@ func TestDataChannelWithICE(t *testing.T) {
 			if candidate != nil {
 				init := candidate.ToJSON()
 				libPC.AddICECandidate(pc.ICECandidate{
-					Candidate:     init.Candidate,
-					SDPMid:        init.SDPMid,
-					SDPMLineIndex: init.SDPMLineIndex,
+					Candidate:        init.Candidate,
+					SDPMid:           init.SDPMid,
+					SDPMLineIndex:    init.SDPMLineIndex,
+					UsernameFragment: init.UsernameFragment,
 				})
 			}
 		}
