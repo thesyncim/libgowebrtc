@@ -172,12 +172,14 @@ func TestGetUserMediaResolvesDevicesAndSettings(t *testing.T) {
 			DeviceID:   IdealString("cam-2"),
 			FacingMode: FacingModeEnvironment,
 			Codec:      codec.VP8,
+			Bitrate:    500_000,
 		},
 		Audio: &AudioConstraints{
 			SampleRate:       ExactInt(48_000),
 			ChannelCount:     ExactInt(2),
 			DeviceID:         ExactString("mic-1"),
 			EchoCancellation: IdealBool(true),
+			Bitrate:          64_000,
 		},
 	})
 	if err != nil {
@@ -216,6 +218,56 @@ func TestGetUserMediaResolvesDevicesAndSettings(t *testing.T) {
 	}
 	if !audio.GetSettings().EchoCancellation {
 		t.Fatal("audio EchoCancellation = false, want true")
+	}
+}
+
+func TestGetUserMediaRejectsMissingVideoBitrate(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
+			return []ffi.DeviceInfo{
+				{DeviceID: "cam-1", Label: "Front Camera", Kind: ffi.DeviceKindVideoInput},
+			}, nil
+		},
+	})
+
+	stream, err := GetUserMedia(Constraints{
+		Video: &VideoConstraints{
+			Width:     ExactInt(640),
+			Height:    ExactInt(480),
+			FrameRate: ExactFloat(30),
+			Codec:     codec.VP8,
+		},
+	})
+	if !errors.Is(err, ErrInvalidConstraints) {
+		t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	}
+	if stream != nil {
+		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+	}
+}
+
+func TestGetUserMediaRejectsMissingAudioBitrate(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
+			return []ffi.DeviceInfo{
+				{DeviceID: "mic-1", Label: "Built-in Mic", Kind: ffi.DeviceKindAudioInput},
+			}, nil
+		},
+	})
+
+	stream, err := GetUserMedia(Constraints{
+		Audio: &AudioConstraints{
+			SampleRate:   ExactInt(48_000),
+			ChannelCount: ExactInt(2),
+		},
+	})
+	if !errors.Is(err, ErrInvalidConstraints) {
+		t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	}
+	if stream != nil {
+		t.Fatal("GetUserMedia() stream = non-nil, want nil")
 	}
 }
 
@@ -271,9 +323,11 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 			Width:     IdealInt(1920),
 			Height:    IdealInt(1080),
 			FrameRate: IdealFloat(30),
+			Bitrate:   3_000_000,
 		},
 		Audio: &AudioConstraints{
 			DeviceID: ExactString("mic-1"),
+			Bitrate:  64_000,
 		},
 	})
 	if err != nil {
@@ -330,7 +384,8 @@ func TestGetDisplayMediaRejectsConflictingTargets(t *testing.T) {
 func TestBuildVideoTrackConfigPrefersCodecPreferences(t *testing.T) {
 	cfg, resolved := buildVideoTrackConfig(
 		VideoConstraints{
-			Codec: codec.H264,
+			Codec:   codec.H264,
+			Bitrate: 500_000,
 			CodecPreferences: []webrtc.RTPCodecParameters{{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
 					MimeType:  webrtc.MimeTypeVP8,
@@ -352,11 +407,14 @@ func TestBuildVideoTrackConfigPrefersCodecPreferences(t *testing.T) {
 	if len(cfg.CodecPreferences) != 1 || cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeVP8 {
 		t.Fatalf("cfg.CodecPreferences = %+v, want VP8 preference", cfg.CodecPreferences)
 	}
-	if cfg.Bitrate == 0 {
-		t.Fatal("cfg.Bitrate should be explicitly resolved")
+	if cfg.Bitrate != 500_000 {
+		t.Fatalf("cfg.Bitrate = %d, want %d", cfg.Bitrate, 500_000)
 	}
 	if resolved.Codec != codec.VP8 {
 		t.Fatalf("resolved.Codec = %v, want %v", resolved.Codec, codec.VP8)
+	}
+	if resolved.Bitrate != 500_000 {
+		t.Fatalf("resolved.Bitrate = %d, want %d", resolved.Bitrate, 500_000)
 	}
 }
 
@@ -405,6 +463,7 @@ func TestNewVideoStreamTrackOptsInToAutoAdaptation(t *testing.T) {
 func TestBuildAudioTrackConfigPreservesCodecPreferences(t *testing.T) {
 	cfg, resolved := buildAudioTrackConfig(
 		AudioConstraints{
+			Bitrate: 64_000,
 			CodecPreferences: []webrtc.RTPCodecParameters{{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
 					MimeType:  webrtc.MimeTypeOpus,
@@ -419,13 +478,13 @@ func TestBuildAudioTrackConfigPreservesCodecPreferences(t *testing.T) {
 			ChannelCount: 2,
 		},
 	)
-	if cfg.Bitrate == 0 {
-		t.Fatal("cfg.Bitrate should be explicitly resolved")
+	if cfg.Bitrate != 64_000 {
+		t.Fatalf("cfg.Bitrate = %d, want %d", cfg.Bitrate, 64_000)
 	}
 	if len(cfg.CodecPreferences) != 1 || cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeOpus {
 		t.Fatalf("cfg.CodecPreferences = %+v, want Opus preference", cfg.CodecPreferences)
 	}
-	if resolved.Bitrate == 0 {
-		t.Fatal("resolved.Bitrate should be explicitly resolved")
+	if resolved.Bitrate != 64_000 {
+		t.Fatalf("resolved.Bitrate = %d, want %d", resolved.Bitrate, 64_000)
 	}
 }
