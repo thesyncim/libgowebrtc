@@ -202,8 +202,7 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	if err != nil {
 		return exampleStats{}, fmt.Errorf("add subscriber recv transceiver: %w", err)
 	}
-	subscriberPreset := pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionDecode, pioncodec.PresetModeSupported)
-	if err := subscriberRecv.SetCodecPreferences(filterCodecParametersByTypes(subscriberPreset.VideoCodecs(), codecCycle)); err != nil {
+	if err := subscriberRecv.SetCodecPreferences(codecPreferences(codecCycle)); err != nil {
 		return exampleStats{}, fmt.Errorf("set subscriber codec preferences: %w", err)
 	}
 	subscriberValidator = validate.NewPionSession(subscriberPC, validate.SessionConfig{
