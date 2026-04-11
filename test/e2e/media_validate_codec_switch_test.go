@@ -114,7 +114,7 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 			{
 				Name:   "codec-switch",
 				Action: validate.ScenarioActionCodecRenegotiation,
-				Callback: func(context.Context, *validate.Session) error {
+				Callback: func(stepCtx context.Context, _ *validate.Session) error {
 					if err := stopPumpAndWait(); err != nil {
 						return err
 					}
@@ -125,7 +125,7 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 					if err := pp.Renegotiate(); err != nil {
 						return err
 					}
-					stableCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+					stableCtx, cancel := context.WithTimeout(stepCtx, 4*time.Second)
 					defer cancel()
 					if err := session.WaitForStable(stableCtx); err != nil {
 						return err
