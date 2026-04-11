@@ -76,7 +76,7 @@ func New(cfg Config) (Packetizer, error) {
 		return nil, ErrBufferTooSmall
 	}
 	if cfg.ClockRate == 0 {
-		cfg.ClockRate = cfg.Codec.ClockRate()
+		return nil, fmt.Errorf("%w: clock rate is required", ErrInvalidData)
 	}
 
 	payloader, err := newPayloader(cfg.Codec)

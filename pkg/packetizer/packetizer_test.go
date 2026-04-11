@@ -11,36 +11,17 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
-func TestConfigDefaults(t *testing.T) {
-	configs := []struct {
-		name      string
-		codec     codec.Type
-		clockRate uint32
-	}{
-		{"H264", codec.H264, 90000},
-		{"VP8", codec.VP8, 90000},
-		{"VP9", codec.VP9, 90000},
-		{"AV1", codec.AV1, 90000},
-		{"Opus", codec.Opus, 48000},
+func TestNewRequiresExplicitClockRate(t *testing.T) {
+	p, err := New(Config{
+		Codec:       codec.H264,
+		SSRC:        1,
+		PayloadType: 96,
+	})
+	if err == nil {
+		t.Fatal("New() error = nil, want error")
 	}
-
-	for _, tc := range configs {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := Config{
-				Codec:       tc.codec,
-				SSRC:        1,
-				PayloadType: 96,
-			}
-
-			// ClockRate defaults to codec's clock rate when 0
-			if cfg.ClockRate == 0 {
-				cfg.ClockRate = tc.codec.ClockRate()
-			}
-
-			if cfg.ClockRate != tc.clockRate {
-				t.Errorf("ClockRate = %v, want %v", cfg.ClockRate, tc.clockRate)
-			}
-		})
+	if p != nil {
+		t.Fatalf("New() = %v, want nil packetizer", p)
 	}
 }
 
@@ -133,6 +114,7 @@ func TestPacketizeIntoInteropsWithPionDepacketizers(t *testing.T) {
 				SSRC:        0x01020304,
 				PayloadType: tc.payloadType,
 				MTU:         1200,
+				ClockRate:   tc.codecType.ClockRate(),
 			})
 			if err != nil {
 				t.Fatalf("New: %v", err)
