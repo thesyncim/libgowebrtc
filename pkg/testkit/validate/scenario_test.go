@@ -19,7 +19,7 @@ func TestScenarioLabRunDelaysAndCancellation(t *testing.T) {
 		t.Fatalf("Run(nil session) error = %v, want nil-session error", err)
 	}
 
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	lab := NewScenarioLab(session, LabConfig{StepDelay: 5 * time.Millisecond})
 	start := time.Now()
 	var calls int
@@ -63,7 +63,7 @@ func TestScenarioLabRunDelaysAndCancellation(t *testing.T) {
 }
 
 func TestScenarioLabRunStepErrorsAndHelpers(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	lab := NewScenarioLab(session, LabConfig{})
 	ctx := context.Background()
 
@@ -169,7 +169,7 @@ func TestScenarioLabRunStepErrorsAndHelpers(t *testing.T) {
 }
 
 func TestScenarioLabRunStepWaitsForRecoveryExpectations(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{SwitchRecoveryThreshold: 80 * time.Millisecond})
+	session := newSession(nil, SessionConfig{SwitchRecoveryThreshold: 80 * time.Millisecond})
 	session.mu.Lock()
 	session.appendConnectionStateLocked(time.Now(), webrtc.PeerConnectionStateDisconnected)
 	session.appendSignalingStateLocked(time.Now(), webrtc.SignalingStateHaveLocalOffer)
@@ -233,7 +233,7 @@ func TestScenarioLabRunStepWaitsForRecoveryExpectations(t *testing.T) {
 }
 
 func TestScenarioLabRunStepExpectationTracksFrameDeltasAndHold(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{SwitchRecoveryThreshold: 120 * time.Millisecond})
+	session := newSession(nil, SessionConfig{SwitchRecoveryThreshold: 120 * time.Millisecond})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{id: "video-1", frameCount: 3}
 	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1", frameCount: 5}
@@ -282,7 +282,7 @@ func TestScenarioLabRunStepExpectationTracksFrameDeltasAndHold(t *testing.T) {
 }
 
 func TestScenarioLabRunStepExpectationTimeoutIncludesReason(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{SwitchRecoveryThreshold: 20 * time.Millisecond})
+	session := newSession(nil, SessionConfig{SwitchRecoveryThreshold: 20 * time.Millisecond})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{
 		id:          "video-1",
@@ -318,7 +318,7 @@ func TestScenarioLabRunStepExpectationTimeoutIncludesReason(t *testing.T) {
 }
 
 func TestScenarioLabRunStepRejectsAmbiguousUnlabeledDataChannelActions(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	lab := NewScenarioLab(session, LabConfig{})
 	ctx := context.Background()
 
@@ -337,7 +337,7 @@ func TestScenarioLabRunStepRejectsAmbiguousUnlabeledDataChannelActions(t *testin
 }
 
 func TestScenarioLabRunStepExpectationSkipsUnsupportedBrowserAssertions(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{Browser: pioncodec.BrowserSafari})
+	session := newSession(nil, SessionConfig{Browser: pioncodec.BrowserSafari})
 	lab := NewScenarioLab(session, LabConfig{})
 
 	err := lab.Run(context.Background(), ScenarioScript{

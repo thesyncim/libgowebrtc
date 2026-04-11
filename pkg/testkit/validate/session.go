@@ -249,32 +249,29 @@ type Session struct {
 }
 
 // NewPionSession creates a validation session around a Pion PeerConnection.
-func NewPionSession(pc *webrtc.PeerConnection, registry *media.RemoteStreamRegistry, cfg SessionConfig) *Session {
+func NewPionSession(pc *webrtc.PeerConnection, cfg SessionConfig) *Session {
 	if pc == nil {
-		return newSession(nil, registry, cfg)
+		return newSession(nil, cfg)
 	}
-	return newSession(&pionPeerAdapter{pc: pc}, registry, cfg)
+	return newSession(&pionPeerAdapter{pc: pc}, cfg)
 }
 
 // NewPCSession creates a validation session around a native pkg/pc PeerConnection.
-func NewPCSession(pc *pc.PeerConnection, registry *media.RemoteStreamRegistry, cfg SessionConfig) *Session {
+func NewPCSession(pc *pc.PeerConnection, cfg SessionConfig) *Session {
 	if pc == nil {
-		return newSession(nil, registry, cfg)
+		return newSession(nil, cfg)
 	}
-	return newSession(&nativePeerAdapter{pc: pc}, registry, cfg)
+	return newSession(&nativePeerAdapter{pc: pc}, cfg)
 }
 
-func newSession(peer peerAdapter, registry *media.RemoteStreamRegistry, cfg SessionConfig) *Session {
+func newSession(peer peerAdapter, cfg SessionConfig) *Session {
 	cfg, policy := normalizeSessionConfig(cfg)
-	if registry == nil {
-		registry = media.NewRemoteStreamRegistry()
-	}
 
 	s := &Session{
 		cfg:          cfg,
 		policy:       policy,
 		peer:         peer,
-		registry:     registry,
+		registry:     media.NewRemoteStreamRegistry(),
 		videoTracks:  make(map[string]*videoTrackState),
 		audioTracks:  make(map[string]*audioTrackState),
 		dataChannels: make(map[string]*dataChannelState),

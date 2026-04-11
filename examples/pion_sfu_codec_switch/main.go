@@ -31,7 +31,6 @@ import (
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
-	"github.com/thesyncim/libgowebrtc/pkg/media"
 	"github.com/thesyncim/libgowebrtc/pkg/packetizer"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
@@ -207,7 +206,7 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	if err := subscriberRecv.SetCodecPreferences(filterCodecParametersByTypes(subscriberPreset.VideoCodecs(), codecCycle)); err != nil {
 		return exampleStats{}, fmt.Errorf("set subscriber codec preferences: %w", err)
 	}
-	subscriberValidator = validate.NewPionSession(subscriberPC, media.NewRemoteStreamRegistry(), validate.SessionConfig{
+	subscriberValidator = validate.NewPionSession(subscriberPC, validate.SessionConfig{
 		Browser:                 pioncodec.BrowserChrome,
 		StatsPollInterval:       250 * time.Millisecond,
 		EventHistory:            64,

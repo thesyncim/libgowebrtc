@@ -222,7 +222,7 @@ func TestPolicyForBrowser(t *testing.T) {
 
 func TestNewSessionsAndTrackWrappers(t *testing.T) {
 	pionPC := mustNewPionPeerConnection(t)
-	pionSession := NewPionSession(pionPC, nil, SessionConfig{})
+	pionSession := NewPionSession(pionPC, SessionConfig{})
 	if pionSession == nil {
 		t.Fatal("NewPionSession() = nil")
 	}
@@ -250,7 +250,7 @@ func TestNewSessionsAndTrackWrappers(t *testing.T) {
 		t.Fatalf("pion failures = %v, want nil-track failure", failures)
 	}
 
-	pcSession := NewPCSession(nil, nil, SessionConfig{})
+	pcSession := NewPCSession(nil, SessionConfig{})
 	if pcSession == nil {
 		t.Fatal("NewPCSession() = nil")
 	}
@@ -295,7 +295,7 @@ func TestSessionStatsCorrelationAndValidation(t *testing.T) {
 		},
 	}
 
-	session := newSession(peer, nil, SessionConfig{})
+	session := newSession(peer, SessionConfig{})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{
 		id:           "video-1",
@@ -341,7 +341,7 @@ func TestSessionWaitersAndCodecSwitch(t *testing.T) {
 		ice:       webrtc.ICEConnectionStateChecking,
 		signaling: webrtc.SignalingStateHaveLocalOffer,
 	}
-	session := newSession(peer, nil, SessionConfig{StatsPollInterval: 10 * time.Millisecond})
+	session := newSession(peer, SessionConfig{StatsPollInterval: 10 * time.Millisecond})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{
 		id:           "video-1",
@@ -397,7 +397,7 @@ func TestSessionWaitersAndCodecSwitch(t *testing.T) {
 }
 
 func TestSessionObserveRemoteTracks(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{
+	session := newSession(nil, SessionConfig{
 		FreezeThreshold:   5 * time.Millisecond,
 		AudioGapThreshold: 5 * time.Millisecond,
 		EventHistory:      8,
@@ -462,7 +462,7 @@ func TestSessionObserveRemoteTracks(t *testing.T) {
 }
 
 func TestSessionObserveRemoteTrackRecordsCallbackInstallWarnings(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	video := &failingRemoteVideoTrack{
 		fakeRemoteVideoTrack: newFakeRemoteVideoTrack("video-1", "stream-1", "", codec.VP8, webrtc.RTPCodecParameters{
 			RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
@@ -491,7 +491,7 @@ func TestSessionObserveRemoteTrackRecordsCallbackInstallWarnings(t *testing.T) {
 }
 
 func TestSessionDataChannelHeartbeatsAndScenarioLab(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{
+	session := newSession(nil, SessionConfig{
 		EnableDataChannelHeartbeats: true,
 		HeartbeatInterval:           10 * time.Millisecond,
 		HeartbeatTimeout:            50 * time.Millisecond,
@@ -564,7 +564,7 @@ func TestSessionDataChannelHeartbeatsAndScenarioLab(t *testing.T) {
 }
 
 func TestSessionDataChannelReobserveReplacesAdapterAndRestartsHeartbeats(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{
+	session := newSession(nil, SessionConfig{
 		EnableDataChannelHeartbeats: true,
 		HeartbeatInterval:           10 * time.Millisecond,
 		HeartbeatTimeout:            50 * time.Millisecond,
@@ -610,7 +610,7 @@ func TestSessionDataChannelReobserveReplacesAdapterAndRestartsHeartbeats(t *test
 }
 
 func TestSessionDataChannelReobserveIgnoresStaleAdapterCallbacks(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{
+	session := newSession(nil, SessionConfig{
 		EnableDataChannelHeartbeats: true,
 		HeartbeatInterval:           10 * time.Millisecond,
 		HeartbeatTimeout:            50 * time.Millisecond,
@@ -665,7 +665,7 @@ func TestSessionDataChannelReobserveIgnoresStaleAdapterCallbacks(t *testing.T) {
 }
 
 func TestSessionWaitForAudioContinuousAndDataChannelOpen(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	session.mu.Lock()
 	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1"}
 	session.signalLocked()
@@ -784,7 +784,7 @@ func TestAudioTrackStateAdaptiveFreezeThreshold(t *testing.T) {
 }
 
 func TestSessionWaitForRespondsToSignalsImmediately(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	session.mu.Lock()
 	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1"}
 	session.mu.Unlock()
@@ -808,7 +808,7 @@ func TestSessionWaitForRespondsToSignalsImmediately(t *testing.T) {
 }
 
 func TestSessionValidateAggregation(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{EnableDataChannelHeartbeats: true, EventHistory: 8})
+	session := newSession(nil, SessionConfig{EnableDataChannelHeartbeats: true, EventHistory: 8})
 	session.recordFailure("boom")
 
 	session.mu.Lock()
@@ -853,7 +853,7 @@ func TestSessionValidateAggregation(t *testing.T) {
 }
 
 func TestSessionHandleDataChannelMessageBranches(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	dc := &fakeDataChannel{label: "control", id: 7, state: "open"}
 	session.observeDataChannel(dc)
 
@@ -883,7 +883,7 @@ func TestSessionHandleDataChannelMessageBranches(t *testing.T) {
 }
 
 func TestSessionHeartbeatMissAndSendError(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{
+	session := newSession(nil, SessionConfig{
 		EnableDataChannelHeartbeats: true,
 		HeartbeatInterval:           10 * time.Millisecond,
 		HeartbeatTimeout:            10 * time.Millisecond,
@@ -974,7 +974,7 @@ func TestSessionTrackStateHelpersAndAudioLevels(t *testing.T) {
 }
 
 func TestSessionResetUsesCurrentDataChannelReadyState(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	dc := &fakeDataChannel{label: "control", id: 7, state: "open"}
 	session.observeDataChannel(dc)
 
@@ -1014,7 +1014,7 @@ func TestHasOpenDataChannel(t *testing.T) {
 }
 
 func TestSessionBrowserPolicySkipsUnsupportedAssertions(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{Browser: "safari"})
+	session := newSession(nil, SessionConfig{Browser: "safari"})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{id: "video-1"}
 	session.mu.Unlock()
@@ -1039,7 +1039,7 @@ func TestSessionBrowserPolicySkipsUnsupportedAssertions(t *testing.T) {
 }
 
 func TestSessionVideoSpecificWaiters(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{
 		id:              "video-1",
@@ -1069,7 +1069,7 @@ func TestSessionVideoSpecificWaiters(t *testing.T) {
 }
 
 func TestScenarioLabSkipsUnsupportedLayerScenarios(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{Browser: "safari"})
+	session := newSession(nil, SessionConfig{Browser: "safari"})
 	lab := NewScenarioLab(session, LabConfig{})
 	video := &fakePublishedVideo{}
 

@@ -63,7 +63,7 @@ func TestEnrichCodecSample(t *testing.T) {
 
 func TestMatchVideoTrackLocked(t *testing.T) {
 	t.Run("track_id", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		want := &videoTrackState{id: "video-1"}
 		session.videoTracks["video-1"] = want
 		if got := session.matchVideoTrackLocked(RTPStatsSample{TrackID: "video-1"}); got != want {
@@ -72,7 +72,7 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 	})
 
 	t.Run("ssrc", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		want := &videoTrackState{id: "video-1", ssrc: 1234}
 		session.videoTracks["video-1"] = want
 		if got := session.matchVideoTrackLocked(RTPStatsSample{SSRC: 1234}); got != want {
@@ -81,7 +81,7 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 	})
 
 	t.Run("rid", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		want := &videoTrackState{id: "video-1", rid: "f"}
 		session.videoTracks["video-1"] = want
 		if got := session.matchVideoTrackLocked(RTPStatsSample{RID: "f"}); got != want {
@@ -90,7 +90,7 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 	})
 
 	t.Run("current rid", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		want := &videoTrackState{id: "video-1", currentRID: "h"}
 		session.videoTracks["video-1"] = want
 		if got := session.matchVideoTrackLocked(RTPStatsSample{RID: "h"}); got != want {
@@ -99,7 +99,7 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 	})
 
 	t.Run("current mid", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		want := &videoTrackState{id: "video-1", currentMID: "mid-1"}
 		session.videoTracks["video-1"] = want
 		if got := session.matchVideoTrackLocked(RTPStatsSample{MID: "mid-1"}); got != want {
@@ -108,7 +108,7 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 	})
 
 	t.Run("monitor fallback rid", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		monitor := pionrecv.NewVideoSubscriberMonitor(pionrecv.VideoSubscriberMonitorConfig{})
 		setUnexportedField(t, monitor, "currentRID", "q")
 		want := &videoTrackState{id: "video-1", monitor: monitor}
@@ -119,7 +119,7 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 	})
 
 	t.Run("monitor fallback mid", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		monitor := pionrecv.NewVideoSubscriberMonitor(pionrecv.VideoSubscriberMonitorConfig{})
 		setUnexportedField(t, monitor, "currentMID", "mid-wire")
 		want := &videoTrackState{id: "video-1", monitor: monitor}
@@ -130,7 +130,7 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 	})
 
 	t.Run("single video track fallback", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		want := &videoTrackState{id: "video-1"}
 		session.videoTracks["video-1"] = want
 		if got := session.matchVideoTrackLocked(RTPStatsSample{Kind: "video"}); got != want {
@@ -144,7 +144,7 @@ func TestMatchVideoTrackLocked(t *testing.T) {
 
 func TestMatchAudioTrackLocked(t *testing.T) {
 	t.Run("track id / ssrc / rid", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		track := &audioTrackState{id: "audio-1", ssrc: 4321, rid: "a"}
 		session.audioTracks["audio-1"] = track
 
@@ -163,7 +163,7 @@ func TestMatchAudioTrackLocked(t *testing.T) {
 	})
 
 	t.Run("current mid", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		track := &audioTrackState{id: "audio-1", currentMID: "audio-mid"}
 		session.audioTracks["audio-1"] = track
 		if got := session.matchAudioTrackLocked(RTPStatsSample{MID: "audio-mid"}); got != track {
@@ -172,7 +172,7 @@ func TestMatchAudioTrackLocked(t *testing.T) {
 	})
 
 	t.Run("single-track fallback", func(t *testing.T) {
-		session := newSession(nil, nil, SessionConfig{})
+		session := newSession(nil, SessionConfig{})
 		track := &audioTrackState{id: "audio-1"}
 		session.audioTracks["audio-1"] = track
 		if got := session.matchAudioTrackLocked(RTPStatsSample{Kind: "audio"}); got != track {
@@ -185,7 +185,7 @@ func TestMatchAudioTrackLocked(t *testing.T) {
 }
 
 func TestMatchRTPStatsLocked(t *testing.T) {
-	session := newSession(nil, nil, SessionConfig{EventHistory: 8})
+	session := newSession(nil, SessionConfig{EventHistory: 8})
 	session.videoTracks["video-1"] = &videoTrackState{
 		id:            "video-1",
 		currentWidth:  320,
@@ -233,7 +233,7 @@ func TestMatchRTPStatsLocked(t *testing.T) {
 
 func TestApplyStatsReportLocked(t *testing.T) {
 	now := time.Now()
-	session := newSession(nil, nil, SessionConfig{EventHistory: 8})
+	session := newSession(nil, SessionConfig{EventHistory: 8})
 	session.videoTracks["video-1"] = &videoTrackState{id: "video-1"}
 	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1"}
 	session.dataChannels[dataChannelKey("control", 3)] = &dataChannelState{
@@ -354,7 +354,7 @@ func TestApplyStatsReportLocked(t *testing.T) {
 
 func TestApplyStatsReportLockedUpdatesCodecSwitchesFromStats(t *testing.T) {
 	now := time.Now()
-	session := newSession(nil, nil, SessionConfig{EventHistory: 8})
+	session := newSession(nil, SessionConfig{EventHistory: 8})
 	session.videoTracks["video-1"] = &videoTrackState{id: "video-1"}
 	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1"}
 
