@@ -726,8 +726,10 @@ func newAudioStreamTrack(cfg track.AudioTrackConfig, constraints AudioConstraint
 
 func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSettings) (track.VideoTrackConfig, VideoConstraints) {
 	resolved := constraints
+	trackID := generateID()
 	cfg := track.VideoTrackConfig{
-		ID:             generateID(),
+		ID:             trackID,
+		StreamID:       trackID,
 		Codec:          resolved.Codec,
 		Width:          settings.Width,
 		Height:         settings.Height,
@@ -755,8 +757,10 @@ func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSett
 
 func buildAudioTrackConfig(constraints AudioConstraints, settings AudioTrackSettings) (track.AudioTrackConfig, AudioConstraints) {
 	resolved := constraints
+	trackID := generateID()
 	cfg := track.AudioTrackConfig{
-		ID:         generateID(),
+		ID:         trackID,
+		StreamID:   trackID,
 		SampleRate: settings.SampleRate,
 		Channels:   settings.ChannelCount,
 		Bitrate:    resolved.Bitrate,

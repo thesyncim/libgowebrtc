@@ -108,9 +108,8 @@ func TestVideoTrackDefaults(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	// Check StreamID defaults to ID
-	if track.StreamID() != "video-0" {
-		t.Errorf("StreamID should default to ID, got %v", track.StreamID())
+	if track.StreamID() != "" {
+		t.Errorf("StreamID = %q, want empty", track.StreamID())
 	}
 }
 
@@ -310,9 +309,8 @@ func TestAudioTrackDefaults(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	// Check defaults
-	if track.StreamID() != "audio-0" {
-		t.Errorf("StreamID should default to ID")
+	if track.StreamID() != "" {
+		t.Errorf("StreamID = %q, want empty", track.StreamID())
 	}
 	if track.config.SampleRate != 48000 {
 		t.Errorf("SampleRate should default to 48000, got %v", track.config.SampleRate)

@@ -151,9 +151,6 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 	if cfg.ID == "" {
 		return nil, ErrInvalidConfig
 	}
-	if cfg.StreamID == "" {
-		cfg.StreamID = cfg.ID
-	}
 	if cfg.MTU == 0 {
 		cfg.MTU = 1200
 	}
@@ -948,9 +945,6 @@ type AudioTrack struct {
 func NewAudioTrack(cfg AudioTrackConfig) (*AudioTrack, error) {
 	if cfg.ID == "" {
 		return nil, ErrInvalidConfig
-	}
-	if cfg.StreamID == "" {
-		cfg.StreamID = cfg.ID
 	}
 	if cfg.SampleRate == 0 {
 		cfg.SampleRate = 48000

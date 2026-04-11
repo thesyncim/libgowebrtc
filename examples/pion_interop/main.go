@@ -43,12 +43,13 @@ func main() {
 	// Create libwebrtc-backed video track
 	fmt.Println("\n2. Creating libwebrtc video track (VP8)...")
 	videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
-		ID:      "video-0",
-		Codec:   codec.VP8,
-		Width:   1280,
-		Height:  720,
-		Bitrate: 2_000_000,
-		FPS:     30,
+		ID:       "video-0",
+		StreamID: "stream-video-0",
+		Codec:    codec.VP8,
+		Width:    1280,
+		Height:   720,
+		Bitrate:  2_000_000,
+		FPS:      30,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create video track: %v", err)
@@ -60,6 +61,7 @@ func main() {
 	fmt.Println("\n3. Creating libwebrtc audio track (Opus)...")
 	audioTrack, err := track.NewAudioTrack(track.AudioTrackConfig{
 		ID:         "audio-0",
+		StreamID:   "stream-audio-0",
 		SampleRate: 48000,
 		Channels:   2,
 		Bitrate:    64000,
