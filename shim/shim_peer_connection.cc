@@ -98,11 +98,13 @@ public:
     void OnIceCandidate(const webrtc::IceCandidateInterface* candidate) override {
         if (pc_->on_ice_candidate) {
             std::string sdp;
+            std::string sdp_mid = candidate->sdp_mid();
             candidate->ToString(&sdp);
 
             ShimICECandidate shim_candidate;
             shim_candidate.candidate = sdp.c_str();
-            shim_candidate.sdp_mid = candidate->sdp_mid().c_str();
+            // Keep callback string storage alive for the duration of the Go call.
+            shim_candidate.sdp_mid = sdp_mid.c_str();
             shim_candidate.sdp_mline_index = candidate->sdp_mline_index();
 
             pc_->on_ice_candidate(pc_->on_ice_candidate_ctx, &shim_candidate);
