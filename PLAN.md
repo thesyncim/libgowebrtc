@@ -544,6 +544,8 @@ func main() {
         },
         Audio: &media.AudioConstraints{
             SampleRate:       48000,
+            ChannelCount:     2,
+            Bitrate:          64000,
             EchoCancellation: true,
             NoiseSuppression: true,
         },
@@ -1012,8 +1014,10 @@ stream, _ := media.GetUserMedia(media.Constraints{
         FPS:      30,
     },
     Audio: &media.AudioConstraints{
-        DeviceID:   "mic-id",
-        SampleRate: 48000,
+        DeviceID:     "mic-id",
+        SampleRate:   48000,
+        ChannelCount: 2,
+        Bitrate:      64000,
     },
 })
 
