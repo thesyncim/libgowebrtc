@@ -11,9 +11,58 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
+
+func explicitAudioCodecPreferences() []webrtc.RTPCodecParameters {
+	return []webrtc.RTPCodecParameters{{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:  webrtc.MimeTypeOpus,
+			ClockRate: 48000,
+			Channels:  2,
+		},
+	}}
+}
+
+func explicitVideoCodecPreferences(mimeTypes ...string) []webrtc.RTPCodecParameters {
+	if len(mimeTypes) == 0 {
+		mimeTypes = []string{webrtc.MimeTypeVP8}
+	}
+	out := make([]webrtc.RTPCodecParameters, 0, len(mimeTypes))
+	for _, mimeType := range mimeTypes {
+		out = append(out, webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:  mimeType,
+				ClockRate: 90000,
+			},
+		})
+	}
+	return out
+}
+
+func explicitAudioPublishConfig() AudioPublishConfig {
+	return AudioPublishConfig{
+		TrackID:          "audio-track",
+		StreamID:         "stream-audio",
+		SampleRate:       48000,
+		Channels:         2,
+		Bitrate:          64000,
+		PTime:            20 * time.Millisecond,
+		CodecPreferences: explicitAudioCodecPreferences(),
+	}
+}
+
+func explicitVideoPublishConfig() VideoPublishConfig {
+	return VideoPublishConfig{
+		TrackID:          "video-track",
+		StreamID:         "stream-video",
+		Width:            1280,
+		Height:           720,
+		Bitrate:          700000,
+		FPS:              30,
+		CodecPreferences: explicitVideoCodecPreferences(),
+	}
+}
 
 func newTestPeerConnection(t *testing.T) *webrtc.PeerConnection {
 	t.Helper()
@@ -28,29 +77,26 @@ func newTestPeerConnection(t *testing.T) *webrtc.PeerConnection {
 	return pc
 }
 
-func TestPublishAudioDefaultsAndLifecycle(t *testing.T) {
+func TestPublishAudioLifecycle(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
-	published, err := PublishAudio(pc, AudioPublishConfig{TrackID: "audio-track"})
+	published, err := PublishAudio(pc, explicitAudioPublishConfig())
 	if err != nil {
 		t.Fatalf("PublishAudio: %v", err)
 	}
 
 	audio := published.(*publishedAudio)
-	if audio.cfg.StreamID != "audio-track" {
-		t.Fatalf("StreamID = %q, want track ID", audio.cfg.StreamID)
-	}
-	if audio.cfg.Browser != pioncodec.BrowserChrome {
-		t.Fatalf("Browser = %q, want %q", audio.cfg.Browser, pioncodec.BrowserChrome)
-	}
 	if audio.cfg.SampleRate != 48000 || audio.cfg.Channels != 2 {
-		t.Fatalf("audio defaults = %d Hz/%d ch, want 48000/2", audio.cfg.SampleRate, audio.cfg.Channels)
+		t.Fatalf("audio config = %d Hz/%d ch, want 48000/2", audio.cfg.SampleRate, audio.cfg.Channels)
 	}
-	if audio.cfg.Bitrate != 64000 || audio.cfg.MTU != 1200 || audio.cfg.PTime != defaultAudioPTime {
-		t.Fatalf("audio defaults bitrate/mtu/ptime = %d/%d/%v, want 64000/1200/%v", audio.cfg.Bitrate, audio.cfg.MTU, audio.cfg.PTime, defaultAudioPTime)
+	if audio.cfg.StreamID != "stream-audio" {
+		t.Fatalf("StreamID = %q, want %q", audio.cfg.StreamID, "stream-audio")
 	}
-	if len(audio.cfg.CodecPreferences) == 0 {
-		t.Fatal("CodecPreferences = 0, want browser defaults")
+	if audio.cfg.Bitrate != 64000 || audio.cfg.PTime != 20*time.Millisecond {
+		t.Fatalf("audio config bitrate/ptime = %d/%v, want 64000/20ms", audio.cfg.Bitrate, audio.cfg.PTime)
+	}
+	if len(audio.cfg.CodecPreferences) != 1 || audio.cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeOpus {
+		t.Fatalf("CodecPreferences = %+v, want explicit Opus prefs", audio.cfg.CodecPreferences)
 	}
 	if audio.Sender() == nil {
 		t.Fatal("Sender() = nil, want sender")
@@ -123,10 +169,9 @@ func TestPublishedAudioDelegatesToTrack(t *testing.T) {
 func TestPublishAudioRejectsInvalidPTime(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
-	_, err := PublishAudio(pc, AudioPublishConfig{
-		TrackID: "audio-track",
-		PTime:   333 * time.Microsecond,
-	})
+	cfg := explicitAudioPublishConfig()
+	cfg.PTime = 333 * time.Microsecond
+	_, err := PublishAudio(pc, cfg)
 	if !errors.Is(err, ErrInvalidConfig) {
 		t.Fatalf("PublishAudio(invalid ptime) error = %v, want %v", err, ErrInvalidConfig)
 	}
@@ -175,31 +220,23 @@ func TestPublishedAudioRejectsMismatchedFrameShape(t *testing.T) {
 	}
 }
 
-func TestPublishVideoDefaultsAndLifecycle(t *testing.T) {
+func TestPublishVideoLifecycle(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
-	published, err := PublishVideo(pc, VideoPublishConfig{
-		TrackID: "video-track",
-		Width:   1280,
-		Height:  720,
-		FPS:     30,
-	})
+	published, err := PublishVideo(pc, explicitVideoPublishConfig())
 	if err != nil {
 		t.Fatalf("PublishVideo: %v", err)
 	}
 
 	video := published.(*publishedVideo)
-	if video.cfg.StreamID != "video-track" {
-		t.Fatalf("StreamID = %q, want track ID", video.cfg.StreamID)
+	if video.cfg.StreamID != "stream-video" {
+		t.Fatalf("StreamID = %q, want %q", video.cfg.StreamID, "stream-video")
 	}
-	if video.cfg.Browser != pioncodec.BrowserChrome {
-		t.Fatalf("Browser = %q, want %q", video.cfg.Browser, pioncodec.BrowserChrome)
+	if video.cfg.Bitrate != 700000 {
+		t.Fatalf("Bitrate = %d, want 700000", video.cfg.Bitrate)
 	}
-	if video.cfg.Bitrate == 0 {
-		t.Fatal("Bitrate = 0, want derived default")
-	}
-	if len(video.cfg.CodecPreferences) == 0 {
-		t.Fatal("CodecPreferences = 0, want browser defaults")
+	if len(video.cfg.CodecPreferences) != 1 || video.cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeVP8 {
+		t.Fatalf("CodecPreferences = %+v, want explicit VP8 prefs", video.cfg.CodecPreferences)
 	}
 	if video.Sender() == nil {
 		t.Fatal("Sender() = nil, want sender")
@@ -245,12 +282,7 @@ func TestPublishVideoDefaultsAndLifecycle(t *testing.T) {
 func TestPublishVideoOptsInToTrackAdaptation(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
-	published, err := PublishVideo(pc, VideoPublishConfig{
-		TrackID: "video-track",
-		Width:   1280,
-		Height:  720,
-		FPS:     30,
-	})
+	published, err := PublishVideo(pc, explicitVideoPublishConfig())
 	if err != nil {
 		t.Fatalf("PublishVideo: %v", err)
 	}
@@ -279,13 +311,9 @@ func TestPublishVideoOptsInToTrackAdaptation(t *testing.T) {
 func TestPublishVideoSimulcastControls(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
-	published, err := PublishVideo(pc, VideoPublishConfig{
-		TrackID: "video-track",
-		Width:   1280,
-		Height:  720,
-		FPS:     30,
-		SVC:     &codec.SVCConfig{Mode: codec.SVCModeS3T3},
-	})
+	cfg := explicitVideoPublishConfig()
+	cfg.SVC = &codec.SVCConfig{Mode: codec.SVCModeS3T3}
+	published, err := PublishVideo(pc, cfg)
 	if err != nil {
 		t.Fatalf("PublishVideo(simulcast): %v", err)
 	}
@@ -392,11 +420,11 @@ func TestPublishedVideoHelpers(t *testing.T) {
 		t.Fatalf("validateNegotiatedLocked(unbound): %v", err)
 	}
 
-	if got := codecFromPreferences([]webrtc.RTPCodecParameters{{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeAV1}}}); got != codec.AV1 {
-		t.Fatalf("codecFromPreferences() = %v, want %v", got, codec.AV1)
+	if got, ok := codecFromPreferences([]webrtc.RTPCodecParameters{{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeAV1}}}); !ok || got != codec.AV1 {
+		t.Fatalf("codecFromPreferences() = (%v, %v), want (%v, true)", got, ok, codec.AV1)
 	}
-	if got := codecFromPreferences(nil); got != codec.VP8 {
-		t.Fatalf("codecFromPreferences(nil) = %v, want %v", got, codec.VP8)
+	if _, ok := codecFromPreferences(nil); ok {
+		t.Fatal("codecFromPreferences(nil) = ok, want no match")
 	}
 
 	original := &codec.SVCConfig{

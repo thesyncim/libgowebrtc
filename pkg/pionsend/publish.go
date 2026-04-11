@@ -1,4 +1,4 @@
-// Package pionsend provides browser-shaped Pion publishing helpers backed by
+// Package pionsend provides explicit Pion publishing helpers backed by
 // libgowebrtc local tracks.
 package pionsend
 
@@ -12,7 +12,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
@@ -31,7 +30,7 @@ var (
 	ErrUnsupportedLayeredCodec = errors.New("pionsend: automatic DD layering requires VP9 or AV1")
 )
 
-// VideoPublishConfig configures browser-shaped layered or simulcast publish.
+// VideoPublishConfig configures explicit layered or simulcast publish wiring.
 type VideoPublishConfig struct {
 	TrackID          string
 	StreamID         string
@@ -42,7 +41,6 @@ type VideoPublishConfig struct {
 	MTU              uint16
 	CodecPreferences []webrtc.RTPCodecParameters
 	SVC              *codec.SVCConfig
-	Browser          pioncodec.Browser
 }
 
 // PublishedVideo describes an active layered publisher.
@@ -97,29 +95,19 @@ func RequiredVideoHeaderExtensionURIs(cfg VideoPublishConfig) []string {
 }
 
 // PublishVideo creates one or more libgowebrtc-backed local tracks and wires
-// them into a Pion RTPSender with browser-like defaults.
+// them into a Pion RTPSender using explicit caller-provided publish settings.
 func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedVideo, error) {
 	if pc == nil {
 		return nil, ErrNilPeerConnection
 	}
-	if cfg.TrackID == "" || cfg.Width <= 0 || cfg.Height <= 0 || cfg.FPS <= 0 {
+	if cfg.TrackID == "" || cfg.StreamID == "" || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Bitrate == 0 || cfg.FPS <= 0 || len(cfg.CodecPreferences) == 0 {
 		return nil, ErrInvalidConfig
 	}
-	if cfg.StreamID == "" {
-		cfg.StreamID = cfg.TrackID
+	selectedCodec, ok := codecFromPreferences(cfg.CodecPreferences)
+	if !ok {
+		return nil, ErrInvalidConfig
 	}
-	if cfg.Browser == "" {
-		cfg.Browser = pioncodec.BrowserChrome
-	}
-	if cfg.Bitrate == 0 {
-		cfg.Bitrate = codec.DefaultVP8Config(cfg.Width, cfg.Height).Bitrate
-	}
-
-	codecPreferences := cfg.CodecPreferences
-	if len(codecPreferences) == 0 {
-		codecPreferences = defaultCodecPreferences(cfg)
-	}
-	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), codecPreferences...)
+	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), cfg.CodecPreferences...)
 
 	layers := deriveEncodingConfigs(cfg)
 	if len(layers) == 0 {
@@ -127,7 +115,6 @@ func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedV
 	}
 
 	runtimeEncodings := make([]*encodingRuntime, 0, len(layers))
-	selectedCodec := codecFromPreferences(codecPreferences)
 	for i, layer := range layers {
 		videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
 			ID:               cfg.TrackID,
@@ -143,7 +130,7 @@ func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedV
 			AutoBitrate:      true,
 			AutoFramerate:    true,
 			AutoResolution:   true,
-			CodecPreferences: codecPreferences,
+			CodecPreferences: cfg.CodecPreferences,
 			SVC:              layer.SVC,
 		})
 		if err != nil {
@@ -340,33 +327,13 @@ func (c encodingConfig) AllocScaledFrame() *frame.VideoFrame {
 	return frame.NewI420Frame(c.Width, c.Height)
 }
 
-func defaultCodecPreferences(cfg VideoPublishConfig) []webrtc.RTPCodecParameters {
-	base := pioncodec.BrowserPreset(cfg.Browser, pioncodec.DirectionEncode, pioncodec.PresetModeSupported).VideoCodecs()
-	if cfg.SVC == nil || cfg.SVC.Mode.IsSimulcast() {
-		return base
-	}
-
-	ordered := make([]webrtc.RTPCodecParameters, 0, len(base))
-	for _, preferred := range []string{webrtc.MimeTypeVP9, webrtc.MimeTypeAV1, webrtc.MimeTypeH264, webrtc.MimeTypeVP8} {
-		for _, candidate := range base {
-			if candidate.MimeType == preferred {
-				ordered = append(ordered, candidate)
-			}
-		}
-	}
-	if len(ordered) == 0 {
-		return base
-	}
-	return ordered
-}
-
-func codecFromPreferences(preferred []webrtc.RTPCodecParameters) codec.Type {
+func codecFromPreferences(preferred []webrtc.RTPCodecParameters) (codec.Type, bool) {
 	for _, params := range preferred {
 		if codecType, ok := codec.ParseMimeType(params.MimeType); ok {
-			return codecType
+			return codecType, true
 		}
 	}
-	return codec.VP8
+	return 0, false
 }
 
 func deriveEncodingConfigs(cfg VideoPublishConfig) []encodingConfig {

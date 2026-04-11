@@ -8,13 +8,10 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
-const defaultAudioPTime = 20 * time.Millisecond
-
-// AudioPublishConfig configures browser-shaped Opus publishing.
+// AudioPublishConfig configures explicit audio publishing.
 type AudioPublishConfig struct {
 	TrackID          string
 	StreamID         string
@@ -24,7 +21,6 @@ type AudioPublishConfig struct {
 	MTU              uint16
 	PTime            time.Duration
 	CodecPreferences []webrtc.RTPCodecParameters
-	Browser          pioncodec.Browser
 }
 
 // PublishedAudio describes an active audio publisher.
@@ -47,45 +43,20 @@ type publishedAudio struct {
 }
 
 // PublishAudio creates a libgowebrtc-backed local audio track and wires it
-// into a Pion RTPSender with browser-like Opus defaults.
+// into a Pion RTPSender using explicit caller-provided publish settings.
 func PublishAudio(pc *webrtc.PeerConnection, cfg AudioPublishConfig) (PublishedAudio, error) {
 	if pc == nil {
 		return nil, ErrNilPeerConnection
 	}
-	if cfg.TrackID == "" {
+	if cfg.TrackID == "" || cfg.StreamID == "" || cfg.SampleRate <= 0 || cfg.Channels <= 0 || cfg.Bitrate == 0 || cfg.PTime <= 0 || len(cfg.CodecPreferences) == 0 {
 		return nil, ErrInvalidConfig
-	}
-	if cfg.StreamID == "" {
-		cfg.StreamID = cfg.TrackID
-	}
-	if cfg.Browser == "" {
-		cfg.Browser = pioncodec.BrowserChrome
-	}
-	if cfg.SampleRate <= 0 {
-		cfg.SampleRate = 48000
-	}
-	if cfg.Channels <= 0 {
-		cfg.Channels = 2
-	}
-	if cfg.Bitrate == 0 {
-		cfg.Bitrate = 64000
-	}
-	if cfg.MTU == 0 {
-		cfg.MTU = 1200
-	}
-	if cfg.PTime <= 0 {
-		cfg.PTime = defaultAudioPTime
 	}
 	samplesPerFrame, ok := samplesForPTime(cfg.SampleRate, cfg.PTime)
 	if !ok {
 		return nil, ErrInvalidConfig
 	}
 
-	codecPreferences := cfg.CodecPreferences
-	if len(codecPreferences) == 0 {
-		codecPreferences = defaultAudioCodecPreferences(cfg.Browser)
-	}
-	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), codecPreferences...)
+	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), cfg.CodecPreferences...)
 
 	audioTrack, err := track.NewAudioTrack(track.AudioTrackConfig{
 		ID:               cfg.TrackID,
@@ -94,7 +65,7 @@ func PublishAudio(pc *webrtc.PeerConnection, cfg AudioPublishConfig) (PublishedA
 		Channels:         cfg.Channels,
 		Bitrate:          cfg.Bitrate,
 		MTU:              cfg.MTU,
-		CodecPreferences: codecPreferences,
+		CodecPreferences: cfg.CodecPreferences,
 	})
 	if err != nil {
 		return nil, err
@@ -183,8 +154,4 @@ func samplesForPTime(sampleRate int, ptime time.Duration) (int, bool) {
 		return 0, false
 	}
 	return int(samples), true
-}
-
-func defaultAudioCodecPreferences(browser pioncodec.Browser) []webrtc.RTPCodecParameters {
-	return pioncodec.BrowserPreset(browser, pioncodec.DirectionEncode, pioncodec.PresetModeSupported).AudioCodecs()
 }
