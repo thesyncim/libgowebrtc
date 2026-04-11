@@ -28,7 +28,11 @@ floors=(
   "github.com/thesyncim/libgowebrtc/pkg/track:60"
 )
 
-output="$(go test -cover "${packages[@]}")"
+if ! output="$(go test -cover "${packages[@]}" 2>&1)"; then
+  printf '%s\n' "$output"
+  echo "::error::go test -cover failed before coverage floor evaluation"
+  exit 1
+fi
 printf '%s\n' "$output"
 
 status=0
