@@ -18,23 +18,13 @@ var (
 	ErrNilICECandidateInit          = errors.New("ice candidate init is nil")
 )
 
-func normalizeConfiguration(config webrtc.Configuration) webrtc.Configuration {
+func validateConfiguration(config webrtc.Configuration) error {
 	if config.BundlePolicy == webrtc.BundlePolicyUnknown {
-		config.BundlePolicy = webrtc.BundlePolicyBalanced
+		return fmt.Errorf("%w: bundle policy must be set explicitly", ErrUnsupportedConfiguration)
 	}
 	if config.RTCPMuxPolicy == webrtc.RTCPMuxPolicyUnknown {
-		config.RTCPMuxPolicy = webrtc.RTCPMuxPolicyRequire
+		return fmt.Errorf("%w: rtcp mux policy must be set explicitly", ErrUnsupportedConfiguration)
 	}
-	if config.ICETransportPolicy == webrtc.ICETransportPolicy(0) {
-		config.ICETransportPolicy = webrtc.ICETransportPolicyAll
-	}
-	if config.SDPSemantics == webrtc.SDPSemantics(0) {
-		config.SDPSemantics = webrtc.SDPSemanticsUnifiedPlan
-	}
-	return config
-}
-
-func validateConfiguration(config webrtc.Configuration) error {
 	if config.PeerIdentity != "" {
 		return fmt.Errorf("%w: peer identity", ErrUnsupportedConfiguration)
 	}

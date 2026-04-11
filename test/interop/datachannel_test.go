@@ -319,11 +319,12 @@ func TestDataChannelBidirectional(t *testing.T) {
 // TestDataChannelWithICE tests data channel with ICE candidate exchange.
 func TestDataChannelWithICE(t *testing.T) {
 	// Create PeerConnections with STUN servers
-	libPC, err := pc.NewPeerConnection(pc.Configuration{
-		ICEServers: []pionwebrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
-	})
+	libConfig := pc.DefaultConfiguration()
+	libConfig.ICEServers = []pionwebrtc.ICEServer{
+		{URLs: []string{"stun:stun.l.google.com:19302"}},
+	}
+
+	libPC, err := pc.NewPeerConnection(libConfig)
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc PeerConnection: %v", err)
 	}

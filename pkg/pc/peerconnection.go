@@ -1006,7 +1006,6 @@ func NewPeerConnection(config webrtc.Configuration) (*PeerConnection, error) {
 	if err := ffi.LoadLibrary(); err != nil {
 		return nil, err
 	}
-	config = normalizeConfiguration(config)
 	if err := validateConfiguration(config); err != nil {
 		return nil, err
 	}
