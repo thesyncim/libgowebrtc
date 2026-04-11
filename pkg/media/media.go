@@ -822,8 +822,8 @@ func resolveAudioCaptureRequest(request AudioConstraints, devices []MediaDeviceI
 		return AudioTrackSettings{}, AudioConstraints{}, "", err
 	}
 
-	sampleRate := resolveIntConstraint(request.SampleRate, 48000)
-	channelCount := resolveIntConstraint(request.ChannelCount, 2)
+	sampleRate := resolveIntConstraint(request.SampleRate, 0)
+	channelCount := resolveIntConstraint(request.ChannelCount, 0)
 	if sampleRate <= 0 || channelCount <= 0 {
 		return AudioTrackSettings{}, AudioConstraints{}, "", ErrInvalidConstraints
 	}

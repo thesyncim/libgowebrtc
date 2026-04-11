@@ -290,7 +290,9 @@ stream, _ := media.GetUserMedia(media.Constraints{
         Codec:     codec.VP9,
     },
     Audio: &media.AudioConstraints{
-        SampleRate: media.ExactInt(48000),
+        SampleRate:   media.ExactInt(48000),
+        ChannelCount: media.ExactInt(2),
+        Bitrate:      64000,
     },
 })
 

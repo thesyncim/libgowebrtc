@@ -359,6 +359,45 @@ func TestGetUserMediaRejectsMissingAudioBitrate(t *testing.T) {
 	}
 }
 
+func TestGetUserMediaRejectsMissingAudioSampleRateOrChannelCount(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
+			return []ffi.DeviceInfo{
+				{DeviceID: "mic-1", Label: "Built-in Mic", Kind: ffi.DeviceKindAudioInput},
+			}, nil
+		},
+	})
+
+	for _, tc := range []struct {
+		name        string
+		constraints AudioConstraints
+	}{
+		{
+			name: "missing sample rate",
+			constraints: AudioConstraints{
+				ChannelCount: ExactInt(2),
+				Bitrate:      64_000,
+			},
+		},
+		{
+			name: "missing channel count",
+			constraints: AudioConstraints{
+				SampleRate: ExactInt(48_000),
+				Bitrate:    64_000,
+			},
+		},
+	} {
+		stream, err := GetUserMedia(Constraints{Audio: &tc.constraints})
+		if !errors.Is(err, ErrInvalidConstraints) {
+			t.Fatalf("%s: GetUserMedia() error = %v, want %v", tc.name, err, ErrInvalidConstraints)
+		}
+		if stream != nil {
+			t.Fatalf("%s: GetUserMedia() stream = non-nil, want nil", tc.name)
+		}
+	}
+}
+
 func TestGetUserMediaMissingExactDeviceReturnsOverconstrained(t *testing.T) {
 	installMediaFFIStubs(t, mediaFFIStubs{
 		loadLibrary: func() error { return nil },
@@ -420,8 +459,10 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 			Bitrate:   3_000_000,
 		},
 		Audio: &AudioConstraints{
-			DeviceID: ExactString("mic-1"),
-			Bitrate:  64_000,
+			SampleRate:   ExactInt(48_000),
+			ChannelCount: ExactInt(2),
+			DeviceID:     ExactString("mic-1"),
+			Bitrate:      64_000,
 		},
 	})
 	if err != nil {
