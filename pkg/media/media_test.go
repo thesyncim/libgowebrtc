@@ -126,7 +126,10 @@ func TestGetUserMediaReturnsCaptureNotSupportedWhenLoadFails(t *testing.T) {
 	})
 
 	stream, err := GetUserMedia(Constraints{
-		Video: &VideoConstraints{Width: ExactInt(640)},
+		Video: &VideoConstraints{
+			Width: ExactInt(640),
+			Codec: codec.VP8,
+		},
 	})
 	if !errors.Is(err, ErrCaptureNotSupported) {
 		t.Fatalf("GetUserMedia() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
@@ -247,6 +250,32 @@ func TestGetUserMediaRejectsMissingVideoBitrate(t *testing.T) {
 	}
 }
 
+func TestGetUserMediaRejectsMissingVideoCodec(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
+			return []ffi.DeviceInfo{
+				{DeviceID: "cam-1", Label: "Front Camera", Kind: ffi.DeviceKindVideoInput},
+			}, nil
+		},
+	})
+
+	stream, err := GetUserMedia(Constraints{
+		Video: &VideoConstraints{
+			Width:     ExactInt(640),
+			Height:    ExactInt(480),
+			FrameRate: ExactFloat(30),
+			Bitrate:   500_000,
+		},
+	})
+	if !errors.Is(err, ErrInvalidConstraints) {
+		t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	}
+	if stream != nil {
+		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+	}
+}
+
 func TestGetUserMediaRejectsMissingAudioBitrate(t *testing.T) {
 	installMediaFFIStubs(t, mediaFFIStubs{
 		loadLibrary: func() error { return nil },
@@ -284,6 +313,7 @@ func TestGetUserMediaMissingExactDeviceReturnsOverconstrained(t *testing.T) {
 	stream, err := GetUserMedia(Constraints{
 		Video: &VideoConstraints{
 			DeviceID: ExactString("cam-404"),
+			Codec:    codec.VP8,
 		},
 	})
 	if stream != nil {
@@ -323,6 +353,7 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 			Width:     IdealInt(1920),
 			Height:    IdealInt(1080),
 			FrameRate: IdealFloat(30),
+			Codec:     codec.VP8,
 			Bitrate:   3_000_000,
 		},
 		Audio: &AudioConstraints{
@@ -352,6 +383,33 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 	}
 	if got := audioTracks[0].GetSettings().DeviceID; got != "mic-1" {
 		t.Fatalf("audio DeviceID = %q, want %q", got, "mic-1")
+	}
+}
+
+func TestGetDisplayMediaRejectsMissingVideoCodec(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateScreen: func() ([]ffi.ScreenInfo, error) {
+			return []ffi.ScreenInfo{
+				{ID: 1, Title: "Main Display", IsWindow: false},
+			}, nil
+		},
+	})
+
+	stream, err := GetDisplayMedia(DisplayConstraints{
+		Video: &DisplayVideoConstraints{
+			ScreenID:  1,
+			Width:     ExactInt(1920),
+			Height:    ExactInt(1080),
+			FrameRate: ExactFloat(30),
+			Bitrate:   3_000_000,
+		},
+	})
+	if !errors.Is(err, ErrInvalidConstraints) {
+		t.Fatalf("GetDisplayMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	}
+	if stream != nil {
+		t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
 	}
 }
 
