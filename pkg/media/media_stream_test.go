@@ -210,17 +210,6 @@ func TestMediaStreamClonePreservesTrackState(t *testing.T) {
 func TestVideoStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
 	video := newTestVideoTrack(t)
 
-	capabilities := video.GetCapabilities()
-	if got := capabilities.Width; got.Min != 640 || got.Max != 640 {
-		t.Fatalf("Width capability = %+v, want exact 640", got)
-	}
-	if got := capabilities.FrameRate; got.Min != 1 || got.Max != 30 {
-		t.Fatalf("FrameRate capability = %+v, want 1-30", got)
-	}
-	if got := len(capabilities.DeviceID); got != 0 {
-		t.Fatalf("DeviceID capabilities len = %d, want 0 for synthetic test track", got)
-	}
-
 	if err := video.ApplyConstraints(VideoConstraints{
 		Bitrate:   900_000,
 		FrameRate: ExactFloat(15),
@@ -236,7 +225,7 @@ func TestVideoStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
 	}
 
 	if err := video.ApplyConstraints(VideoConstraints{FrameRate: IdealFloat(60)}); err != nil {
-		t.Fatalf("ApplyConstraints() with ideal frame rate above capability = %v", err)
+		t.Fatalf("ApplyConstraints() with ideal frame rate above supported max = %v", err)
 	}
 	if got := video.GetSettings().FrameRate; got != 30 {
 		t.Fatalf("FrameRate after ideal clamp = %.0f, want 30", got)
@@ -262,18 +251,6 @@ func TestVideoStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
 
 func TestAudioStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
 	audio := newTestAudioTrack(t)
-
-	capabilities := audio.GetCapabilities()
-	if got := capabilities.SampleRate; got.Min != 48_000 || got.Max != 48_000 {
-		t.Fatalf("SampleRate capability = %+v, want exact 48000", got)
-	}
-	if got := capabilities.ChannelCount; got.Min != 2 || got.Max != 2 {
-		t.Fatalf("ChannelCount capability = %+v, want exact 2", got)
-	}
-	capabilities.EchoCancellation[0] = false
-	if got := audio.GetCapabilities().EchoCancellation; len(got) != 2 || !got[1] {
-		t.Fatalf("GetCapabilities() should return defensive copies, got %v", got)
-	}
 
 	if err := audio.ApplyConstraints(AudioConstraints{
 		Bitrate:          96_000,

@@ -315,8 +315,8 @@ peerConnection.SetLocalDescription(offer)
 
 `pkg/media` is capture-only. For synthetic/manual frame production, use [`pkg/track`](./pkg/track).
 For native libwebrtc-backed senders, create tracks through [`pkg/pc`](./pkg/pc).
-Use typed `GetCapabilities()` calls on concrete capture-backed tracks to inspect
-which browser-shaped knobs the library can actually honor.
+Use concrete track settings and explicit constraints instead of browser-style
+capability probing.
 
 ### Pion Integration
 
@@ -710,7 +710,7 @@ libgowebrtc/
 <summary><strong>Media Capture</strong></summary>
 
 - Capture-backed device/screen streams via `GetUserMedia`/`GetDisplayMedia`
-- Browser-style supported-constraint and per-track capability discovery
+- Browser-style capture constraints with explicit per-track settings
 - Manual frame injection lives in `pkg/track`
 - Pion interop, including MediaStream-aware `msid` preservation via `AddTracksToPC`
 </details>
