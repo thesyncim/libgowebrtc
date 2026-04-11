@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
+	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 var (
@@ -451,22 +453,10 @@ func parseCodec(name string) codec.Type {
 }
 
 func applyVideoCodecPreference(peerConn *pc.PeerConnection, codecType codec.Type) error {
-	supported, err := pc.GetSupportedVideoCodecs()
+	preferences, err := videoCodecPreferences(codecType)
 	if err != nil {
 		return err
 	}
-
-	targetMime := codecType.MimeType()
-	preferences := make([]webrtc.RTPCodecParameters, 0, len(supported))
-	for _, candidate := range supported {
-		if candidate.MimeType == targetMime {
-			preferences = append(preferences, candidate)
-		}
-	}
-	if len(preferences) == 0 {
-		return fmt.Errorf("no supported codec preferences found for %s", targetMime)
-	}
-
 	for _, transceiver := range peerConn.GetTransceivers() {
 		if !transceiver.IsValid() || transceiver.Kind() != "video" {
 			continue
@@ -476,6 +466,28 @@ func applyVideoCodecPreference(peerConn *pc.PeerConnection, codecType codec.Type
 		}
 	}
 	return nil
+}
+
+func videoCodecPreferences(codecType codec.Type) ([]webrtc.RTPCodecParameters, error) {
+	codecs := pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionEncode, pioncodec.PresetModeNegotiation).VideoCodecs()
+	mime := codecType.MimeType()
+	if mime == "" {
+		return nil, fmt.Errorf("unsupported codec: %v", codecType)
+	}
+	return prioritizeVideoCodecsByMime(codecs, mime), nil
+}
+
+func prioritizeVideoCodecsByMime(codecs []webrtc.RTPCodecParameters, mime string) []webrtc.RTPCodecParameters {
+	preferred := make([]webrtc.RTPCodecParameters, 0, len(codecs))
+	rest := make([]webrtc.RTPCodecParameters, 0, len(codecs))
+	for _, codec := range codecs {
+		if strings.EqualFold(codec.MimeType, mime) {
+			preferred = append(preferred, codec)
+			continue
+		}
+		rest = append(rest, codec)
+	}
+	return append(preferred, rest...)
 }
 
 func fillAnimatedPattern(f *frame.VideoFrame, frameNum uint32) {

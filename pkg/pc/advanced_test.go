@@ -7,6 +7,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
@@ -392,14 +393,12 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 	_ = transceiver.CurrentDirection()
 	_ = transceiver.Mid()
 
-	videoCodecs, err := GetSupportedVideoCodecs()
+	codecs, err := ffi.TransceiverGetCodecPreferences(transceiver.handle)
 	if err != nil {
-		t.Fatalf("GetSupportedVideoCodecs: %v", err)
+		t.Fatalf("TransceiverGetCodecPreferences: %v", err)
 	}
-	if len(videoCodecs) > 0 {
-		if err := transceiver.SetCodecPreferences(videoCodecs[:1]); err != nil {
-			t.Fatalf("SetCodecPreferences: %v", err)
-		}
+	if err := transceiver.SetCodecPreferences(codecParametersFromFFICapabilities(codecs)); err != nil {
+		t.Fatalf("SetCodecPreferences: %v", err)
 	}
 
 	if stats, err := pc.GetStats(); err != nil {

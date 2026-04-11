@@ -23,14 +23,6 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
 
-	audioCodecs, err := pc.GetSupportedAudioCodecs()
-	if err != nil {
-		t.Fatalf("GetSupportedAudioCodecs: %v", err)
-	}
-	if len(audioCodecs) < 2 {
-		t.Skipf("need at least two supported audio codecs to test a switch; got %d", len(audioCodecs))
-	}
-
 	session := validate.NewPCSession(pp.Receiver, validate.SessionConfig{
 		Browser:                 pioncodec.BrowserChrome,
 		StatsPollInterval:       50 * time.Millisecond,

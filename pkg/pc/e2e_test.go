@@ -7,6 +7,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 )
 
@@ -531,64 +532,49 @@ func BenchmarkCreateOffer(b *testing.B) {
 	}
 }
 
-func TestGetSupportedVideoCodecs(t *testing.T) {
-	codecs, err := GetSupportedVideoCodecs()
+func TestSetCodecPreferencesWithExplicitVideoCodecs(t *testing.T) {
+	pc, err := NewPeerConnection(DefaultConfiguration())
 	if err != nil {
-		t.Fatalf("GetSupportedVideoCodecs failed: %v", err)
+		t.Fatalf("NewPeerConnection failed: %v", err)
+	}
+	defer pc.Close()
+
+	transceiver, err := pc.AddTransceiver("video", &TransceiverInit{
+		Direction: TransceiverDirectionSendRecv,
+	})
+	if err != nil {
+		t.Fatalf("AddTransceiver failed: %v", err)
 	}
 
-	if len(codecs) == 0 {
-		t.Fatal("Expected at least one video codec")
+	codecs, err := ffi.TransceiverGetCodecPreferences(transceiver.handle)
+	if err != nil {
+		t.Fatalf("TransceiverGetCodecPreferences(video): %v", err)
 	}
-
-	// Should include VP8 or H264
-	foundKnown := false
-	for _, c := range codecs {
-		t.Logf("Video codec: %s (clock=%d, pt=%d)", c.MimeType, c.ClockRate, c.PayloadType)
-		if c.MimeType == "video/VP8" || c.MimeType == "video/H264" || c.MimeType == "video/VP9" {
-			foundKnown = true
-		}
-	}
-	if !foundKnown {
-		t.Error("Expected to find VP8, H264, or VP9 codec")
+	if err := transceiver.SetCodecPreferences(codecParametersFromFFICapabilities(codecs)); err != nil {
+		t.Fatalf("SetCodecPreferences(video): %v", err)
 	}
 }
 
-func TestGetSupportedAudioCodecs(t *testing.T) {
-	codecs, err := GetSupportedAudioCodecs()
+func TestSetCodecPreferencesWithExplicitAudioCodecs(t *testing.T) {
+	pc, err := NewPeerConnection(DefaultConfiguration())
 	if err != nil {
-		t.Fatalf("GetSupportedAudioCodecs failed: %v", err)
+		t.Fatalf("NewPeerConnection failed: %v", err)
+	}
+	defer pc.Close()
+
+	transceiver, err := pc.AddTransceiver("audio", &TransceiverInit{
+		Direction: TransceiverDirectionSendRecv,
+	})
+	if err != nil {
+		t.Fatalf("AddTransceiver failed: %v", err)
 	}
 
-	if len(codecs) == 0 {
-		t.Fatal("Expected at least one audio codec")
+	codecs, err := ffi.TransceiverGetCodecPreferences(transceiver.handle)
+	if err != nil {
+		t.Fatalf("TransceiverGetCodecPreferences(audio): %v", err)
 	}
-
-	// Should include Opus
-	foundOpus := false
-	for _, c := range codecs {
-		t.Logf("Audio codec: %s (clock=%d, ch=%d, pt=%d)", c.MimeType, c.ClockRate, c.Channels, c.PayloadType)
-		if c.MimeType == "audio/opus" {
-			foundOpus = true
-		}
-	}
-	if !foundOpus {
-		t.Error("Expected to find Opus codec")
-	}
-}
-
-func TestIsCodecSupported(t *testing.T) {
-	// VP8 and Opus should be supported
-	if !IsCodecSupported("video/VP8") {
-		t.Error("VP8 should be supported")
-	}
-	if !IsCodecSupported("audio/opus") {
-		t.Error("Opus should be supported")
-	}
-
-	// Unknown codec should not be supported
-	if IsCodecSupported("video/unknown-codec") {
-		t.Error("Unknown codec should not be supported")
+	if err := transceiver.SetCodecPreferences(codecParametersFromFFICapabilities(codecs)); err != nil {
+		t.Fatalf("SetCodecPreferences(audio): %v", err)
 	}
 }
 
