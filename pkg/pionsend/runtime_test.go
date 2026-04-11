@@ -14,16 +14,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
-func explicitAudioCodecPreferences() []webrtc.RTPCodecParameters {
-	return []webrtc.RTPCodecParameters{{
-		RTPCodecCapability: webrtc.RTPCodecCapability{
-			MimeType:  webrtc.MimeTypeOpus,
-			ClockRate: 48000,
-			Channels:  2,
-		},
-	}}
-}
-
 func explicitVideoCodecPreferences(mimeTypes ...string) []webrtc.RTPCodecParameters {
 	if len(mimeTypes) == 0 {
 		mimeTypes = []string{webrtc.MimeTypeVP8}
@@ -42,13 +32,12 @@ func explicitVideoCodecPreferences(mimeTypes ...string) []webrtc.RTPCodecParamet
 
 func explicitAudioPublishConfig() AudioPublishConfig {
 	return AudioPublishConfig{
-		TrackID:          "audio-track",
-		StreamID:         "stream-audio",
-		SampleRate:       48000,
-		Channels:         2,
-		Bitrate:          64000,
-		PTime:            20 * time.Millisecond,
-		CodecPreferences: explicitAudioCodecPreferences(),
+		TrackID:    "audio-track",
+		StreamID:   "stream-audio",
+		SampleRate: 48000,
+		Channels:   2,
+		Bitrate:    64000,
+		PTime:      20 * time.Millisecond,
 	}
 }
 
@@ -95,8 +84,8 @@ func TestPublishAudioLifecycle(t *testing.T) {
 	if audio.cfg.Bitrate != 64000 || audio.cfg.PTime != 20*time.Millisecond {
 		t.Fatalf("audio config bitrate/ptime = %d/%v, want 64000/20ms", audio.cfg.Bitrate, audio.cfg.PTime)
 	}
-	if len(audio.cfg.CodecPreferences) != 1 || audio.cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeOpus {
-		t.Fatalf("CodecPreferences = %+v, want explicit Opus prefs", audio.cfg.CodecPreferences)
+	if len(audio.cfg.CodecPreferences) != 0 {
+		t.Fatalf("CodecPreferences = %+v, want none", audio.cfg.CodecPreferences)
 	}
 	if audio.Sender() == nil {
 		t.Fatal("Sender() = nil, want sender")
