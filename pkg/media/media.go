@@ -111,7 +111,7 @@ type DisplayVideoConstraints struct {
 	Width     IntConstraint    // Width constrains the captured frame width in pixels.
 	Height    IntConstraint    // Height constrains the captured frame height in pixels.
 	Codec     codec.Type       // Codec picks the preferred encoder codec for the resulting track.
-	Bitrate   uint32           // Bitrate overrides the initial encoder target bitrate in bps.
+	Bitrate   uint32           // Bitrate sets the initial encoder target bitrate in bps.
 	SVC       *codec.SVCConfig // SVC configures scalable or simulcast video output when supported.
 	// CodecPreferences is the advanced codec selection path and takes precedence over Codec.
 	CodecPreferences []webrtc.RTPCodecParameters
@@ -125,7 +125,7 @@ type VideoConstraints struct {
 	FacingMode FacingMode       // FacingMode prefers a front, rear, left, or right camera.
 	DeviceID   StringConstraint // DeviceID selects a specific capture device when available.
 	Codec      codec.Type       // Codec picks the preferred encoder codec for the resulting track.
-	Bitrate    uint32           // Bitrate overrides the initial encoder target bitrate in bps.
+	Bitrate    uint32           // Bitrate sets the initial encoder target bitrate in bps.
 	SVC        *codec.SVCConfig // SVC configures scalable or simulcast video output when supported.
 	// CodecPreferences is the advanced codec selection path and takes precedence over Codec.
 	CodecPreferences []webrtc.RTPCodecParameters
@@ -139,7 +139,7 @@ type AudioConstraints struct {
 	NoiseSuppression BoolConstraint   // NoiseSuppression prefers or requires noise suppression.
 	AutoGainControl  BoolConstraint   // AutoGainControl prefers or requires automatic gain control.
 	DeviceID         StringConstraint // DeviceID selects a specific audio device when available.
-	Bitrate          uint32           // Bitrate overrides the initial encoder target bitrate in bps.
+	Bitrate          uint32           // Bitrate sets the initial encoder target bitrate in bps.
 	// CodecPreferences is the advanced codec selection path.
 	CodecPreferences []webrtc.RTPCodecParameters
 }
@@ -755,11 +755,6 @@ func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSett
 		cfg.Codec = codec.H264
 		resolved.Codec = cfg.Codec
 	}
-	if cfg.Bitrate == 0 {
-		cfg.Bitrate = defaultVideoBitrate(cfg.Codec, settings.Width, settings.Height)
-		resolved.Bitrate = cfg.Bitrate
-	}
-
 	return cfg, resolved
 }
 
@@ -773,10 +768,6 @@ func buildAudioTrackConfig(constraints AudioConstraints, settings AudioTrackSett
 	}
 	if len(resolved.CodecPreferences) > 0 {
 		cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), resolved.CodecPreferences...)
-	}
-	if cfg.Bitrate == 0 {
-		cfg.Bitrate = codec.DefaultOpusConfig().Bitrate
-		resolved.Bitrate = cfg.Bitrate
 	}
 	return cfg, resolved
 }
@@ -813,10 +804,6 @@ func resolveVideoCaptureRequest(request VideoConstraints, devices []MediaDeviceI
 	if resolved.Codec == 0 {
 		resolved.Codec = codec.H264
 	}
-	if resolved.Bitrate == 0 {
-		resolved.Bitrate = defaultVideoBitrate(resolved.Codec, width, height)
-	}
-
 	label := device.Label
 	if label == "" {
 		label = "camera"
@@ -853,9 +840,6 @@ func resolveAudioCaptureRequest(request AudioConstraints, devices []MediaDeviceI
 	resolved.SampleRate = ExactInt(sampleRate)
 	resolved.ChannelCount = ExactInt(channelCount)
 	resolved.DeviceID = ExactString(device.DeviceID)
-	if resolved.Bitrate == 0 {
-		resolved.Bitrate = codec.DefaultOpusConfig().Bitrate
-	}
 	resolved.EchoCancellation = ExactBool(settings.EchoCancellation)
 	resolved.NoiseSuppression = ExactBool(settings.NoiseSuppression)
 	resolved.AutoGainControl = ExactBool(settings.AutoGainControl)
@@ -896,9 +880,6 @@ func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []Scr
 	if videoConstraints.Codec == 0 {
 		videoConstraints.Codec = codec.H264
 	}
-	if videoConstraints.Bitrate == 0 {
-		videoConstraints.Bitrate = 3_000_000
-	}
 	if videoConstraints.SVC == nil {
 		videoConstraints.SVC = codec.SVCPresetScreenShare()
 	}
@@ -928,19 +909,6 @@ func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []Scr
 	}
 
 	return settings, videoConstraints, displayConstraints, label, nil
-}
-
-func defaultVideoBitrate(codecType codec.Type, width, height int) uint32 {
-	switch codecType {
-	case codec.VP8:
-		return codec.DefaultVP8Config(width, height).Bitrate
-	case codec.VP9:
-		return codec.DefaultVP9Config(width, height).Bitrate
-	case codec.AV1:
-		return codec.DefaultAV1Config(width, height).Bitrate
-	default:
-		return codec.DefaultH264Config(width, height).Bitrate
-	}
 }
 
 func validateVideoConstraints(c VideoConstraints) error {
