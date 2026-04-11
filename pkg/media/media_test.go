@@ -479,14 +479,48 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 	}
 
 	video := videoTracks[0].(*videoStreamTrack)
-	if got := video.Label(); got != "window-capture" {
-		t.Fatalf("video Label() = %q, want %q", got, "window-capture")
+	if got := video.Label(); got != "Slides" {
+		t.Fatalf("video Label() = %q, want %q", got, "Slides")
 	}
 	if video.displayConstraints == nil || video.displayConstraints.DisplaySurface != DisplaySurfaceWindow {
 		t.Fatalf("display surface = %+v, want %q", video.displayConstraints, DisplaySurfaceWindow)
 	}
 	if got := audioTracks[0].GetSettings().DeviceID; got != "mic-1" {
 		t.Fatalf("audio DeviceID = %q, want %q", got, "mic-1")
+	}
+}
+
+func TestGetDisplayMediaLeavesEmptyLabelWhenSourceTitleMissing(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateScreen: func() ([]ffi.ScreenInfo, error) {
+			return []ffi.ScreenInfo{
+				{ID: 1, Title: "", IsWindow: false},
+			}, nil
+		},
+		newScreen: func(int64, bool, int) (screenCaptureHandle, error) { return stubScreenCapture{}, nil },
+	})
+
+	stream, err := GetDisplayMedia(DisplayConstraints{
+		Video: &DisplayVideoConstraints{
+			ScreenID:  1,
+			Width:     ExactInt(1920),
+			Height:    ExactInt(1080),
+			FrameRate: ExactFloat(30),
+			Codec:     codec.VP8,
+			Bitrate:   3_000_000,
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetDisplayMedia() error = %v", err)
+	}
+
+	videoTracks := stream.GetVideoTracks()
+	if len(videoTracks) != 1 {
+		t.Fatalf("GetVideoTracks() len = %d, want 1", len(videoTracks))
+	}
+	if got := videoTracks[0].Label(); got != "" {
+		t.Fatalf("video Label() = %q, want empty label", got)
 	}
 }
 
