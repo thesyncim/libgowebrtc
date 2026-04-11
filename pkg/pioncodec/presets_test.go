@@ -163,3 +163,31 @@ func TestCodecSetSelectRejectsUnsupportedH264Variant(t *testing.T) {
 		t.Fatal("Select() ok = true, want false for non-preferred H264 profile in supported mode")
 	}
 }
+
+func TestCodecSetSelectKeepsOfferedPayloadTypeExact(t *testing.T) {
+	set := CodecSetFromParameters([]webrtc.RTPCodecParameters{
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:  webrtc.MimeTypeVP8,
+				ClockRate: 90000,
+			},
+			PayloadType: 96,
+		},
+	})
+	offered := []webrtc.RTPCodecParameters{
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:  webrtc.MimeTypeVP8,
+				ClockRate: 90000,
+			},
+		},
+	}
+
+	selected, ok := set.Select(offered)
+	if !ok {
+		t.Fatal("Select() ok = false, want true")
+	}
+	if selected.PayloadType != 0 {
+		t.Fatalf("Select().PayloadType = %d, want 0 from offered codec without backfill", selected.PayloadType)
+	}
+}
