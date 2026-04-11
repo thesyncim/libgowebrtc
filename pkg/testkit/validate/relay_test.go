@@ -27,6 +27,7 @@ func TestICEEdgeRelayLifecycleAndPause(t *testing.T) {
 	}()
 
 	relay, err := NewICEEdgeRelay(RelayConfig{
+		ListenAddr: "127.0.0.1:0",
 		TargetAddr: target.LocalAddr().String(),
 		RandomSeed: 1,
 	})
@@ -68,6 +69,15 @@ func TestICEEdgeRelayLifecycleAndPause(t *testing.T) {
 	relay.ClearImpairment()
 	if !expectEcho("resumed", 200*time.Millisecond) {
 		t.Fatal("echo after ClearImpairment failed")
+	}
+}
+
+func TestNewICEEdgeRelayRequiresExplicitAddresses(t *testing.T) {
+	if _, err := NewICEEdgeRelay(RelayConfig{TargetAddr: "127.0.0.1:9"}); err == nil || err.Error() != "validate: relay listen address is required" {
+		t.Fatalf("missing listen addr error = %v, want explicit listen address requirement", err)
+	}
+	if _, err := NewICEEdgeRelay(RelayConfig{ListenAddr: "127.0.0.1:0"}); err == nil || err.Error() != "validate: relay target address is required" {
+		t.Fatalf("missing target addr error = %v, want explicit target address requirement", err)
 	}
 }
 

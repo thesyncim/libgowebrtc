@@ -66,6 +66,9 @@ type ICEEdgeRelay struct {
 // NewICEEdgeRelay creates and starts a UDP relay that forwards traffic to the
 // configured target endpoint.
 func NewICEEdgeRelay(cfg RelayConfig) (*ICEEdgeRelay, error) {
+	if cfg.ListenAddr == "" {
+		return nil, errors.New("validate: relay listen address is required")
+	}
 	if cfg.TargetAddr == "" {
 		return nil, errors.New("validate: relay target address is required")
 	}
@@ -73,11 +76,7 @@ func NewICEEdgeRelay(cfg RelayConfig) (*ICEEdgeRelay, error) {
 	if err != nil {
 		return nil, err
 	}
-	listenAddr := cfg.ListenAddr
-	if listenAddr == "" {
-		listenAddr = "127.0.0.1:0"
-	}
-	inbound, err := net.ListenUDP("udp", mustResolveUDPAddr(listenAddr))
+	inbound, err := net.ListenUDP("udp", mustResolveUDPAddr(cfg.ListenAddr))
 	if err != nil {
 		return nil, err
 	}
