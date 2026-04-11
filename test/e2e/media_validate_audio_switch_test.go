@@ -74,18 +74,28 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		t.Fatal("timed out waiting for receiver audio track")
 	}
 
-	stopPump := make(chan struct{})
-	pumpDone := make(chan error, 1)
-	go pumpAudioFrames(track, audioSampleRate, audioChannels, audioSamples, stopPump, pumpDone)
-	defer func() {
-		close(stopPump)
+	startPump := func() (chan struct{}, chan error) {
+		stop := make(chan struct{})
+		done := make(chan error, 1)
+		go pumpAudioFrames(track, audioSampleRate, audioChannels, audioSamples, stop, done)
+		return stop, done
+	}
+	stopPump := func(stop chan struct{}, done chan error) {
+		close(stop)
 		select {
-		case err := <-pumpDone:
+		case err := <-done:
 			if err != nil {
 				t.Fatalf("pumpAudioFrames: %v", err)
 			}
 		case <-time.After(2 * time.Second):
 			t.Fatal("timed out waiting for audio pump shutdown")
+		}
+	}
+
+	pumpStop, pumpDone := startPump()
+	defer func() {
+		if pumpStop != nil {
+			stopPump(pumpStop, pumpDone)
 		}
 	}()
 
@@ -117,11 +127,19 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 				Name:   "audio-codec-switch",
 				Action: validate.ScenarioActionCodecRenegotiation,
 				Callback: func(context.Context, *validate.Session) error {
+					stopPump(pumpStop, pumpDone)
+					pumpStop, pumpDone = nil, nil
+
 					err := sender.SetPreferredCodec(targetCodec)
 					if err != nil && !errors.Is(err, pc.ErrRenegotiationNeeded) {
 						return err
 					}
-					return pp.Renegotiate()
+					if err := pp.Renegotiate(); err != nil {
+						return err
+					}
+
+					pumpStop, pumpDone = startPump()
+					return nil
 				},
 				Expect: validate.ScenarioExpectation{
 					Within:            4 * time.Second,

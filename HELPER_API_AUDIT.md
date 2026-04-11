@@ -19,6 +19,7 @@ thumb should be:
 - `pkg/pc` no longer rewrites SDP/MSID lines to fake multi-stream sender semantics; callers now provide one explicit stream ID per native track.
 - `pkg/media` remote-track helpers no longer pretend tracks belong to multiple stream IDs; the helper layer now mirrors the native single-stream contract.
 - `pkg/media` no longer exposes stream-scoping or batch-add Pion convenience helpers; the package now offers only a raw `TrackLocal(...)` escape hatch.
+- `pkg/media` no longer exposes a global browser-style `GetSupportedConstraints` matrix; capability discovery is tied to concrete tracks instead.
 - Validation DSL and waiter tooling now lives under `pkg/testkit/validate` instead of `pkg/media/validate`.
 
 ## Core vs Helper Layers
