@@ -91,9 +91,6 @@ func normalizeSessionConfig(cfg SessionConfig) (SessionConfig, BrowserPolicy) {
 	if cfg.StatsPollInterval <= 0 {
 		cfg.StatsPollInterval = policy.DefaultStatsPollInterval
 	}
-	if cfg.EventHistory <= 0 {
-		cfg.EventHistory = 32
-	}
 	if cfg.FreezeThreshold < 0 {
 		cfg.FreezeThreshold = 0
 	}

@@ -3,6 +3,7 @@ package validate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -257,6 +258,22 @@ func TestNewSessionsAndTrackWrappers(t *testing.T) {
 	pcSession.PCOnTrack()(nil, nil, "")
 	if failures := pcSession.Snapshot().Failures; len(failures) == 0 || !strings.Contains(failures[0], "nil pc remote track") {
 		t.Fatalf("pc failures = %v, want nil-track failure", failures)
+	}
+}
+
+func TestNewSessionKeepsZeroEventHistoryUnbounded(t *testing.T) {
+	session := newSession(nil, SessionConfig{})
+	if session.cfg.EventHistory != 0 {
+		t.Fatalf("EventHistory = %d, want 0", session.cfg.EventHistory)
+	}
+
+	for i := range 40 {
+		session.recordWarning(fmt.Sprintf("warning-%d", i))
+	}
+
+	snapshot := session.Snapshot()
+	if len(snapshot.Warnings) != 40 {
+		t.Fatalf("len(Warnings) = %d, want 40", len(snapshot.Warnings))
 	}
 }
 
