@@ -13,7 +13,7 @@ body:
     id: go_version
     attributes:
       label: Go version
-      placeholder: go version go1.26.1 darwin/arm64
+      placeholder: go version go1.26.2 darwin/arm64
     validations:
       required: true
   - type: input
