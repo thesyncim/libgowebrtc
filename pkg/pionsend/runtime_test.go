@@ -2,6 +2,7 @@ package pionsend
 
 import (
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -238,6 +239,40 @@ func TestPublishVideoDefaultsAndLifecycle(t *testing.T) {
 	src := frame.NewI420Frame(1280, 720)
 	if err := video.WriteFrame(src, true); err != nil {
 		t.Fatalf("WriteFrame after close error = %v, want nil", err)
+	}
+}
+
+func TestPublishVideoOptsInToTrackAdaptation(t *testing.T) {
+	pc := newTestPeerConnection(t)
+
+	published, err := PublishVideo(pc, VideoPublishConfig{
+		TrackID: "video-track",
+		Width:   1280,
+		Height:  720,
+		FPS:     30,
+	})
+	if err != nil {
+		t.Fatalf("PublishVideo: %v", err)
+	}
+
+	video := published.(*publishedVideo)
+	defer video.Close()
+
+	var calls int32
+	video.encodings[0].videoTrack.SetBWESource(func() *track.BandwidthEstimate {
+		atomic.AddInt32(&calls, 1)
+		return &track.BandwidthEstimate{TargetBitrateBps: 1_000_000}
+	})
+	t.Cleanup(func() {
+		video.encodings[0].videoTrack.SetBWESource(nil)
+	})
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for atomic.LoadInt32(&calls) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if atomic.LoadInt32(&calls) == 0 {
+		t.Fatal("SetBWESource did not start adaptation loop, want helper opt-in")
 	}
 }
 

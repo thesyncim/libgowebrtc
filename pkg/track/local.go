@@ -50,7 +50,8 @@ type VideoTrackConfig struct {
 	FPS      float64    // FPS is the initial encoder target frame rate.
 	MTU      uint16     // RTP MTU (default 1200)
 
-	// Auto adaptation (all default true for browser-like behavior)
+	// Auto adaptation is opt-in so helpers can choose browser-like defaults
+	// explicitly instead of the base constructor guessing from zero values.
 	AutoKeyframe   bool // PLI/FIR → RequestKeyFrame()
 	AutoBitrate    bool // BWE → adjust bitrate
 	AutoFramerate  bool // BWE → adjust framerate
@@ -145,7 +146,7 @@ type VideoTrack struct {
 }
 
 // NewVideoTrack creates a new video track backed by libwebrtc encoder.
-// Auto adaptation features default to true for browser-like behavior.
+// Auto adaptation stays disabled unless the caller opts in explicitly.
 func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 	if cfg.ID == "" {
 		return nil, ErrInvalidConfig
@@ -163,21 +164,6 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 				break
 			}
 		}
-	}
-
-	// Default auto adaptation to true (browser-like behavior)
-	// Use explicit false to disable
-	if !cfg.AutoKeyframe && cfg.MinBitrate == 0 && cfg.MaxBitrate == 0 {
-		cfg.AutoKeyframe = true
-	}
-	if !cfg.AutoBitrate && cfg.MinBitrate == 0 && cfg.MaxBitrate == 0 {
-		cfg.AutoBitrate = true
-	}
-	if !cfg.AutoFramerate && cfg.MinFramerate == 0 && cfg.MaxFramerate == 0 {
-		cfg.AutoFramerate = true
-	}
-	if !cfg.AutoResolution && cfg.MinWidth == 0 && cfg.MinHeight == 0 {
-		cfg.AutoResolution = true
 	}
 
 	// Set default constraints if not specified

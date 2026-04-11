@@ -461,8 +461,7 @@ func TestVideoTrackSetParameters(t *testing.T) {
 	}
 }
 
-func TestVideoTrackAutoAdaptationDefaults(t *testing.T) {
-	// Test that auto adaptation defaults to true
+func TestVideoTrackAutoAdaptationRequiresExplicitOptIn(t *testing.T) {
 	track, err := NewVideoTrack(VideoTrackConfig{
 		ID:      "video-0",
 		Codec:   codec.H264,
@@ -476,18 +475,54 @@ func TestVideoTrackAutoAdaptationDefaults(t *testing.T) {
 	}
 	defer track.Close()
 
-	// All auto features should default to true
-	if !track.config.AutoKeyframe {
-		t.Error("AutoKeyframe should default to true")
+	if track.config.AutoKeyframe {
+		t.Error("AutoKeyframe should stay disabled unless explicitly enabled")
 	}
-	if !track.config.AutoBitrate {
-		t.Error("AutoBitrate should default to true")
+	if track.config.AutoBitrate {
+		t.Error("AutoBitrate should stay disabled unless explicitly enabled")
 	}
-	if !track.config.AutoFramerate {
-		t.Error("AutoFramerate should default to true")
+	if track.config.AutoFramerate {
+		t.Error("AutoFramerate should stay disabled unless explicitly enabled")
 	}
-	if !track.config.AutoResolution {
-		t.Error("AutoResolution should default to true")
+	if track.config.AutoResolution {
+		t.Error("AutoResolution should stay disabled unless explicitly enabled")
+	}
+
+	track.SetBWESource(func() *BandwidthEstimate {
+		return &BandwidthEstimate{TargetBitrateBps: 1_000_000}
+	})
+	if track.adaptStop != nil {
+		t.Fatal("adaptation loop should not start without explicit auto-adaptation opt-in")
+	}
+
+	explicit, err := NewVideoTrack(VideoTrackConfig{
+		ID:             "video-1",
+		Codec:          codec.H264,
+		Width:          1280,
+		Height:         720,
+		Bitrate:        2_000_000,
+		FPS:            30,
+		AutoKeyframe:   true,
+		AutoBitrate:    true,
+		AutoFramerate:  true,
+		AutoResolution: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create explicit track: %v", err)
+	}
+	defer explicit.Close()
+
+	if !explicit.config.AutoKeyframe {
+		t.Error("AutoKeyframe should remain enabled when explicitly requested")
+	}
+	if !explicit.config.AutoBitrate {
+		t.Error("AutoBitrate should remain enabled when explicitly requested")
+	}
+	if !explicit.config.AutoFramerate {
+		t.Error("AutoFramerate should remain enabled when explicitly requested")
+	}
+	if !explicit.config.AutoResolution {
+		t.Error("AutoResolution should remain enabled when explicitly requested")
 	}
 }
 
