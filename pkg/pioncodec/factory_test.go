@@ -12,6 +12,112 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
 
+func explicitOpusParams() webrtc.RTPCodecParameters {
+	return webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:  webrtc.MimeTypeOpus,
+			ClockRate: 48_000,
+			Channels:  2,
+		},
+		PayloadType: 111,
+	}
+}
+
+func TestNewAudioEncoderRequiresExplicitFactoryConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cfg  AudioFactoryConfig
+	}{
+		{
+			name: "missing sample rate",
+			cfg: AudioFactoryConfig{
+				Channels: 2,
+				Bitrate:  64_000,
+			},
+		},
+		{
+			name: "missing channels",
+			cfg: AudioFactoryConfig{
+				SampleRate: 48_000,
+				Bitrate:    64_000,
+			},
+		},
+		{
+			name: "missing bitrate",
+			cfg: AudioFactoryConfig{
+				SampleRate: 48_000,
+				Channels:   2,
+			},
+		},
+	} {
+		enc, err := NewAudioEncoder(explicitOpusParams(), tc.cfg)
+		if !errors.Is(err, ErrInvalidConfig) {
+			t.Fatalf("%s: NewAudioEncoder() error = %v, want %v", tc.name, err, ErrInvalidConfig)
+		}
+		if enc != nil {
+			t.Fatalf("%s: NewAudioEncoder() = %v, want nil encoder", tc.name, enc)
+		}
+	}
+}
+
+func TestNewAudioEncoderAcceptsExplicitOpusConfig(t *testing.T) {
+	testutil.SkipIfNoShim(t)
+
+	enc, err := NewAudioEncoder(explicitOpusParams(), AudioFactoryConfig{
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
+	})
+	if err != nil {
+		t.Fatalf("NewAudioEncoder(Opus) error = %v", err)
+	}
+	defer enc.Close()
+}
+
+func TestNewAudioDecoderRequiresExplicitClockRateAndChannels(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		params webrtc.RTPCodecParameters
+	}{
+		{
+			name: "missing clock rate",
+			params: webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType: webrtc.MimeTypeOpus,
+					Channels: 2,
+				},
+			},
+		},
+		{
+			name: "missing channels",
+			params: webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeOpus,
+					ClockRate: 48_000,
+				},
+			},
+		},
+	} {
+		dec, err := NewAudioDecoder(tc.params)
+		if !errors.Is(err, ErrInvalidConfig) {
+			t.Fatalf("%s: NewAudioDecoder() error = %v, want %v", tc.name, err, ErrInvalidConfig)
+		}
+		if dec != nil {
+			t.Fatalf("%s: NewAudioDecoder() = %v, want nil decoder", tc.name, dec)
+		}
+	}
+}
+
+func TestNewAudioDecoderAcceptsExplicitOpusParams(t *testing.T) {
+	testutil.SkipIfNoShim(t)
+
+	dec, err := NewAudioDecoder(explicitOpusParams())
+	if err != nil {
+		t.Fatalf("NewAudioDecoder(Opus) error = %v", err)
+	}
+	defer dec.Close()
+}
+
 func TestNewVideoEncoderAcceptsExplicitH264HighProfile(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
