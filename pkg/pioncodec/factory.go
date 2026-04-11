@@ -1,6 +1,7 @@
 package pioncodec
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,10 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/decoder"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 )
+
+// ErrInvalidConfig reports invalid codec-factory configuration or missing
+// required codec parameters.
+var ErrInvalidConfig = errors.New("invalid codec factory config")
 
 // VideoFactoryConfig configures libgowebrtc-backed Pion video factories.
 type VideoFactoryConfig struct {
@@ -90,20 +95,13 @@ func NewAudioEncoder(params webrtc.RTPCodecParameters, cfg AudioFactoryConfig) (
 	if codecType != libcodec.Opus {
 		return nil, encoder.ErrUnsupportedCodec
 	}
-
-	opusCfg := libcodec.DefaultOpusConfig()
-	if cfg.SampleRate > 0 {
-		opusCfg.SampleRate = cfg.SampleRate
-	} else if params.ClockRate > 0 {
-		opusCfg.SampleRate = int(params.ClockRate)
+	if cfg.SampleRate <= 0 || cfg.Channels <= 0 || cfg.Bitrate == 0 {
+		return nil, ErrInvalidConfig
 	}
-	if cfg.Channels > 0 {
-		opusCfg.Channels = cfg.Channels
-	} else if params.Channels > 0 {
-		opusCfg.Channels = int(params.Channels)
-	}
-	if cfg.Bitrate != 0 {
-		opusCfg.Bitrate = cfg.Bitrate
+	opusCfg := libcodec.OpusConfig{
+		SampleRate: cfg.SampleRate,
+		Channels:   cfg.Channels,
+		Bitrate:    cfg.Bitrate,
 	}
 	return encoder.NewOpusEncoder(opusCfg)
 }
@@ -128,16 +126,10 @@ func NewAudioDecoder(params webrtc.RTPCodecParameters) (decoder.AudioDecoder, er
 	if codecType != libcodec.Opus {
 		return nil, decoder.ErrUnsupportedCodec
 	}
-
-	sampleRate := int(params.ClockRate)
-	if sampleRate == 0 {
-		sampleRate = int(codecType.ClockRate())
+	if params.ClockRate == 0 || params.Channels == 0 {
+		return nil, ErrInvalidConfig
 	}
-	channels := int(params.Channels)
-	if channels == 0 {
-		channels = 2
-	}
-	return decoder.NewAudioDecoder(codecType, sampleRate, channels)
+	return decoder.NewAudioDecoder(codecType, int(params.ClockRate), int(params.Channels))
 }
 
 func overrideCommonVideoConfig(
