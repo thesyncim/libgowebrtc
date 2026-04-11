@@ -6,21 +6,10 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
-func TestDefaultAudioCodecPreferencesFollowBrowserBehavior(t *testing.T) {
-	got := defaultAudioCodecPreferences(pioncodec.BrowserChrome)
-	if len(got) == 0 {
-		t.Fatal("defaultAudioCodecPreferences() returned no codecs")
-	}
-	if got[0].MimeType != webrtc.MimeTypeOpus {
-		t.Fatalf("defaultAudioCodecPreferences()[0] = %q, want %q", got[0].MimeType, webrtc.MimeTypeOpus)
-	}
-}
-
-func TestPublishAudioValidationAndDefaults(t *testing.T) {
+func TestPublishAudioValidation(t *testing.T) {
 	if _, err := PublishAudio(nil, AudioPublishConfig{TrackID: "audio"}); err != ErrNilPeerConnection {
 		t.Fatalf("PublishAudio(nil) error = %v, want %v", err, ErrNilPeerConnection)
 	}
@@ -76,35 +65,17 @@ func TestRequiredVideoHeaderExtensionURIs(t *testing.T) {
 	})
 }
 
-func TestDefaultCodecPreferencesFollowBrowserBehavior(t *testing.T) {
-	t.Run("LayeredPrefersDDCapableCodecs", func(t *testing.T) {
-		got := defaultCodecPreferences(VideoPublishConfig{
-			Browser: pioncodec.BrowserChrome,
-			SVC:     &codec.SVCConfig{Mode: codec.SVCModeL3T3_KEY},
-		})
-		if len(got) < 2 {
-			t.Fatalf("len(defaultCodecPreferences) = %d, want at least 2", len(got))
-		}
-		if got[0].MimeType != webrtc.MimeTypeVP9 {
-			t.Fatalf("defaultCodecPreferences()[0] = %q, want %q", got[0].MimeType, webrtc.MimeTypeVP9)
-		}
-		if got[1].MimeType != webrtc.MimeTypeAV1 {
-			t.Fatalf("defaultCodecPreferences()[1] = %q, want %q", got[1].MimeType, webrtc.MimeTypeAV1)
-		}
-	})
-
-	t.Run("SimulcastKeepsBrowserOrder", func(t *testing.T) {
-		got := defaultCodecPreferences(VideoPublishConfig{
-			Browser: pioncodec.BrowserChrome,
-			SVC:     &codec.SVCConfig{Mode: codec.SVCModeS3T3},
-		})
-		if len(got) == 0 {
-			t.Fatal("defaultCodecPreferences() returned no codecs")
-		}
-		if got[0].MimeType != webrtc.MimeTypeVP8 {
-			t.Fatalf("defaultCodecPreferences()[0] = %q, want browser-shaped %q", got[0].MimeType, webrtc.MimeTypeVP8)
-		}
-	})
+func TestCodecFromPreferencesRequiresRecognizedCodec(t *testing.T) {
+	if got, ok := codecFromPreferences([]webrtc.RTPCodecParameters{{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/unknown"},
+	}}); ok {
+		t.Fatalf("codecFromPreferences(unknown) = %v, want no match", got)
+	}
+	if got, ok := codecFromPreferences([]webrtc.RTPCodecParameters{{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP9},
+	}}); !ok || got != codec.VP9 {
+		t.Fatalf("codecFromPreferences(VP9) = (%v, %v), want (%v, true)", got, ok, codec.VP9)
+	}
 }
 
 func TestDeriveEncodingConfigsForSimulcast(t *testing.T) {
