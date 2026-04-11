@@ -344,7 +344,16 @@ SHIM_EXPORT int shim_audio_track_source_push_frame(
     int num_samples = params->num_samples;
     int64_t timestamp_us = params->timestamp_us;
 
-    source->source->PushAudio(samples, num_samples, timestamp_us);
+    auto source_ref = source->source;
+    auto* worker_thread = shim::GetWorkerThread();
+    if (!worker_thread || worker_thread->IsCurrent()) {
+        source_ref->PushAudio(samples, num_samples, timestamp_us);
+        return SHIM_OK;
+    }
+
+    worker_thread->BlockingCall([source_ref, samples, num_samples, timestamp_us]() {
+        source_ref->PushAudio(samples, num_samples, timestamp_us);
+    });
     return SHIM_OK;
 }
 
