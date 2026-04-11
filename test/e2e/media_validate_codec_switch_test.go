@@ -35,11 +35,11 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		pp.receivedTracksMu.Lock()
 		pp.ReceivedTracks = append(pp.ReceivedTracks, track)
 		pp.receivedTracksMu.Unlock()
+		pcOnTrack(track, recv, streamID)
 		select {
 		case pp.trackReceived <- struct{}{}:
 		default:
 		}
-		pcOnTrack(track, recv, streamID)
 	})
 
 	track, err := pp.Sender.CreateVideoTrack("video-codec-switch", 640, 360)
@@ -58,18 +58,34 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		t.Fatal("timed out waiting for receiver track")
 	}
 
-	stopPump := make(chan struct{})
-	pumpDone := make(chan error, 1)
-	go pumpVideoFrames(track, stopPump, pumpDone)
-	defer func() {
+	var (
+		stopPump chan struct{}
+		pumpDone chan error
+	)
+	startPump := func() {
+		stopPump = make(chan struct{})
+		pumpDone = make(chan error, 1)
+		go pumpVideoFrames(track, stopPump, pumpDone)
+	}
+	stopPumpAndWait := func() error {
+		if stopPump == nil {
+			return nil
+		}
 		close(stopPump)
+		stopPump = nil
+		done := pumpDone
+		pumpDone = nil
 		select {
-		case err := <-pumpDone:
-			if err != nil {
-				t.Fatalf("pumpVideoFrames: %v", err)
-			}
+		case err := <-done:
+			return err
 		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for frame pump shutdown")
+			return errors.New("timed out waiting for frame pump shutdown")
+		}
+	}
+	startPump()
+	defer func() {
+		if err := stopPumpAndWait(); err != nil {
+			t.Fatalf("pumpVideoFrames: %v", err)
 		}
 	}()
 
@@ -99,11 +115,23 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 				Name:   "codec-switch",
 				Action: validate.ScenarioActionCodecRenegotiation,
 				Callback: func(context.Context, *validate.Session) error {
+					if err := stopPumpAndWait(); err != nil {
+						return err
+					}
 					err := sender.SetPreferredCodec(targetCodec)
 					if err != nil && !errors.Is(err, pc.ErrRenegotiationNeeded) {
 						return err
 					}
-					return pp.Renegotiate()
+					if err := pp.Renegotiate(); err != nil {
+						return err
+					}
+					stableCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+					defer cancel()
+					if err := session.WaitForStable(stableCtx); err != nil {
+						return err
+					}
+					startPump()
+					return nil
 				},
 				Expect: validate.ScenarioExpectation{
 					Within:            4 * time.Second,
