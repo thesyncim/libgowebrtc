@@ -135,6 +135,15 @@ func (f *fakeDataChannel) close() {
 	}
 }
 
+func (f *fakeDataChannel) emitError(err error) {
+	f.mu.Lock()
+	onError := f.onError
+	f.mu.Unlock()
+	if onError != nil {
+		onError(err)
+	}
+}
+
 func (f *fakeDataChannel) setSendErr(err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -600,6 +609,61 @@ func TestSessionDataChannelReobserveReplacesAdapterAndRestartsHeartbeats(t *test
 	}
 }
 
+func TestSessionDataChannelReobserveIgnoresStaleAdapterCallbacks(t *testing.T) {
+	session := newSession(nil, nil, SessionConfig{
+		EnableDataChannelHeartbeats: true,
+		HeartbeatInterval:           10 * time.Millisecond,
+		HeartbeatTimeout:            50 * time.Millisecond,
+	})
+
+	first := &fakeDataChannel{label: "control", id: 7, state: "connecting"}
+	session.observeDataChannel(first)
+	first.open()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.State == "open" && dc.HeartbeatAcked > 0
+	}); err != nil {
+		t.Fatalf("wait for initial heartbeat ack: %v", err)
+	}
+
+	second := &fakeDataChannel{label: "control", id: 7, state: "connecting"}
+	session.observeDataChannel(second)
+	second.open()
+
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.State == "open" && dc.OpenTransitions >= 2
+	}); err != nil {
+		t.Fatalf("wait for replacement open: %v", err)
+	}
+
+	before := session.Snapshot().DataChannels[dataChannelKey("control", 7)]
+
+	first.close()
+	first.emitError(errors.New("stale adapter error"))
+
+	snapshot := session.Snapshot().DataChannels[dataChannelKey("control", 7)]
+	if snapshot.State != "open" {
+		t.Fatalf("state after stale close = %q, want open", snapshot.State)
+	}
+	if snapshot.CloseTransitions != before.CloseTransitions {
+		t.Fatalf("close transitions after stale close = %d, want %d", snapshot.CloseTransitions, before.CloseTransitions)
+	}
+	if snapshot.LastError != before.LastError {
+		t.Fatalf("last error after stale error = %q, want %q", snapshot.LastError, before.LastError)
+	}
+
+	if err := session.waitFor(ctx, func(snapshot SessionSnapshot) bool {
+		dc, ok := snapshot.DataChannels[dataChannelKey("control", 7)]
+		return ok && dc.State == "open" && dc.HeartbeatAcked > before.HeartbeatAcked
+	}); err != nil {
+		t.Fatalf("wait for replacement heartbeat ack after stale callbacks: %v", err)
+	}
+}
+
 func TestSessionWaitForAudioContinuousAndDataChannelOpen(t *testing.T) {
 	session := newSession(nil, nil, SessionConfig{})
 	session.mu.Lock()
@@ -641,6 +705,81 @@ func TestSessionWaitForAudioContinuousAndDataChannelOpen(t *testing.T) {
 	defer missingCancel()
 	if err := session.WaitForDataChannelOpen(missingCtx, "missing"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("WaitForDataChannelOpen(missing) error = %v, want deadline exceeded", err)
+	}
+}
+
+func TestAudioTrackStateObserveFrameLockedRecordsFreezeAndConfigSwitch(t *testing.T) {
+	state := &audioTrackState{id: "audio-1"}
+
+	first := frame.NewAudioFrameS16(48000, 2, 960)
+	state.observeFrameAtLocked(first, time.Unix(0, 0), time.Nanosecond, sessionDefaultAudioFreezeCap, 8)
+
+	second := frame.NewAudioFrameS16(48000, 2, 480)
+	state.observeFrameAtLocked(second, time.Unix(0, 2*int64(time.Millisecond)), time.Nanosecond, sessionDefaultAudioFreezeCap, 8)
+
+	snapshot := state.snapshotLocked()
+	if snapshot.FrameCount != 2 {
+		t.Fatalf("frame count = %d, want 2", snapshot.FrameCount)
+	}
+	if snapshot.FreezeCount != 1 {
+		t.Fatalf("freeze count = %d, want 1 with a tiny explicit threshold", snapshot.FreezeCount)
+	}
+	if len(snapshot.FreezeEvents) != 1 || snapshot.FreezeEvents[0].Kind != "frame" {
+		t.Fatalf("freeze events = %+v, want one frame freeze event", snapshot.FreezeEvents)
+	}
+	if len(snapshot.ConfigSwitches) != 1 {
+		t.Fatalf("config switches = %d, want 1", len(snapshot.ConfigSwitches))
+	}
+	if got := snapshot.CurrentPTime; got != second.Duration() {
+		t.Fatalf("current ptime = %v, want %v", got, second.Duration())
+	}
+	if snapshot.Continuous {
+		t.Fatalf("snapshot should not report continuous after a tiny-threshold frame gap: %+v", snapshot)
+	}
+}
+
+func TestVideoTrackStateAdaptiveFreezeThreshold(t *testing.T) {
+	state := &videoTrackState{id: "video-1"}
+	start := time.Unix(0, 0)
+
+	state.observeFrameAtLocked(&frame.VideoFrame{Width: 640, Height: 360, PTS: 0}, start, 0, sessionDefaultVideoFreezeCap, 8)
+	state.observeFrameAtLocked(&frame.VideoFrame{Width: 640, Height: 360, PTS: 9000}, start.Add(100*time.Millisecond), 0, sessionDefaultVideoFreezeCap, 8)
+
+	if got := state.freezeThresholdLocked(0, sessionDefaultVideoFreezeCap); got != 300*time.Millisecond {
+		t.Fatalf("video adaptive threshold = %v, want 300ms", got)
+	}
+
+	state.observeFrameAtLocked(&frame.VideoFrame{Width: 640, Height: 360, PTS: 18000}, start.Add(380*time.Millisecond), 0, sessionDefaultVideoFreezeCap, 8)
+	if state.freezeCount != 0 {
+		t.Fatalf("freeze count after sub-threshold gap = %d, want 0", state.freezeCount)
+	}
+
+	state.observeFrameAtLocked(&frame.VideoFrame{Width: 640, Height: 360, PTS: 27000}, start.Add(760*time.Millisecond), 0, sessionDefaultVideoFreezeCap, 8)
+	if state.freezeCount != 1 {
+		t.Fatalf("freeze count after adaptive-threshold breach = %d, want 1", state.freezeCount)
+	}
+}
+
+func TestAudioTrackStateAdaptiveFreezeThreshold(t *testing.T) {
+	state := &audioTrackState{id: "audio-1"}
+	start := time.Unix(0, 0)
+	frame20ms := frame.NewAudioFrameS16(48000, 2, 960)
+
+	state.observeFrameAtLocked(frame20ms, start, 0, sessionDefaultAudioFreezeCap, 8)
+	state.observeFrameAtLocked(frame20ms, start.Add(20*time.Millisecond), 0, sessionDefaultAudioFreezeCap, 8)
+
+	if got := state.freezeThresholdLocked(0, sessionDefaultAudioFreezeCap, frame20ms.Duration()); got != 80*time.Millisecond {
+		t.Fatalf("audio adaptive threshold = %v, want 80ms", got)
+	}
+
+	state.observeFrameAtLocked(frame20ms, start.Add(90*time.Millisecond), 0, sessionDefaultAudioFreezeCap, 8)
+	if state.freezeCount != 0 {
+		t.Fatalf("freeze count after sub-threshold audio gap = %d, want 0", state.freezeCount)
+	}
+
+	state.observeFrameAtLocked(frame20ms, start.Add(180*time.Millisecond), 0, sessionDefaultAudioFreezeCap, 8)
+	if state.freezeCount != 1 {
+		t.Fatalf("freeze count after adaptive audio breach = %d, want 1", state.freezeCount)
 	}
 }
 
@@ -782,7 +921,7 @@ func TestSessionTrackStateHelpersAndAudioLevels(t *testing.T) {
 		currentHeight: 180,
 		lastFrameAt:   time.Now().Add(-20 * time.Millisecond),
 	}
-	videoState.observeFrameLocked(&frame.VideoFrame{Width: 640, Height: 360, IsKeyframe: true}, 5*time.Millisecond, 4)
+	videoState.observeFrameLocked(&frame.VideoFrame{Width: 640, Height: 360, IsKeyframe: true}, 5*time.Millisecond, sessionDefaultVideoFreezeCap, 4)
 	videoState.observeCodecChangeLocked(pionrecv.CodecChange{
 		CurrentType:  codec.H264,
 		CurrentCodec: webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}},
@@ -806,10 +945,10 @@ func TestSessionTrackStateHelpersAndAudioLevels(t *testing.T) {
 		streamID: "stream-1",
 		source:   "manual",
 	}
-	audioState.observeFrameLocked(nil, 5*time.Millisecond, 4)
-	audioState.observeFrameLocked(silent, 5*time.Millisecond, 4)
+	audioState.observeFrameLocked(nil, 5*time.Millisecond, sessionDefaultAudioFreezeCap, 4)
+	audioState.observeFrameLocked(silent, 5*time.Millisecond, sessionDefaultAudioFreezeCap, 4)
 	audioState.lastFrameAt = time.Now().Add(-20 * time.Millisecond)
-	audioState.observeFrameLocked(clipped, 5*time.Millisecond, 4)
+	audioState.observeFrameLocked(clipped, 5*time.Millisecond, sessionDefaultAudioFreezeCap, 4)
 	audioState.observeCodecChangeLocked(pionrecv.CodecChange{
 		CurrentType:  codec.PCMU,
 		CurrentCodec: webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypePCMU}},

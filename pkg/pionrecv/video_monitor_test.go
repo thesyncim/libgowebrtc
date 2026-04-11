@@ -1,6 +1,8 @@
 package pionrecv
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -279,5 +281,85 @@ func TestVideoSubscriberMonitorDetectsFrameFreeze(t *testing.T) {
 	}
 	if len(snapshot.FreezeEvents) == 0 || snapshot.FreezeEvents[0].Kind != "frame" {
 		t.Fatalf("FreezeEvents = %+v, want frame freeze event", snapshot.FreezeEvents)
+	}
+}
+
+func TestVideoSubscriberMonitorDeduplicatesVisibleFreezeCount(t *testing.T) {
+	params := mustCodecParams(t, codec.VP8, 96)
+	track := newFakeTrackReader(webrtc.RTPCodecTypeVideo, params, 0x45674568)
+
+	monitor := NewVideoSubscriberMonitor(VideoSubscriberMonitorConfig{
+		FreezeThreshold:    5 * time.Millisecond,
+		PacketGapThreshold: 5 * time.Millisecond,
+	})
+	monitor.bind(track, nil, codec.VP8, params)
+
+	pkt1 := &rtp.Packet{
+		Header: rtp.Header{
+			Version:        2,
+			PayloadType:    uint8(params.PayloadType),
+			SequenceNumber: 10,
+			Timestamp:      3000,
+			SSRC:           uint32(track.SSRC()),
+		},
+		Payload: []byte{0x01},
+	}
+	pkt2 := &rtp.Packet{
+		Header: rtp.Header{
+			Version:        2,
+			PayloadType:    uint8(params.PayloadType),
+			SequenceNumber: 13,
+			Timestamp:      6000,
+			SSRC:           uint32(track.SSRC()),
+		},
+		Payload: []byte{0x02},
+	}
+
+	first := frame.NewI420Frame(160, 90)
+	first.PTS = 0
+	second := frame.NewI420Frame(160, 90)
+	second.PTS = 3000
+	monitor.observePacket(pkt1)
+	monitor.observeFrame(first)
+	time.Sleep(10 * time.Millisecond)
+	monitor.observePacket(pkt2)
+	monitor.observeFrame(second)
+
+	snapshot := monitor.Snapshot()
+	if snapshot.PacketGapCount != 1 {
+		t.Fatalf("PacketGapCount = %d, want 1", snapshot.PacketGapCount)
+	}
+	if snapshot.FrameGapCount != 1 {
+		t.Fatalf("FrameGapCount = %d, want 1", snapshot.FrameGapCount)
+	}
+	if snapshot.FreezeCount != 1 {
+		t.Fatalf("FreezeCount = %d, want 1 visible freeze", snapshot.FreezeCount)
+	}
+	if len(snapshot.FreezeEvents) != 2 {
+		t.Fatalf("len(FreezeEvents) = %d, want 2 raw freeze events", len(snapshot.FreezeEvents))
+	}
+}
+
+func TestVideoSubscriberMonitorWaitForCodecRequiresDecodedFrames(t *testing.T) {
+	params := mustCodecParams(t, codec.VP8, 96)
+	track := newFakeTrackReader(webrtc.RTPCodecTypeVideo, params, 0x45674569)
+
+	monitor := NewVideoSubscriberMonitor(VideoSubscriberMonitorConfig{})
+	monitor.bind(track, nil, codec.VP8, params)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := monitor.WaitForCodec(ctx, codec.VP8); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForCodec before frame error = %v, want %v", err, context.DeadlineExceeded)
+	}
+
+	video := frame.NewI420Frame(160, 90)
+	video.PTS = 0
+	monitor.observeFrame(video)
+
+	readyCtx, readyCancel := context.WithTimeout(context.Background(), testTimeout)
+	defer readyCancel()
+	if err := monitor.WaitForCodec(readyCtx, codec.VP8); err != nil {
+		t.Fatalf("WaitForCodec after frame: %v", err)
 	}
 }

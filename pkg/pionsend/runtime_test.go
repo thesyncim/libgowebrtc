@@ -94,7 +94,17 @@ func TestPublishedAudioDelegatesToTrack(t *testing.T) {
 		t.Fatalf("NewAudioTrack: %v", err)
 	}
 
-	audio := &publishedAudio{track: audioTrack}
+	audio := &publishedAudio{
+		cfg: AudioPublishConfig{
+			TrackID:    "audio-track",
+			StreamID:   "stream-audio",
+			SampleRate: 48_000,
+			Channels:   2,
+			PTime:      20 * time.Millisecond,
+		},
+		track:           audioTrack,
+		samplesPerFrame: 960,
+	}
 	silence := frame.NewAudioFrameS16(48_000, 2, 960)
 	if err := audio.WriteFrame(silence); !errors.Is(err, track.ErrNotBound) {
 		t.Fatalf("WriteFrame(unbound) error = %v, want %v", err, track.ErrNotBound)
@@ -107,6 +117,61 @@ func TestPublishedAudioDelegatesToTrack(t *testing.T) {
 	}
 	if err := audio.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+	}
+}
+
+func TestPublishAudioRejectsInvalidPTime(t *testing.T) {
+	pc := newTestPeerConnection(t)
+
+	_, err := PublishAudio(pc, AudioPublishConfig{
+		TrackID: "audio-track",
+		PTime:   333 * time.Microsecond,
+	})
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("PublishAudio(invalid ptime) error = %v, want %v", err, ErrInvalidConfig)
+	}
+}
+
+func TestPublishedAudioRejectsMismatchedFrameShape(t *testing.T) {
+	audioTrack, err := track.NewAudioTrack(track.AudioTrackConfig{
+		ID:         "audio-track",
+		StreamID:   "stream-audio",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
+	})
+	if err != nil {
+		t.Fatalf("NewAudioTrack: %v", err)
+	}
+
+	audio := &publishedAudio{
+		cfg: AudioPublishConfig{
+			TrackID:    "audio-track",
+			StreamID:   "stream-audio",
+			SampleRate: 48_000,
+			Channels:   2,
+			PTime:      10 * time.Millisecond,
+		},
+		track:           audioTrack,
+		samplesPerFrame: 480,
+	}
+
+	for _, tc := range []struct {
+		name string
+		src  *frame.AudioFrame
+	}{
+		{name: "sample rate", src: frame.NewAudioFrameS16(44_100, 2, 480)},
+		{name: "channels", src: frame.NewAudioFrameS16(48_000, 1, 480)},
+		{name: "ptime", src: frame.NewAudioFrameS16(48_000, 2, 960)},
+	} {
+		if err := audio.WriteFrame(tc.src); err == nil {
+			t.Fatalf("WriteFrame(%s mismatch) error = nil, want error", tc.name)
+		}
+	}
+
+	matching := frame.NewAudioFrameS16(48_000, 2, 480)
+	if err := audio.WriteFrame(matching); !errors.Is(err, track.ErrNotBound) {
+		t.Fatalf("WriteFrame(valid frame, unbound track) error = %v, want %v", err, track.ErrNotBound)
 	}
 }
 
