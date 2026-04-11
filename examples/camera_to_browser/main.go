@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +30,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 var (
@@ -498,25 +496,28 @@ func applyVideoCodecPreference(peerConn *pc.PeerConnection, codecType codec.Type
 }
 
 func videoCodecPreferences(codecType codec.Type) ([]webrtc.RTPCodecParameters, error) {
-	codecs := pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionEncode, pioncodec.PresetModeNegotiation).VideoCodecs()
-	mime := codecType.MimeType()
-	if mime == "" {
+	if codecType.MimeType() == "" {
 		return nil, fmt.Errorf("unsupported codec: %v", codecType)
 	}
-	return prioritizeVideoCodecsByMime(codecs, mime), nil
+	return []webrtc.RTPCodecParameters{{
+		RTPCodecCapability: videoCodecCapability(codecType),
+	}}, nil
 }
 
-func prioritizeVideoCodecsByMime(codecs []webrtc.RTPCodecParameters, mime string) []webrtc.RTPCodecParameters {
-	preferred := make([]webrtc.RTPCodecParameters, 0, len(codecs))
-	rest := make([]webrtc.RTPCodecParameters, 0, len(codecs))
-	for _, codec := range codecs {
-		if strings.EqualFold(codec.MimeType, mime) {
-			preferred = append(preferred, codec)
-			continue
+func videoCodecCapability(codecType codec.Type) webrtc.RTPCodecCapability {
+	switch codecType {
+	case codec.H264:
+		return webrtc.RTPCodecCapability{
+			MimeType:    codecType.MimeType(),
+			ClockRate:   uint32(codecType.ClockRate()),
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=" + string(codec.H264ProfileConstrainedBase),
 		}
-		rest = append(rest, codec)
+	default:
+		return webrtc.RTPCodecCapability{
+			MimeType:  codecType.MimeType(),
+			ClockRate: uint32(codecType.ClockRate()),
+		}
 	}
-	return append(preferred, rest...)
 }
 
 const indexHTML = `<!DOCTYPE html>

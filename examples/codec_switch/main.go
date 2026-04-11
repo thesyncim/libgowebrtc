@@ -27,9 +27,9 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/thesyncim/libgowebrtc/internal/examplesupport"
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 //go:embed index.html
@@ -334,7 +334,28 @@ func sendVideo(peerConn *pc.PeerConnection, track *pc.Track, sender *pc.RTPSende
 }
 
 func codecSwitchVideoCodecs() []webrtc.RTPCodecParameters {
-	return pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionEncode, pioncodec.PresetModeNegotiation).VideoCodecs()
+	return []webrtc.RTPCodecParameters{
+		{RTPCodecCapability: codecCapabilityFor(codec.VP8)},
+		{RTPCodecCapability: codecCapabilityFor(codec.H264)},
+		{RTPCodecCapability: codecCapabilityFor(codec.VP9)},
+		{RTPCodecCapability: codecCapabilityFor(codec.AV1)},
+	}
+}
+
+func codecCapabilityFor(c codec.Type) webrtc.RTPCodecCapability {
+	switch c {
+	case codec.H264:
+		return webrtc.RTPCodecCapability{
+			MimeType:    c.MimeType(),
+			ClockRate:   uint32(c.ClockRate()),
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=" + string(codec.H264ProfileConstrainedBase),
+		}
+	default:
+		return webrtc.RTPCodecCapability{
+			MimeType:  c.MimeType(),
+			ClockRate: uint32(c.ClockRate()),
+		}
+	}
 }
 
 func generateTestPattern(f *frame.VideoFrame, frameNum int) {

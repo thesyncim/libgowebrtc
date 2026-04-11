@@ -40,6 +40,33 @@ func encodeUntilOutput(t testing.TB, enc VideoEncoder, src *frame.VideoFrame, ds
 	return EncodeResult{}, ffi.ErrNeedMoreData
 }
 
+func encodeUntilOutputAfterKeyFrameRequest(t testing.TB, enc VideoEncoder, src *frame.VideoFrame, dst []byte) (EncodeResult, error) {
+	t.Helper()
+
+	if src == nil {
+		return EncodeResult{}, ErrInvalidFrame
+	}
+
+	basePTS := src.PTS
+	defer func() { src.PTS = basePTS }()
+
+	for i := 0; i < encodeRetryAttempts; i++ {
+		// RequestKeyFrame is consumed by each encode attempt, even if the encoder
+		// still needs more input before producing output.
+		enc.RequestKeyFrame()
+		src.PTS = basePTS + uint32(i*encodeRetryStep)
+		result, err := enc.EncodeInto(src, dst, false)
+		if err == nil && result.N > 0 {
+			return result, nil
+		}
+		if err != nil && !errors.Is(err, ffi.ErrNeedMoreData) {
+			return EncodeResult{}, err
+		}
+	}
+
+	return EncodeResult{}, ffi.ErrNeedMoreData
+}
+
 func decodeUntilOutput(t testing.TB, dec decoder.VideoDecoder, encoded []byte, dst *frame.VideoFrame, timestamp uint32, isKeyframe bool) error {
 	t.Helper()
 
