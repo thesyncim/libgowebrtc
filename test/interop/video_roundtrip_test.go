@@ -85,7 +85,7 @@ func TestVideoTrackRoundtrip(t *testing.T) {
 	}
 
 	// Add track to libwebrtc PeerConnection
-	_, err = libPC.AddTrack(libTrack)
+	_, err = libPC.AddTrack(libTrack, libTrack.ID())
 	if err != nil {
 		t.Fatalf("Failed to add track to libwebrtc: %v", err)
 	}
@@ -179,8 +179,8 @@ func TestPionToLibWebRTCVideo(t *testing.T) {
 
 	// Track received on libwebrtc side
 	trackReceived := make(chan struct{})
-	libPC.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
-		t.Logf("libwebrtc received track: %s, kind: %s", track.ID(), track.Kind())
+	libPC.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
+		t.Logf("libwebrtc received track: %s, stream: %s, kind: %s", track.ID(), streamID, track.Kind())
 		close(trackReceived)
 	})
 

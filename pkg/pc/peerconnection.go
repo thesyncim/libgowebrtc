@@ -1,5 +1,6 @@
-// Package pc provides a browser-like PeerConnection API backed by libwebrtc.
-// This wraps libwebrtc's native PeerConnection, not Pion's.
+// Package pc provides a thin PeerConnection wrapper backed by libwebrtc.
+// It stays close to libwebrtc's native transport model rather than emulating
+// browser multi-stream helper semantics.
 package pc
 
 import (
@@ -26,6 +27,7 @@ var (
 	ErrTrackNotFound         = errors.New("track not found")
 	ErrNilTrack              = errors.New("track is nil")
 	ErrNilSender             = errors.New("sender is nil")
+	ErrInvalidStreamID       = errors.New("stream id is required")
 	ErrNilVideoFrame         = errors.New("video frame is nil")
 	ErrNilAudioFrame         = errors.New("audio frame is nil")
 	// ErrNotSupported reports APIs that are intentionally exposed but not yet
@@ -178,12 +180,12 @@ func ffiCodecCapabilitiesFromParameters(codecs []webrtc.RTPCodecParameters) []ff
 
 // RTPSender represents an RTP sender.
 type RTPSender struct {
-	handle  uintptr
-	track   *Track
-	pc      *PeerConnection
-	id      string
-	streams []string
-	mu      sync.RWMutex
+	handle   uintptr
+	track    *Track
+	pc       *PeerConnection
+	id       string
+	streamID string
+	mu       sync.RWMutex
 }
 
 // IsValid returns true if the sender has a valid native handle.
@@ -200,11 +202,11 @@ func (s *RTPSender) Track() *Track {
 	return s.track
 }
 
-// StreamIDs returns the browser-style MediaStream IDs associated with the sender.
-func (s *RTPSender) StreamIDs() []string {
+// StreamID returns the explicit MediaStream ID associated with the sender.
+func (s *RTPSender) StreamID() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return append([]string(nil), s.streams...)
+	return s.streamID
 }
 
 // ReplaceTrack replaces the sender's track.
@@ -754,7 +756,7 @@ type PeerConnection struct {
 	onICEGatheringStateChange  func(state ICEGatheringState)
 	onSignalingStateChange     func(state SignalingState)
 	onConnectionStateChange    func(state PeerConnectionState)
-	onTrack                    func(track *Track, receiver *RTPReceiver, streams []string)
+	onTrack                    func(track *Track, receiver *RTPReceiver, streamID string)
 	onNegotiationNeeded        func()
 	onDataChannel              func(dc *DataChannel)
 
@@ -797,7 +799,7 @@ func (pc *PeerConnection) SetOnConnectionStateChange(cb func(state PeerConnectio
 	pc.onConnectionStateChange = cb
 }
 
-func (pc *PeerConnection) SetOnTrack(cb func(track *Track, receiver *RTPReceiver, streams []string)) {
+func (pc *PeerConnection) SetOnTrack(cb func(track *Track, receiver *RTPReceiver, streamID string)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onTrack = cb
@@ -1095,11 +1097,7 @@ func NewPeerConnection(config webrtc.Configuration) (*PeerConnection, error) {
 			pc.receivers = append(pc.receivers, receiver)
 			pc.mu.Unlock()
 
-			streamIDs := splitStreamIDs(streams)
-			if len(streamIDs) == 0 {
-				streamIDs = pc.remoteTrackStreamIDs(trackID)
-			}
-			cb(track, receiver, streamIDs)
+			cb(track, receiver, firstStreamID(splitStreamIDs(streams)))
 		}
 	})
 
@@ -1199,7 +1197,7 @@ func (pc *PeerConnection) CreateOffer(options *webrtc.OfferOptions) (webrtc.Sess
 
 	return webrtc.SessionDescription{
 		Type: webrtc.SDPTypeOffer,
-		SDP:  pc.expandLocalTrackStreamIDs(string(sdpBuf[:sdpLen])),
+		SDP:  string(sdpBuf[:sdpLen]),
 	}, nil
 }
 
@@ -1219,7 +1217,7 @@ func (pc *PeerConnection) CreateAnswer(options *webrtc.AnswerOptions) (webrtc.Se
 
 	return webrtc.SessionDescription{
 		Type: webrtc.SDPTypeAnswer,
-		SDP:  pc.expandLocalTrackStreamIDs(string(sdpBuf[:sdpLen])),
+		SDP:  string(sdpBuf[:sdpLen]),
 	}, nil
 }
 
@@ -1341,10 +1339,14 @@ func (pc *PeerConnection) ConnectionState() PeerConnectionState {
 	return pc.connectionState.Load().(PeerConnectionState)
 }
 
-// AddTrack adds a track to the connection (mirrors browser's addTrack).
-func (pc *PeerConnection) AddTrack(track *Track, streams ...string) (*RTPSender, error) {
+// AddTrack adds a track to the connection with one explicit MediaStream ID.
+func (pc *PeerConnection) AddTrack(track *Track, streamID string) (*RTPSender, error) {
 	if track == nil {
 		return nil, ErrNilTrack
+	}
+	streamID = strings.TrimSpace(streamID)
+	if streamID == "" {
+		return nil, ErrInvalidStreamID
 	}
 	if pc.closed.Load() {
 		return nil, ErrPeerConnectionClosed
@@ -1355,9 +1357,6 @@ func (pc *PeerConnection) AddTrack(track *Track, streams ...string) (*RTPSender,
 
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
-
-	streamIDs := normalizeTrackStreamIDs(track.id, streams)
-	streamID := streamIDs[0]
 
 	var senderHandle uintptr
 
@@ -1397,11 +1396,11 @@ func (pc *PeerConnection) AddTrack(track *Track, streams ...string) (*RTPSender,
 	}
 
 	sender := &RTPSender{
-		handle:  senderHandle,
-		track:   track,
-		pc:      pc,
-		id:      track.id,
-		streams: streamIDs,
+		handle:   senderHandle,
+		track:    track,
+		pc:       pc,
+		id:       track.id,
+		streamID: streamID,
 	}
 
 	pc.senders = append(pc.senders, sender)
@@ -1727,214 +1726,11 @@ func splitStreamIDs(streams string) []string {
 	return streamIDs
 }
 
-func (pc *PeerConnection) remoteTrackStreamIDs(trackID string) []string {
-	if trackID == "" {
-		return nil
-	}
-
-	pc.mu.RLock()
-	desc := pc.remoteDescription
-	pc.mu.RUnlock()
-	if desc == nil {
-		return nil
-	}
-
-	return streamIDsForTrackID(desc.SDP, trackID)
-}
-
-func (pc *PeerConnection) expandLocalTrackStreamIDs(sdp string) string {
-	if sdp == "" {
-		return sdp
-	}
-
-	trackStreams, allStreams := pc.localTrackStreamIDs()
-	if len(trackStreams) == 0 || len(allStreams) == 0 {
-		return sdp
-	}
-
-	lineEnding := "\n"
-	if strings.Contains(sdp, "\r\n") {
-		lineEnding = "\r\n"
-	}
-
-	lines := strings.Split(sdp, lineEnding)
-	var out []string
-	semanticUpdated := false
-	insertedSemantic := false
-
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "a=msid-semantic: WMS") {
-			out = append(out, "a=msid-semantic: WMS "+strings.Join(allStreams, " "))
-			semanticUpdated = true
-			continue
-		}
-
-		if !semanticUpdated && !insertedSemantic && strings.HasPrefix(trimmed, "m=") {
-			out = append(out, "a=msid-semantic: WMS "+strings.Join(allStreams, " "))
-			insertedSemantic = true
-		}
-
-		out = append(out, line)
-
-		streamID, trackID, prefix, ok := parseMSIDLine(trimmed)
-		if !ok {
-			if i == len(lines)-1 && !semanticUpdated && !insertedSemantic {
-				out = append(out, "a=msid-semantic: WMS "+strings.Join(allStreams, " "))
-			}
-			continue
-		}
-
-		streams := trackStreams[trackID]
-		if len(streams) <= 1 {
-			continue
-		}
-		for _, extraStreamID := range streams[1:] {
-			if extraStreamID == "" || extraStreamID == streamID {
-				continue
-			}
-			if prefix == "a=msid:" {
-				out = append(out, prefix+extraStreamID+" "+trackID)
-				continue
-			}
-			out = append(out, prefix+extraStreamID+" "+trackID)
-		}
-	}
-
-	return strings.Join(out, lineEnding)
-}
-
-func (pc *PeerConnection) localTrackStreamIDs() (map[string][]string, []string) {
-	pc.mu.RLock()
-	defer pc.mu.RUnlock()
-
-	trackStreams := make(map[string][]string)
-	seenStreams := make(map[string]struct{})
-	allStreams := make([]string, 0, len(pc.senders))
-
-	for _, sender := range pc.senders {
-		if sender == nil {
-			continue
-		}
-		sender.mu.RLock()
-		track := sender.track
-		streams := append([]string(nil), sender.streams...)
-		sender.mu.RUnlock()
-		if track == nil || len(streams) == 0 {
-			continue
-		}
-		trackStreams[track.id] = streams
-		for _, streamID := range streams {
-			if _, ok := seenStreams[streamID]; ok {
-				continue
-			}
-			seenStreams[streamID] = struct{}{}
-			allStreams = append(allStreams, streamID)
-		}
-	}
-
-	return trackStreams, allStreams
-}
-
-func streamIDsForTrackID(sdp, trackID string) []string {
-	if sdp == "" || trackID == "" {
-		return nil
-	}
-
-	seen := make(map[string]struct{})
-	streamIDs := make([]string, 0, 2)
-	lines := strings.Split(sdp, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		var value string
-		switch {
-		case strings.HasPrefix(line, "a=msid:"):
-			value = strings.TrimPrefix(line, "a=msid:")
-		case strings.HasPrefix(line, "a=ssrc:"):
-			idx := strings.Index(line, " msid:")
-			if idx < 0 {
-				continue
-			}
-			value = line[idx+len(" msid:"):]
-		default:
-			continue
-		}
-
-		parts := strings.Fields(value)
-		if len(parts) < 2 || parts[1] != trackID {
-			continue
-		}
-		streamID := strings.TrimSpace(parts[0])
-		if streamID == "" {
-			continue
-		}
-		if _, ok := seen[streamID]; ok {
-			continue
-		}
-		seen[streamID] = struct{}{}
-		streamIDs = append(streamIDs, streamID)
-	}
-
+func firstStreamID(streamIDs []string) string {
 	if len(streamIDs) == 0 {
-		return nil
+		return ""
 	}
-	return streamIDs
-}
-
-func normalizeTrackStreamIDs(trackID string, streams []string) []string {
-	if trackID == "" {
-		return nil
-	}
-
-	seen := make(map[string]struct{}, len(streams)+1)
-	out := make([]string, 0, len(streams)+1)
-	for _, streamID := range streams {
-		streamID = strings.TrimSpace(streamID)
-		if streamID == "" {
-			continue
-		}
-		if _, ok := seen[streamID]; ok {
-			continue
-		}
-		seen[streamID] = struct{}{}
-		out = append(out, streamID)
-	}
-	if len(out) == 0 {
-		return []string{trackID}
-	}
-	return out
-}
-
-func parseMSIDLine(line string) (streamID, trackID, prefix string, ok bool) {
-	if line == "" {
-		return "", "", "", false
-	}
-
-	value := ""
-	switch {
-	case strings.HasPrefix(line, "a=msid:"):
-		prefix = "a=msid:"
-		value = strings.TrimPrefix(line, prefix)
-	case strings.HasPrefix(line, "a=ssrc:"):
-		idx := strings.Index(line, " msid:")
-		if idx < 0 {
-			return "", "", "", false
-		}
-		prefix = line[:idx+len(" msid:")]
-		value = line[idx+len(" msid:"):]
-	default:
-		return "", "", "", false
-	}
-
-	parts := strings.Fields(value)
-	if len(parts) < 2 {
-		return "", "", "", false
-	}
-	return parts[0], parts[1], prefix, true
+	return streamIDs[0]
 }
 
 // Close closes the peer connection.

@@ -115,7 +115,7 @@ func handleOffer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add track to get sender
-	sender, err := peerConn.AddTrack(track)
+	sender, err := peerConn.AddTrack(track, track.ID())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

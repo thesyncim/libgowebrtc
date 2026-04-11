@@ -17,9 +17,8 @@ import (
 // track-to-stream association available for higher-level routing.
 type RemoteTrack interface {
 	MediaStreamTrack
-	StreamID() string    // StreamID returns the first associated remote MediaStream ID, if any.
-	StreamIDs() []string // StreamIDs returns all associated remote MediaStream IDs.
-	RID() string         // RID returns the RTP stream ID for simulcast/SVC tracks when available.
+	StreamID() string // StreamID returns the associated remote MediaStream ID, if any.
+	RID() string      // RID returns the RTP stream ID for simulcast/SVC tracks when available.
 }
 
 // RemoteVideoTrack is a browser-like remote video track that emits decoded
@@ -140,11 +139,11 @@ func (r *RemoteStreamRegistry) BindDecodedTrack(decoded *pionrecv.DecodedTrack) 
 
 // BindPCTrack binds a libwebrtc-backed pkg/pc track event into the same
 // browser-like remote track and MediaStream model used by BindPionTrack.
-func (r *RemoteStreamRegistry) BindPCTrack(track *pc.Track, receiver *pc.RTPReceiver, streams []string) (RemoteTrack, []*MediaStream, error) {
+func (r *RemoteStreamRegistry) BindPCTrack(track *pc.Track, receiver *pc.RTPReceiver, streamID string) (RemoteTrack, []*MediaStream, error) {
 	if track == nil {
 		return nil, nil, ErrTrackNotFound
 	}
-	return r.bindSource(newPCTrackAdapter(track, receiver, streams))
+	return r.bindSource(newPCTrackAdapter(track, receiver, streamID))
 }
 
 // PionOnTrack adapts a low-level Pion OnTrack callback into the browser-like
@@ -189,9 +188,9 @@ func (r *RemoteStreamRegistry) PionOnTrack(
 func (r *RemoteStreamRegistry) PCOnTrack(
 	handler func(PCTrackEvent),
 	onError func(error),
-) func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
-	return func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
-		remoteTrack, mediaStreams, err := r.BindPCTrack(track, receiver, streams)
+) func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
+	return func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
+		remoteTrack, mediaStreams, err := r.BindPCTrack(track, receiver, streamID)
 		if err != nil {
 			if onError != nil {
 				onError(err)
@@ -249,32 +248,28 @@ func (r *RemoteStreamRegistry) bindSource(source remoteFrameTrack) (RemoteTrack,
 }
 
 func (r *RemoteStreamRegistry) streamsForTrack(track RemoteTrack) []*MediaStream {
-	streamIDs := normalizeStreamIDs(track.StreamIDs())
-	if len(streamIDs) == 0 {
+	streamID := strings.TrimSpace(track.StreamID())
+	if streamID == "" {
 		return []*MediaStream{}
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	streams := make([]*MediaStream, 0, len(streamIDs))
-	for _, streamID := range streamIDs {
-		stream, ok := r.streams[streamID]
-		if !ok {
-			stream = newMediaStreamWithID(streamID)
-			r.streams[streamID] = stream
-		}
-		if stream.GetTrackByID(track.ID()) == nil {
-			stream.AddTrack(track)
-		}
-		streams = append(streams, stream)
+	stream, ok := r.streams[streamID]
+	if !ok {
+		stream = newMediaStreamWithID(streamID)
+		r.streams[streamID] = stream
 	}
-	return streams
+	if stream.GetTrackByID(track.ID()) == nil {
+		stream.AddTrack(track)
+	}
+	return []*MediaStream{stream}
 }
 
 type remoteFrameTrack interface {
 	ID() string
-	StreamIDs() []string
+	StreamID() string
 	RID() string
 	Kind() string
 	Label() string
@@ -311,12 +306,12 @@ type decodedTrackAdapter struct {
 	decoded *pionrecv.DecodedTrack
 }
 
-func (a *decodedTrackAdapter) ID() string          { return a.decoded.ID() }
-func (a *decodedTrackAdapter) StreamIDs() []string { return singleStreamIDs(a.decoded.StreamID()) }
-func (a *decodedTrackAdapter) RID() string         { return a.decoded.RID() }
-func (a *decodedTrackAdapter) Kind() string        { return a.decoded.Kind().String() }
-func (a *decodedTrackAdapter) Label() string       { return a.decoded.ID() }
-func (a *decodedTrackAdapter) Codec() codec.Type   { return a.decoded.Codec() }
+func (a *decodedTrackAdapter) ID() string        { return a.decoded.ID() }
+func (a *decodedTrackAdapter) StreamID() string  { return a.decoded.StreamID() }
+func (a *decodedTrackAdapter) RID() string       { return a.decoded.RID() }
+func (a *decodedTrackAdapter) Kind() string      { return a.decoded.Kind().String() }
+func (a *decodedTrackAdapter) Label() string     { return a.decoded.ID() }
+func (a *decodedTrackAdapter) Codec() codec.Type { return a.decoded.Codec() }
 func (a *decodedTrackAdapter) CodecParameters() webrtc.RTPCodecParameters {
 	return a.decoded.CodecParameters()
 }
@@ -344,21 +339,21 @@ func (a *decodedTrackAdapter) RawDecodedTrack() *pionrecv.DecodedTrack { return 
 type pcTrackAdapter struct {
 	track    *pc.Track
 	receiver *pc.RTPReceiver
-	streams  []string
+	streamID string
 }
 
-func newPCTrackAdapter(track *pc.Track, receiver *pc.RTPReceiver, streams []string) *pcTrackAdapter {
+func newPCTrackAdapter(track *pc.Track, receiver *pc.RTPReceiver, streamID string) *pcTrackAdapter {
 	return &pcTrackAdapter{
 		track:    track,
 		receiver: receiver,
-		streams:  normalizeStreamIDs(streams),
+		streamID: strings.TrimSpace(streamID),
 	}
 }
 
-func (a *pcTrackAdapter) ID() string          { return a.track.ID() }
-func (a *pcTrackAdapter) StreamIDs() []string { return append([]string(nil), a.streams...) }
-func (a *pcTrackAdapter) RID() string         { return "" }
-func (a *pcTrackAdapter) Kind() string        { return a.track.Kind() }
+func (a *pcTrackAdapter) ID() string       { return a.track.ID() }
+func (a *pcTrackAdapter) StreamID() string { return a.streamID }
+func (a *pcTrackAdapter) RID() string      { return "" }
+func (a *pcTrackAdapter) Kind() string     { return a.track.Kind() }
 func (a *pcTrackAdapter) Label() string {
 	if label := a.track.Label(); label != "" {
 		return label
@@ -639,11 +634,8 @@ func (t *remoteTrackView) Clone() MediaStreamTrack {
 	return clone
 }
 
-func (t *remoteTrackView) StreamID() string { return firstStreamID(t.StreamIDs()) }
-func (t *remoteTrackView) StreamIDs() []string {
-	return normalizeStreamIDs(t.source.track.StreamIDs())
-}
-func (t *remoteTrackView) RID() string { return t.source.track.RID() }
+func (t *remoteTrackView) StreamID() string { return strings.TrimSpace(t.source.track.StreamID()) }
+func (t *remoteTrackView) RID() string      { return t.source.track.RID() }
 
 func (t *remoteTrackView) shouldDispatch() bool {
 	return t.Enabled() && t.ReadyState() == "live"
@@ -789,42 +781,4 @@ func supportsDecodedTrack(track remoteFrameTrack) bool {
 func supportsPCTrack(track remoteFrameTrack) bool {
 	_, ok := track.(remotePCTrack)
 	return ok
-}
-
-func normalizeStreamIDs(streamIDs []string) []string {
-	if len(streamIDs) == 0 {
-		return nil
-	}
-
-	seen := make(map[string]struct{}, len(streamIDs))
-	out := make([]string, 0, len(streamIDs))
-	for _, streamID := range streamIDs {
-		streamID = strings.TrimSpace(streamID)
-		if streamID == "" {
-			continue
-		}
-		if _, ok := seen[streamID]; ok {
-			continue
-		}
-		seen[streamID] = struct{}{}
-		out = append(out, streamID)
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func singleStreamIDs(streamID string) []string {
-	if streamID == "" {
-		return nil
-	}
-	return []string{streamID}
-}
-
-func firstStreamID(streamIDs []string) string {
-	if len(streamIDs) == 0 {
-		return ""
-	}
-	return streamIDs[0]
 }

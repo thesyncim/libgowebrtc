@@ -2,7 +2,6 @@ package pc
 
 import (
 	"errors"
-	"strings"
 	"testing"
 	"unsafe"
 
@@ -62,110 +61,12 @@ func TestSplitStreamIDs(t *testing.T) {
 	}
 }
 
-func TestStreamIDsForTrackID(t *testing.T) {
-	const sdp = `v=0
-o=- 1 2 IN IP4 127.0.0.1
-s=-
-t=0 0
-a=msid-semantic: WMS stream-a stream-b
-m=video 9 UDP/TLS/RTP/SAVPF 96
-a=mid:0
-a=msid:stream-a video-track
-a=msid:stream-b video-track
-a=msid:stream-b video-track
-a=ssrc:123456 msid:stream-c audio-track
-`
-
-	videoStreams := streamIDsForTrackID(sdp, "video-track")
-	if len(videoStreams) != 2 || videoStreams[0] != "stream-a" || videoStreams[1] != "stream-b" {
-		t.Fatalf("streamIDsForTrackID(video-track) = %v, want [stream-a stream-b]", videoStreams)
+func TestFirstStreamID(t *testing.T) {
+	if got := firstStreamID(nil); got != "" {
+		t.Fatalf("firstStreamID(nil) = %q, want empty", got)
 	}
-
-	audioStreams := streamIDsForTrackID(sdp, "audio-track")
-	if len(audioStreams) != 1 || audioStreams[0] != "stream-c" {
-		t.Fatalf("streamIDsForTrackID(audio-track) = %v, want [stream-c]", audioStreams)
-	}
-
-	if got := streamIDsForTrackID(sdp, "missing-track"); got != nil {
-		t.Fatalf("streamIDsForTrackID(missing-track) = %v, want nil", got)
-	}
-}
-
-func TestPeerConnectionRemoteTrackStreamIDs(t *testing.T) {
-	pc := &PeerConnection{
-		remoteDescription: &SessionDescription{
-			SDP: "a=msid:stream-1 video-track\r\na=ssrc:42 msid:stream-2 audio-track\r\n",
-		},
-	}
-
-	videoStreams := pc.remoteTrackStreamIDs("video-track")
-	if len(videoStreams) != 1 || videoStreams[0] != "stream-1" {
-		t.Fatalf("remoteTrackStreamIDs(video-track) = %v, want [stream-1]", videoStreams)
-	}
-
-	audioStreams := pc.remoteTrackStreamIDs("audio-track")
-	if len(audioStreams) != 1 || audioStreams[0] != "stream-2" {
-		t.Fatalf("remoteTrackStreamIDs(audio-track) = %v, want [stream-2]", audioStreams)
-	}
-}
-
-func TestNormalizeTrackStreamIDs(t *testing.T) {
-	got := normalizeTrackStreamIDs("track-1", []string{" stream-a ", "", "stream-b", "stream-a"})
-	if len(got) != 2 || got[0] != "stream-a" || got[1] != "stream-b" {
-		t.Fatalf("normalizeTrackStreamIDs(...) = %v, want [stream-a stream-b]", got)
-	}
-
-	got = normalizeTrackStreamIDs("track-1", nil)
-	if len(got) != 1 || got[0] != "track-1" {
-		t.Fatalf("normalizeTrackStreamIDs(nil) = %v, want [track-1]", got)
-	}
-}
-
-func TestExpandLocalTrackStreamIDs(t *testing.T) {
-	pc := &PeerConnection{
-		senders: []*RTPSender{
-			{
-				track:   &Track{id: "video-track"},
-				streams: []string{"stream-a", "stream-b"},
-			},
-			{
-				track:   &Track{id: "audio-track"},
-				streams: []string{"stream-c"},
-			},
-		},
-	}
-
-	const input = `v=0
-o=- 1 2 IN IP4 127.0.0.1
-s=-
-t=0 0
-a=group:BUNDLE 0 1
-a=msid-semantic: WMS stream-a stream-c
-m=video 9 UDP/TLS/RTP/SAVPF 96
-a=mid:0
-a=msid:stream-a video-track
-a=ssrc:1234 msid:stream-a video-track
-a=ssrc:5678 msid:stream-a video-track
-m=audio 9 UDP/TLS/RTP/SAVPF 111
-a=mid:1
-a=msid:stream-c audio-track
-`
-
-	munged := pc.expandLocalTrackStreamIDs(input)
-	if !strings.Contains(munged, "a=msid-semantic: WMS stream-a stream-b stream-c") {
-		t.Fatalf("expanded SDP missing multi-stream msid-semantic line:\n%s", munged)
-	}
-	if !strings.Contains(munged, "a=msid:stream-b video-track") {
-		t.Fatalf("expanded SDP missing extra a=msid line:\n%s", munged)
-	}
-	if !strings.Contains(munged, "a=ssrc:1234 msid:stream-b video-track") {
-		t.Fatalf("expanded SDP missing first extra a=ssrc msid line:\n%s", munged)
-	}
-	if !strings.Contains(munged, "a=ssrc:5678 msid:stream-b video-track") {
-		t.Fatalf("expanded SDP missing second extra a=ssrc msid line:\n%s", munged)
-	}
-	if strings.Count(munged, "a=msid:stream-c audio-track") != 1 {
-		t.Fatalf("expanded SDP should not duplicate single-stream audio track:\n%s", munged)
+	if got := firstStreamID([]string{"stream-a", "stream-b"}); got != "stream-a" {
+		t.Fatalf("firstStreamID(...) = %q, want stream-a", got)
 	}
 }
 
@@ -204,9 +105,9 @@ func TestSenderReceiverAndTransceiverGuardPaths(t *testing.T) {
 	if sender.Track() != track {
 		t.Fatal("Track() did not return stored track")
 	}
-	sender.streams = []string{"stream-a", "stream-b"}
-	if got := sender.StreamIDs(); len(got) != 2 || got[0] != "stream-a" || got[1] != "stream-b" {
-		t.Fatalf("StreamIDs() = %v, want [stream-a stream-b]", got)
+	sender.streamID = "stream-a"
+	if got := sender.StreamID(); got != "stream-a" {
+		t.Fatalf("StreamID() = %q, want stream-a", got)
 	}
 	if err := sender.ReplaceTrack(nil); err == nil {
 		t.Fatal("ReplaceTrack on uninitialized sender expected error")
@@ -387,8 +288,12 @@ func TestTrackAndDataChannelGuardPaths(t *testing.T) {
 func TestPeerConnectionNilArgumentGuards(t *testing.T) {
 	pc := &PeerConnection{}
 
-	if _, err := pc.AddTrack(nil); err != ErrNilTrack {
+	if _, err := pc.AddTrack(nil, "stream-0"); err != ErrNilTrack {
 		t.Fatalf("AddTrack(nil) = %v, want %v", err, ErrNilTrack)
+	}
+	track := &Track{id: "track-1", kind: "video"}
+	if _, err := pc.AddTrack(track, "   "); err != ErrInvalidStreamID {
+		t.Fatalf("AddTrack(empty stream) = %v, want %v", err, ErrInvalidStreamID)
 	}
 	if err := pc.RemoveTrack(nil); err != ErrNilSender {
 		t.Fatalf("RemoveTrack(nil) = %v, want %v", err, ErrNilSender)

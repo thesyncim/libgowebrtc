@@ -54,12 +54,12 @@ func newFakeDecodedRemoteTrack(id, streamID string, kind webrtc.RTPCodecType, co
 	}
 }
 
-func (f *fakeDecodedRemoteTrack) ID() string          { return f.id }
-func (f *fakeDecodedRemoteTrack) StreamIDs() []string { return singleStreamIDs(f.streamID) }
-func (f *fakeDecodedRemoteTrack) RID() string         { return f.rid }
-func (f *fakeDecodedRemoteTrack) Kind() string        { return f.kind.String() }
-func (f *fakeDecodedRemoteTrack) Label() string       { return f.id }
-func (f *fakeDecodedRemoteTrack) Codec() codec.Type   { return f.codecType }
+func (f *fakeDecodedRemoteTrack) ID() string        { return f.id }
+func (f *fakeDecodedRemoteTrack) StreamID() string  { return f.streamID }
+func (f *fakeDecodedRemoteTrack) RID() string       { return f.rid }
+func (f *fakeDecodedRemoteTrack) Kind() string      { return f.kind.String() }
+func (f *fakeDecodedRemoteTrack) Label() string     { return f.id }
+func (f *fakeDecodedRemoteTrack) Codec() codec.Type { return f.codecType }
 func (f *fakeDecodedRemoteTrack) CodecParameters() webrtc.RTPCodecParameters {
 	return f.codecParams
 }
@@ -120,7 +120,7 @@ type fakePCRemoteTrack struct {
 	id       string
 	label    string
 	kind     string
-	streams  []string
+	streamID string
 	libTrack *pc.Track
 	receiver *pc.RTPReceiver
 
@@ -131,22 +131,22 @@ type fakePCRemoteTrack struct {
 	closed    atomic.Bool
 }
 
-func newFakePCRemoteTrack(id, kind string, streams []string) *fakePCRemoteTrack {
+func newFakePCRemoteTrack(id, kind, streamID string) *fakePCRemoteTrack {
 	return &fakePCRemoteTrack{
 		id:       id,
 		label:    "remote-" + id,
 		kind:     kind,
-		streams:  append([]string(nil), streams...),
+		streamID: streamID,
 		libTrack: &pc.Track{},
 		receiver: &pc.RTPReceiver{},
 	}
 }
 
-func (f *fakePCRemoteTrack) ID() string          { return f.id }
-func (f *fakePCRemoteTrack) StreamIDs() []string { return append([]string(nil), f.streams...) }
-func (f *fakePCRemoteTrack) RID() string         { return "" }
-func (f *fakePCRemoteTrack) Kind() string        { return f.kind }
-func (f *fakePCRemoteTrack) Label() string       { return f.label }
+func (f *fakePCRemoteTrack) ID() string       { return f.id }
+func (f *fakePCRemoteTrack) StreamID() string { return f.streamID }
+func (f *fakePCRemoteTrack) RID() string      { return "" }
+func (f *fakePCRemoteTrack) Kind() string     { return f.kind }
+func (f *fakePCRemoteTrack) Label() string    { return f.label }
 func (f *fakePCRemoteTrack) SetOnVideoFrame(handler func(*frame.VideoFrame)) error {
 	f.onVideo = handler
 	return nil
@@ -209,9 +209,6 @@ func TestRemoteStreamRegistryReusesMediaStreamForMatchingStreamID(t *testing.T) 
 	}
 	if got := videoTrack.StreamID(); got != "stream-1" {
 		t.Fatalf("videoTrack.StreamID() = %q, want %q", got, "stream-1")
-	}
-	if got := videoTrack.StreamIDs(); len(got) != 1 || got[0] != "stream-1" {
-		t.Fatalf("videoTrack.StreamIDs() = %v, want [stream-1]", got)
 	}
 }
 
@@ -385,9 +382,9 @@ func TestPionRemoteTrackCodecChangeAndNaturalEnd(t *testing.T) {
 	waitForCondition(t, 2*time.Second, func() bool { return videoTrack.ReadyState() == "ended" })
 }
 
-func TestPCRemoteTrackMultiStreamFanoutAndClose(t *testing.T) {
+func TestPCRemoteTrackSingleStreamFanoutAndClose(t *testing.T) {
 	registry := NewRemoteStreamRegistry()
-	videoSource := newFakePCRemoteTrack("remote-video", "video", []string{"stream-a", "stream-b", "stream-a"})
+	videoSource := newFakePCRemoteTrack("remote-video", "video", "stream-a")
 
 	track, streams, err := registry.bindSource(videoSource)
 	if err != nil {
@@ -402,11 +399,8 @@ func TestPCRemoteTrackMultiStreamFanoutAndClose(t *testing.T) {
 	if got := videoTrack.StreamID(); got != "stream-a" {
 		t.Fatalf("StreamID() = %q, want %q", got, "stream-a")
 	}
-	if got := videoTrack.StreamIDs(); len(got) != 2 || got[0] != "stream-a" || got[1] != "stream-b" {
-		t.Fatalf("StreamIDs() = %v, want [stream-a stream-b]", got)
-	}
-	if len(streams) != 2 {
-		t.Fatalf("streams len = %d, want 2", len(streams))
+	if len(streams) != 1 {
+		t.Fatalf("streams len = %d, want 1", len(streams))
 	}
 	for _, stream := range streams {
 		if got := stream.GetTrackByID(videoTrack.ID()); got == nil {
@@ -449,7 +443,7 @@ func TestPCRemoteTrackMultiStreamFanoutAndClose(t *testing.T) {
 
 func TestRemoteStreamRegistryCloseStopsTracks(t *testing.T) {
 	registry := NewRemoteStreamRegistry()
-	videoSource := newFakePCRemoteTrack("remote-video", "video", []string{"stream-a"})
+	videoSource := newFakePCRemoteTrack("remote-video", "video", "stream-a")
 
 	track, _, err := registry.bindSource(videoSource)
 	if err != nil {
@@ -483,7 +477,7 @@ func TestRemoteStreamRegistryPCOnTrackErrorPath(t *testing.T) {
 		errCh <- err
 	})
 
-	callback(nil, nil, nil)
+	callback(nil, nil, "")
 
 	select {
 	case err := <-errCh:

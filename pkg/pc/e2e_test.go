@@ -243,7 +243,7 @@ func TestAddTrack(t *testing.T) {
 	t.Log("AddTrack succeeded")
 }
 
-func TestAddTrackPreservesMultipleStreamIDs(t *testing.T) {
+func TestAddTrackUsesSingleExplicitStreamID(t *testing.T) {
 	senderPC, err := NewPeerConnection(DefaultConfiguration())
 	if err != nil {
 		t.Fatalf("NewPeerConnection(sender): %v", err)
@@ -256,10 +256,10 @@ func TestAddTrackPreservesMultipleStreamIDs(t *testing.T) {
 	}
 	defer receiverPC.Close()
 
-	streamsCh := make(chan []string, 1)
-	receiverPC.SetOnTrack(func(track *Track, receiver *RTPReceiver, streams []string) {
+	streamCh := make(chan string, 1)
+	receiverPC.SetOnTrack(func(track *Track, receiver *RTPReceiver, streamID string) {
 		select {
-		case streamsCh <- append([]string(nil), streams...):
+		case streamCh <- streamID:
 		default:
 		}
 	})
@@ -268,7 +268,7 @@ func TestAddTrackPreservesMultipleStreamIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateVideoTrack: %v", err)
 	}
-	if _, err := senderPC.AddTrack(videoTrack, "stream-a", "stream-b"); err != nil {
+	if _, err := senderPC.AddTrack(videoTrack, "stream-a"); err != nil {
 		t.Fatalf("AddTrack: %v", err)
 	}
 
@@ -295,9 +295,9 @@ func TestAddTrackPreservesMultipleStreamIDs(t *testing.T) {
 	}
 
 	select {
-	case streams := <-streamsCh:
-		if len(streams) != 2 || streams[0] != "stream-a" || streams[1] != "stream-b" {
-			t.Fatalf("OnTrack streams = %v, want [stream-a stream-b]", streams)
+	case streamID := <-streamCh:
+		if streamID != "stream-a" {
+			t.Fatalf("OnTrack streamID = %q, want stream-a", streamID)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for OnTrack callback")

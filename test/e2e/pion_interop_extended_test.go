@@ -19,7 +19,7 @@ func TestStressInterop(t *testing.T) {
 	defer pp.Close()
 
 	track, _ := pp.Lib.CreateVideoTrack("stress-test", 320, 240)
-	_, _ = pp.Lib.AddTrack(track)
+	_, _ = pp.Lib.AddTrack(track, track.ID())
 
 	if err := pp.ConnectLibOffersPionAnswers(); err != nil {
 		t.Fatalf("Failed to connect: %v", err)

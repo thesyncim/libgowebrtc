@@ -135,7 +135,7 @@ func (s *Session) run() error {
 	s.videoTrack = videoTrack
 
 	// Add track to PeerConnection
-	if _, err := peerConn.AddTrack(videoTrack); err != nil {
+	if _, err := peerConn.AddTrack(videoTrack, videoTrack.ID()); err != nil {
 		return fmt.Errorf("add track: %w", err)
 	}
 	if err := applyVideoCodecPreference(peerConn, parseCodec(*codecName)); err != nil {

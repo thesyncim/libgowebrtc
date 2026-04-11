@@ -330,13 +330,13 @@ func (s *Session) PionOnTrack() func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
 
 // PCOnTrack returns an OnTrack handler that binds browser-shaped remote tracks
 // into the session.
-func (s *Session) PCOnTrack() func(*pc.Track, *pc.RTPReceiver, []string) {
-	return func(trackRemote *pc.Track, receiver *pc.RTPReceiver, streams []string) {
+func (s *Session) PCOnTrack() func(*pc.Track, *pc.RTPReceiver, string) {
+	return func(trackRemote *pc.Track, receiver *pc.RTPReceiver, streamID string) {
 		if trackRemote == nil {
 			s.recordFailure("validate: nil pc remote track")
 			return
 		}
-		remoteTrack, _, err := s.registry.BindPCTrack(trackRemote, receiver, streams)
+		remoteTrack, _, err := s.registry.BindPCTrack(trackRemote, receiver, streamID)
 		if err != nil {
 			s.recordFailure(fmt.Sprintf("validate: bind pc track %q: %v", trackRemote.ID(), err))
 			return

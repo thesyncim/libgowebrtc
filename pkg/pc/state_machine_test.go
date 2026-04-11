@@ -492,7 +492,7 @@ func TestPeerConnection_AddTrack_AfterClose(t *testing.T) {
 
 	pc.Close()
 
-	_, err = pc.AddTrack(track)
+	_, err = pc.AddTrack(track, "stream-0")
 	if err != ErrPeerConnectionClosed {
 		t.Errorf("AddTrack after close: got %v, want ErrPeerConnectionClosed", err)
 	}

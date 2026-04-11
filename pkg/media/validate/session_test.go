@@ -254,7 +254,7 @@ func TestNewSessionsAndTrackWrappers(t *testing.T) {
 	if pcSession == nil {
 		t.Fatal("NewPCSession() = nil")
 	}
-	pcSession.PCOnTrack()(nil, nil, nil)
+	pcSession.PCOnTrack()(nil, nil, "")
 	if failures := pcSession.Snapshot().Failures; len(failures) == 0 || !strings.Contains(failures[0], "nil pc remote track") {
 		t.Fatalf("pc failures = %v, want nil-track failure", failures)
 	}

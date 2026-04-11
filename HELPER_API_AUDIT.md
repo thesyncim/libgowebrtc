@@ -12,6 +12,13 @@ thumb should be:
 - Zero values should not silently enable behavior.
 - Test/example/browser ergonomics should live outside the primary API path.
 
+## Progress
+
+- `pkg/track` no longer auto-enables adaptation from zero values.
+- `pkg/pc.NewPeerConnection` no longer silently normalizes zero-value config.
+- `pkg/pc` no longer rewrites SDP/MSID lines to fake multi-stream sender semantics; callers now provide one explicit stream ID per native track.
+- `pkg/media` remote-track helpers no longer pretend tracks belong to multiple stream IDs; the helper layer now mirrors the native single-stream contract.
+
 ## Core vs Helper Layers
 
 The intended split is:

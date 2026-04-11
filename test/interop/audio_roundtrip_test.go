@@ -75,7 +75,7 @@ func TestAudioTrackRoundtrip(t *testing.T) {
 	}
 
 	// Add track to libwebrtc PeerConnection
-	_, err = pp.Lib.AddTrack(libTrack)
+	_, err = pp.Lib.AddTrack(libTrack, libTrack.ID())
 	if err != nil {
 		t.Fatalf("Failed to add audio track to libwebrtc: %v", err)
 	}
@@ -129,8 +129,8 @@ func TestPionToLibWebRTCAudio(t *testing.T) {
 
 	// Track received on libwebrtc side
 	trackReceived := make(chan struct{})
-	pp.Lib.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streams []string) {
-		t.Logf("libwebrtc received audio track: %s, kind: %s", track.ID(), track.Kind())
+	pp.Lib.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
+		t.Logf("libwebrtc received audio track: %s, stream: %s, kind: %s", track.ID(), streamID, track.Kind())
 		close(trackReceived)
 	})
 
@@ -251,12 +251,12 @@ func TestAudioAndVideoTogether(t *testing.T) {
 	}
 
 	// Add both tracks
-	_, err = pp.Lib.AddTrack(libVideoTrack)
+	_, err = pp.Lib.AddTrack(libVideoTrack, libVideoTrack.ID())
 	if err != nil {
 		t.Fatalf("Failed to add video track: %v", err)
 	}
 
-	_, err = pp.Lib.AddTrack(libAudioTrack)
+	_, err = pp.Lib.AddTrack(libAudioTrack, libAudioTrack.ID())
 	if err != nil {
 		t.Fatalf("Failed to add audio track: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestAudioTrackWithICE(t *testing.T) {
 		t.Fatalf("Failed to create audio track: %v", err)
 	}
 
-	_, err = pp.Lib.AddTrack(libAudioTrack)
+	_, err = pp.Lib.AddTrack(libAudioTrack, libAudioTrack.ID())
 	if err != nil {
 		t.Fatalf("Failed to add audio track: %v", err)
 	}

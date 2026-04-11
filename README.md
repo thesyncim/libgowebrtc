@@ -658,7 +658,7 @@ libgowebrtc/
 | `SetLayerActive()` / `SetLayerBitrate()` | Simulcast layer control |
 | `GetActiveLayers()` | Get active layer count |
 | `SetScalabilityMode()` / `GetScalabilityMode()` | Runtime SVC mode control |
-| `StreamIDs()` | MediaStream IDs associated with the sender |
+| `StreamID()` | MediaStream ID associated with the sender |
 </details>
 
 <details>
@@ -689,7 +689,7 @@ libgowebrtc/
 | `SetOnICEGatheringStateChange(...)` | ICE gathering progress events |
 | `SetOnNegotiationNeeded(...)` | Renegotiation trigger events |
 | `SetOnICECandidate(...)` | New ICE candidate events |
-| `SetOnTrack(...)` | Remote track received events with browser-style stream IDs |
+| `SetOnTrack(...)` | Remote track received events with one explicit stream ID |
 | `SetOnDataChannel(...)` | Data channel received events |
 </details>
 
