@@ -21,8 +21,8 @@ on:
     - cron: '0 5 * * 1'
 
 env:
-  GO_VERSION: '1.26.1'
-  GO_VERSION_FULL: '1.26.1'  # Full version for direct downloads (Rosetta job)
+  GO_VERSION: '1.26.2'
+  GO_VERSION_FULL: '1.26.2'  # Full version for direct downloads (Rosetta job)
   CORE_TEST_PACKAGES: ./internal/ffi ./pkg/... ./test/e2e ./test/interop ./test/benchmark
   BAZELISK_VERSION: v1.26.0
   GOLANGCI_LINT_VERSION: v1.64.8

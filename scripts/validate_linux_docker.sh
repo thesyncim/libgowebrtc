@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 TARGET_PLATFORM="${TARGET_PLATFORM:-linux_amd64}"
-GO_VERSION="${GO_VERSION:-1.26.1}"
+GO_VERSION="${GO_VERSION:-1.26.2}"
 IMAGE_NAME="${IMAGE_NAME:-libgowebrtc-validate}"
 DOCKER_PROGRESS="${DOCKER_PROGRESS:-plain}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-}"
