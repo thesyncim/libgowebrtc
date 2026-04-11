@@ -274,19 +274,22 @@ func (pp *PionLibPeerPair) ConnectLibOffersPionAnswers() error {
 
 	for _, c := range libCandidates {
 		idx := c.SDPMLineIndex
+		ufrag := c.UsernameFragment
 		pp.Pion.AddICECandidate(webrtc.ICECandidateInit{
-			Candidate:     c.Candidate,
-			SDPMid:        c.SDPMid,
-			SDPMLineIndex: idx,
+			Candidate:        c.Candidate,
+			SDPMid:           c.SDPMid,
+			SDPMLineIndex:    idx,
+			UsernameFragment: ufrag,
 		})
 	}
 
 	for _, c := range pionCandidates {
 		cJSON := c.ToJSON()
 		pp.Lib.AddICECandidate(pc.ICECandidate{
-			Candidate:     cJSON.Candidate,
-			SDPMid:        cJSON.SDPMid,
-			SDPMLineIndex: cJSON.SDPMLineIndex,
+			Candidate:        cJSON.Candidate,
+			SDPMid:           cJSON.SDPMid,
+			SDPMLineIndex:    cJSON.SDPMLineIndex,
+			UsernameFragment: cJSON.UsernameFragment,
 		})
 	}
 
