@@ -296,7 +296,7 @@ func TestMultiCodecEncoders(t *testing.T) {
 				vPlane[i] = 128
 			}
 
-			encBuf := make([]byte, width*height)
+			encBuf := make([]byte, width*height*3/2)
 
 			n, isKeyframe, err := encodeUntilOutput(
 				t,
