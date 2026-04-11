@@ -752,11 +752,6 @@ func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSett
 			}
 		}
 	}
-
-	if cfg.Codec == 0 {
-		cfg.Codec = codec.H264
-		resolved.Codec = cfg.Codec
-	}
 	return cfg, resolved
 }
 
@@ -805,9 +800,6 @@ func resolveVideoCaptureRequest(request VideoConstraints, devices []MediaDeviceI
 	resolved.Height = ExactInt(height)
 	resolved.FrameRate = ExactFloat(frameRate)
 	resolved.DeviceID = ExactString(device.DeviceID)
-	if resolved.Codec == 0 {
-		resolved.Codec = codec.H264
-	}
 	label := device.Label
 	if label == "" {
 		label = "camera"
@@ -881,9 +873,6 @@ func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []Scr
 		SVC:              request.SVC,
 		CodecPreferences: append([]webrtc.RTPCodecParameters(nil), request.CodecPreferences...),
 	}
-	if videoConstraints.Codec == 0 {
-		videoConstraints.Codec = codec.H264
-	}
 	if videoConstraints.SVC == nil {
 		videoConstraints.SVC = codec.SVCPresetScreenShare()
 	}
@@ -919,6 +908,9 @@ func validateVideoConstraints(c VideoConstraints) error {
 	if !c.FacingMode.IsValid() {
 		return ErrInvalidConstraints
 	}
+	if !hasExplicitVideoCodecSelection(c.Codec, c.CodecPreferences) {
+		return ErrInvalidConstraints
+	}
 	if err := validateStringConstraintShape(c.DeviceID); err != nil {
 		return err
 	}
@@ -949,6 +941,9 @@ func validateAudioConstraints(c AudioConstraints) error {
 
 func validateDisplayVideoConstraints(c DisplayVideoConstraints) error {
 	if !c.DisplaySurface.IsValid() {
+		return ErrInvalidConstraints
+	}
+	if !hasExplicitVideoCodecSelection(c.Codec, c.CodecPreferences) {
 		return ErrInvalidConstraints
 	}
 	if c.ScreenID != 0 && c.WindowID != 0 {
@@ -1018,6 +1013,18 @@ func validateStringConstraintShape(c StringConstraint) error {
 		return ErrInvalidConstraints
 	}
 	return nil
+}
+
+func hasExplicitVideoCodecSelection(codecType codec.Type, preferences []webrtc.RTPCodecParameters) bool {
+	if codecType != 0 {
+		return true
+	}
+	for _, preferred := range preferences {
+		if _, ok := codec.ParseMimeType(preferred.MimeType); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func selectDevice(devices []MediaDeviceInfo, kind MediaDeviceKind, requested StringConstraint) (MediaDeviceInfo, error) {
@@ -1348,11 +1355,10 @@ func (t *videoStreamTrack) GetConstraints() VideoConstraints { return t.constrai
 func (t *videoStreamTrack) GetSettings() VideoTrackSettings  { return t.settings }
 
 func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
-	if err := validateVideoConstraints(vc); err != nil {
+	merged := mergeVideoConstraints(t.constraints, vc)
+	if err := validateVideoConstraints(merged); err != nil {
 		return err
 	}
-
-	merged := mergeVideoConstraints(t.constraints, vc)
 	if err := validateVideoConstraintsAgainstSettings(merged, t.settings); err != nil {
 		return err
 	}
