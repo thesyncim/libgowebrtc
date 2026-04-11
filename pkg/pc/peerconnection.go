@@ -123,29 +123,6 @@ func DefaultConfiguration() webrtc.Configuration {
 	}
 }
 
-// GetSupportedVideoCodecs returns a list of supported video codecs.
-func GetSupportedVideoCodecs() ([]webrtc.RTPCodecParameters, error) {
-	ffiCodecs, err := ffi.GetSupportedVideoCodecs()
-	if err != nil {
-		return nil, err
-	}
-	return codecParametersFromFFICapabilities(ffiCodecs), nil
-}
-
-// GetSupportedAudioCodecs returns a list of supported audio codecs.
-func GetSupportedAudioCodecs() ([]webrtc.RTPCodecParameters, error) {
-	ffiCodecs, err := ffi.GetSupportedAudioCodecs()
-	if err != nil {
-		return nil, err
-	}
-	return codecParametersFromFFICapabilities(ffiCodecs), nil
-}
-
-// IsCodecSupported checks if a specific codec is supported.
-func IsCodecSupported(mimeType string) bool {
-	return ffi.IsCodecSupported(mimeType)
-}
-
 func codecParametersFromFFICapabilities(ffiCodecs []ffi.CodecCapability) []webrtc.RTPCodecParameters {
 	codecs := make([]webrtc.RTPCodecParameters, len(ffiCodecs))
 	for i, c := range ffiCodecs {

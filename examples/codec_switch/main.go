@@ -27,6 +27,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/thesyncim/libgowebrtc/internal/examplesupport"
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
+	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
@@ -47,12 +48,8 @@ func main() {
 		log.Fatalf("Failed to load library: %v", err)
 	}
 
-	// Show supported codecs
-	videoCodecs, err := pc.GetSupportedVideoCodecs()
-	if err != nil {
-		log.Fatalf("Failed to get supported codecs: %v", err)
-	}
-	log.Println("Supported video codecs:")
+	videoCodecs := codecSwitchVideoCodecs()
+	log.Println("Video codec preferences:")
 	for _, c := range videoCodecs {
 		log.Printf("  - %s (clock: %d, PT: %d)", c.MimeType, c.ClockRate, c.PayloadType)
 	}
@@ -133,17 +130,11 @@ func handleOffer(w http.ResponseWriter, r *http.Request) {
 		if t.IsValid() {
 			log.Printf("Transceiver mid=%s, direction=%s", t.Mid(), t.Direction().String())
 
-			// Set codec preferences - prefer VP8 first, then AV1
-			// Both will be in the SDP, allowing the remote to accept either
-			prefs := []webrtc.RTPCodecParameters{
-				{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/VP8", ClockRate: 90000}},
-				{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/AV1", ClockRate: 90000}},
-			}
-
-			if err := t.SetCodecPreferences(prefs); err != nil {
+			// Set explicit codec preferences so SDP advertises the full local set.
+			if err := t.SetCodecPreferences(codecSwitchVideoCodecs()); err != nil {
 				log.Printf("Warning: SetCodecPreferences failed: %v", err)
 			} else {
-				log.Println("Set codec preferences: VP8, AV1")
+				log.Println("Set codec preferences: VP8, H264, VP9, AV1")
 			}
 		}
 	}
@@ -338,6 +329,31 @@ func sendVideo(peerConn *pc.PeerConnection, track *pc.Track, sender *pc.RTPSende
 					}
 				}
 			}
+		}
+	}
+}
+
+func codecSwitchVideoCodecs() []webrtc.RTPCodecParameters {
+	return []webrtc.RTPCodecParameters{
+		{RTPCodecCapability: codecCapabilityFor(codec.VP8)},
+		{RTPCodecCapability: codecCapabilityFor(codec.H264)},
+		{RTPCodecCapability: codecCapabilityFor(codec.VP9)},
+		{RTPCodecCapability: codecCapabilityFor(codec.AV1)},
+	}
+}
+
+func codecCapabilityFor(c codec.Type) webrtc.RTPCodecCapability {
+	switch c {
+	case codec.H264:
+		return webrtc.RTPCodecCapability{
+			MimeType:    c.MimeType(),
+			ClockRate:   uint32(c.ClockRate()),
+			SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=" + string(codec.H264ProfileConstrainedBase),
+		}
+	default:
+		return webrtc.RTPCodecCapability{
+			MimeType:  c.MimeType(),
+			ClockRate: uint32(c.ClockRate()),
 		}
 	}
 }

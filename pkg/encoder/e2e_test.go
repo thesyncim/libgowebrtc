@@ -218,11 +218,8 @@ func TestEncoderRequestKeyFrame(t *testing.T) {
 	}
 
 	// Request keyframe
-	enc.RequestKeyFrame()
-
-	// Next encode should be keyframe
 	src.PTS = uint32(6 * 33)
-	result, err := encodeUntilOutput(t, enc, src, dst, false)
+	result, err := encodeUntilOutputAfterKeyFrameRequest(t, enc, src, dst)
 	if err != nil {
 		t.Fatalf("EncodeInto: %v", err)
 	}

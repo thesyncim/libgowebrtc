@@ -296,12 +296,8 @@ func TestVideoEncoder_RequestKeyFrame(t *testing.T) {
 				}
 			}
 
-			// Request keyframe
-			enc.RequestKeyFrame()
-
-			// Next frame should be keyframe
 			srcFrame.PTS = 6 * 3000
-			result, err = encodeUntilOutput(t, enc, srcFrame, encBuf, false)
+			result, err = encodeUntilOutputAfterKeyFrameRequest(t, enc, srcFrame, encBuf)
 			if err != nil {
 				t.Fatalf("EncodeInto: %v", err)
 			}
