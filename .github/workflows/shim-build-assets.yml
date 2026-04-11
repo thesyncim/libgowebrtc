@@ -44,7 +44,7 @@ jobs:
           mv "libwebrtc_shim_${{ matrix.platform }}.tar.gz.sha256" "release/${SHIM_RELEASE_TAG}/"
 
       - name: Upload platform artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shim-${{ matrix.platform }}
           path: release/${{ env.SHIM_RELEASE_TAG }}/
@@ -77,7 +77,7 @@ jobs:
           sha256sum "$release_dir/$archive" > "$release_dir/$archive.sha256"
 
       - name: Upload platform artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shim-${{ matrix.platform }}
           path: release/${{ env.SHIM_RELEASE_TAG }}/
@@ -116,7 +116,7 @@ jobs:
           mv "libwebrtc_shim_windows_amd64.tar.gz.sha256" "release/${SHIM_RELEASE_TAG}/"
 
       - name: Upload platform artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shim-windows_amd64
           path: release/${{ env.SHIM_RELEASE_TAG }}/
@@ -140,7 +140,7 @@ jobs:
           ls -la "release/${SHIM_RELEASE_TAG}"
 
       - name: Upload assembled release bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shim-release-${{ env.SHIM_RELEASE_TAG }}
           path: release/${{ env.SHIM_RELEASE_TAG }}/

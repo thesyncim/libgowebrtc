@@ -290,7 +290,7 @@ jobs:
           mv "libwebrtc_shim_${{ matrix.platform }}.tar.gz.sha256" release-assets/
 
       - name: Upload release asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shim-${{ matrix.platform }}
           path: release-assets/*
@@ -332,7 +332,7 @@ jobs:
           fi
 
       - name: Upload release asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shim-${{ matrix.platform }}
           path: release-assets/*
@@ -370,7 +370,7 @@ jobs:
           mv "libwebrtc_shim_windows_amd64.tar.gz.sha256" release-assets/
 
       - name: Upload release asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shim-windows_amd64
           path: release-assets/*
