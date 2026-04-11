@@ -163,14 +163,6 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 		}
 	}
 
-	// Set default constraints if not specified
-	if cfg.MaxFramerate == 0 {
-		cfg.MaxFramerate = cfg.FPS
-	}
-	if cfg.MinFramerate == 0 {
-		cfg.MinFramerate = 1.0
-	}
-
 	t := &VideoTrack{
 		id:          cfg.ID,
 		streamID:    cfg.StreamID,
