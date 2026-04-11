@@ -313,7 +313,14 @@ func TestPublishVideoSimulcastControls(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
 	cfg := explicitVideoPublishConfig()
-	cfg.SVC = &codec.SVCConfig{Mode: codec.SVCModeS3T3}
+	cfg.SVC = &codec.SVCConfig{
+		Mode: codec.SVCModeS3T3,
+		Layers: []codec.SVCLayerConfig{
+			{Bitrate: 120_000, Active: true},
+			{Bitrate: 240_000, Active: true},
+			{Bitrate: 480_000, Active: true},
+		},
+	}
 	published, err := PublishVideo(pc, cfg)
 	if err != nil {
 		t.Fatalf("PublishVideo(simulcast): %v", err)
@@ -464,24 +471,13 @@ func TestPublishedVideoHelpers(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		count       int
-		wantWeights []int
-		wantRIDs    []string
+		count    int
+		wantRIDs []string
 	}{
-		{count: 2, wantWeights: []int{1, 2}, wantRIDs: []string{"h", "f"}},
-		{count: 3, wantWeights: []int{1, 2, 4}, wantRIDs: []string{"q", "h", "f"}},
-		{count: 4, wantWeights: []int{1, 1, 1, 1}, wantRIDs: []string{""}},
+		{count: 2, wantRIDs: []string{"h", "f"}},
+		{count: 3, wantRIDs: []string{"q", "h", "f"}},
+		{count: 4, wantRIDs: []string{""}},
 	} {
-		gotWeights := defaultLayerWeights(tc.count)
-		if len(gotWeights) != len(tc.wantWeights) {
-			t.Fatalf("defaultLayerWeights(%d) len = %d, want %d", tc.count, len(gotWeights), len(tc.wantWeights))
-		}
-		for i, want := range tc.wantWeights {
-			if gotWeights[i] != want {
-				t.Fatalf("defaultLayerWeights(%d)[%d] = %d, want %d", tc.count, i, gotWeights[i], want)
-			}
-		}
-
 		gotRIDs := defaultRIDs(tc.count)
 		if len(gotRIDs) != len(tc.wantRIDs) {
 			t.Fatalf("defaultRIDs(%d) len = %d, want %d", tc.count, len(gotRIDs), len(tc.wantRIDs))
@@ -493,9 +489,6 @@ func TestPublishedVideoHelpers(t *testing.T) {
 		}
 	}
 
-	if got := weightedBitrate(700_000, 2, []int{1, 2, 4}); got == 0 {
-		t.Fatal("weightedBitrate() = 0, want positive value")
-	}
 	if got := clampPositive(319, 640); got != 318 {
 		t.Fatalf("clampPositive(319, 640) = %d, want 318", got)
 	}

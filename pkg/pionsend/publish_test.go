@@ -86,9 +86,9 @@ func TestDeriveEncodingConfigsForSimulcast(t *testing.T) {
 		SVC: &codec.SVCConfig{
 			Mode: codec.SVCModeS3T3,
 			Layers: []codec.SVCLayerConfig{
-				{Active: true},
-				{Active: false},
-				{Active: true},
+				{Bitrate: 120_000, Active: true},
+				{Bitrate: 240_000, Active: false},
+				{Bitrate: 480_000, Active: true},
 			},
 		},
 	})
@@ -99,6 +99,7 @@ func TestDeriveEncodingConfigsForSimulcast(t *testing.T) {
 	wantRIDs := []string{"q", "h", "f"}
 	wantWidths := []int{320, 640, 1280}
 	wantHeights := []int{180, 360, 720}
+	wantBitrates := []uint32{120_000, 240_000, 480_000}
 	wantActive := []bool{true, false, true}
 
 	for i := range layers {
@@ -111,12 +112,29 @@ func TestDeriveEncodingConfigsForSimulcast(t *testing.T) {
 		if layers[i].Active != wantActive[i] {
 			t.Fatalf("layers[%d].Active = %v, want %v", i, layers[i].Active, wantActive[i])
 		}
+		if layers[i].Bitrate != wantBitrates[i] {
+			t.Fatalf("layers[%d].Bitrate = %d, want %d", i, layers[i].Bitrate, wantBitrates[i])
+		}
 		if layers[i].SVC == nil || layers[i].SVC.Mode != codec.SVCModeL1T3 {
 			t.Fatalf("layers[%d].SVC = %+v, want L1T3", i, layers[i].SVC)
 		}
 	}
+}
 
-	if layers[0].Bitrate >= layers[1].Bitrate || layers[1].Bitrate >= layers[2].Bitrate {
-		t.Fatalf("bitrates = [%d %d %d], want strictly increasing low->high", layers[0].Bitrate, layers[1].Bitrate, layers[2].Bitrate)
+func TestDeriveEncodingConfigsForSimulcastRequiresExplicitLayerBitrates(t *testing.T) {
+	if layers := deriveEncodingConfigs(VideoPublishConfig{
+		Width:   1280,
+		Height:  720,
+		Bitrate: 700_000,
+		SVC: &codec.SVCConfig{
+			Mode: codec.SVCModeS3T3,
+			Layers: []codec.SVCLayerConfig{
+				{Bitrate: 120_000},
+				{Bitrate: 0},
+				{Bitrate: 480_000},
+			},
+		},
+	}); layers != nil {
+		t.Fatalf("deriveEncodingConfigs(missing simulcast bitrate) = %+v, want nil", layers)
 	}
 }
