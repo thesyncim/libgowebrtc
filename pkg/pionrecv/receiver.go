@@ -333,10 +333,6 @@ func newDecodedTrack(track trackReader, source *webrtc.TrackRemote, receiver *we
 			opt(&cfg)
 		}
 	}
-
-	if cfg.maxLatePackets == 0 {
-		cfg.maxLatePackets = defaultMaxLatePackets
-	}
 	if cfg.maxVideoDecodeWidth <= 0 || cfg.maxVideoDecodeHeight <= 0 {
 		return nil, errors.New("invalid max video decode dimensions")
 	}

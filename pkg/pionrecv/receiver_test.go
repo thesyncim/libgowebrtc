@@ -147,6 +147,17 @@ func TestNewDecodedTrackValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("KeepsExplicitZeroMaxLatePackets", func(t *testing.T) {
+		track := newFakeTrackReader(webrtc.RTPCodecTypeVideo, mustCodecParams(t, codec.VP8, 96), 0x1004)
+		decoded, err := newDecodedTrack(track, nil, nil, WithMaxLatePackets(0))
+		if err != nil {
+			t.Fatalf("newDecodedTrack: %v", err)
+		}
+		if decoded.cfg.maxLatePackets != 0 {
+			t.Fatalf("maxLatePackets = %d, want explicit 0", decoded.cfg.maxLatePackets)
+		}
+	})
+
 	t.Run("UnsupportedMimeType", func(t *testing.T) {
 		track := newFakeTrackReader(webrtc.RTPCodecTypeVideo, webrtc.RTPCodecParameters{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
