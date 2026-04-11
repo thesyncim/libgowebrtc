@@ -2,6 +2,7 @@ package pionrecv
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -95,16 +96,14 @@ func TestAudioSubscriberMonitorObservesPacketAndFrameGaps(t *testing.T) {
 		Payload: []byte{0x03, 0x04},
 	}
 
-	monitor.observePacket(pkt1)
-	time.Sleep(10 * time.Millisecond)
-	monitor.observePacket(pkt2)
-
 	first := newTestAudioFrame(testAudioClockRate * testAudioFrameMs / 1000)
 	first.PTS = 0
 	second := newTestAudioFrame(testAudioClockRate * testAudioFrameMs / 1000)
 	second.PTS = 960
+	monitor.observePacket(pkt1)
 	monitor.observeFrame(first)
 	time.Sleep(10 * time.Millisecond)
+	monitor.observePacket(pkt2)
 	monitor.observeFrame(second)
 
 	snapshot := monitor.Snapshot()
@@ -120,11 +119,51 @@ func TestAudioSubscriberMonitorObservesPacketAndFrameGaps(t *testing.T) {
 	if snapshot.FrameGapCount != 1 {
 		t.Fatalf("FrameGapCount = %d, want 1", snapshot.FrameGapCount)
 	}
+	if snapshot.FreezeCount != 1 {
+		t.Fatalf("FreezeCount = %d, want 1 visible freeze", snapshot.FreezeCount)
+	}
 	if !snapshot.HasFreeze() {
 		t.Fatal("HasFreeze() = false, want true")
 	}
 	if len(snapshot.FreezeEvents) < 2 {
 		t.Fatalf("len(FreezeEvents) = %d, want at least 2", len(snapshot.FreezeEvents))
+	}
+}
+
+func TestAudioSubscriberMonitorWaitersRequireSubscriberVisibleMedia(t *testing.T) {
+	params := mustCodecParams(t, codec.Opus, 111)
+	track := newFakeTrackReader(webrtc.RTPCodecTypeAudio, params, 0xabcdef05)
+
+	monitor := NewAudioSubscriberMonitor(AudioSubscriberMonitorConfig{})
+	monitor.bind(track, nil, codec.Opus, params)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	if err := monitor.WaitForCodec(ctx, codec.Opus); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForCodec before media error = %v, want %v", err, context.DeadlineExceeded)
+	}
+	if err := monitor.WaitForConfig(ctx, testAudioClockRate, testAudioChannels); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForConfig before media error = %v, want %v", err, context.DeadlineExceeded)
+	}
+	if err := monitor.WaitForPTime(ctx, 20*time.Millisecond); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitForPTime before media error = %v, want %v", err, context.DeadlineExceeded)
+	}
+
+	audio := newTestAudioFrame(testAudioClockRate * testAudioFrameMs / 1000)
+	audio.PTS = 0
+	monitor.observeFrame(audio)
+
+	readyCtx, readyCancel := context.WithTimeout(context.Background(), testTimeout)
+	defer readyCancel()
+	if err := monitor.WaitForCodec(readyCtx, codec.Opus); err != nil {
+		t.Fatalf("WaitForCodec after media: %v", err)
+	}
+	if err := monitor.WaitForConfig(readyCtx, testAudioClockRate, testAudioChannels); err != nil {
+		t.Fatalf("WaitForConfig after media: %v", err)
+	}
+	if err := monitor.WaitForPTime(readyCtx, 20*time.Millisecond); err != nil {
+		t.Fatalf("WaitForPTime after media: %v", err)
 	}
 }
 

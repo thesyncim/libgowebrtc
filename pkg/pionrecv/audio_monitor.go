@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	defaultAudioFreezeThreshold        = 500 * time.Millisecond
-	defaultAudioPacketGapThreshold     = 250 * time.Millisecond
-	minAdaptiveAudioFreezeThreshold    = 120 * time.Millisecond
-	minAdaptiveAudioPacketGapThreshold = 80 * time.Millisecond
+	defaultAudioFreezeThreshold        = 200 * time.Millisecond
+	defaultAudioPacketGapThreshold     = 100 * time.Millisecond
+	minAdaptiveAudioFreezeThreshold    = 80 * time.Millisecond
+	minAdaptiveAudioPacketGapThreshold = 60 * time.Millisecond
 	defaultAudioSilenceThreshold       = 0.002
 	defaultAudioSampleRate             = 48000
 	audioClipThreshold                 = 32760
@@ -139,6 +139,9 @@ type AudioSubscriberMonitor struct {
 	lastFramePTS       uint32
 	hasLastFramePTS    bool
 	estimatedFrameStep time.Duration
+	lastFreezeStart    time.Time
+	lastFreezeEnd      time.Time
+	hasFreezeWindow    bool
 
 	codecSwitches  []CodecSwitchObservation
 	configSwitches []AudioConfigSwitch
@@ -200,6 +203,9 @@ func (m *AudioSubscriberMonitor) Reset() {
 	m.lastFramePTS = 0
 	m.hasLastFramePTS = false
 	m.estimatedFrameStep = 0
+	m.lastFreezeStart = time.Time{}
+	m.lastFreezeEnd = time.Time{}
+	m.hasFreezeWindow = false
 	m.codecSwitches = nil
 	m.configSwitches = nil
 	m.freezeEvents = nil
@@ -218,21 +224,23 @@ func (m *AudioSubscriberMonitor) WaitForFrames(ctx context.Context, targetFrames
 // and channel count.
 func (m *AudioSubscriberMonitor) WaitForConfig(ctx context.Context, sampleRate, channels int) error {
 	return m.waitFor(ctx, func(snapshot AudioSubscriberSnapshot) bool {
-		return snapshot.CurrentSampleRate == sampleRate && snapshot.CurrentChannels == channels
+		return snapshot.FrameCount > 0 &&
+			snapshot.CurrentSampleRate == sampleRate &&
+			snapshot.CurrentChannels == channels
 	})
 }
 
 // WaitForPTime waits until the decoded audio frame duration matches the target.
 func (m *AudioSubscriberMonitor) WaitForPTime(ctx context.Context, ptime time.Duration) error {
 	return m.waitFor(ctx, func(snapshot AudioSubscriberSnapshot) bool {
-		return snapshot.CurrentPTime == ptime
+		return snapshot.FrameCount > 0 && snapshot.CurrentPTime == ptime
 	})
 }
 
 // WaitForCodec waits until the decoded codec matches the target.
 func (m *AudioSubscriberMonitor) WaitForCodec(ctx context.Context, target codec.Type) error {
 	return m.waitFor(ctx, func(snapshot AudioSubscriberSnapshot) bool {
-		return snapshot.CurrentCodec == target
+		return snapshot.FrameCount > 0 && snapshot.CurrentCodec == target
 	})
 }
 
@@ -285,13 +293,7 @@ func (m *AudioSubscriberMonitor) observePacket(pkt *rtp.Packet) {
 			m.maxInterPacketGap = gap
 		}
 		if gap > m.packetGapThresholdLocked() {
-			m.freezeCount++
-			m.packetGapCount++
-			m.freezeEvents = appendLimited(m.freezeEvents, FreezeEvent{
-				At:   now,
-				Gap:  gap,
-				Kind: "packet",
-			}, m.cfg.EventHistory)
+			m.recordFreezeLocked(now, gap, "packet")
 		}
 	}
 	m.lastPacketAt = now
@@ -338,13 +340,7 @@ func (m *AudioSubscriberMonitor) observeFrame(f *frame.AudioFrame) {
 			m.maxInterFrameGap = gap
 		}
 		if gap > m.freezeThresholdLocked() {
-			m.freezeCount++
-			m.frameGapCount++
-			m.freezeEvents = appendLimited(m.freezeEvents, FreezeEvent{
-				At:   now,
-				Gap:  gap,
-				Kind: "frame",
-			}, m.cfg.EventHistory)
+			m.recordFreezeLocked(now, gap, "frame")
 		}
 	}
 
@@ -485,6 +481,36 @@ func (m *AudioSubscriberMonitor) snapshotLocked() AudioSubscriberSnapshot {
 func (m *AudioSubscriberMonitor) signalLocked() {
 	close(m.changed)
 	m.changed = make(chan struct{})
+}
+
+func (m *AudioSubscriberMonitor) recordFreezeLocked(now time.Time, gap time.Duration, kind string) {
+	switch kind {
+	case "packet":
+		m.packetGapCount++
+	case "frame":
+		m.frameGapCount++
+	}
+
+	m.freezeEvents = appendLimited(m.freezeEvents, FreezeEvent{
+		At:   now,
+		Gap:  gap,
+		Kind: kind,
+	}, m.cfg.EventHistory)
+
+	start := now.Add(-gap)
+	if !m.hasFreezeWindow || start.After(m.lastFreezeEnd) {
+		m.freezeCount++
+		m.lastFreezeStart = start
+		m.lastFreezeEnd = now
+		m.hasFreezeWindow = true
+		return
+	}
+	if start.Before(m.lastFreezeStart) {
+		m.lastFreezeStart = start
+	}
+	if now.After(m.lastFreezeEnd) {
+		m.lastFreezeEnd = now
+	}
 }
 
 func (m *AudioSubscriberMonitor) freezeThresholdLocked() time.Duration {
