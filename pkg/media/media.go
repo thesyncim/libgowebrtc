@@ -726,6 +726,9 @@ func newAudioStreamTrack(cfg track.AudioTrackConfig, constraints AudioConstraint
 
 func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSettings) (track.VideoTrackConfig, VideoConstraints) {
 	resolved := constraints
+	resolved.Width = ExactInt(settings.Width)
+	resolved.Height = ExactInt(settings.Height)
+	resolved.FrameRate = ExactFloat(settings.FrameRate)
 	trackID := generateID()
 	cfg := track.VideoTrackConfig{
 		ID:             trackID,
@@ -757,6 +760,8 @@ func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSett
 
 func buildAudioTrackConfig(constraints AudioConstraints, settings AudioTrackSettings) (track.AudioTrackConfig, AudioConstraints) {
 	resolved := constraints
+	resolved.SampleRate = ExactInt(settings.SampleRate)
+	resolved.ChannelCount = ExactInt(settings.ChannelCount)
 	trackID := generateID()
 	cfg := track.AudioTrackConfig{
 		ID:         trackID,
@@ -780,9 +785,9 @@ func resolveVideoCaptureRequest(request VideoConstraints, devices []MediaDeviceI
 		return VideoTrackSettings{}, VideoConstraints{}, "", err
 	}
 
-	width := resolveIntConstraint(request.Width, 1280)
-	height := resolveIntConstraint(request.Height, 720)
-	frameRate := resolveFloatConstraint(request.FrameRate, 30)
+	width := resolveIntConstraint(request.Width, 0)
+	height := resolveIntConstraint(request.Height, 0)
+	frameRate := resolveFloatConstraint(request.FrameRate, 0)
 	if width <= 0 || height <= 0 || frameRate <= 0 {
 		return VideoTrackSettings{}, VideoConstraints{}, "", ErrInvalidConstraints
 	}
@@ -909,6 +914,12 @@ func validateVideoConstraints(c VideoConstraints) error {
 		return ErrInvalidConstraints
 	}
 	if !hasExplicitVideoCodecSelection(c.Codec, c.CodecPreferences) {
+		return ErrInvalidConstraints
+	}
+	if c.Bitrate == 0 {
+		return ErrInvalidConstraints
+	}
+	if !c.Width.IsSet() || !c.Height.IsSet() || !c.FrameRate.IsSet() {
 		return ErrInvalidConstraints
 	}
 	if err := validateStringConstraintShape(c.DeviceID); err != nil {
