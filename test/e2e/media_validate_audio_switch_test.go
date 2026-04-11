@@ -170,8 +170,8 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	if !strings.EqualFold(lastSwitch.Change.CurrentCodec.MimeType, targetCodec.MimeType) {
 		t.Fatalf("last audio codec switch target = %q, want %q", lastSwitch.Change.CurrentCodec.MimeType, targetCodec.MimeType)
 	}
-	if trackSnap.FreezeCount > 1 {
-		t.Fatalf("receiver audio freeze count = %d, want at most 1 transient freeze during full codec renegotiation: %+v", trackSnap.FreezeCount, trackSnap)
+	if trackSnap.FreezeCount > maxTransientCodecRenegotiationFreezes {
+		t.Fatalf("receiver audio freeze count = %d, want at most %d transient freezes during full codec renegotiation: %+v", trackSnap.FreezeCount, maxTransientCodecRenegotiationFreezes, trackSnap)
 	}
 	if trackSnap.FrameCount < 20 {
 		t.Fatalf("receiver audio frame count = %d, want ongoing media after switch", trackSnap.FrameCount)
