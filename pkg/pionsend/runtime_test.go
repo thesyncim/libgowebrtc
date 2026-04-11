@@ -2,7 +2,9 @@ package pionsend
 
 import (
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 
@@ -92,7 +94,17 @@ func TestPublishedAudioDelegatesToTrack(t *testing.T) {
 		t.Fatalf("NewAudioTrack: %v", err)
 	}
 
-	audio := &publishedAudio{track: audioTrack}
+	audio := &publishedAudio{
+		cfg: AudioPublishConfig{
+			TrackID:    "audio-track",
+			StreamID:   "stream-audio",
+			SampleRate: 48_000,
+			Channels:   2,
+			PTime:      20 * time.Millisecond,
+		},
+		track:           audioTrack,
+		samplesPerFrame: 960,
+	}
 	silence := frame.NewAudioFrameS16(48_000, 2, 960)
 	if err := audio.WriteFrame(silence); !errors.Is(err, track.ErrNotBound) {
 		t.Fatalf("WriteFrame(unbound) error = %v, want %v", err, track.ErrNotBound)
@@ -105,6 +117,61 @@ func TestPublishedAudioDelegatesToTrack(t *testing.T) {
 	}
 	if err := audio.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+	}
+}
+
+func TestPublishAudioRejectsInvalidPTime(t *testing.T) {
+	pc := newTestPeerConnection(t)
+
+	_, err := PublishAudio(pc, AudioPublishConfig{
+		TrackID: "audio-track",
+		PTime:   333 * time.Microsecond,
+	})
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("PublishAudio(invalid ptime) error = %v, want %v", err, ErrInvalidConfig)
+	}
+}
+
+func TestPublishedAudioRejectsMismatchedFrameShape(t *testing.T) {
+	audioTrack, err := track.NewAudioTrack(track.AudioTrackConfig{
+		ID:         "audio-track",
+		StreamID:   "stream-audio",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
+	})
+	if err != nil {
+		t.Fatalf("NewAudioTrack: %v", err)
+	}
+
+	audio := &publishedAudio{
+		cfg: AudioPublishConfig{
+			TrackID:    "audio-track",
+			StreamID:   "stream-audio",
+			SampleRate: 48_000,
+			Channels:   2,
+			PTime:      10 * time.Millisecond,
+		},
+		track:           audioTrack,
+		samplesPerFrame: 480,
+	}
+
+	for _, tc := range []struct {
+		name string
+		src  *frame.AudioFrame
+	}{
+		{name: "sample rate", src: frame.NewAudioFrameS16(44_100, 2, 480)},
+		{name: "channels", src: frame.NewAudioFrameS16(48_000, 1, 480)},
+		{name: "ptime", src: frame.NewAudioFrameS16(48_000, 2, 960)},
+	} {
+		if err := audio.WriteFrame(tc.src); err == nil {
+			t.Fatalf("WriteFrame(%s mismatch) error = nil, want error", tc.name)
+		}
+	}
+
+	matching := frame.NewAudioFrameS16(48_000, 2, 480)
+	if err := audio.WriteFrame(matching); !errors.Is(err, track.ErrNotBound) {
+		t.Fatalf("WriteFrame(valid frame, unbound track) error = %v, want %v", err, track.ErrNotBound)
 	}
 }
 
@@ -172,6 +239,40 @@ func TestPublishVideoDefaultsAndLifecycle(t *testing.T) {
 	src := frame.NewI420Frame(1280, 720)
 	if err := video.WriteFrame(src, true); err != nil {
 		t.Fatalf("WriteFrame after close error = %v, want nil", err)
+	}
+}
+
+func TestPublishVideoOptsInToTrackAdaptation(t *testing.T) {
+	pc := newTestPeerConnection(t)
+
+	published, err := PublishVideo(pc, VideoPublishConfig{
+		TrackID: "video-track",
+		Width:   1280,
+		Height:  720,
+		FPS:     30,
+	})
+	if err != nil {
+		t.Fatalf("PublishVideo: %v", err)
+	}
+
+	video := published.(*publishedVideo)
+	defer video.Close()
+
+	var calls int32
+	video.encodings[0].videoTrack.SetBWESource(func() *track.BandwidthEstimate {
+		atomic.AddInt32(&calls, 1)
+		return &track.BandwidthEstimate{TargetBitrateBps: 1_000_000}
+	})
+	t.Cleanup(func() {
+		video.encodings[0].videoTrack.SetBWESource(nil)
+	})
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for atomic.LoadInt32(&calls) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if atomic.LoadInt32(&calls) == 0 {
+		t.Fatal("SetBWESource did not start adaptation loop, want helper opt-in")
 	}
 }
 

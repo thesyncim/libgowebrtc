@@ -114,6 +114,9 @@ func (s *Session) matchRTPStatsLocked(sample RTPStatsSample) {
 	}
 	if state := s.matchAudioTrackLocked(sample); state != nil {
 		state.observeStatsCodecLocked(sample, s.cfg.EventHistory)
+		if sample.MID != "" {
+			state.currentMID = sample.MID
+		}
 		state.stats = appendLimited(state.stats, sample, s.cfg.EventHistory)
 		return
 	}
@@ -164,6 +167,9 @@ func (s *Session) matchAudioTrackLocked(sample RTPStatsSample) *audioTrackState 
 			return state
 		}
 		if sample.RID != "" && state.rid != "" && sample.RID == state.rid {
+			return state
+		}
+		if sample.MID != "" && state.currentMID != "" && sample.MID == state.currentMID {
 			return state
 		}
 	}

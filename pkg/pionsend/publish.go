@@ -139,6 +139,10 @@ func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedV
 			Bitrate:          layer.Bitrate,
 			FPS:              cfg.FPS,
 			MTU:              cfg.MTU,
+			AutoKeyframe:     true,
+			AutoBitrate:      true,
+			AutoFramerate:    true,
+			AutoResolution:   true,
 			CodecPreferences: codecPreferences,
 			SVC:              layer.SVC,
 		})

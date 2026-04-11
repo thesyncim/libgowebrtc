@@ -31,6 +31,7 @@ type fakeDecodedRemoteTrack struct {
 	closeOnce sync.Once
 	closed    atomic.Bool
 	runDone   chan struct{}
+	startErr  error
 
 	keyframeRequests atomic.Int32
 }
@@ -79,6 +80,9 @@ func (f *fakeDecodedRemoteTrack) SetOnCodecChange(handler func(pionrecv.CodecCha
 	f.onCodecChange = handler
 }
 func (f *fakeDecodedRemoteTrack) Start(onEnd func()) error {
+	if f.startErr != nil {
+		return f.startErr
+	}
 	go func() {
 		<-f.runDone
 		onEnd()
@@ -211,6 +215,28 @@ func TestRemoteStreamRegistryReusesMediaStreamForMatchingStreamID(t *testing.T) 
 	}
 }
 
+func TestRemoteStreamRegistryBindSourceStartFailure(t *testing.T) {
+	registry := NewRemoteStreamRegistry()
+	startErr := errors.New("boom")
+	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "stream-1", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
+	videoDecoded.startErr = startErr
+
+	track, streams, err := registry.bindSource(videoDecoded)
+	if !errors.Is(err, startErr) {
+		t.Fatalf("bindSource() error = %v, want %v", err, startErr)
+	}
+	if track != nil {
+		t.Fatalf("bindSource() track = %#v, want nil", track)
+	}
+	if streams != nil {
+		t.Fatalf("bindSource() streams = %v, want nil", streams)
+	}
+	if got := len(registry.streams); got != 0 {
+		t.Fatalf("registry.streams len = %d, want 0", got)
+	}
+	waitForCondition(t, 2*time.Second, func() bool { return videoDecoded.closed.Load() })
+}
+
 func TestPionRemoteTrackCloneFanoutAndStop(t *testing.T) {
 	registry := NewRemoteStreamRegistry()
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
@@ -290,6 +316,29 @@ func TestPionRemoteTrackClonePreservesState(t *testing.T) {
 	}
 	if got := clone.ReadyState(); got != "ended" {
 		t.Fatalf("clone ReadyState() = %q, want ended", got)
+	}
+}
+
+func TestPionRemoteTrackLateCloneAfterLastStopStartsEnded(t *testing.T) {
+	registry := NewRemoteStreamRegistry()
+	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
+
+	track, _, err := registry.bindSource(videoDecoded)
+	if err != nil {
+		t.Fatalf("bindSource() error = %v", err)
+	}
+	videoTrack := track.(PionRemoteVideoTrack)
+	view := remoteTrackViewFor(videoTrack)
+	if view == nil {
+		t.Fatal("remoteTrackViewFor(videoTrack) = nil")
+	}
+
+	videoTrack.Stop()
+	waitForCondition(t, 2*time.Second, func() bool { return videoDecoded.closed.Load() })
+
+	lateClone := view.source.newTrack("late-clone")
+	if got := lateClone.ReadyState(); got != "ended" {
+		t.Fatalf("late clone ReadyState() = %q, want ended", got)
 	}
 }
 
