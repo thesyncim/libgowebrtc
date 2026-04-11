@@ -111,6 +111,12 @@ func TestVideoTrackDefaults(t *testing.T) {
 	if track.StreamID() != "" {
 		t.Errorf("StreamID = %q, want empty", track.StreamID())
 	}
+	if track.config.MaxFramerate != 0 {
+		t.Errorf("MaxFramerate = %v, want 0 unless explicitly configured", track.config.MaxFramerate)
+	}
+	if track.config.MinFramerate != 0 {
+		t.Errorf("MinFramerate = %v, want 0 unless explicitly configured", track.config.MinFramerate)
+	}
 }
 
 func TestVideoTrackProperties(t *testing.T) {
