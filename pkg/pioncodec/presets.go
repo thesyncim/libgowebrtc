@@ -1,5 +1,5 @@
-// Package pioncodec provides Pion-native codec presets, matching, and
-// factory helpers for libgowebrtc-backed encode/decode pipelines.
+// Package pioncodec provides Pion-native codec sets, matching, and factory
+// helpers for libgowebrtc-backed encode/decode pipelines.
 package pioncodec
 
 import (
@@ -10,32 +10,14 @@ import (
 	libcodec "github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
-// Browser identifies a browser-shaped codec preset.
+// Browser identifies a browser-shaped compatibility label.
 type Browser string
 
-// Browser values identify the browser compatibility profile to emulate.
+// Browser values identify the browser compatibility profile label.
 const (
 	BrowserChrome  Browser = "chrome"
 	BrowserFirefox Browser = "firefox"
 	BrowserSafari  Browser = "safari"
-)
-
-// Direction identifies whether a preset is intended for encode or decode.
-type Direction string
-
-// Direction values identify whether codec ordering is meant for encoding or decoding.
-const (
-	DirectionEncode Direction = "encode"
-	DirectionDecode Direction = "decode"
-)
-
-// PresetMode controls whether a preset is factory-backed or negotiation-shaped.
-type PresetMode string
-
-// PresetMode values control whether a preset is filtered for local support or full negotiation.
-const (
-	PresetModeSupported   PresetMode = "supported"
-	PresetModeNegotiation PresetMode = "negotiation"
 )
 
 // CodecEntry describes a single codec entry in a preset.
@@ -45,26 +27,14 @@ type CodecEntry struct {
 	Supported bool                      // Supported reports whether libgowebrtc can instantiate this codec locally.
 }
 
-// CodecSet is a browser-shaped codec preset or a caller-provided preference list.
+// CodecSet is a caller-provided codec preference list.
 type CodecSet struct {
-	Browser   Browser    // Browser records the source browser profile when preset-derived.
-	Direction Direction  // Direction records whether the set targets encode or decode ordering.
-	Mode      PresetMode // Mode records whether the set is support-filtered or negotiation-shaped.
-
 	entries []CodecEntry
 }
 
-// BrowserPreset returns a browser-shaped codec preset for audio and video.
-func BrowserPreset(browser Browser, direction Direction, mode PresetMode) CodecSet {
-	if mode == "" {
-		mode = PresetModeSupported
-	}
-	return CodecSet{
-		Browser:   browser,
-		Direction: direction,
-		Mode:      mode,
-		entries:   presetEntries(browser, direction, mode),
-	}
+// CodecSetFromParameters builds a codec set from an explicit preference list.
+func CodecSetFromParameters(codecs []webrtc.RTPCodecParameters) CodecSet {
+	return codecSetFromParameters(codecs)
 }
 
 // Entries returns a copy of the preset entries.
@@ -84,10 +54,7 @@ func (s CodecSet) SupportedOnly() CodecSet {
 		filtered = append(filtered, entry)
 	}
 	return CodecSet{
-		Browser:   s.Browser,
-		Direction: s.Direction,
-		Mode:      PresetModeSupported,
-		entries:   filtered,
+		entries: filtered,
 	}
 }
 
@@ -132,120 +99,6 @@ func codecSetFromParameters(codecs []webrtc.RTPCodecParameters) CodecSet {
 		})
 	}
 	return CodecSet{entries: entries}
-}
-
-func presetEntries(browser Browser, direction Direction, mode PresetMode) []CodecEntry {
-	entries := make([]CodecEntry, 0, 24)
-	entries = append(entries, browserAudioEntries(browser, direction, mode)...)
-	entries = append(entries, browserVideoEntries(browser, direction, mode)...)
-	return entries
-}
-
-func browserAudioEntries(browser Browser, direction Direction, mode PresetMode) []CodecEntry {
-	_ = browser
-	_ = direction
-	audio := canonicalAudioCodec(webrtc.MimeTypeOpus)
-	audio.Supported = true
-	if mode == PresetModeNegotiation {
-		return []CodecEntry{audio}
-	}
-	return []CodecEntry{audio}
-}
-
-func browserVideoEntries(browser Browser, direction Direction, mode PresetMode) []CodecEntry {
-	order := orderedVideoFamilies(browser, direction)
-	entries := make([]CodecEntry, 0, 24)
-
-	for _, family := range order {
-		switch family {
-		case webrtc.MimeTypeVP8:
-			entries = append(entries, entriesForMode(mode, canonicalVideoCodec(webrtc.MimeTypeVP8))...)
-		case webrtc.MimeTypeAV1:
-			entries = append(entries, entriesForMode(mode, canonicalVideoCodec(webrtc.MimeTypeAV1))...)
-		case webrtc.MimeTypeVP9:
-			entries = append(entries, entriesForMode(mode, canonicalVideoCodec(canonicalVP9Profile0Key))...)
-		case webrtc.MimeTypeH264:
-			if mode == PresetModeNegotiation {
-				entries = append(entries, canonicalH264FamilyNegotiationEntries()...)
-			} else {
-				entries = append(entries, entriesForMode(mode, canonicalVideoCodec(canonicalH264ConstrainedBasePM1Key))...)
-			}
-		}
-	}
-
-	if mode == PresetModeSupported {
-		return markSupported(entries)
-	}
-	return markNegotiation(entries)
-}
-
-func orderedVideoFamilies(browser Browser, direction Direction) []string {
-	switch browser {
-	case BrowserFirefox:
-		if direction == DirectionDecode {
-			return []string{webrtc.MimeTypeAV1, webrtc.MimeTypeVP9, webrtc.MimeTypeVP8, webrtc.MimeTypeH264}
-		}
-		return []string{webrtc.MimeTypeVP8, webrtc.MimeTypeH264, webrtc.MimeTypeVP9, webrtc.MimeTypeAV1}
-	case BrowserSafari:
-		return []string{webrtc.MimeTypeH264, webrtc.MimeTypeVP8}
-	case BrowserChrome:
-		fallthrough
-	default:
-		if direction == DirectionDecode {
-			return []string{webrtc.MimeTypeAV1, webrtc.MimeTypeVP9, webrtc.MimeTypeH264, webrtc.MimeTypeVP8}
-		}
-		return []string{webrtc.MimeTypeVP8, webrtc.MimeTypeH264, webrtc.MimeTypeVP9, webrtc.MimeTypeAV1}
-	}
-}
-
-func canonicalH264FamilyNegotiationEntries() []CodecEntry {
-	keys := []string{
-		canonicalH264ConstrainedBasePM1Key,
-		canonicalH264ConstrainedBasePM0Key,
-		canonicalH264BaselinePM1Key,
-		canonicalH264BaselinePM0Key,
-		canonicalH264MainPM1Key,
-		canonicalH264MainPM0Key,
-		canonicalH264HighPM1Key,
-	}
-
-	entries := make([]CodecEntry, 0, len(keys)*2)
-	for _, key := range keys {
-		entries = append(entries, canonicalVideoCodec(key)...)
-	}
-	return entries
-}
-
-func markSupported(entries []CodecEntry) []CodecEntry {
-	out := make([]CodecEntry, len(entries))
-	for i, entry := range entries {
-		out[i] = entry
-		out[i].Supported = isLocallyPreferredCodec(entry.Codec)
-	}
-	return out
-}
-
-func markNegotiation(entries []CodecEntry) []CodecEntry {
-	out := make([]CodecEntry, len(entries))
-	for i, entry := range entries {
-		out[i] = entry
-		out[i].Supported = isLocallyPreferredCodec(entry.Codec)
-	}
-	return out
-}
-
-func entriesForMode(mode PresetMode, entries []CodecEntry) []CodecEntry {
-	if mode == PresetModeNegotiation {
-		return entries
-	}
-	filtered := make([]CodecEntry, 0, len(entries))
-	for _, entry := range entries {
-		if !isMediaCodec(entry.Codec.MimeType) {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
 }
 
 func codecsByKind(entries []CodecEntry, kind webrtc.RTPCodecType) []webrtc.RTPCodecParameters {

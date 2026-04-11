@@ -12,7 +12,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
 type collectingWriter struct {
@@ -289,14 +288,29 @@ func TestVideoTrackBindSelectsPreferredCodecFromPreferences(t *testing.T) {
 	defer testutil.WithSerialExecution(t)()
 	testutil.SkipIfNoShim(t)
 
-	preset := pioncodec.BrowserPreset(pioncodec.BrowserChrome, pioncodec.DirectionEncode, pioncodec.PresetModeSupported)
 	track, err := NewVideoTrack(VideoTrackConfig{
-		ID:               "video-preset-bind",
-		Width:            320,
-		Height:           240,
-		Bitrate:          400_000,
-		FPS:              30,
-		CodecPreferences: preset.SupportedOnly().VideoCodecs(),
+		ID:      "video-preset-bind",
+		Width:   320,
+		Height:  240,
+		Bitrate: 400_000,
+		FPS:     30,
+		CodecPreferences: []webrtc.RTPCodecParameters{
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:  webrtc.MimeTypeVP8,
+					ClockRate: 90000,
+				},
+				PayloadType: 96,
+			},
+			{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType:    webrtc.MimeTypeH264,
+					ClockRate:   90000,
+					SDPFmtpLine: "packetization-mode=1;profile-level-id=42e01f;level-asymmetry-allowed=1",
+				},
+				PayloadType: 106,
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewVideoTrack: %v", err)
