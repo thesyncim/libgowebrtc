@@ -32,12 +32,13 @@ func explicitVideoCodecPreferences(mimeTypes ...string) []webrtc.RTPCodecParamet
 
 func explicitAudioPublishConfig() AudioPublishConfig {
 	return AudioPublishConfig{
-		TrackID:    "audio-track",
-		StreamID:   "stream-audio",
-		SampleRate: 48000,
-		Channels:   2,
-		Bitrate:    64000,
-		PTime:      20 * time.Millisecond,
+		TrackID:          "audio-track",
+		StreamID:         "stream-audio",
+		SampleRate:       48000,
+		Channels:         2,
+		Bitrate:          64000,
+		PTime:            20 * time.Millisecond,
+		CodecPreferences: []webrtc.RTPCodecParameters{{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}}},
 	}
 }
 
@@ -84,8 +85,8 @@ func TestPublishAudioLifecycle(t *testing.T) {
 	if audio.cfg.Bitrate != 64000 || audio.cfg.PTime != 20*time.Millisecond {
 		t.Fatalf("audio config bitrate/ptime = %d/%v, want 64000/20ms", audio.cfg.Bitrate, audio.cfg.PTime)
 	}
-	if len(audio.cfg.CodecPreferences) != 0 {
-		t.Fatalf("CodecPreferences = %+v, want none", audio.cfg.CodecPreferences)
+	if len(audio.cfg.CodecPreferences) != 1 || audio.cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeOpus {
+		t.Fatalf("CodecPreferences = %+v, want explicit Opus prefs", audio.cfg.CodecPreferences)
 	}
 	if audio.Sender() == nil {
 		t.Fatal("Sender() = nil, want sender")
@@ -163,6 +164,17 @@ func TestPublishAudioRejectsInvalidPTime(t *testing.T) {
 	_, err := PublishAudio(pc, cfg)
 	if !errors.Is(err, ErrInvalidConfig) {
 		t.Fatalf("PublishAudio(invalid ptime) error = %v, want %v", err, ErrInvalidConfig)
+	}
+}
+
+func TestPublishAudioRequiresExplicitCodecPreferences(t *testing.T) {
+	pc := newTestPeerConnection(t)
+
+	cfg := explicitAudioPublishConfig()
+	cfg.CodecPreferences = nil
+	_, err := PublishAudio(pc, cfg)
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("PublishAudio(empty codec preferences) error = %v, want %v", err, ErrInvalidConfig)
 	}
 }
 

@@ -178,12 +178,22 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Download published shim
+      - name: Install Bazelisk
+        if: matrix.platform == 'darwin_arm64'
         shell: bash
         run: |
-          python scripts/download_shim_release.py \
-            --platform ${{ matrix.platform }} \
-            --output-dir lib/${{ matrix.platform }}
+          GOBIN="$HOME/go/bin" go install github.com/bazelbuild/bazelisk@${{ env.BAZELISK_VERSION }}
+
+      - name: Prepare shim
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "darwin_arm64" ]]; then
+            PATH="$HOME/go/bin:$PATH" ./scripts/build.sh
+          else
+            python scripts/download_shim_release.py \
+              --platform ${{ matrix.platform }} \
+              --output-dir lib/${{ matrix.platform }}
+          fi
           ls -la lib/${{ matrix.platform }}/
 
       - name: Run deterministic core tests (purego - default)

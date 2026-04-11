@@ -143,11 +143,17 @@ func encodeOpusForTrackTest(t *testing.T) []byte {
 	defer enc.Close()
 
 	dst := make([]byte, enc.MaxEncodedSize())
-	n, err := enc.EncodeInto(testutil.CreateTestAudioFrame(48_000, 2, 960), dst)
-	if err != nil {
-		t.Fatalf("EncodeInto: %v", err)
+	for attempt := 0; attempt < 4; attempt++ {
+		n, err := enc.EncodeInto(testutil.CreateTestAudioFrame(48_000, 2, 960), dst)
+		if err != nil {
+			t.Fatalf("EncodeInto: %v", err)
+		}
+		if n > 0 {
+			return append([]byte(nil), dst[:n]...)
+		}
 	}
-	return append([]byte(nil), dst[:n]...)
+	t.Fatal("EncodeInto produced no Opus payload after retries")
+	return nil
 }
 
 func TestVideoTrackBindWriteAndUnbind(t *testing.T) {

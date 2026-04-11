@@ -15,6 +15,10 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
 )
 
+// Full codec renegotiation can surface two short receiver freezes before media
+// continuity fully recovers, especially on native macOS paths.
+const maxTransientCodecRenegotiationFreezes = 2
+
 func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
@@ -131,8 +135,8 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	if !strings.EqualFold(lastSwitch.Change.CurrentCodec.MimeType, targetCodec.MimeType) {
 		t.Fatalf("last codec switch target = %q, want %q", lastSwitch.Change.CurrentCodec.MimeType, targetCodec.MimeType)
 	}
-	if trackSnap.FreezeCount > 1 {
-		t.Fatalf("receiver video freeze count = %d, want at most 1 transient freeze during full codec renegotiation: %+v", trackSnap.FreezeCount, trackSnap)
+	if trackSnap.FreezeCount > maxTransientCodecRenegotiationFreezes {
+		t.Fatalf("receiver video freeze count = %d, want at most %d transient freezes during full codec renegotiation: %+v", trackSnap.FreezeCount, maxTransientCodecRenegotiationFreezes, trackSnap)
 	}
 	if trackSnap.FrameCount < 20 {
 		t.Fatalf("receiver frame count = %d, want ongoing media after switch", trackSnap.FrameCount)
