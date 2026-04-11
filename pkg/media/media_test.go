@@ -2,12 +2,15 @@ package media
 
 import (
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
+	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
 type stubVideoCapture struct{}
@@ -366,6 +369,43 @@ func TestNewVideoStreamTrackCodecPreferencesOverrideCodec(t *testing.T) {
 	}
 	if len(constraints.CodecPreferences) != 1 || constraints.CodecPreferences[0].MimeType != webrtc.MimeTypeVP8 {
 		t.Fatalf("constraints.CodecPreferences = %+v, want VP8 preference", constraints.CodecPreferences)
+	}
+}
+
+func TestNewVideoStreamTrackOptsInToAutoAdaptation(t *testing.T) {
+	video, err := newVideoStreamTrack(
+		VideoConstraints{
+			Codec: codec.H264,
+		},
+		VideoTrackSettings{
+			Width:     640,
+			Height:    480,
+			FrameRate: 30,
+		},
+		"camera",
+	)
+	if err != nil {
+		t.Fatalf("newVideoStreamTrack: %v", err)
+	}
+	t.Cleanup(func() {
+		video.Stop()
+	})
+
+	var calls int32
+	video.track.SetBWESource(func() *track.BandwidthEstimate {
+		atomic.AddInt32(&calls, 1)
+		return &track.BandwidthEstimate{TargetBitrateBps: 1_000_000}
+	})
+	t.Cleanup(func() {
+		video.track.SetBWESource(nil)
+	})
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for atomic.LoadInt32(&calls) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if atomic.LoadInt32(&calls) == 0 {
+		t.Fatal("SetBWESource did not start adaptation loop, want browser-like helper opt-in")
 	}
 }
 

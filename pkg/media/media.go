@@ -706,12 +706,16 @@ func newVideoStreamTrack(constraints VideoConstraints, settings VideoTrackSettin
 	}
 
 	trackCfg := track.VideoTrackConfig{
-		ID:      generateID(),
-		Codec:   codecType,
-		Width:   settings.Width,
-		Height:  settings.Height,
-		Bitrate: constraints.Bitrate,
-		FPS:     settings.FrameRate,
+		ID:             generateID(),
+		Codec:          codecType,
+		Width:          settings.Width,
+		Height:         settings.Height,
+		Bitrate:        constraints.Bitrate,
+		FPS:            settings.FrameRate,
+		AutoKeyframe:   true,
+		AutoBitrate:    true,
+		AutoFramerate:  true,
+		AutoResolution: true,
 	}
 	if len(constraints.CodecPreferences) > 0 {
 		trackCfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), constraints.CodecPreferences...)
