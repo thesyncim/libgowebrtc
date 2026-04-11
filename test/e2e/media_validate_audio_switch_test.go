@@ -12,8 +12,6 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 
-	libcodec "github.com/thesyncim/libgowebrtc/pkg/codec"
-	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
@@ -42,6 +40,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 
 	const trackID = "audio-codec-switch"
 	const streamID = "stream-audio-switch"
+	const audioPTime = 20 * time.Millisecond
 
 	initialCodec := webrtc.RTPCodecParameters{
 		RTPCodecCapability: webrtc.RTPCodecCapability{
@@ -84,7 +83,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	startPump := func() (chan struct{}, chan error) {
 		stop := make(chan struct{})
 		done := make(chan error, 1)
-		go pumpPionAudioSamples(initialTrack, initialCodec, stop, done)
+		go pumpPionAudioSamples(initialTrack, opusSilenceAccessUnit(), audioPTime, stop, done)
 		return stop, done
 	}
 	stopPump := func(stop chan struct{}, done chan error) {
@@ -167,7 +166,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 
 					pumpStop = make(chan struct{})
 					pumpDone = make(chan error, 1)
-					go pumpPionAudioSamples(replacementTrack, targetCodec, pumpStop, pumpDone)
+					go pumpPionAudioSamples(replacementTrack, pcmuSilenceAccessUnit(), audioPTime, pumpStop, pumpDone)
 					return nil
 				},
 				Expect: validate.ScenarioExpectation{
@@ -212,26 +211,9 @@ func newPionAudioSampleTrack(codecParams webrtc.RTPCodecParameters, trackID, str
 	return webrtc.NewTrackLocalStaticSample(codecParams.RTPCodecCapability, trackID, streamID)
 }
 
-func pumpPionAudioSamples(track *webrtc.TrackLocalStaticSample, codecParams webrtc.RTPCodecParameters, stop <-chan struct{}, done chan<- error) {
-	ticker := time.NewTicker(20 * time.Millisecond)
+func pumpPionAudioSamples(track *webrtc.TrackLocalStaticSample, payload []byte, frameDuration time.Duration, stop <-chan struct{}, done chan<- error) {
+	ticker := time.NewTicker(frameDuration)
 	defer ticker.Stop()
-
-	var (
-		frameIndex uint32
-		audioEnc   encoder.AudioEncoder
-		err        error
-	)
-	if strings.EqualFold(codecParams.MimeType, webrtc.MimeTypeOpus) {
-		opusCfg := libcodec.DefaultOpusConfig()
-		opusCfg.SampleRate = int(codecParams.ClockRate)
-		opusCfg.Channels = int(codecParams.Channels)
-		audioEnc, err = encoder.NewOpusEncoder(opusCfg)
-		if err != nil {
-			done <- err
-			return
-		}
-		defer func() { _ = audioEnc.Close() }()
-	}
 
 	for {
 		select {
@@ -239,57 +221,27 @@ func pumpPionAudioSamples(track *webrtc.TrackLocalStaticSample, codecParams webr
 			done <- nil
 			return
 		case <-ticker.C:
-			payload, err := encodeAudioSample(codecParams, audioEnc, frameIndex)
-			if err != nil {
-				done <- err
-				return
-			}
 			if err := track.WriteSample(media.Sample{
-				Data:     payload,
-				Duration: 20 * time.Millisecond,
+				Data:     append([]byte(nil), payload...),
+				Duration: frameDuration,
 			}); err != nil {
 				done <- err
 				return
 			}
-			frameIndex++
 		}
 	}
 }
 
-func encodeAudioSample(codecParams webrtc.RTPCodecParameters, audioEnc encoder.AudioEncoder, frameIndex uint32) ([]byte, error) {
-	sampleRate := int(codecParams.ClockRate)
-	channels := audioChannelsForCodec(codecParams)
-	samplesPerFrame := sampleRate * 20 / 1000
-	src := CreateTestAudioFrame(sampleRate, channels, samplesPerFrame, frameIndex*uint32(samplesPerFrame))
-
-	switch {
-	case strings.EqualFold(codecParams.MimeType, webrtc.MimeTypeOpus):
-		buf := make([]byte, audioEnc.MaxEncodedSize())
-		for i := 0; i < 5; i++ {
-			n, err := audioEnc.EncodeInto(src, buf)
-			if err != nil {
-				return nil, err
-			}
-			if n > 0 {
-				return append([]byte(nil), buf[:n]...), nil
-			}
-		}
-		return nil, errors.New("opus encoder produced no output")
-	case strings.EqualFold(codecParams.MimeType, webrtc.MimeTypePCMU):
-		return encodePCMUSamples(src.SamplesS16()), nil
-	default:
-		return nil, errors.New("unsupported audio codec for pion sample pump")
-	}
+func opusSilenceAccessUnit() []byte {
+	return []byte{0xF8, 0xFF, 0xFE}
 }
 
-func audioChannelsForCodec(codecParams webrtc.RTPCodecParameters) int {
-	if codecParams.Channels > 0 {
-		return int(codecParams.Channels)
+func pcmuSilenceAccessUnit() []byte {
+	payload := make([]byte, 160)
+	for i := range payload {
+		payload[i] = 0xFF
 	}
-	if strings.EqualFold(codecParams.MimeType, webrtc.MimeTypeOpus) {
-		return 2
-	}
-	return 1
+	return payload
 }
 
 func waitForReceiverAudioCodec(t *testing.T, session *validate.Session, peer *pc.PeerConnection, trackID string, timeout time.Duration) string {
@@ -382,12 +334,7 @@ func connectPionOffersLibAnswersWithICE(pion *webrtc.PeerConnection, lib *pc.Pee
 
 	for _, candidate := range pionCandidates {
 		init := candidate.ToJSON()
-		if err := lib.AddICECandidate(pc.ICECandidate{
-			Candidate:        init.Candidate,
-			SDPMid:           init.SDPMid,
-			SDPMLineIndex:    init.SDPMLineIndex,
-			UsernameFragment: init.UsernameFragment,
-		}); err != nil {
+		if err := lib.AddICECandidate(pc.ICECandidate(init)); err != nil {
 			return err
 		}
 	}
@@ -459,41 +406,4 @@ func drainPionSenderRTCP(sender *webrtc.RTPSender) {
 			return
 		}
 	}
-}
-
-func encodePCMUSamples(samples []int16) []byte {
-	encoded := make([]byte, len(samples))
-	for i, sample := range samples {
-		encoded[i] = linearToMuLaw(sample)
-	}
-	return encoded
-}
-
-func linearToMuLaw(sample int16) byte {
-	const (
-		muLawBias = 0x84
-		muLawClip = 32635
-	)
-
-	sign := byte(0)
-	pcm := int(sample)
-	if pcm < 0 {
-		sign = 0x80
-		pcm = -pcm
-		if pcm > 0 {
-			pcm--
-		}
-	}
-	if pcm > muLawClip {
-		pcm = muLawClip
-	}
-	pcm += muLawBias
-
-	exponent := 7
-	for expMask := 0x4000; exponent > 0 && (pcm&expMask) == 0; exponent-- {
-		expMask >>= 1
-	}
-	mantissa := (pcm >> (exponent + 3)) & 0x0f
-
-	return ^byte(sign | byte(exponent<<4) | byte(mantissa))
 }
