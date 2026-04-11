@@ -18,6 +18,7 @@ thumb should be:
 - `pkg/pc.NewPeerConnection` no longer silently normalizes zero-value config.
 - `pkg/pc` no longer rewrites SDP/MSID lines to fake multi-stream sender semantics; callers now provide one explicit stream ID per native track.
 - `pkg/media` remote-track helpers no longer pretend tracks belong to multiple stream IDs; the helper layer now mirrors the native single-stream contract.
+- Validation DSL and waiter tooling now lives under `pkg/testkit/validate` instead of `pkg/media/validate`.
 
 ## Core vs Helper Layers
 
@@ -52,7 +53,7 @@ For this audit, "custom helper logic" means any exported behavior that:
 | P1 | Browser-style remote track registry | `pkg/media/remote.go`, `pkg/media/pion.go` | `RemoteStreamRegistry`, event adaptation, browser-like stream grouping, `AddTracksToPionPeerConnection`, `PionTrackLocalForStream` | This is a convenience layer on top of raw `OnTrack`/`AddTrack`, not the core primitive itself. It is helpful, but it hides where MSID and stream grouping are coming from. | Keep it as an adapter layer, but not as the canonical way to use remote/local tracks. Prefer direct Pion/native surfaces first, registry helpers second. |
 | P1 | Browser codec preset logic | `pkg/pioncodec/presets.go` | Browser profiles, preset modes, canonical ordering, codec-family heuristics, negotiated/support-filtered presets | Presets are policy. They are valuable, but they are not a thin wrapper over libwebrtc or Pion. | Keep presets opt-in and separate from exact codec factory paths. The main encoder/decoder constructors should work from exact codec params without preset dependency. |
 | P1 | Browser-shaped publish helpers | `pkg/pionsend/publish.go`, `pkg/pionsend/audio_publish.go` | `PublishVideo`, `PublishAudio`, default browser codec choice, layered/simulcast derivation, header-extension helper logic | This combines track construction, codec policy, and sender wiring into one helper path. Good ergonomics, but not minimal API surface. | Preserve as optional publishing helpers, but keep the lower-level "construct tracks, then add/send" path front and center. |
-| P2 | Validation DSL and impairment tooling | `pkg/media/validate/doc.go`, `pkg/media/validate/session.go`, `pkg/media/validate/scenario.go`, `pkg/media/validate/relay.go` | Browser-style validation session, waiters, policy gating, scenario scripting, impairment relay | Powerful testkit, but very far from core media/transport API. It reads more like a testing framework than a foundational library package. | Treat it as `testkit`/validation tooling rather than as part of the core runtime story. Keep it available, but quarantine it conceptually and eventually by package path if possible. |
+| P2 | Validation DSL and impairment tooling | `pkg/testkit/validate/doc.go`, `pkg/testkit/validate/session.go`, `pkg/testkit/validate/scenario.go`, `pkg/testkit/validate/relay.go` | Browser-style validation session, waiters, policy gating, scenario scripting, impairment relay | Powerful testkit, but very far from core media/transport API. It reads more like a testing framework than a foundational library package. | Keep it under an explicit testkit boundary rather than a runtime media package. |
 | P3 | Example-only summarization helpers | `internal/examplesupport/stats.go` | Collapses full WebRTC stats into a demo-friendly summary | Fine for examples, but it should stay obviously non-core. | Keep internal. Do not promote outward. |
 | P3 | Test-only helpers | `internal/testutil/testutil.go`, `internal/testutil/concurrency.go` | Shim bootstrap helper, serial test lock | Fine as internal test plumbing. | Keep internal. No public API work needed. |
 
@@ -104,7 +105,7 @@ Desired end state:
 
 Current hotspots:
 
-- `pkg/media/validate` session/waiter/scenario APIs
+- `pkg/testkit/validate` session/waiter/scenario APIs
 
 Desired end state:
 
@@ -120,7 +121,7 @@ Desired end state:
 - [ ] Isolate SDP/MSID rewriting to the narrowest possible internal compatibility layer.
 - [ ] Make `pkg/media` clearly optional browser-compatibility API, or split it into a more explicit capture core plus browser adapter layer.
 - [ ] Keep `pkg/pioncodec` presets opt-in; ensure the exact-params path stays primary in docs and examples.
-- [ ] Reposition `pkg/media/validate` as validation/testkit functionality, not a general runtime helper package.
+- [x] Reposition validation/session tooling under `pkg/testkit/validate` instead of `pkg/media/validate`.
 
 ## Likely First Fixes
 
@@ -129,7 +130,7 @@ These feel like the highest-leverage cleanup steps:
 1. Make `pkg/track.NewVideoTrack` explicit about adaptation.
 2. Remove hidden configuration normalization from `pkg/pc.NewPeerConnection`.
 3. Audit all exported helpers in `pkg/media` and `pkg/pionsend` for "silent defaults vs explicit constructor."
-4. Decide whether `pkg/media/validate` should stay public under its current path or move to a clearer testkit boundary later.
+4. Continue trimming runtime-facing helper surfaces now that validation already lives under the clearer `pkg/testkit/validate` boundary.
 
 ## Open Questions
 

@@ -1,4 +1,5 @@
-// Package validate provides browser-style media validation helpers for Go
+// Package validate provides browser-style media validation helpers for testkit
+// use in Go
 // publisher/subscriber topologies, including:
 //   - session snapshots and waiters for connection, media, and data-channel state
 //   - subscriber-visible audio/video continuity monitoring
@@ -7,6 +8,6 @@
 //   - an ICE-edge UDP relay for black-box SFU network impairment testing
 //
 // The package is designed for validation and observability rather than media
-// transport itself. It layers on top of pkg/media, pkg/pionrecv, pkg/pionsend,
-// and pkg/pc.
+// transport itself. It lives under pkg/testkit to keep that boundary explicit,
+// and layers on top of pkg/media, pkg/pionrecv, pkg/pionsend, and pkg/pc.
 package validate
