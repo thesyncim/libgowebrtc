@@ -22,6 +22,8 @@
 
 libgowebrtc brings native codec performance to Go WebRTC applications. It's designed to **complement** [Pion](https://github.com/pion/webrtc) - use Pion for networking and signaling, libgowebrtc for encoding/decoding.
 
+The core packages stay intentionally thin. Browser-like capture, publishing, and validation helpers are available, but they are layered on top of the core API rather than defining it.
+
 **Key benefits:**
 - **Native codec performance** - H.264, VP8, VP9, AV1 via Google's libwebrtc
 - **Hardware acceleration** - VideoToolbox on macOS for H.264

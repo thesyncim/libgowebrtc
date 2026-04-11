@@ -9,7 +9,7 @@ on:
         type: string
 
 env:
-  GO_VERSION: "1.26.1"
+  GO_VERSION: "1.26.2"
   BAZELISK_VERSION: v1.26.0
   SHIM_RELEASE_TAG: shim-v${{ inputs.version }}
 
