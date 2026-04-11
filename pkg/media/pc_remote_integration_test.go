@@ -11,7 +11,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
-func TestBindPCRemoteTrackIntegration(t *testing.T) {
+func TestBindPCTrackIntegration(t *testing.T) {
 	testutil.RequireShim(t)
 
 	sender, err := newMediaRemotePeerConnection()
@@ -39,7 +39,7 @@ func TestBindPCRemoteTrackIntegration(t *testing.T) {
 	errCh := make(chan error, 1)
 
 	receiver.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
-		videoTrack, err := BindPCRemoteTrack(track, receiver, streamID)
+		videoTrack, err := BindPCTrack(track, receiver, streamID)
 		if err != nil {
 			select {
 			case errCh <- err:
@@ -85,7 +85,7 @@ func TestBindPCRemoteTrackIntegration(t *testing.T) {
 	select {
 	case boundTrack = <-trackCh:
 	case err := <-errCh:
-		t.Fatalf("BindPCRemoteTrack: %v", err)
+		t.Fatalf("BindPCTrack: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for bound remote track")
 	}

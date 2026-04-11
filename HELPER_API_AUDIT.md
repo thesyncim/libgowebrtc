@@ -85,9 +85,9 @@ Current hotspots:
 - `pkg/pc.expandLocalTrackStreamIDs(...)`
 - `pkg/pc.streamIDsForTrackID(...)`
 - `pkg/pc.normalizeTrackStreamIDs(...)`
-- `pkg/media.BindPionRemoteTrack(...)`
-- `pkg/media.BindPCRemoteTrack(...)`
-- `pkg/media.BindDecodedRemoteTrack(...)`
+- `pkg/media.BindPionTrack(...)`
+- `pkg/media.BindPCTrack(...)`
+- `pkg/media.BindDecodedTrack(...)`
 
 Desired end state:
 

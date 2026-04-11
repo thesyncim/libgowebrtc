@@ -314,7 +314,7 @@ func (s *Session) PionOnTrack() func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
 			opts = append(opts, pionrecv.WithAudioSubscriberMonitor(audioMonitor))
 		}
 
-		remoteTrack, err := media.BindPionRemoteTrack(trackRemote, receiver, opts...)
+		remoteTrack, err := media.BindPionTrack(trackRemote, receiver, opts...)
 		if err != nil {
 			s.recordFailure(fmt.Sprintf("validate: bind pion track %q: %v", trackRemote.ID(), err))
 			return
@@ -331,7 +331,7 @@ func (s *Session) PCOnTrack() func(*pc.Track, *pc.RTPReceiver, string) {
 			s.recordFailure("validate: nil pc remote track")
 			return
 		}
-		remoteTrack, err := media.BindPCRemoteTrack(trackRemote, receiver, streamID)
+		remoteTrack, err := media.BindPCTrack(trackRemote, receiver, streamID)
 		if err != nil {
 			s.recordFailure(fmt.Sprintf("validate: bind pc track %q: %v", trackRemote.ID(), err))
 			return

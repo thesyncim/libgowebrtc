@@ -383,9 +383,9 @@ func TestPCRemoteTrackSingleStreamFanoutAndClose(t *testing.T) {
 	waitForCondition(t, 2*time.Second, func() bool { return videoSource.closed.Load() })
 }
 
-func TestBindDecodedRemoteTrackRejectsNil(t *testing.T) {
-	if _, err := BindDecodedRemoteTrack(nil); !errors.Is(err, ErrTrackNotFound) {
-		t.Fatalf("BindDecodedRemoteTrack(nil) error = %v, want %v", err, ErrTrackNotFound)
+func TestBindDecodedTrackRejectsNil(t *testing.T) {
+	if _, err := BindDecodedTrack(nil); !errors.Is(err, ErrTrackNotFound) {
+		t.Fatalf("BindDecodedTrack(nil) error = %v, want %v", err, ErrTrackNotFound)
 	}
 }
 

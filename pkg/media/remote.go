@@ -81,9 +81,9 @@ type PCRemoteAudioTrack interface {
 	PCRemoteTrack
 }
 
-// BindPionRemoteTrack binds a Pion OnTrack pair into a browser-like remote
+// BindPionTrack binds a Pion OnTrack pair into a browser-like remote
 // track wrapper without inventing stream-grouping state.
-func BindPionRemoteTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, opts ...pionrecv.Option) (RemoteTrack, error) {
+func BindPionTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, opts ...pionrecv.Option) (RemoteTrack, error) {
 	decoded, err := pionrecv.BindRemoteTrack(track, receiver, opts...)
 	if err != nil {
 		return nil, err
@@ -91,18 +91,18 @@ func BindPionRemoteTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver
 	return bindRemoteTrackSource(&decodedTrackAdapter{decoded: decoded})
 }
 
-// BindDecodedRemoteTrack binds a caller-managed pionrecv.DecodedTrack into the
-// browser-like remote track wrapper used by BindPionRemoteTrack.
-func BindDecodedRemoteTrack(decoded *pionrecv.DecodedTrack) (RemoteTrack, error) {
+// BindDecodedTrack binds a caller-managed pionrecv.DecodedTrack into the
+// browser-like remote track wrapper used by BindPionTrack.
+func BindDecodedTrack(decoded *pionrecv.DecodedTrack) (RemoteTrack, error) {
 	if decoded == nil {
 		return nil, ErrTrackNotFound
 	}
 	return bindRemoteTrackSource(&decodedTrackAdapter{decoded: decoded})
 }
 
-// BindPCRemoteTrack binds a libwebrtc-backed pkg/pc track into the same
-// browser-like remote track wrapper used by BindPionRemoteTrack.
-func BindPCRemoteTrack(track *pc.Track, receiver *pc.RTPReceiver, streamID string) (RemoteTrack, error) {
+// BindPCTrack binds a libwebrtc-backed pkg/pc track into the same
+// browser-like remote track wrapper used by BindPionTrack.
+func BindPCTrack(track *pc.Track, receiver *pc.RTPReceiver, streamID string) (RemoteTrack, error) {
 	if track == nil {
 		return nil, ErrTrackNotFound
 	}
