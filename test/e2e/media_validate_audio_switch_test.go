@@ -10,6 +10,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
+	"github.com/thesyncim/libgowebrtc/pkg/media"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
@@ -31,7 +32,8 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		t.Skipf("need at least two supported audio codecs to test a switch; got %d", len(audioCodecs))
 	}
 
-	session := validate.NewPCSession(pp.Receiver, validate.SessionConfig{
+	registry := media.NewRemoteStreamRegistry()
+	session := validate.NewPCSession(pp.Receiver, registry, validate.SessionConfig{
 		Browser:                 pioncodec.BrowserChrome,
 		StatsPollInterval:       50 * time.Millisecond,
 		EventHistory:            64,
