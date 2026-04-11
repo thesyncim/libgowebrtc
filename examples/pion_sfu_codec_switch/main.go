@@ -32,9 +32,9 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/media"
-	"github.com/thesyncim/libgowebrtc/pkg/media/validate"
 	"github.com/thesyncim/libgowebrtc/pkg/packetizer"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
+	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
 	libtrack "github.com/thesyncim/libgowebrtc/pkg/track"
 )
 

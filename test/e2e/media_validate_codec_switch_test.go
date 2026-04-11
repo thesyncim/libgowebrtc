@@ -11,9 +11,9 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/media"
-	"github.com/thesyncim/libgowebrtc/pkg/media/validate"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
+	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
 )
 
 func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
