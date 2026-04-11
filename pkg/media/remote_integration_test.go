@@ -16,7 +16,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
-func TestBindPionRemoteTrackIntegration(t *testing.T) {
+func TestBindPionTrackIntegration(t *testing.T) {
 	sender, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatalf("NewPeerConnection(sender): %v", err)
@@ -52,7 +52,7 @@ func TestBindPionRemoteTrackIntegration(t *testing.T) {
 	errCh := make(chan error, 1)
 
 	receiver.OnTrack(func(trackRemote *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
-		videoTrack, err := BindPionRemoteTrack(
+		videoTrack, err := BindPionTrack(
 			trackRemote,
 			rtpReceiver,
 			pionrecv.WithRTCPWriter(rtpReceiver.Transport()),
@@ -97,7 +97,7 @@ func TestBindPionRemoteTrackIntegration(t *testing.T) {
 	select {
 	case boundTrack = <-trackCh:
 	case err := <-errCh:
-		t.Fatalf("BindPionRemoteTrack: %v", err)
+		t.Fatalf("BindPionTrack: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for remote track")
 	}
@@ -126,7 +126,7 @@ func TestBindPionRemoteTrackIntegration(t *testing.T) {
 	boundTrack.Stop()
 }
 
-func TestBindDecodedRemoteTrackIntegration(t *testing.T) {
+func TestBindDecodedTrackIntegration(t *testing.T) {
 	sender, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatalf("NewPeerConnection(sender): %v", err)
@@ -194,9 +194,9 @@ func TestBindDecodedRemoteTrackIntegration(t *testing.T) {
 		t.Fatal("timed out waiting for decoded track")
 	}
 
-	boundTrack, err := BindDecodedRemoteTrack(decoded)
+	boundTrack, err := BindDecodedTrack(decoded)
 	if err != nil {
-		t.Fatalf("BindDecodedRemoteTrack: %v", err)
+		t.Fatalf("BindDecodedTrack: %v", err)
 	}
 
 	frameCh := make(chan *frame.VideoFrame, 8)

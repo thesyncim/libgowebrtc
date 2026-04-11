@@ -526,7 +526,7 @@ import (
 )
 
 pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-    remoteTrack, err := media.BindPionRemoteTrack(
+    remoteTrack, err := media.BindPionTrack(
         track,
         receiver,
         pionrecv.WithRTCPWriter(receiver.Transport()),
@@ -557,7 +557,7 @@ import (
 )
 
 peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
-    remoteTrack, err := media.BindPCRemoteTrack(track, receiver, streamID)
+    remoteTrack, err := media.BindPCTrack(track, receiver, streamID)
     if err != nil {
         println("remote bind error:", err.Error())
         return
@@ -575,7 +575,7 @@ peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string)
 ```
 
 If you already manage the Pion receive pipeline yourself with `pionrecv.New(...)`
-or `pionrecv.BindRemoteTrack(...)`, use `media.BindDecodedRemoteTrack(decoded)`
+or `pionrecv.BindRemoteTrack(...)`, use `media.BindDecodedTrack(decoded)`
 to project that decoded track into the same browser-like remote-track model.
 
 ### Low-Level Encoding (Allocation-Free)

@@ -82,7 +82,8 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		}
 	}
 
-	pumpStop, pumpDone := startPump()
+	var pumpStop chan struct{}
+	var pumpDone chan error
 	defer func() {
 		if pumpStop != nil {
 			stopPump(pumpStop, pumpDone)
@@ -98,6 +99,8 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	if err := session.WaitForStable(ctx); err != nil {
 		t.Fatalf("WaitForStable: %v", err)
 	}
+
+	pumpStop, pumpDone = startPump()
 	if err := session.WaitForAudioContinuous(ctx, "audio-codec-switch"); err != nil {
 		t.Fatalf("WaitForAudioContinuous(initial): %v", err)
 	}
