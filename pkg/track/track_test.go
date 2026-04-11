@@ -145,7 +145,7 @@ func TestVideoTrackProperties(t *testing.T) {
 	}
 }
 
-func TestVideoTrackCodecPreferencesOverrideCodec(t *testing.T) {
+func TestVideoTrackCodecPreferencesDoNotOverrideExplicitCodecAtConstruction(t *testing.T) {
 	input := []webrtc.RTPCodecParameters{{
 		RTPCodecCapability: webrtc.RTPCodecCapability{
 			MimeType:  webrtc.MimeTypeVP8,
@@ -165,8 +165,8 @@ func TestVideoTrackCodecPreferencesOverrideCodec(t *testing.T) {
 		t.Fatalf("NewVideoTrack: %v", err)
 	}
 
-	if track.codec != codec.VP8 {
-		t.Fatalf("track.codec = %v, want %v", track.codec, codec.VP8)
+	if track.codec != codec.H264 {
+		t.Fatalf("track.codec = %v, want %v", track.codec, codec.H264)
 	}
 
 	input[0].MimeType = webrtc.MimeTypeH264

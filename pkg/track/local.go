@@ -154,14 +154,6 @@ func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 	if cfg.MTU == 0 {
 		cfg.MTU = 1200
 	}
-	if len(cfg.CodecPreferences) > 0 {
-		for _, preferred := range cfg.CodecPreferences {
-			if codecType, ok := codec.ParseMimeType(preferred.MimeType); ok {
-				cfg.Codec = codecType
-				break
-			}
-		}
-	}
 
 	t := &VideoTrack{
 		id:          cfg.ID,
