@@ -69,9 +69,6 @@ type packetizer struct {
 
 // New creates a new RTP packetizer.
 func New(cfg Config) (Packetizer, error) {
-	if cfg.MTU == 0 {
-		cfg.MTU = 1200
-	}
 	if cfg.MTU <= 12 {
 		return nil, ErrBufferTooSmall
 	}
