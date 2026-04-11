@@ -80,11 +80,11 @@ func TestEnumerateDevicesWithoutLibrary(t *testing.T) {
 	_ = ffi.Close()
 
 	devices, err := EnumerateDevices()
-	if err != nil {
-		t.Fatalf("EnumerateDevices() error = %v, want nil", err)
+	if !errors.Is(err, ErrCaptureNotSupported) {
+		t.Fatalf("EnumerateDevices() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
 	}
-	if devices == nil {
-		t.Fatal("EnumerateDevices() should return an empty slice, not nil")
+	if devices != nil {
+		t.Fatal("EnumerateDevices() should return nil when capture is unavailable")
 	}
 }
 
@@ -92,11 +92,11 @@ func TestEnumerateScreensWithoutLibrary(t *testing.T) {
 	_ = ffi.Close()
 
 	screens, err := EnumerateScreens()
-	if err != nil {
-		t.Fatalf("EnumerateScreens() error = %v, want nil", err)
+	if !errors.Is(err, ErrCaptureNotSupported) {
+		t.Fatalf("EnumerateScreens() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
 	}
-	if screens == nil {
-		t.Fatal("EnumerateScreens() should return an empty slice, not nil")
+	if screens != nil {
+		t.Fatal("EnumerateScreens() should return nil when capture is unavailable")
 	}
 }
 
@@ -327,8 +327,8 @@ func TestGetDisplayMediaRejectsConflictingTargets(t *testing.T) {
 	}
 }
 
-func TestNewVideoStreamTrackCodecPreferencesOverrideCodec(t *testing.T) {
-	video, err := newVideoStreamTrack(
+func TestBuildVideoTrackConfigPrefersCodecPreferences(t *testing.T) {
+	cfg, resolved := buildVideoTrackConfig(
 		VideoConstraints{
 			Codec: codec.H264,
 			CodecPreferences: []webrtc.RTPCodecParameters{{
@@ -344,31 +344,37 @@ func TestNewVideoStreamTrackCodecPreferencesOverrideCodec(t *testing.T) {
 			Height:    480,
 			FrameRate: 30,
 		},
-		"camera",
 	)
-	if err != nil {
-		t.Fatalf("newVideoStreamTrack: %v", err)
-	}
 
-	constraints := video.GetConstraints()
-	if constraints.Codec != codec.VP8 {
-		t.Fatalf("constraints.Codec = %v, want %v", constraints.Codec, codec.VP8)
+	if cfg.Codec != codec.VP8 {
+		t.Fatalf("cfg.Codec = %v, want %v", cfg.Codec, codec.VP8)
 	}
-	if len(constraints.CodecPreferences) != 1 || constraints.CodecPreferences[0].MimeType != webrtc.MimeTypeVP8 {
-		t.Fatalf("constraints.CodecPreferences = %+v, want VP8 preference", constraints.CodecPreferences)
+	if len(cfg.CodecPreferences) != 1 || cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeVP8 {
+		t.Fatalf("cfg.CodecPreferences = %+v, want VP8 preference", cfg.CodecPreferences)
+	}
+	if cfg.Bitrate == 0 {
+		t.Fatal("cfg.Bitrate should be explicitly resolved")
+	}
+	if resolved.Codec != codec.VP8 {
+		t.Fatalf("resolved.Codec = %v, want %v", resolved.Codec, codec.VP8)
 	}
 }
 
 func TestNewVideoStreamTrackOptsInToAutoAdaptation(t *testing.T) {
+	constraints := VideoConstraints{
+		Codec:   codec.H264,
+		Bitrate: 500_000,
+	}
+	settings := VideoTrackSettings{
+		Width:     640,
+		Height:    480,
+		FrameRate: 30,
+	}
+	cfg, resolved := buildVideoTrackConfig(constraints, settings)
 	video, err := newVideoStreamTrack(
-		VideoConstraints{
-			Codec: codec.H264,
-		},
-		VideoTrackSettings{
-			Width:     640,
-			Height:    480,
-			FrameRate: 30,
-		},
+		cfg,
+		resolved,
+		settings,
 		"camera",
 	)
 	if err != nil {
@@ -396,8 +402,8 @@ func TestNewVideoStreamTrackOptsInToAutoAdaptation(t *testing.T) {
 	}
 }
 
-func TestNewAudioStreamTrackPreservesCodecPreferences(t *testing.T) {
-	audio, err := newAudioStreamTrack(
+func TestBuildAudioTrackConfigPreservesCodecPreferences(t *testing.T) {
+	cfg, resolved := buildAudioTrackConfig(
 		AudioConstraints{
 			CodecPreferences: []webrtc.RTPCodecParameters{{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
@@ -412,14 +418,14 @@ func TestNewAudioStreamTrackPreservesCodecPreferences(t *testing.T) {
 			SampleRate:   48000,
 			ChannelCount: 2,
 		},
-		"microphone",
 	)
-	if err != nil {
-		t.Fatalf("newAudioStreamTrack: %v", err)
+	if cfg.Bitrate == 0 {
+		t.Fatal("cfg.Bitrate should be explicitly resolved")
 	}
-
-	constraints := audio.GetConstraints()
-	if len(constraints.CodecPreferences) != 1 || constraints.CodecPreferences[0].MimeType != webrtc.MimeTypeOpus {
-		t.Fatalf("constraints.CodecPreferences = %+v, want Opus preference", constraints.CodecPreferences)
+	if len(cfg.CodecPreferences) != 1 || cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeOpus {
+		t.Fatalf("cfg.CodecPreferences = %+v, want Opus preference", cfg.CodecPreferences)
+	}
+	if resolved.Bitrate == 0 {
+		t.Fatal("resolved.Bitrate should be explicitly resolved")
 	}
 }
