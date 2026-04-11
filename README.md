@@ -301,8 +301,12 @@ peerConnection, _ := webrtc.NewPeerConnection(webrtc.Configuration{
     },
 })
 
-// Add capture-backed tracks to a Pion PeerConnection
-senders, _ := media.AddTracksToPionPeerConnection(peerConnection, stream)
+// Add capture-backed tracks to a Pion PeerConnection explicitly
+for _, track := range stream.GetTracks() {
+    if trackLocal, ok := media.TrackLocal(track); ok {
+        _, _ = peerConnection.AddTrack(trackLocal)
+    }
+}
 
 // Create offer
 offer, _ := peerConnection.CreateOffer(nil)
@@ -344,9 +348,10 @@ frame := frame.NewI420Frame(1280, 720)
 videoTrack.WriteFrame(frame, false)
 ```
 
-When you want browser-like `MediaStream` semantics with manual Pion control,
-use `media.PionTrackLocalForStream(stream, track)` so the remote side sees the
-stream's `msid`. `media.PionTrackLocal(track)` remains the raw escape hatch.
+`media.TrackLocal(track)` is the raw escape hatch when you want to hand a
+capture-backed track to Pion yourself. If you need exact stream-ID/msid
+semantics, use the lower-level `pkg/track` or `pkg/pc` constructors directly
+and set stream IDs there instead of relying on `pkg/media` helpers.
 
 ### Browser Codec Presets
 

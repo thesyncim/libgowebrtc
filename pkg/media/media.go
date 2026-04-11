@@ -24,8 +24,6 @@ var (
 	ErrStreamClosed        = errors.New("stream closed")
 	ErrDeviceNotFound      = errors.New("device not found")
 	ErrCaptureNotSupported = errors.New("capture not supported without shim library")
-	ErrNilMediaStream      = errors.New("media stream is nil")
-	ErrNilPeerConnection   = errors.New("peer connection is nil")
 )
 
 // MediaDeviceKind represents the type of media device.
