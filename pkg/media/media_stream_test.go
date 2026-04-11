@@ -1,10 +1,7 @@
 package media
 
 import (
-	"errors"
 	"testing"
-
-	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 )
@@ -315,12 +312,10 @@ func TestAudioStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
 	}
 }
 
-func TestPionTrackLocalAndAddTracksToPionPeerConnection(t *testing.T) {
+func TestTrackLocalExtractsUnderlyingPionTrack(t *testing.T) {
 	stream := NewMediaStream()
 	video := newTestVideoTrack(t)
-	audio := newTestAudioTrack(t)
 	stream.AddTrack(video)
-	stream.AddTrack(audio)
 	stream.AddTrack(&fakeMediaTrack{
 		id:         "fake-video",
 		kind:       "video",
@@ -329,55 +324,10 @@ func TestPionTrackLocalAndAddTracksToPionPeerConnection(t *testing.T) {
 		readyState: "live",
 	})
 
-	if pionTrack, ok := PionTrackLocal(video); !ok || pionTrack == nil {
-		t.Fatal("PionTrackLocal() should succeed for real media track")
+	if pionTrack, ok := TrackLocal(video); !ok || pionTrack == nil {
+		t.Fatal("TrackLocal() should succeed for real media track")
 	}
-	if scopedTrack, ok := PionTrackLocalForStream(stream, video); !ok || scopedTrack == nil {
-		t.Fatal("PionTrackLocalForStream() should succeed for real media track")
-	} else if got := scopedTrack.StreamID(); got != stream.ID() {
-		t.Fatalf("PionTrackLocalForStream().StreamID() = %q, want %q", got, stream.ID())
-	}
-	if pionTrack, ok := PionTrackLocal(stream.GetTrackByID("fake-video")); ok || pionTrack != nil {
-		t.Fatal("PionTrackLocal() should fail for fake media track")
-	}
-
-	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-	if err != nil {
-		t.Fatalf("NewPeerConnection() error = %v", err)
-	}
-	defer pc.Close()
-
-	senders, err := AddTracksToPionPeerConnection(pc, stream)
-	if err != nil {
-		t.Fatalf("AddTracksToPionPeerConnection() error = %v", err)
-	}
-	if got := len(senders); got != 2 {
-		t.Fatalf("AddTracksToPionPeerConnection() senders len = %d, want 2", got)
-	}
-	for _, sender := range senders {
-		if sender.Track() == nil {
-			t.Fatal("AddTracksToPionPeerConnection() sender.Track() returned nil")
-		}
-		if got := sender.Track().StreamID(); got != stream.ID() {
-			t.Fatalf("sender.Track().StreamID() = %q, want %q", got, stream.ID())
-		}
-	}
-}
-
-func TestAddTracksToPionPeerConnectionNilGuards(t *testing.T) {
-	stream := NewMediaStream()
-
-	if _, err := AddTracksToPionPeerConnection(nil, stream); !errors.Is(err, ErrNilPeerConnection) {
-		t.Fatalf("AddTracksToPionPeerConnection(nil, stream) error = %v, want %v", err, ErrNilPeerConnection)
-	}
-
-	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-	if err != nil {
-		t.Fatalf("NewPeerConnection() error = %v", err)
-	}
-	defer pc.Close()
-
-	if _, err := AddTracksToPionPeerConnection(pc, nil); !errors.Is(err, ErrNilMediaStream) {
-		t.Fatalf("AddTracksToPionPeerConnection(pc, nil) error = %v, want %v", err, ErrNilMediaStream)
+	if pionTrack, ok := TrackLocal(stream.GetTrackByID("fake-video")); ok || pionTrack != nil {
+		t.Fatal("TrackLocal() should fail for fake media track")
 	}
 }
