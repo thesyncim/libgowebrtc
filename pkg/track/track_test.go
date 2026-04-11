@@ -272,11 +272,11 @@ func TestNewAudioTrack(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name: "minimal config",
+			name: "missing audio shape",
 			cfg: AudioTrackConfig{
 				ID: "audio-1",
 			},
-			expectErr: false,
+			expectErr: true,
 		},
 		{
 			name: "empty ID",
@@ -309,7 +309,10 @@ func TestNewAudioTrack(t *testing.T) {
 
 func TestAudioTrackDefaults(t *testing.T) {
 	track, err := NewAudioTrack(AudioTrackConfig{
-		ID: "audio-0",
+		ID:         "audio-0",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -318,14 +321,14 @@ func TestAudioTrackDefaults(t *testing.T) {
 	if track.StreamID() != "" {
 		t.Errorf("StreamID = %q, want empty", track.StreamID())
 	}
-	if track.config.SampleRate != 48000 {
-		t.Errorf("SampleRate should default to 48000, got %v", track.config.SampleRate)
+	if track.config.SampleRate != 48_000 {
+		t.Errorf("SampleRate = %v, want 48000", track.config.SampleRate)
 	}
 	if track.config.Channels != 2 {
-		t.Errorf("Channels should default to 2, got %v", track.config.Channels)
+		t.Errorf("Channels = %v, want 2", track.config.Channels)
 	}
-	if track.config.Bitrate != 64000 {
-		t.Errorf("Bitrate should default to 64000, got %v", track.config.Bitrate)
+	if track.config.Bitrate != 64_000 {
+		t.Errorf("Bitrate = %v, want 64000", track.config.Bitrate)
 	}
 	if track.config.MTU != 1200 {
 		t.Errorf("MTU should default to 1200, got %v", track.config.MTU)
@@ -334,8 +337,11 @@ func TestAudioTrackDefaults(t *testing.T) {
 
 func TestAudioTrackProperties(t *testing.T) {
 	track, err := NewAudioTrack(AudioTrackConfig{
-		ID:       "audio-test",
-		StreamID: "stream-test",
+		ID:         "audio-test",
+		StreamID:   "stream-test",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -357,7 +363,10 @@ func TestAudioTrackProperties(t *testing.T) {
 
 func TestAudioTrackNotBound(t *testing.T) {
 	track, _ := NewAudioTrack(AudioTrackConfig{
-		ID: "audio-0",
+		ID:         "audio-0",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
 	})
 
 	err := track.WriteFrame(nil)
@@ -373,7 +382,10 @@ func TestAudioTrackNotBound(t *testing.T) {
 
 func TestAudioTrackClose(t *testing.T) {
 	track, _ := NewAudioTrack(AudioTrackConfig{
-		ID: "audio-0",
+		ID:         "audio-0",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
 	})
 
 	err := track.Close()
@@ -396,8 +408,10 @@ func TestAudioTrackClose(t *testing.T) {
 
 func TestAudioTrackSetBitrateUnbound(t *testing.T) {
 	track, _ := NewAudioTrack(AudioTrackConfig{
-		ID:      "audio-0",
-		Bitrate: 64000,
+		ID:         "audio-0",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
 	})
 
 	err := track.SetBitrate(128000)
