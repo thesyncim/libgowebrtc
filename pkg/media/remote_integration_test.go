@@ -16,7 +16,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
-func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
+func TestBindPionRemoteTrackIntegration(t *testing.T) {
 	sender, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatalf("NewPeerConnection(sender): %v", err)
@@ -47,43 +47,42 @@ func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
 	}
 	go drainRemoteRegistryRTCP(rtpSender)
 
-	registry := NewRemoteStreamRegistry()
 	frameCh := make(chan *frame.VideoFrame, 8)
-	eventCh := make(chan PionTrackEvent, 1)
-	streamsCh := make(chan []*MediaStream, 1)
+	trackCh := make(chan PionRemoteVideoTrack, 1)
 	errCh := make(chan error, 1)
 
-	receiver.OnTrack(registry.PionOnTrack(
-		func(event PionTrackEvent) {
-			video := event.Track.(PionRemoteVideoTrack)
-			if err := video.SetOnVideoFrame(func(f *frame.VideoFrame) {
-				select {
-				case frameCh <- f:
-				default:
-				}
-			}); err != nil {
-				select {
-				case errCh <- err:
-				default:
-				}
-				return
-			}
-			select {
-			case eventCh <- event:
-			default:
-			}
-			select {
-			case streamsCh <- event.Streams:
-			default:
-			}
-		},
-		func(err error) {
+	receiver.OnTrack(func(trackRemote *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
+		videoTrack, err := BindPionRemoteTrack(
+			trackRemote,
+			rtpReceiver,
+			pionrecv.WithRTCPWriter(rtpReceiver.Transport()),
+		)
+		if err != nil {
 			select {
 			case errCh <- err:
 			default:
 			}
-		},
-	))
+			return
+		}
+
+		video := videoTrack.(PionRemoteVideoTrack)
+		if err := video.SetOnVideoFrame(func(f *frame.VideoFrame) {
+			select {
+			case frameCh <- f:
+			default:
+			}
+		}); err != nil {
+			select {
+			case errCh <- err:
+			default:
+			}
+			return
+		}
+		select {
+		case trackCh <- video:
+		default:
+		}
+	})
 
 	connectRemoteRegistryPionPeers(t, sender, receiver)
 
@@ -94,23 +93,13 @@ func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	var event PionTrackEvent
+	var boundTrack PionRemoteVideoTrack
 	select {
-	case event = <-eventCh:
+	case boundTrack = <-trackCh:
 	case err := <-errCh:
-		t.Fatalf("PionOnTrack: %v", err)
+		t.Fatalf("BindPionRemoteTrack: %v", err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for remote track")
-	}
-	boundTrack := event.Track
-
-	var streams []*MediaStream
-	select {
-	case streams = <-streamsCh:
-	case err := <-errCh:
-		t.Fatalf("PionOnTrack: %v", err)
-	case <-time.After(10 * time.Second):
-		t.Fatal("timed out waiting for remote streams")
 	}
 
 	select {
@@ -130,26 +119,14 @@ func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
 	if boundTrack.StreamID() != "remote-stream" {
 		t.Fatalf("boundTrack.StreamID() = %q, want %q", boundTrack.StreamID(), "remote-stream")
 	}
-	if len(streams) != 1 {
-		t.Fatalf("streams len = %d, want 1", len(streams))
-	}
-	if streams[0].ID() != "remote-stream" {
-		t.Fatalf("stream ID = %q, want %q", streams[0].ID(), "remote-stream")
-	}
-	if got := streams[0].GetTrackByID(boundTrack.ID()); got == nil {
-		t.Fatal("expected bound track to be present in returned MediaStream")
-	}
-	if event.TrackRemote == nil {
-		t.Fatal("TrackRemote = nil, want original Pion track")
-	}
-	if event.Receiver == nil {
-		t.Fatal("Receiver = nil, want original RTP receiver")
+	if boundTrack.DecodedTrack() == nil {
+		t.Fatal("DecodedTrack() = nil, want underlying decoded track")
 	}
 
 	boundTrack.Stop()
 }
 
-func TestRemoteStreamRegistryBindDecodedTrackIntegration(t *testing.T) {
+func TestBindDecodedRemoteTrackIntegration(t *testing.T) {
 	sender, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		t.Fatalf("NewPeerConnection(sender): %v", err)
@@ -217,12 +194,9 @@ func TestRemoteStreamRegistryBindDecodedTrackIntegration(t *testing.T) {
 		t.Fatal("timed out waiting for decoded track")
 	}
 
-	registry := NewRemoteStreamRegistry()
-	defer registry.Close()
-
-	boundTrack, streams, err := registry.BindDecodedTrack(decoded)
+	boundTrack, err := BindDecodedRemoteTrack(decoded)
 	if err != nil {
-		t.Fatalf("BindDecodedTrack: %v", err)
+		t.Fatalf("BindDecodedRemoteTrack: %v", err)
 	}
 
 	frameCh := make(chan *frame.VideoFrame, 8)
@@ -257,9 +231,6 @@ func TestRemoteStreamRegistryBindDecodedTrackIntegration(t *testing.T) {
 	}
 	if boundTrack.StreamID() != "decoded-stream" {
 		t.Fatalf("boundTrack.StreamID() = %q, want %q", boundTrack.StreamID(), "decoded-stream")
-	}
-	if len(streams) != 1 || streams[0].ID() != "decoded-stream" {
-		t.Fatalf("streams = %v, want [decoded-stream]", streams)
 	}
 }
 

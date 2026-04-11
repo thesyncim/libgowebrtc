@@ -222,10 +222,9 @@ type dataChannelState struct {
 // Session is the browser-style validation surface for media, data channels,
 // and transport state.
 type Session struct {
-	cfg      SessionConfig
-	policy   BrowserPolicy
-	peer     peerAdapter
-	registry *media.RemoteStreamRegistry
+	cfg    SessionConfig
+	policy BrowserPolicy
+	peer   peerAdapter
 
 	mu sync.Mutex
 
@@ -271,7 +270,6 @@ func newSession(peer peerAdapter, cfg SessionConfig) *Session {
 		cfg:          cfg,
 		policy:       policy,
 		peer:         peer,
-		registry:     media.NewRemoteStreamRegistry(),
 		videoTracks:  make(map[string]*videoTrackState),
 		audioTracks:  make(map[string]*audioTrackState),
 		dataChannels: make(map[string]*dataChannelState),
@@ -316,7 +314,7 @@ func (s *Session) PionOnTrack() func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
 			opts = append(opts, pionrecv.WithAudioSubscriberMonitor(audioMonitor))
 		}
 
-		remoteTrack, _, err := s.registry.BindPionTrack(trackRemote, receiver, opts...)
+		remoteTrack, err := media.BindPionRemoteTrack(trackRemote, receiver, opts...)
 		if err != nil {
 			s.recordFailure(fmt.Sprintf("validate: bind pion track %q: %v", trackRemote.ID(), err))
 			return
@@ -333,7 +331,7 @@ func (s *Session) PCOnTrack() func(*pc.Track, *pc.RTPReceiver, string) {
 			s.recordFailure("validate: nil pc remote track")
 			return
 		}
-		remoteTrack, _, err := s.registry.BindPCTrack(trackRemote, receiver, streamID)
+		remoteTrack, err := media.BindPCRemoteTrack(trackRemote, receiver, streamID)
 		if err != nil {
 			s.recordFailure(fmt.Sprintf("validate: bind pc track %q: %v", trackRemote.ID(), err))
 			return

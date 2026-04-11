@@ -177,75 +177,44 @@ func (f *fakePCRemoteTrack) emitAudioFrame(a *frame.AudioFrame) {
 	}
 }
 
-func TestRemoteStreamRegistryReusesMediaStreamForMatchingStreamID(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
+func TestBoundRemoteTrackPreservesStreamID(t *testing.T) {
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "stream-1", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
 	audioDecoded := newFakeDecodedRemoteTrack("remote-audio", "stream-1", webrtc.RTPCodecTypeAudio, codec.Opus, 111)
 
-	videoTrack, videoStreams, err := registry.bindSource(videoDecoded)
-	if err != nil {
-		t.Fatalf("bindSource(video) error = %v", err)
-	}
-	audioTrack, audioStreams, err := registry.bindSource(audioDecoded)
-	if err != nil {
-		t.Fatalf("bindSource(audio) error = %v", err)
-	}
+	videoTrack := bindTestRemoteTrack(t, videoDecoded)
+	audioTrack := bindTestRemoteTrack(t, audioDecoded)
 	t.Cleanup(func() {
 		videoTrack.Stop()
 		audioTrack.Stop()
 	})
 
-	if len(videoStreams) != 1 || len(audioStreams) != 1 {
-		t.Fatalf("stream counts = (%d, %d), want (1, 1)", len(videoStreams), len(audioStreams))
-	}
-	if videoStreams[0] != audioStreams[0] {
-		t.Fatal("expected matching stream IDs to reuse the same MediaStream instance")
-	}
-	if got := videoStreams[0].ID(); got != "stream-1" {
-		t.Fatalf("MediaStream ID = %q, want %q", got, "stream-1")
-	}
-	if got := len(videoStreams[0].GetTracks()); got != 2 {
-		t.Fatalf("GetTracks() len = %d, want 2", got)
-	}
 	if got := videoTrack.StreamID(); got != "stream-1" {
 		t.Fatalf("videoTrack.StreamID() = %q, want %q", got, "stream-1")
 	}
+	if got := audioTrack.StreamID(); got != "stream-1" {
+		t.Fatalf("audioTrack.StreamID() = %q, want %q", got, "stream-1")
+	}
 }
 
-func TestRemoteStreamRegistryBindSourceStartFailure(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
+func TestBindRemoteTrackSourceStartFailure(t *testing.T) {
 	startErr := errors.New("boom")
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "stream-1", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
 	videoDecoded.startErr = startErr
 
-	track, streams, err := registry.bindSource(videoDecoded)
+	track, err := bindRemoteTrackSource(videoDecoded)
 	if !errors.Is(err, startErr) {
-		t.Fatalf("bindSource() error = %v, want %v", err, startErr)
+		t.Fatalf("bindRemoteTrackSource() error = %v, want %v", err, startErr)
 	}
 	if track != nil {
-		t.Fatalf("bindSource() track = %#v, want nil", track)
-	}
-	if streams != nil {
-		t.Fatalf("bindSource() streams = %v, want nil", streams)
-	}
-	if got := len(registry.streams); got != 0 {
-		t.Fatalf("registry.streams len = %d, want 0", got)
+		t.Fatalf("bindRemoteTrackSource() track = %#v, want nil", track)
 	}
 	waitForCondition(t, 2*time.Second, func() bool { return videoDecoded.closed.Load() })
 }
 
 func TestPionRemoteTrackCloneFanoutAndStop(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
 
-	track, streams, err := registry.bindSource(videoDecoded)
-	if err != nil {
-		t.Fatalf("bindSource() error = %v", err)
-	}
-	if len(streams) != 0 {
-		t.Fatalf("streamless remote track should not create streams, got %d", len(streams))
-	}
-	videoTrack := track.(PionRemoteVideoTrack)
+	videoTrack := bindTestRemoteTrack(t, videoDecoded).(PionRemoteVideoTrack)
 	clone := videoTrack.Clone().(PionRemoteVideoTrack)
 
 	var (
@@ -296,14 +265,9 @@ func TestPionRemoteTrackCloneFanoutAndStop(t *testing.T) {
 }
 
 func TestPionRemoteTrackClonePreservesState(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
 
-	track, _, err := registry.bindSource(videoDecoded)
-	if err != nil {
-		t.Fatalf("bindSource() error = %v", err)
-	}
-	videoTrack := track.(PionRemoteVideoTrack)
+	videoTrack := bindTestRemoteTrack(t, videoDecoded).(PionRemoteVideoTrack)
 	videoTrack.SetEnabled(false)
 	videoTrack.Stop()
 
@@ -317,14 +281,9 @@ func TestPionRemoteTrackClonePreservesState(t *testing.T) {
 }
 
 func TestPionRemoteTrackLateCloneAfterLastStopStartsEnded(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
 
-	track, _, err := registry.bindSource(videoDecoded)
-	if err != nil {
-		t.Fatalf("bindSource() error = %v", err)
-	}
-	videoTrack := track.(PionRemoteVideoTrack)
+	videoTrack := bindTestRemoteTrack(t, videoDecoded).(PionRemoteVideoTrack)
 	view := remoteTrackViewFor(videoTrack)
 	if view == nil {
 		t.Fatal("remoteTrackViewFor(videoTrack) = nil")
@@ -340,14 +299,9 @@ func TestPionRemoteTrackLateCloneAfterLastStopStartsEnded(t *testing.T) {
 }
 
 func TestPionRemoteTrackCodecChangeAndNaturalEnd(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "stream-2", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
 
-	track, _, err := registry.bindSource(videoDecoded)
-	if err != nil {
-		t.Fatalf("bindSource() error = %v", err)
-	}
-	videoTrack := track.(PionRemoteVideoTrack)
+	videoTrack := bindTestRemoteTrack(t, videoDecoded).(PionRemoteVideoTrack)
 
 	changeCh := make(chan pionrecv.CodecChange, 1)
 	videoTrack.SetOnCodecChange(func(change pionrecv.CodecChange) {
@@ -383,29 +337,17 @@ func TestPionRemoteTrackCodecChangeAndNaturalEnd(t *testing.T) {
 }
 
 func TestPCRemoteTrackSingleStreamFanoutAndClose(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
 	videoSource := newFakePCRemoteTrack("remote-video", "video", "stream-a")
 
-	track, streams, err := registry.bindSource(videoSource)
-	if err != nil {
-		t.Fatalf("bindSource() error = %v", err)
-	}
-	videoTrack := track.(PCRemoteVideoTrack)
+	videoTrack := bindTestRemoteTrack(t, videoSource).(PCRemoteVideoTrack)
 	clone := videoTrack.Clone().(PCRemoteVideoTrack)
 	t.Cleanup(func() {
-		registry.Close()
+		videoTrack.Stop()
+		clone.Stop()
 	})
 
 	if got := videoTrack.StreamID(); got != "stream-a" {
 		t.Fatalf("StreamID() = %q, want %q", got, "stream-a")
-	}
-	if len(streams) != 1 {
-		t.Fatalf("streams len = %d, want 1", len(streams))
-	}
-	for _, stream := range streams {
-		if got := stream.GetTrackByID(videoTrack.ID()); got == nil {
-			t.Fatalf("expected track %q in stream %q", videoTrack.ID(), stream.ID())
-		}
 	}
 	if videoTrack.PCTrack() != videoSource.libTrack {
 		t.Fatal("PCTrack() did not expose underlying lib track")
@@ -441,96 +383,18 @@ func TestPCRemoteTrackSingleStreamFanoutAndClose(t *testing.T) {
 	waitForCondition(t, 2*time.Second, func() bool { return videoSource.closed.Load() })
 }
 
-func TestRemoteStreamRegistryCloseStopsTracks(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
-	videoSource := newFakePCRemoteTrack("remote-video", "video", "stream-a")
-
-	track, _, err := registry.bindSource(videoSource)
-	if err != nil {
-		t.Fatalf("bindSource() error = %v", err)
-	}
-	videoTrack := track.(PCRemoteVideoTrack)
-
-	registry.Close()
-
-	waitForCondition(t, 2*time.Second, func() bool { return videoSource.closed.Load() })
-	if got := videoTrack.ReadyState(); got != "ended" {
-		t.Fatalf("ReadyState() after registry.Close = %q, want ended", got)
-	}
-}
-
-func TestRemoteStreamRegistryBindDecodedTrackRejectsNil(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
-	if _, _, err := registry.BindDecodedTrack(nil); !errors.Is(err, ErrTrackNotFound) {
-		t.Fatalf("BindDecodedTrack(nil) error = %v, want %v", err, ErrTrackNotFound)
-	}
-}
-
-func TestRemoteStreamRegistryPCOnTrackErrorPath(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
-
-	var handlerCalled bool
-	errCh := make(chan error, 1)
-	callback := registry.PCOnTrack(func(PCTrackEvent) {
-		handlerCalled = true
-	}, func(err error) {
-		errCh <- err
-	})
-
-	callback(nil, nil, "")
-
-	select {
-	case err := <-errCh:
-		if !errors.Is(err, ErrTrackNotFound) {
-			t.Fatalf("PCOnTrack() error = %v, want %v", err, ErrTrackNotFound)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for PCOnTrack error callback")
-	}
-	if handlerCalled {
-		t.Fatal("PCOnTrack success handler should not run on bind error")
-	}
-}
-
-func TestRemoteStreamRegistryPionOnTrackErrorPath(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
-
-	var handlerCalled bool
-	errCh := make(chan error, 1)
-	callback := registry.PionOnTrack(func(PionTrackEvent) {
-		handlerCalled = true
-	}, func(err error) {
-		errCh <- err
-	})
-
-	callback(nil, nil)
-
-	select {
-	case err := <-errCh:
-		if !errors.Is(err, pionrecv.ErrNilTrack) {
-			t.Fatalf("PionOnTrack() error = %v, want %v", err, pionrecv.ErrNilTrack)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for PionOnTrack error callback")
-	}
-	if handlerCalled {
-		t.Fatal("PionOnTrack success handler should not run on bind error")
+func TestBindDecodedRemoteTrackRejectsNil(t *testing.T) {
+	if _, err := BindDecodedRemoteTrack(nil); !errors.Is(err, ErrTrackNotFound) {
+		t.Fatalf("BindDecodedRemoteTrack(nil) error = %v, want %v", err, ErrTrackNotFound)
 	}
 }
 
 func TestRemoteFrameSourceIgnoresNilFrames(t *testing.T) {
-	registry := NewRemoteStreamRegistry()
 	videoDecoded := newFakeDecodedRemoteTrack("remote-video", "stream-1", webrtc.RTPCodecTypeVideo, codec.VP8, 96)
 	audioDecoded := newFakeDecodedRemoteTrack("remote-audio", "stream-1", webrtc.RTPCodecTypeAudio, codec.Opus, 111)
 
-	videoTrack, _, err := registry.bindSource(videoDecoded)
-	if err != nil {
-		t.Fatalf("bindSource(video) error = %v", err)
-	}
-	audioTrack, _, err := registry.bindSource(audioDecoded)
-	if err != nil {
-		t.Fatalf("bindSource(audio) error = %v", err)
-	}
+	videoTrack := bindTestRemoteTrack(t, videoDecoded)
+	audioTrack := bindTestRemoteTrack(t, audioDecoded)
 
 	var videoFrames, audioFrames int
 	if err := videoTrack.(RemoteVideoTrack).SetOnVideoFrame(func(*frame.VideoFrame) { videoFrames++ }); err != nil {
@@ -546,6 +410,16 @@ func TestRemoteFrameSourceIgnoresNilFrames(t *testing.T) {
 	if videoFrames != 0 || audioFrames != 0 {
 		t.Fatalf("nil frame dispatch counts = (%d, %d), want (0, 0)", videoFrames, audioFrames)
 	}
+}
+
+func bindTestRemoteTrack(t *testing.T, source remoteFrameTrack) RemoteTrack {
+	t.Helper()
+
+	track, err := bindRemoteTrackSource(source)
+	if err != nil {
+		t.Fatalf("bindRemoteTrackSource() error = %v", err)
+	}
+	return track
 }
 
 func waitForCondition(t *testing.T, timeout time.Duration, predicate func() bool) {

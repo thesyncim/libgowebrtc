@@ -81,190 +81,45 @@ type PCRemoteAudioTrack interface {
 	PCRemoteTrack
 }
 
-// RemoteTrackEvent mirrors the browser ontrack event payload after it has been
-// normalized into browser-like MediaStream objects.
-type RemoteTrackEvent struct {
-	Track   RemoteTrack    // Track is the normalized browser-like remote track.
-	Streams []*MediaStream // Streams are the stable MediaStream views associated with Track.
-}
-
-// PionTrackEvent is the browser-like remote track event for low-level Pion
-// OnTrack handlers.
-type PionTrackEvent struct {
-	RemoteTrackEvent
-	TrackRemote *webrtc.TrackRemote // TrackRemote is the original Pion TrackRemote.
-	Receiver    *webrtc.RTPReceiver // Receiver is the original Pion RTPReceiver, when available.
-}
-
-// PCTrackEvent is the browser-like remote track event for native pkg/pc
-// SetOnTrack handlers.
-type PCTrackEvent struct {
-	RemoteTrackEvent
-	PCTrack  *pc.Track       // PCTrack is the original pkg/pc remote track wrapper.
-	Receiver *pc.RTPReceiver // Receiver is the original pkg/pc RTPReceiver wrapper.
-}
-
-// RemoteStreamRegistry groups incoming remote tracks into stable MediaStream
-// instances keyed by their remote stream IDs, mirroring browser ontrack events.
-type RemoteStreamRegistry struct {
-	mu      sync.Mutex
-	streams map[string]*MediaStream
-}
-
-// NewRemoteStreamRegistry creates a registry for browser-like remote streams.
-func NewRemoteStreamRegistry() *RemoteStreamRegistry {
-	return &RemoteStreamRegistry{
-		streams: make(map[string]*MediaStream),
-	}
-}
-
-// BindPionTrack binds a Pion OnTrack pair into a browser-like remote track and
-// the stable MediaStreams it belongs to.
-func (r *RemoteStreamRegistry) BindPionTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, opts ...pionrecv.Option) (RemoteTrack, []*MediaStream, error) {
+// BindPionRemoteTrack binds a Pion OnTrack pair into a browser-like remote
+// track wrapper without inventing stream-grouping state.
+func BindPionRemoteTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, opts ...pionrecv.Option) (RemoteTrack, error) {
 	decoded, err := pionrecv.BindRemoteTrack(track, receiver, opts...)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return r.bindSource(&decodedTrackAdapter{decoded: decoded})
+	return bindRemoteTrackSource(&decodedTrackAdapter{decoded: decoded})
 }
 
-// BindDecodedTrack binds a caller-managed pionrecv.DecodedTrack into the same
-// browser-like remote track and MediaStream model used by BindPionTrack.
-func (r *RemoteStreamRegistry) BindDecodedTrack(decoded *pionrecv.DecodedTrack) (RemoteTrack, []*MediaStream, error) {
+// BindDecodedRemoteTrack binds a caller-managed pionrecv.DecodedTrack into the
+// browser-like remote track wrapper used by BindPionRemoteTrack.
+func BindDecodedRemoteTrack(decoded *pionrecv.DecodedTrack) (RemoteTrack, error) {
 	if decoded == nil {
-		return nil, nil, ErrTrackNotFound
+		return nil, ErrTrackNotFound
 	}
-	return r.bindSource(&decodedTrackAdapter{decoded: decoded})
+	return bindRemoteTrackSource(&decodedTrackAdapter{decoded: decoded})
 }
 
-// BindPCTrack binds a libwebrtc-backed pkg/pc track event into the same
-// browser-like remote track and MediaStream model used by BindPionTrack.
-func (r *RemoteStreamRegistry) BindPCTrack(track *pc.Track, receiver *pc.RTPReceiver, streamID string) (RemoteTrack, []*MediaStream, error) {
+// BindPCRemoteTrack binds a libwebrtc-backed pkg/pc track into the same
+// browser-like remote track wrapper used by BindPionRemoteTrack.
+func BindPCRemoteTrack(track *pc.Track, receiver *pc.RTPReceiver, streamID string) (RemoteTrack, error) {
 	if track == nil {
-		return nil, nil, ErrTrackNotFound
+		return nil, ErrTrackNotFound
 	}
-	return r.bindSource(newPCTrackAdapter(track, receiver, streamID))
+	return bindRemoteTrackSource(newPCTrackAdapter(track, receiver, streamID))
 }
 
-// PionOnTrack adapts a low-level Pion OnTrack callback into the browser-like
-// RemoteTrackEvent model used by this package. When a receiver transport is
-// available it automatically enables PLI requests via pionrecv.WithRTCPWriter
-// before applying any caller-provided options.
-func (r *RemoteStreamRegistry) PionOnTrack(
-	handler func(PionTrackEvent),
-	onError func(error),
-	opts ...pionrecv.Option,
-) func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-	return func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		bindOpts := make([]pionrecv.Option, 0, len(opts)+1)
-		if receiver != nil && receiver.Transport() != nil {
-			bindOpts = append(bindOpts, pionrecv.WithRTCPWriter(receiver.Transport()))
-		}
-		bindOpts = append(bindOpts, opts...)
-
-		remoteTrack, streams, err := r.BindPionTrack(track, receiver, bindOpts...)
-		if err != nil {
-			if onError != nil {
-				onError(err)
-			}
-			return
-		}
-		if handler == nil {
-			return
-		}
-		handler(PionTrackEvent{
-			RemoteTrackEvent: RemoteTrackEvent{
-				Track:   remoteTrack,
-				Streams: append([]*MediaStream(nil), streams...),
-			},
-			TrackRemote: track,
-			Receiver:    receiver,
-		})
-	}
-}
-
-// PCOnTrack adapts a pkg/pc SetOnTrack callback into the browser-like
-// RemoteTrackEvent model used by this package.
-func (r *RemoteStreamRegistry) PCOnTrack(
-	handler func(PCTrackEvent),
-	onError func(error),
-) func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
-	return func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
-		remoteTrack, mediaStreams, err := r.BindPCTrack(track, receiver, streamID)
-		if err != nil {
-			if onError != nil {
-				onError(err)
-			}
-			return
-		}
-		if handler == nil {
-			return
-		}
-		handler(PCTrackEvent{
-			RemoteTrackEvent: RemoteTrackEvent{
-				Track:   remoteTrack,
-				Streams: append([]*MediaStream(nil), mediaStreams...),
-			},
-			PCTrack:  track,
-			Receiver: receiver,
-		})
-	}
-}
-
-// Close stops all bound remote tracks and forgets the cached MediaStreams.
-func (r *RemoteStreamRegistry) Close() {
-	r.mu.Lock()
-	streams := make([]*MediaStream, 0, len(r.streams))
-	for _, stream := range r.streams {
-		streams = append(streams, stream)
-	}
-	r.streams = make(map[string]*MediaStream)
-	r.mu.Unlock()
-
-	seenTracks := make(map[MediaStreamTrack]struct{})
-	for _, stream := range streams {
-		for _, track := range stream.GetTracks() {
-			if _, ok := seenTracks[track]; ok {
-				continue
-			}
-			seenTracks[track] = struct{}{}
-			track.Stop()
-		}
-	}
-}
-
-func (r *RemoteStreamRegistry) bindSource(source remoteFrameTrack) (RemoteTrack, []*MediaStream, error) {
+func bindRemoteTrackSource(source remoteFrameTrack) (RemoteTrack, error) {
 	input, err := newRemoteFrameSource(source)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	view := input.newTrack(source.ID())
 	if err := input.start(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	streams := r.streamsForTrack(view)
-	return view, streams, nil
-}
-
-func (r *RemoteStreamRegistry) streamsForTrack(track RemoteTrack) []*MediaStream {
-	streamID := strings.TrimSpace(track.StreamID())
-	if streamID == "" {
-		return []*MediaStream{}
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	stream, ok := r.streams[streamID]
-	if !ok {
-		stream = newMediaStreamWithID(streamID)
-		r.streams[streamID] = stream
-	}
-	if stream.GetTrackByID(track.ID()) == nil {
-		stream.AddTrack(track)
-	}
-	return []*MediaStream{stream}
+	return view, nil
 }
 
 type remoteFrameTrack interface {
