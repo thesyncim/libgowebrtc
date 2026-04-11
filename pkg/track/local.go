@@ -946,14 +946,8 @@ func NewAudioTrack(cfg AudioTrackConfig) (*AudioTrack, error) {
 	if cfg.ID == "" {
 		return nil, ErrInvalidConfig
 	}
-	if cfg.SampleRate == 0 {
-		cfg.SampleRate = 48000
-	}
-	if cfg.Channels == 0 {
-		cfg.Channels = 2
-	}
-	if cfg.Bitrate == 0 {
-		cfg.Bitrate = 64000
+	if cfg.SampleRate <= 0 || cfg.Channels <= 0 || cfg.Bitrate == 0 {
+		return nil, ErrInvalidConfig
 	}
 	if cfg.MTU == 0 {
 		cfg.MTU = 1200
