@@ -470,7 +470,7 @@ peerConnection.OnConnectionStateChange = func(state pc.PeerConnectionState) {
 
 // Add tracks (like browser's addTrack)
 videoTrack, _ := peerConnection.CreateVideoTrack("video-0", codec.VP9)
-audioTrack, _ := peerConnection.CreateAudioTrack("audio-0")
+audioTrack, _ := peerConnection.CreateAudioTrackWithOptions("audio-0", 48000, 2)
 
 sender, _ := peerConnection.AddTrack(videoTrack, "stream-0")
 peerConnection.AddTrack(audioTrack, "stream-0")

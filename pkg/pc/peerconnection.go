@@ -1773,12 +1773,6 @@ func (pc *PeerConnection) CreateVideoTrack(id string, width, height int) (*Track
 	return track, nil
 }
 
-// CreateAudioTrack creates an audio track for this peer connection.
-// Uses 48kHz stereo by default (can be overridden with CreateAudioTrackWithOptions).
-func (pc *PeerConnection) CreateAudioTrack(id string) (*Track, error) {
-	return pc.CreateAudioTrackWithOptions(id, 48000, 2)
-}
-
 // CreateAudioTrackWithOptions creates an audio track with specific sample rate and channels.
 func (pc *PeerConnection) CreateAudioTrackWithOptions(id string, sampleRate, channels int) (*Track, error) {
 	if sampleRate <= 0 || channels <= 0 || channels > 2 {

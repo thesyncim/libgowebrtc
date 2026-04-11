@@ -69,7 +69,7 @@ func TestAudioTrackRoundtrip(t *testing.T) {
 	})
 
 	// Create libwebrtc audio track (native)
-	libTrack, err := pp.Lib.CreateAudioTrack("audio-interop-test")
+	libTrack, err := pp.Lib.CreateAudioTrackWithOptions("audio-interop-test", 48000, 2)
 	if err != nil {
 		t.Fatalf("Failed to create libwebrtc audio track: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestAudioAndVideoTogether(t *testing.T) {
 	}
 
 	// Create audio track on libwebrtc
-	libAudioTrack, err := pp.Lib.CreateAudioTrack("audio-combined")
+	libAudioTrack, err := pp.Lib.CreateAudioTrackWithOptions("audio-combined", 48000, 2)
 	if err != nil {
 		t.Fatalf("Failed to create audio track: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestAudioTrackWithICE(t *testing.T) {
 	defer pp.Close()
 
 	// Create audio track on libwebrtc
-	libAudioTrack, err := pp.Lib.CreateAudioTrack("audio-ice-test")
+	libAudioTrack, err := pp.Lib.CreateAudioTrackWithOptions("audio-ice-test", 48000, 2)
 	if err != nil {
 		t.Fatalf("Failed to create audio track: %v", err)
 	}

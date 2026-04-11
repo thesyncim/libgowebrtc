@@ -21,7 +21,7 @@ func TestVideoAndAudioTrackReception(t *testing.T) {
 	}
 	pp.Sender.AddTrack(videoTrack, "stream-0")
 
-	audioTrack, err := pp.Sender.CreateAudioTrack("audio-multi")
+	audioTrack, err := pp.Sender.CreateAudioTrackWithOptions("audio-multi", 48000, 2)
 	if err != nil {
 		t.Fatalf("CreateAudioTrack failed: %v", err)
 	}

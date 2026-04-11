@@ -467,7 +467,7 @@ func TestMultipleTracks(t *testing.T) {
 	pc.AddTrack(videoTrack, "stream-0")
 
 	// Add audio track
-	audioTrack, _ := pc.CreateAudioTrack("audio-0")
+	audioTrack, _ := pc.CreateAudioTrackWithOptions("audio-0", 48000, 2)
 	pc.AddTrack(audioTrack, "stream-0")
 
 	// Verify both tracks

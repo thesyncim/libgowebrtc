@@ -670,7 +670,7 @@ func TestMultipleTracksInterop(t *testing.T) {
 	}
 
 	// Create audio track on lib
-	audioTrack, err := pp.Lib.CreateAudioTrack("audio-multi")
+	audioTrack, err := pp.Lib.CreateAudioTrackWithOptions("audio-multi", 48000, 2)
 	if err != nil {
 		t.Fatalf("Failed to create audio track: %v", err)
 	}

@@ -60,7 +60,7 @@ func TestAudioTrackCreation(t *testing.T) {
 	defer p.Close()
 
 	// Create audio track
-	track, err := p.CreateAudioTrack("audio-test")
+	track, err := p.CreateAudioTrackWithOptions("audio-test", 48000, 2)
 	if err != nil {
 		t.Fatalf("CreateAudioTrack failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestAudioFrameWrite(t *testing.T) {
 	defer p.Close()
 
 	// Create and add audio track
-	track, err := p.CreateAudioTrack("audio-write")
+	track, err := p.CreateAudioTrackWithOptions("audio-write", 48000, 2)
 	if err != nil {
 		t.Fatalf("CreateAudioTrack failed: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestOfferAnswerWithTracks(t *testing.T) {
 	}
 
 	// Add audio track to sender
-	audioTrack, err := pp.Sender.CreateAudioTrack("audio-0")
+	audioTrack, err := pp.Sender.CreateAudioTrackWithOptions("audio-0", 48000, 2)
 	if err != nil {
 		t.Fatalf("CreateAudioTrack failed: %v", err)
 	}
@@ -427,7 +427,7 @@ func BenchmarkAudioFrameWrite(b *testing.B) {
 	p, _ := pc.NewPeerConnection(defaultTestConfig())
 	defer p.Close()
 
-	track, _ := p.CreateAudioTrack("audio-bench")
+	track, _ := p.CreateAudioTrackWithOptions("audio-bench", 48000, 2)
 	p.AddTrack(track, "stream-0")
 
 	frame := CreateTestAudioFrame(48000, 2, 480, 0)
