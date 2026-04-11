@@ -901,12 +901,7 @@ func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []Scr
 		FrameRate: frameRate,
 	}
 
-	label := "screen-capture"
-	if target.IsWindow {
-		label = "window-capture"
-	}
-
-	return settings, videoConstraints, displayConstraints, label, nil
+	return settings, videoConstraints, displayConstraints, target.Title, nil
 }
 
 func validateVideoConstraints(c VideoConstraints) error {
