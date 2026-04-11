@@ -127,8 +127,11 @@ func TestGetUserMediaReturnsCaptureNotSupportedWhenLoadFails(t *testing.T) {
 
 	stream, err := GetUserMedia(Constraints{
 		Video: &VideoConstraints{
-			Width: ExactInt(640),
-			Codec: codec.VP8,
+			Width:     ExactInt(640),
+			Height:    ExactInt(480),
+			FrameRate: ExactFloat(30),
+			Codec:     codec.VP8,
+			Bitrate:   500_000,
 		},
 	})
 	if !errors.Is(err, ErrCaptureNotSupported) {
@@ -250,6 +253,62 @@ func TestGetUserMediaRejectsMissingVideoBitrate(t *testing.T) {
 	}
 }
 
+func TestGetUserMediaRejectsMissingVideoDimensionsOrFramerate(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
+			return []ffi.DeviceInfo{
+				{DeviceID: "cam-1", Label: "Front Camera", Kind: ffi.DeviceKindVideoInput},
+			}, nil
+		},
+	})
+
+	cases := []struct {
+		name  string
+		video VideoConstraints
+	}{
+		{
+			name: "missing width",
+			video: VideoConstraints{
+				Height:    ExactInt(480),
+				FrameRate: ExactFloat(30),
+				Codec:     codec.VP8,
+				Bitrate:   500_000,
+			},
+		},
+		{
+			name: "missing height",
+			video: VideoConstraints{
+				Width:     ExactInt(640),
+				FrameRate: ExactFloat(30),
+				Codec:     codec.VP8,
+				Bitrate:   500_000,
+			},
+		},
+		{
+			name: "missing frame rate",
+			video: VideoConstraints{
+				Width:   ExactInt(640),
+				Height:  ExactInt(480),
+				Codec:   codec.VP8,
+				Bitrate: 500_000,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stream, err := GetUserMedia(Constraints{Video: &tc.video})
+			if !errors.Is(err, ErrInvalidConstraints) {
+				t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+			}
+			if stream != nil {
+				t.Fatal("GetUserMedia() stream = non-nil, want nil")
+			}
+		})
+	}
+}
+
 func TestGetUserMediaRejectsMissingVideoCodec(t *testing.T) {
 	installMediaFFIStubs(t, mediaFFIStubs{
 		loadLibrary: func() error { return nil },
@@ -312,8 +371,12 @@ func TestGetUserMediaMissingExactDeviceReturnsOverconstrained(t *testing.T) {
 
 	stream, err := GetUserMedia(Constraints{
 		Video: &VideoConstraints{
-			DeviceID: ExactString("cam-404"),
-			Codec:    codec.VP8,
+			DeviceID:  ExactString("cam-404"),
+			Width:     ExactInt(640),
+			Height:    ExactInt(480),
+			FrameRate: ExactFloat(30),
+			Codec:     codec.VP8,
+			Bitrate:   500_000,
 		},
 	})
 	if stream != nil {
@@ -474,6 +537,15 @@ func TestBuildVideoTrackConfigPrefersCodecPreferences(t *testing.T) {
 	if resolved.Bitrate != 500_000 {
 		t.Fatalf("resolved.Bitrate = %d, want %d", resolved.Bitrate, 500_000)
 	}
+	if got := resolved.Width; !got.IsExact() || got.Exact == nil || *got.Exact != 640 {
+		t.Fatalf("resolved.Width = %+v, want exact 640", got)
+	}
+	if got := resolved.Height; !got.IsExact() || got.Exact == nil || *got.Exact != 480 {
+		t.Fatalf("resolved.Height = %+v, want exact 480", got)
+	}
+	if got := resolved.FrameRate; !got.IsExact() || got.Exact == nil || *got.Exact != 30 {
+		t.Fatalf("resolved.FrameRate = %+v, want exact 30", got)
+	}
 }
 
 func TestNewVideoStreamTrackOptsInToAutoAdaptation(t *testing.T) {
@@ -544,5 +616,11 @@ func TestBuildAudioTrackConfigPreservesCodecPreferences(t *testing.T) {
 	}
 	if resolved.Bitrate != 64_000 {
 		t.Fatalf("resolved.Bitrate = %d, want %d", resolved.Bitrate, 64_000)
+	}
+	if got := resolved.SampleRate; !got.IsExact() || got.Exact == nil || *got.Exact != 48_000 {
+		t.Fatalf("resolved.SampleRate = %+v, want exact 48000", got)
+	}
+	if got := resolved.ChannelCount; !got.IsExact() || got.Exact == nil || *got.Exact != 2 {
+		t.Fatalf("resolved.ChannelCount = %+v, want exact 2", got)
 	}
 }
