@@ -10,7 +10,6 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
-	"github.com/thesyncim/libgowebrtc/pkg/media"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
@@ -20,8 +19,7 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
 
-	registry := media.NewRemoteStreamRegistry()
-	session := validate.NewPCSession(pp.Receiver, registry, validate.SessionConfig{
+	session := validate.NewPCSession(pp.Receiver, validate.SessionConfig{
 		Browser:                 pioncodec.BrowserChrome,
 		StatsPollInterval:       50 * time.Millisecond,
 		EventHistory:            64,
