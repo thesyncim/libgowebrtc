@@ -22,7 +22,11 @@ func TestNewPeerConnectionRejectsImplicitConfiguration(t *testing.T) {
 }
 
 func TestValidateConfigurationAllowsDefaultConfiguration(t *testing.T) {
-	if err := validateConfiguration(DefaultConfiguration()); err != nil {
+	cfg := DefaultConfiguration()
+	if len(cfg.ICEServers) != 0 {
+		t.Fatalf("DefaultConfiguration().ICEServers len = %d, want 0", len(cfg.ICEServers))
+	}
+	if err := validateConfiguration(cfg); err != nil {
 		t.Fatalf("validateConfiguration(DefaultConfiguration()) = %v, want nil", err)
 	}
 }

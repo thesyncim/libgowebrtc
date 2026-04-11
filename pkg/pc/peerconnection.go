@@ -113,9 +113,6 @@ const (
 // DefaultConfiguration returns a default configuration.
 func DefaultConfiguration() webrtc.Configuration {
 	return webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
 		BundlePolicy:       webrtc.BundlePolicyBalanced,
 		RTCPMuxPolicy:      webrtc.RTCPMuxPolicyRequire,
 		ICETransportPolicy: webrtc.ICETransportPolicyAll,
