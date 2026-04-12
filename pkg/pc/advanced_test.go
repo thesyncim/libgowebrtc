@@ -360,7 +360,7 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 	}
 	_ = videoSender.GetParameters()
 
-	audioTrack, err := pc.CreateAudioTrack("audio-real")
+	audioTrack, err := pc.CreateAudioTrackWithOptions("audio-real", 48000, 2)
 	if err != nil {
 		t.Fatalf("CreateAudioTrack: %v", err)
 	}

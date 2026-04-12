@@ -324,7 +324,7 @@ func CreateTestVideoTrack(t *testing.T, p *pc.PeerConnection, id string, c codec
 // CreateTestAudioTrack creates an audio track for testing.
 func CreateTestAudioTrack(t *testing.T, p *pc.PeerConnection, id string) *pc.Track {
 	t.Helper()
-	track, err := p.CreateAudioTrack(id)
+	track, err := p.CreateAudioTrackWithOptions(id, 48000, 2)
 	if err != nil {
 		t.Fatalf("CreateAudioTrack failed: %v", err)
 	}

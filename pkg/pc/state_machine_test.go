@@ -392,7 +392,7 @@ func TestPeerConnection_Track_VideoTrackCreation(t *testing.T) {
 func TestPeerConnection_Track_AudioTrackCreation(t *testing.T) {
 	pc := &PeerConnection{}
 
-	track, err := pc.CreateAudioTrack("audio-1")
+	track, err := pc.CreateAudioTrackWithOptions("audio-1", 48000, 2)
 	if err != nil {
 		t.Fatalf("CreateAudioTrack: %v", err)
 	}
