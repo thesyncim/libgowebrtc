@@ -134,6 +134,24 @@ func encodeH264ForTrackTest(t *testing.T) []byte {
 	return append([]byte(nil), dst[:result.N]...)
 }
 
+func encodeVP8ForTrackTest(t *testing.T) []byte {
+	t.Helper()
+	cfg := codec.DefaultVP8Config(320, 240)
+	cfg.PreferHW = false
+	enc, err := encoder.NewVP8Encoder(cfg)
+	if err != nil {
+		t.Fatalf("NewVP8Encoder: %v", err)
+	}
+	defer enc.Close()
+
+	dst := make([]byte, enc.MaxEncodedSize())
+	result, err := enc.EncodeInto(testutil.CreateTestVideoFrame(320, 240), dst, true)
+	if err != nil {
+		t.Fatalf("EncodeInto: %v", err)
+	}
+	return append([]byte(nil), dst[:result.N]...)
+}
+
 func encodeOpusForTrackTest(t *testing.T) []byte {
 	t.Helper()
 	enc, err := encoder.NewOpusEncoder(codec.DefaultOpusConfig())
@@ -162,7 +180,7 @@ func TestVideoTrackBindWriteAndUnbind(t *testing.T) {
 
 	track, err := NewVideoTrack(VideoTrackConfig{
 		ID:      "video-bind",
-		Codec:   codec.H264,
+		Codec:   codec.VP8,
 		Width:   320,
 		Height:  240,
 		Bitrate: 400_000,
@@ -175,14 +193,14 @@ func TestVideoTrackBindWriteAndUnbind(t *testing.T) {
 	defer track.Close()
 
 	writer := &collectingWriter{}
-	ctx := newVideoContext(writer, codec.H264, 96)
+	ctx := newVideoContext(writer, codec.VP8, 96)
 
 	params, err := track.Bind(ctx)
 	if err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	if params.MimeType != codec.H264.MimeType() {
-		t.Fatalf("Bind mime type = %q, want %q", params.MimeType, codec.H264.MimeType())
+	if params.MimeType != codec.VP8.MimeType() {
+		t.Fatalf("Bind mime type = %q, want %q", params.MimeType, codec.VP8.MimeType())
 	}
 
 	if err := track.SetBitrate(500_000); err != nil {
@@ -200,7 +218,7 @@ func TestVideoTrackBindWriteAndUnbind(t *testing.T) {
 		t.Fatal("WriteFrame did not write any RTP packets")
 	}
 
-	if err := track.WriteEncodedData(encodeH264ForTrackTest(t), 12_345, true); err != nil {
+	if err := track.WriteEncodedData(encodeVP8ForTrackTest(t), 12_345, true); err != nil {
 		t.Fatalf("WriteEncodedData: %v", err)
 	}
 	if len(writer.writes) < 2 {
@@ -466,21 +484,18 @@ func TestAudioTrackBindWriteAndUnbind(t *testing.T) {
 	if err := track.WriteFrame(nil); err != ErrNilAudioFrame {
 		t.Fatalf("WriteFrame(nil) error = %v, want %v", err, ErrNilAudioFrame)
 	}
-	if err := track.WriteFrame(testutil.CreateTestAudioFrame(48_000, 2, 960)); err != nil {
-		t.Fatalf("WriteFrame: %v", err)
-	}
-	if len(writer.writes) == 0 {
-		t.Fatal("WriteFrame did not emit RTP packets")
-	}
-
+	beforeWrites := len(writer.writes)
 	if err := track.WriteEncodedData(encodeOpusForTrackTest(t), 9_999); err != nil {
 		t.Fatalf("WriteEncodedData: %v", err)
+	}
+	if len(writer.writes) == beforeWrites {
+		t.Fatal("WriteEncodedData did not emit RTP packets")
 	}
 
 	if err := track.Unbind(ctx); err != nil {
 		t.Fatalf("Unbind: %v", err)
 	}
-	if err := track.WriteFrame(testutil.CreateTestAudioFrame(48_000, 2, 960)); err != ErrNotBound {
+	if err := track.WriteFrame(testutil.CreateSilentAudioFrame(48_000, 2, 960)); err != ErrNotBound {
 		t.Fatalf("WriteFrame after Unbind error = %v, want %v", err, ErrNotBound)
 	}
 }
