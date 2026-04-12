@@ -16,7 +16,6 @@ import (
 	libcodec "github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
 )
 
@@ -34,7 +33,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	defer pp.Close()
 
 	session := validate.NewPCSession(pp.Lib, validate.SessionConfig{
-		Browser:                 pioncodec.BrowserChrome,
+		Profile:                 validate.ProfileChrome,
 		StatsPollInterval:       audioCodecSwitchStatsPollInterval,
 		EventHistory:            64,
 		SwitchRecoveryThreshold: 4 * time.Second,

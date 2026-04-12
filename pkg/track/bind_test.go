@@ -12,6 +12,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
+	"github.com/thesyncim/libgowebrtc/pkg/packetizer"
 )
 
 type collectingWriter struct {
@@ -75,6 +76,47 @@ func (c *fakeTrackContext) ID() string {
 func (c *fakeTrackContext) RTCPReader() interceptor.RTCPReader {
 	return nil
 }
+
+type fakeVideoEncoder struct {
+	results []encoder.EncodeResult
+	calls   int
+}
+
+func (e *fakeVideoEncoder) EncodeInto(*frame.VideoFrame, []byte, bool) (encoder.EncodeResult, error) {
+	if e.calls >= len(e.results) {
+		return encoder.EncodeResult{}, nil
+	}
+	result := e.results[e.calls]
+	e.calls++
+	return result, nil
+}
+
+func (e *fakeVideoEncoder) MaxEncodedSize() int { return 16 }
+func (e *fakeVideoEncoder) SetBitrate(uint32) error {
+	return nil
+}
+func (e *fakeVideoEncoder) SetFramerate(float64) error {
+	return nil
+}
+func (e *fakeVideoEncoder) RequestKeyFrame()  {}
+func (e *fakeVideoEncoder) Codec() codec.Type { return codec.VP8 }
+func (e *fakeVideoEncoder) Close() error      { return nil }
+
+type fakePacketizer struct {
+	calls int
+}
+
+func (p *fakePacketizer) PacketizeInto([]byte, uint32, bool, []byte, []packetizer.PacketInfo) (int, error) {
+	p.calls++
+	return 0, nil
+}
+
+func (p *fakePacketizer) MaxPackets(int) int { return 1 }
+func (p *fakePacketizer) MaxPacketSize() int { return 1200 }
+func (p *fakePacketizer) SequenceNumber() uint16 {
+	return 0
+}
+func (p *fakePacketizer) Close() error { return nil }
 
 func newVideoContext(writer webrtc.TrackLocalWriter, codecType codec.Type, payloadType uint8) webrtc.TrackLocalContext {
 	return &fakeTrackContext{
@@ -378,11 +420,42 @@ func TestVideoTrackBindSelectsPreferredCodecFromPreferences(t *testing.T) {
 	if track.codec != codec.VP8 {
 		t.Fatalf("track.codec after Bind = %v, want %v", track.codec, codec.VP8)
 	}
-	if err := track.WriteFrame(testutil.CreateTestVideoFrame(320, 240), true); err != nil {
-		t.Fatalf("WriteFrame: %v", err)
+	src := testutil.CreateTestVideoFrame(320, 240)
+	for attempt := 0; attempt < 4 && len(writer.writes) == 0; attempt++ {
+		if err := track.WriteFrame(src, attempt == 0); err != nil {
+			t.Fatalf("WriteFrame attempt %d: %v", attempt, err)
+		}
 	}
 	if len(writer.writes) == 0 {
 		t.Fatal("expected RTP writes after preset-backed bind")
+	}
+}
+
+func TestVideoTrackWriteFrameIgnoresZeroByteEncoderOutput(t *testing.T) {
+	track := &VideoTrack{
+		id:        "video-warmup",
+		codec:     codec.VP8,
+		config:    VideoTrackConfig{MTU: 1200},
+		enc:       &fakeVideoEncoder{results: []encoder.EncodeResult{{N: 0, IsKeyframe: true}}},
+		pkt:       &fakePacketizer{},
+		writer:    &collectingWriter{},
+		encBuf:    make([]byte, 16),
+		packetBuf: make([]byte, 16),
+	}
+	track.bound.Store(true)
+
+	if err := track.WriteFrame(testutil.CreateTestVideoFrame(320, 240), true); err != nil {
+		t.Fatalf("WriteFrame: %v", err)
+	}
+
+	if track.enc.(*fakeVideoEncoder).calls != 1 {
+		t.Fatalf("encoder calls = %d, want 1", track.enc.(*fakeVideoEncoder).calls)
+	}
+	if track.pkt.(*fakePacketizer).calls != 0 {
+		t.Fatalf("packetizer calls = %d, want 0", track.pkt.(*fakePacketizer).calls)
+	}
+	if got := len(track.writer.(*collectingWriter).writes); got != 0 {
+		t.Fatalf("writer writes = %d, want 0", got)
 	}
 }
 

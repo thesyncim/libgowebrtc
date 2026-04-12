@@ -1,9 +1,8 @@
-// Package validate provides browser-style media validation helpers for testkit
-// use in Go
+// Package validate provides explicit validation helpers for Go
 // publisher/subscriber topologies, including:
 //   - session snapshots and waiters for connection, media, and data-channel state
 //   - subscriber-visible audio/video continuity monitoring
-//   - browser-profile policy gating for Chrome, Firefox, and Safari-shaped tests
+//   - validation-profile policy gating for Chrome-, Firefox-, and Safari-like tests
 //   - scenario scripting for layer switches, renegotiation hooks, and impairments
 //   - an ICE-edge UDP relay for black-box SFU network impairment testing
 //

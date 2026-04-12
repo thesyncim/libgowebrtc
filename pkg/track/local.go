@@ -323,6 +323,9 @@ func (t *VideoTrack) WriteFrame(f *frame.VideoFrame, forceKeyframe bool) error {
 	if err != nil {
 		return err
 	}
+	if result.N == 0 {
+		return nil
+	}
 
 	// Convert PTS to RTP timestamp
 	rtpTimestamp := uint32(f.PTS)

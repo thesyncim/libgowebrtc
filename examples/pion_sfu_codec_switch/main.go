@@ -5,7 +5,7 @@
 //  2. Negotiating the full codec envelope once, up front
 //  3. Relaying raw RTP through a Pion "SFU" without renegotiation
 //  4. Consuming and validating the changing codec stream with libgowebrtc's
-//     browser-style session validator on the subscriber side
+//     explicit subscriber validation harness on the subscriber side
 //
 // Run:
 //
@@ -32,7 +32,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/packetizer"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
 	libtrack "github.com/thesyncim/libgowebrtc/pkg/track"
 )
@@ -113,8 +112,8 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	log.Printf("Starting libgowebrtc <-> Pion SFU codec-switch example")
 	log.Printf("Codec cycle: %s", joinCodecNames(codecCycle))
 	log.Printf("Codec switches reuse the first negotiation only; no renegotiation is performed")
-	log.Printf("Subscriber decode envelope is derived from the Chrome browser preset and then filtered to the active cycle")
-	log.Printf("Subscriber validation is browser-style: each codec hop must be observed end-to-end and resume frame delivery")
+	log.Printf("Subscriber decode envelope is explicit and pinned to the active codec cycle")
+	log.Printf("Subscriber validation is explicit: each codec hop must be observed end-to-end and resume frame delivery")
 
 	errCh := make(chan error, 8)
 	reportAsyncError := func(label string, err error) {
@@ -206,7 +205,7 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 		return exampleStats{}, fmt.Errorf("set subscriber codec preferences: %w", err)
 	}
 	subscriberValidator = validate.NewPionSession(subscriberPC, validate.SessionConfig{
-		Browser:                 pioncodec.BrowserChrome,
+		Profile:                 validate.ProfileChrome,
 		StatsPollInterval:       250 * time.Millisecond,
 		EventHistory:            64,
 		SwitchRecoveryThreshold: 1500 * time.Millisecond,

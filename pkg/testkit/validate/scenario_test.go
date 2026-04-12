@@ -9,7 +9,6 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
@@ -336,8 +335,8 @@ func TestScenarioLabRunStepRejectsAmbiguousUnlabeledDataChannelActions(t *testin
 	}
 }
 
-func TestScenarioLabRunStepExpectationSkipsUnsupportedBrowserAssertions(t *testing.T) {
-	session := newSession(nil, SessionConfig{Browser: pioncodec.BrowserSafari})
+func TestScenarioLabRunStepExpectationSkipsUnsupportedProfileAssertions(t *testing.T) {
+	session := newSession(nil, SessionConfig{Profile: ProfileSafari})
 	lab := NewScenarioLab(session, LabConfig{})
 
 	err := lab.Run(context.Background(), ScenarioScript{
