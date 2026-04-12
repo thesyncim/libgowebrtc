@@ -348,6 +348,10 @@ func (s *RTPSender) SetPreferredCodec(codec webrtc.RTPCodecParameters) error {
 	if strings.TrimSpace(codec.MimeType) == "" {
 		return errors.New("codec mime type is required")
 	}
+	if s.pc != nil {
+		s.pc.ioMu.Lock()
+		defer s.pc.ioMu.Unlock()
+	}
 
 	return ffi.RTPSenderSetPreferredCodec(s.handle, codec.MimeType, int(codec.PayloadType))
 }
@@ -654,7 +658,6 @@ func (t *Track) WriteVideoFrame(f *frame.VideoFrame) error {
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
 	if t.pc != nil {
 		t.pc.ioMu.RLock()
 		defer t.pc.ioMu.RUnlock()
@@ -693,7 +696,6 @@ func (t *Track) WriteAudioFrame(f *frame.AudioFrame) error {
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
 	// Convert bytes to int16 samples for FFI
 	samples := f.SamplesS16()
 	if samples == nil {
@@ -1807,7 +1809,6 @@ func (pc *PeerConnection) GetStats() (webrtc.StatsReport, error) {
 	if pc.handle == 0 {
 		return nil, errors.New("peer connection not initialized")
 	}
-
 	pc.ioMu.Lock()
 	defer pc.ioMu.Unlock()
 
