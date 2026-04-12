@@ -73,11 +73,7 @@ func (s CodecSet) Select(offered []webrtc.RTPCodecParameters) (webrtc.RTPCodecPa
 	for _, preferred := range s.SupportedOnly().entries {
 		for _, candidate := range offered {
 			if codecParametersMatch(preferred.Codec, candidate) {
-				selected := normalizeCodecParameters(candidate)
-				if selected.PayloadType == 0 {
-					selected.PayloadType = preferred.Codec.PayloadType
-				}
-				return selected, true
+				return normalizeCodecParameters(candidate), true
 			}
 		}
 	}
