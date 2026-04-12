@@ -93,7 +93,13 @@ func handleOffer(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Browser offer SDP:\n%s\n", offer.SDP[:min(500, len(offer.SDP))])
 
 	// Create PeerConnection
-	peerConn, err := pc.NewPeerConnection(pc.DefaultConfiguration())
+	peerConn, err := pc.NewPeerConnection(pc.Configuration{
+		BundlePolicy:       pc.BundlePolicyBalanced,
+		RTCPMuxPolicy:      pc.RTCPMuxPolicyRequire,
+		ICETransportPolicy: pc.ICETransportPolicyAll,
+		SDPSemantics:       pc.SDPSemanticsUnifiedPlan,
+		ICEServers:         nil,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

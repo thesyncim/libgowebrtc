@@ -103,7 +103,7 @@ func (e *vp8Encoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyframe
 }
 
 func (e *vp8Encoder) MaxEncodedSize() int {
-	return e.config.Width * e.config.Height * 3 / 2
+	return maxVideoEncodedSize(e.config.Width, e.config.Height)
 }
 
 func (e *vp8Encoder) SetBitrate(bps uint32) error {

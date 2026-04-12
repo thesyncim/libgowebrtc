@@ -123,9 +123,13 @@ func TestBindPCTrackIntegration(t *testing.T) {
 }
 
 func newMediaRemotePeerConnection() (*pc.PeerConnection, error) {
-	cfg := pc.DefaultConfiguration()
-	cfg.ICEServers = nil
-	return pc.NewPeerConnection(cfg)
+	return pc.NewPeerConnection(pc.Configuration{
+		BundlePolicy:       pc.BundlePolicyBalanced,
+		RTCPMuxPolicy:      pc.RTCPMuxPolicyRequire,
+		ICETransportPolicy: pc.ICETransportPolicyAll,
+		SDPSemantics:       pc.SDPSemanticsUnifiedPlan,
+		ICEServers:         nil,
+	})
 }
 
 func connectMediaRemotePeers(offerer, answerer *pc.PeerConnection) error {

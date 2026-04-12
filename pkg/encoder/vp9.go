@@ -117,7 +117,7 @@ func (e *vp9Encoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyframe
 }
 
 func (e *vp9Encoder) MaxEncodedSize() int {
-	return e.config.Width * e.config.Height * 3 / 2
+	return maxVideoEncodedSize(e.config.Width, e.config.Height)
 }
 
 func (e *vp9Encoder) SetBitrate(bps uint32) error {

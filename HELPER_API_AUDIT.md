@@ -68,7 +68,6 @@ For this audit, "custom helper logic" means any exported behavior that:
 
 Current hotspots:
 
-- `pkg/pc.DefaultConfiguration()`
 - `pkg/pc.normalizeConfiguration(...)`
 - `pkg/track.NewVideoTrack(...)` auto-enabling adaptation features
 

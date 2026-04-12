@@ -331,7 +331,7 @@ func TestPeerConnectionRealTrackAndTransceiverOperations(t *testing.T) {
 	release := testutil.WithSerialExecution(t)
 	defer release()
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}

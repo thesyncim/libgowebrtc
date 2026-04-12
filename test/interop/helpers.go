@@ -17,9 +17,13 @@ const (
 )
 
 func defaultInteropConfig() pc.Configuration {
-	cfg := pc.DefaultConfiguration()
-	cfg.ICEServers = nil
-	return cfg
+	return pc.Configuration{
+		BundlePolicy:       pc.BundlePolicyBalanced,
+		RTCPMuxPolicy:      pc.RTCPMuxPolicyRequire,
+		ICETransportPolicy: pc.ICETransportPolicyAll,
+		SDPSemantics:       pc.SDPSemanticsUnifiedPlan,
+		ICEServers:         nil,
+	}
 }
 
 // PeerPair holds a pair of connected PeerConnections for testing.
@@ -73,7 +77,7 @@ func NewPeerPair(t *testing.T, cfg PeerPairConfig) (*PeerPair, error) {
 	t.Helper()
 
 	// Configure ICE servers
-	libConfig := pc.DefaultConfiguration()
+	libConfig := defaultInteropConfig()
 	pionConfig := pionwebrtc.Configuration{}
 
 	if cfg.UseSTUN {

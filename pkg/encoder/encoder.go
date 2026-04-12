@@ -18,6 +18,13 @@ var (
 	ErrBufferTooSmall   = errors.New("destination buffer too small")
 )
 
+const maxEncodedVideoFrameOverhead = 4096
+
+func maxVideoEncodedSize(width, height int) int {
+	rawI420 := width * height * 3 / 2
+	return rawI420 + rawI420/8 + maxEncodedVideoFrameOverhead
+}
+
 // EncodeResult contains the result of an encode operation.
 type EncodeResult struct {
 	// N is the number of bytes written to the destination buffer.
