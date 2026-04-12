@@ -361,6 +361,9 @@ func TestAudioTrackSourcePushFrameUsesPerChannelCount(t *testing.T) {
 	samples := make([]int16, 960*2)
 	got := newAudioTrackSourcePushFrameParams(123, samples, 960, 20_000)
 
+	if got == nil {
+		t.Fatal("newAudioTrackSourcePushFrameParams() = nil")
+	}
 	if got.Source != 123 {
 		t.Fatalf("Source = %d, want 123", got.Source)
 	}
@@ -372,6 +375,29 @@ func TestAudioTrackSourcePushFrameUsesPerChannelCount(t *testing.T) {
 	}
 	if got.TimestampUs != 20_000 {
 		t.Fatalf("TimestampUs = %d, want 20000", got.TimestampUs)
+	}
+}
+
+func TestVideoTrackSourcePushFrameParamsKeepFramePointers(t *testing.T) {
+	yPlane := make([]byte, 32*32)
+	uPlane := make([]byte, 16*16)
+	vPlane := make([]byte, 16*16)
+
+	got := newVideoTrackSourcePushFrameParams(456, yPlane, uPlane, vPlane, 32, 16, 16, 90_000)
+	if got == nil {
+		t.Fatal("newVideoTrackSourcePushFrameParams() = nil")
+	}
+	if got.Source != 456 {
+		t.Fatalf("Source = %d, want 456", got.Source)
+	}
+	if got.YPlane == 0 || got.UPlane == 0 || got.VPlane == 0 {
+		t.Fatal("plane pointers were not forwarded")
+	}
+	if got.YStride != 32 || got.UStride != 16 || got.VStride != 16 {
+		t.Fatalf("strides = (%d, %d, %d), want (32, 16, 16)", got.YStride, got.UStride, got.VStride)
+	}
+	if got.TimestampUs != 90_000 {
+		t.Fatalf("TimestampUs = %d, want 90000", got.TimestampUs)
 	}
 }
 
