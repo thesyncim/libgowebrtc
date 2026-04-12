@@ -65,7 +65,7 @@ func NewPionLibPeerPair(t *testing.T) *PionLibPeerPair {
 	}
 
 	// Create lib peer
-	libConfig := pc.DefaultConfiguration()
+	libConfig := defaultTestConfig()
 	libConfig.ICEServers = nil
 	lib, err := pc.NewPeerConnection(libConfig)
 	if err != nil {

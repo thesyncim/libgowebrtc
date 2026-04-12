@@ -11,7 +11,7 @@ import (
 func TestPeerConnection_InitialState(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestPeerConnection_InitialState(t *testing.T) {
 func TestPeerConnection_SignalingState_CreateOffer(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -71,13 +71,13 @@ func TestPeerConnection_SignalingState_CreateOffer(t *testing.T) {
 func TestPeerConnection_SignalingState_OfferAnswerExchange(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	offerer, err := NewPeerConnection(DefaultConfiguration())
+	offerer, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection (offerer): %v", err)
 	}
 	defer offerer.Close()
 
-	answerer, err := NewPeerConnection(DefaultConfiguration())
+	answerer, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection (answerer): %v", err)
 	}
@@ -140,7 +140,7 @@ func TestPeerConnection_SignalingState_OfferAnswerExchange(t *testing.T) {
 func TestPeerConnection_OperationsAfterClose(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestPeerConnection_OperationsAfterClose(t *testing.T) {
 func TestPeerConnection_DoubleClose(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestPeerConnection_DoubleClose(t *testing.T) {
 func TestPeerConnection_CloseState(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestPeerConnection_CloseState(t *testing.T) {
 func TestPeerConnection_SignalingStateCallback(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestPeerConnection_SignalingStateCallback(t *testing.T) {
 func TestPeerConnection_ICECandidateCallback(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestPeerConnection_ICECandidateCallback(t *testing.T) {
 func TestPeerConnection_DataChannel_Creation(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestPeerConnection_DataChannel_Creation(t *testing.T) {
 func TestPeerConnection_DataChannel_WithOptions(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestPeerConnection_Track_InvalidAudioParams(t *testing.T) {
 func TestPeerConnection_AddTrack_AfterClose(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -477,7 +477,7 @@ func TestPeerConnection_AddTrack_AfterClose(t *testing.T) {
 func TestPeerConnection_Concurrent_StateQueries(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -509,7 +509,7 @@ func TestPeerConnection_Concurrent_StateQueries(t *testing.T) {
 func TestPeerConnection_Concurrent_CreateOfferWhileQuerying(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -551,7 +551,7 @@ func TestPeerConnection_Concurrent_CreateOfferWhileQuerying(t *testing.T) {
 func TestPeerConnection_RestartICE_AfterClose(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestPeerConnection_RestartICE_AfterClose(t *testing.T) {
 func TestPeerConnection_Transceiver_AddAndQuery(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -609,7 +609,7 @@ func TestPeerConnection_Transceiver_AddAndQuery(t *testing.T) {
 func TestPeerConnection_NegotiationNeededCallback(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -641,7 +641,7 @@ func TestPeerConnection_NegotiationNeededCallback(t *testing.T) {
 func TestPeerConnection_GetSendersReceivers(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -662,7 +662,7 @@ func TestPeerConnection_GetSendersReceivers(t *testing.T) {
 func TestPeerConnection_LocalRemoteDescription(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -703,7 +703,7 @@ func TestPeerConnection_LocalRemoteDescription(t *testing.T) {
 func BenchmarkPeerConnection_StateQuery(b *testing.B) {
 	testutil.RequireShim(b)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		b.Fatalf("NewPeerConnection: %v", err)
 	}
@@ -721,7 +721,7 @@ func BenchmarkPeerConnection_StateQuery(b *testing.B) {
 func BenchmarkPeerConnection_CreateOffer(b *testing.B) {
 	testutil.RequireShim(b)
 
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		b.Fatalf("NewPeerConnection: %v", err)
 	}

@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewPeerConnection(t *testing.T) {
-	cfg := DefaultConfiguration()
+	cfg := testPeerConnectionConfig()
 	pc, err := NewPeerConnection(cfg)
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
@@ -69,7 +69,7 @@ func TestPeerConnectionWithICEServers(t *testing.T) {
 }
 
 func TestCreateOffer(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestCreateOffer(t *testing.T) {
 }
 
 func TestCreateOfferWithTrack(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestCreateOfferWithTrack(t *testing.T) {
 }
 
 func TestSetLocalDescription(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -155,13 +155,13 @@ func TestSetLocalDescription(t *testing.T) {
 
 func TestOfferAnswerExchange(t *testing.T) {
 	// Create two peer connections
-	pc1, err := NewPeerConnection(DefaultConfiguration())
+	pc1, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection (offerer) failed: %v", err)
 	}
 	defer pc1.Close()
 
-	pc2, err := NewPeerConnection(DefaultConfiguration())
+	pc2, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection (answerer) failed: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestOfferAnswerExchange(t *testing.T) {
 }
 
 func TestAddTrack(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -245,13 +245,13 @@ func TestAddTrack(t *testing.T) {
 }
 
 func TestAddTrackUsesSingleExplicitStreamID(t *testing.T) {
-	senderPC, err := NewPeerConnection(DefaultConfiguration())
+	senderPC, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection(sender): %v", err)
 	}
 	defer senderPC.Close()
 
-	receiverPC, err := NewPeerConnection(DefaultConfiguration())
+	receiverPC, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection(receiver): %v", err)
 	}
@@ -306,7 +306,7 @@ func TestAddTrackUsesSingleExplicitStreamID(t *testing.T) {
 }
 
 func TestRemoveTrack(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestRemoveTrack(t *testing.T) {
 }
 
 func TestCreateDataChannel(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestCreateDataChannel(t *testing.T) {
 }
 
 func TestCreateDataChannelWithOptions(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -392,7 +392,7 @@ func TestCreateDataChannelWithOptions(t *testing.T) {
 }
 
 func TestAddICECandidate(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -422,7 +422,7 @@ func TestAddICECandidate(t *testing.T) {
 }
 
 func TestPeerConnectionClose(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestPeerConnectionClose(t *testing.T) {
 }
 
 func TestMultipleTracks(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -486,7 +486,7 @@ func TestMultipleTracks(t *testing.T) {
 }
 
 func TestTransceiverDirection(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -514,7 +514,7 @@ func TestTransceiverDirection(t *testing.T) {
 
 // Benchmark PeerConnection creation
 func BenchmarkNewPeerConnection(b *testing.B) {
-	cfg := DefaultConfiguration()
+	cfg := testPeerConnectionConfig()
 	for i := 0; i < b.N; i++ {
 		pc, _ := NewPeerConnection(cfg)
 		pc.Close()
@@ -523,7 +523,7 @@ func BenchmarkNewPeerConnection(b *testing.B) {
 
 // Benchmark offer creation
 func BenchmarkCreateOffer(b *testing.B) {
-	pc, _ := NewPeerConnection(DefaultConfiguration())
+	pc, _ := NewPeerConnection(testPeerConnectionConfig())
 	defer pc.Close()
 
 	b.ResetTimer()
@@ -533,7 +533,7 @@ func BenchmarkCreateOffer(b *testing.B) {
 }
 
 func TestSetCodecPreferencesWithExplicitVideoCodecs(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestSetCodecPreferencesWithExplicitVideoCodecs(t *testing.T) {
 }
 
 func TestSetCodecPreferencesWithExplicitAudioCodecs(t *testing.T) {
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -584,7 +584,7 @@ func TestSetCodecPreferencesWithExplicitAudioCodecs(t *testing.T) {
 
 func TestJitterBufferMinDelay(t *testing.T) {
 	// Test that jitter buffer minimum delay can be set on a receiver
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
@@ -631,7 +631,7 @@ func TestJitterBufferMinDelay(t *testing.T) {
 
 func TestJitterBufferStatsViaGetStats(t *testing.T) {
 	// Test that jitter buffer stats are available through PeerConnection.GetStats().
-	pc, err := NewPeerConnection(DefaultConfiguration())
+	pc, err := NewPeerConnection(testPeerConnectionConfig())
 	if err != nil {
 		t.Fatalf("NewPeerConnection failed: %v", err)
 	}
