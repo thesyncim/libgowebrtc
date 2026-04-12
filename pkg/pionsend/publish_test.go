@@ -10,7 +10,19 @@ import (
 )
 
 func TestPublishAudioValidation(t *testing.T) {
-	if _, err := PublishAudio(nil, AudioPublishConfig{TrackID: "audio"}); err != ErrNilPeerConnection {
+	audioTrack, err := track.NewAudioTrack(track.AudioTrackConfig{
+		ID:         "audio-track",
+		StreamID:   "stream-audio",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
+		MTU:        1200,
+	})
+	if err != nil {
+		t.Fatalf("NewAudioTrack: %v", err)
+	}
+
+	if _, err := PublishAudio(nil, AudioPublishConfig{Track: audioTrack}); err != ErrNilPeerConnection {
 		t.Fatalf("PublishAudio(nil) error = %v, want %v", err, ErrNilPeerConnection)
 	}
 	if _, err := PublishAudio(&webrtc.PeerConnection{}, AudioPublishConfig{}); err != ErrInvalidConfig {
@@ -18,123 +30,154 @@ func TestPublishAudioValidation(t *testing.T) {
 	}
 }
 
-func TestRequiredVideoHeaderExtensionURIs(t *testing.T) {
-	t.Run("NoSVC", func(t *testing.T) {
-		got := RequiredVideoHeaderExtensionURIs(VideoPublishConfig{})
-		want := []string{midRTPHeaderExtensionURI}
-		if len(got) != len(want) || got[0] != want[0] {
-			t.Fatalf("RequiredVideoHeaderExtensionURIs() = %v, want %v", got, want)
-		}
+func TestPublishVideoValidation(t *testing.T) {
+	videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
+		ID:       "video-track",
+		StreamID: "stream-video",
+		Codec:    codec.VP8,
+		Width:    1280,
+		Height:   720,
+		Bitrate:  700_000,
+		FPS:      30,
+		MTU:      1200,
 	})
-
-	t.Run("LayeredSVC", func(t *testing.T) {
-		got := RequiredVideoHeaderExtensionURIs(VideoPublishConfig{
-			SVC: &codec.SVCConfig{Mode: codec.SVCModeL3T3_KEY},
-		})
-		want := []string{
-			midRTPHeaderExtensionURI,
-			track.DependencyDescriptorRTPHeaderExtensionURI,
-		}
-		if len(got) != len(want) {
-			t.Fatalf("len(RequiredVideoHeaderExtensionURIs()) = %d, want %d", len(got), len(want))
-		}
-		for i, uri := range want {
-			if got[i] != uri {
-				t.Fatalf("uri[%d] = %q, want %q", i, got[i], uri)
-			}
-		}
-	})
-
-	t.Run("Simulcast", func(t *testing.T) {
-		got := RequiredVideoHeaderExtensionURIs(VideoPublishConfig{
-			SVC: &codec.SVCConfig{Mode: codec.SVCModeS3T3},
-		})
-		want := []string{
-			midRTPHeaderExtensionURI,
-			rtpStreamIDHeaderExtensionURI,
-			repairedStreamIDHeaderExtensionURI,
-		}
-		if len(got) != len(want) {
-			t.Fatalf("len(RequiredVideoHeaderExtensionURIs()) = %d, want %d", len(got), len(want))
-		}
-		for i, uri := range want {
-			if got[i] != uri {
-				t.Fatalf("uri[%d] = %q, want %q", i, got[i], uri)
-			}
-		}
-	})
-}
-
-func TestCodecFromPreferencesRequiresRecognizedCodec(t *testing.T) {
-	if got, ok := codecFromPreferences([]webrtc.RTPCodecParameters{{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "video/unknown"},
-	}}); ok {
-		t.Fatalf("codecFromPreferences(unknown) = %v, want no match", got)
+	if err != nil {
+		t.Fatalf("NewVideoTrack: %v", err)
 	}
-	if got, ok := codecFromPreferences([]webrtc.RTPCodecParameters{{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP9},
-	}}); !ok || got != codec.VP9 {
-		t.Fatalf("codecFromPreferences(VP9) = (%v, %v), want (%v, true)", got, ok, codec.VP9)
-	}
-}
 
-func TestDeriveEncodingConfigsForSimulcast(t *testing.T) {
-	layers := deriveEncodingConfigs(VideoPublishConfig{
-		Width:   1280,
-		Height:  720,
-		Bitrate: 700_000,
-		SVC: &codec.SVCConfig{
-			Mode: codec.SVCModeS3T3,
-			Layers: []codec.SVCLayerConfig{
-				{RID: "q", Width: 320, Height: 180, Bitrate: 120_000, Active: true},
-				{RID: "h", Width: 640, Height: 360, Bitrate: 240_000, Active: false},
-				{RID: "f", Width: 1280, Height: 720, Bitrate: 480_000, Active: true},
+	valid := VideoPublishConfig{
+		Encodings: []VideoPublishEncoding{{
+			Track:                 videoTrack,
+			Width:                 1280,
+			Height:                720,
+			Bitrate:               700_000,
+			ScaleResolutionDownBy: 1,
+			Active:                true,
+		}},
+	}
+
+	if _, err := PublishVideo(nil, valid); err != ErrNilPeerConnection {
+		t.Fatalf("PublishVideo(nil) error = %v, want %v", err, ErrNilPeerConnection)
+	}
+
+	for _, tc := range []struct {
+		name string
+		cfg  VideoPublishConfig
+	}{
+		{name: "empty", cfg: VideoPublishConfig{}},
+		{name: "nil track", cfg: VideoPublishConfig{Encodings: []VideoPublishEncoding{{Width: 1280, Height: 720, Bitrate: 700_000, ScaleResolutionDownBy: 1, Active: true}}}},
+		{name: "odd width", cfg: VideoPublishConfig{Encodings: []VideoPublishEncoding{{Track: videoTrack, Width: 1279, Height: 720, Bitrate: 700_000, ScaleResolutionDownBy: 1, Active: true}}}},
+		{name: "bad scale", cfg: VideoPublishConfig{Encodings: []VideoPublishEncoding{{Track: videoTrack, Width: 1280, Height: 720, Bitrate: 700_000, ScaleResolutionDownBy: 0.5, Active: true}}}},
+		{name: "mismatched track identity", cfg: VideoPublishConfig{Encodings: []VideoPublishEncoding{
+			{Track: videoTrack, Width: 1280, Height: 720, Bitrate: 700_000, ScaleResolutionDownBy: 1, Active: true},
+			{
+				Track: func() *track.VideoTrack {
+					other, err := track.NewVideoTrack(track.VideoTrackConfig{
+						ID:       "other-track",
+						StreamID: "stream-video",
+						Codec:    codec.VP8,
+						Width:    640,
+						Height:   360,
+						Bitrate:  240_000,
+						FPS:      30,
+						MTU:      1200,
+					})
+					if err != nil {
+						t.Fatalf("NewVideoTrack(other): %v", err)
+					}
+					return other
+				}(),
+				Width:                 640,
+				Height:                360,
+				Bitrate:               240_000,
+				ScaleResolutionDownBy: 2,
+				Active:                true,
 			},
-		},
-	})
-	if len(layers) != 3 {
-		t.Fatalf("len(deriveEncodingConfigs()) = %d, want 3", len(layers))
-	}
-
-	wantRIDs := []string{"q", "h", "f"}
-	wantWidths := []int{320, 640, 1280}
-	wantHeights := []int{180, 360, 720}
-	wantBitrates := []uint32{120_000, 240_000, 480_000}
-	wantActive := []bool{true, false, true}
-
-	for i := range layers {
-		if layers[i].RID != wantRIDs[i] {
-			t.Fatalf("layers[%d].RID = %q, want %q", i, layers[i].RID, wantRIDs[i])
-		}
-		if layers[i].Width != wantWidths[i] || layers[i].Height != wantHeights[i] {
-			t.Fatalf("layers[%d] size = %dx%d, want %dx%d", i, layers[i].Width, layers[i].Height, wantWidths[i], wantHeights[i])
-		}
-		if layers[i].Active != wantActive[i] {
-			t.Fatalf("layers[%d].Active = %v, want %v", i, layers[i].Active, wantActive[i])
-		}
-		if layers[i].Bitrate != wantBitrates[i] {
-			t.Fatalf("layers[%d].Bitrate = %d, want %d", i, layers[i].Bitrate, wantBitrates[i])
-		}
-		if layers[i].SVC == nil || layers[i].SVC.Mode != codec.SVCModeL1T3 {
-			t.Fatalf("layers[%d].SVC = %+v, want L1T3", i, layers[i].SVC)
+		}}},
+	} {
+		if _, err := PublishVideo(&webrtc.PeerConnection{}, tc.cfg); err != ErrInvalidConfig {
+			t.Fatalf("PublishVideo(%s) error = %v, want %v", tc.name, err, ErrInvalidConfig)
 		}
 	}
 }
 
-func TestDeriveEncodingConfigsForSimulcastRequiresExplicitLayerLayout(t *testing.T) {
-	if layers := deriveEncodingConfigs(VideoPublishConfig{
-		Width:   1280,
-		Height:  720,
-		Bitrate: 700_000,
-		SVC: &codec.SVCConfig{
-			Mode: codec.SVCModeS3T3,
-			Layers: []codec.SVCLayerConfig{
-				{RID: "q", Bitrate: 120_000},
-				{RID: "h", Width: 640, Height: 360, Bitrate: 240_000},
-				{RID: "f", Width: 1280, Height: 720, Bitrate: 480_000},
-			},
-		},
-	}); layers != nil {
-		t.Fatalf("deriveEncodingConfigs(missing simulcast layer layout) = %+v, want nil", layers)
+func TestPublishVideoCopiesRequiredHeaderExtensions(t *testing.T) {
+	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("NewPeerConnection: %v", err)
+	}
+	defer pc.Close()
+
+	videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
+		ID:       "video-track",
+		StreamID: "stream-video",
+		Codec:    codec.VP8,
+		Width:    1280,
+		Height:   720,
+		Bitrate:  700_000,
+		FPS:      30,
+		MTU:      1200,
+	})
+	if err != nil {
+		t.Fatalf("NewVideoTrack: %v", err)
+	}
+
+	required := []string{midRTPHeaderExtensionURI}
+	published, err := PublishVideo(pc, VideoPublishConfig{
+		Encodings: []VideoPublishEncoding{{
+			Track:                 videoTrack,
+			Width:                 1280,
+			Height:                720,
+			Bitrate:               700_000,
+			ScaleResolutionDownBy: 1,
+			Active:                true,
+		}},
+		RequiredHeaderExtensions: required,
+	})
+	if err != nil {
+		t.Fatalf("PublishVideo: %v", err)
+	}
+	defer published.Close()
+
+	required[0] = "mutated"
+	video := published.(*publishedVideo)
+	if got := video.cfg.RequiredHeaderExtensions[0]; got != midRTPHeaderExtensionURI {
+		t.Fatalf("RequiredHeaderExtensions[0] = %q, want %q", got, midRTPHeaderExtensionURI)
+	}
+}
+
+func TestAllocScaledFrameRequiresExplicitLayout(t *testing.T) {
+	track, err := track.NewVideoTrack(track.VideoTrackConfig{
+		ID:       "video-track",
+		StreamID: "stream-video",
+		Codec:    codec.VP8,
+		Width:    1280,
+		Height:   720,
+		Bitrate:  700_000,
+		FPS:      30,
+		MTU:      1200,
+	})
+	if err != nil {
+		t.Fatalf("NewVideoTrack: %v", err)
+	}
+
+	if frame := allocScaledFrame(VideoPublishEncoding{
+		Track:                 track,
+		Width:                 320,
+		Height:                180,
+		Bitrate:               120_000,
+		ScaleResolutionDownBy: 4,
+	}); frame == nil || frame.Width != 320 || frame.Height != 180 {
+		t.Fatalf("allocScaledFrame() = %+v, want 320x180 frame", frame)
+	}
+
+	if frame := allocScaledFrame(VideoPublishEncoding{
+		Track:                 track,
+		Width:                 1280,
+		Height:                720,
+		Bitrate:               700_000,
+		ScaleResolutionDownBy: 1,
+	}); frame != nil {
+		t.Fatalf("allocScaledFrame(scale=1) = %+v, want nil", frame)
 	}
 }

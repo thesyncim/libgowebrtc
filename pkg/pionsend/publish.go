@@ -9,7 +9,6 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
-	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/track"
@@ -22,25 +21,27 @@ const (
 )
 
 var (
-	ErrNilPeerConnection       = errors.New("pionsend: peer connection is nil")
-	ErrInvalidConfig           = errors.New("pionsend: invalid config")
-	ErrNilVideoFrame           = errors.New("pionsend: video frame is nil")
-	ErrNilAudioFrame           = errors.New("pionsend: audio frame is nil")
-	ErrInvalidLayerIndex       = errors.New("pionsend: invalid layer index")
-	ErrUnsupportedLayeredCodec = errors.New("pionsend: automatic DD layering requires VP9 or AV1")
+	ErrNilPeerConnection = errors.New("pionsend: peer connection is nil")
+	ErrInvalidConfig     = errors.New("pionsend: invalid config")
+	ErrNilVideoFrame     = errors.New("pionsend: video frame is nil")
+	ErrNilAudioFrame     = errors.New("pionsend: audio frame is nil")
+	ErrInvalidLayerIndex = errors.New("pionsend: invalid layer index")
 )
 
-// VideoPublishConfig configures explicit layered or simulcast publish wiring.
+// VideoPublishConfig wires already-configured local tracks into a single sender.
 type VideoPublishConfig struct {
-	TrackID          string
-	StreamID         string
-	Width            int
-	Height           int
-	Bitrate          uint32
-	FPS              float64
-	MTU              uint16
-	CodecPreferences []webrtc.RTPCodecParameters
-	SVC              *codec.SVCConfig
+	Encodings                []VideoPublishEncoding
+	RequiredHeaderExtensions []string
+}
+
+// VideoPublishEncoding describes one sender encoding backed by a concrete local track.
+type VideoPublishEncoding struct {
+	Track                 *track.VideoTrack
+	Width                 int
+	Height                int
+	Bitrate               uint32
+	ScaleResolutionDownBy float64
+	Active                bool
 }
 
 // PublishedVideo describes an active layered publisher.
@@ -61,7 +62,7 @@ type PublishedEncoding struct {
 	Width   int
 	Height  int
 	Bitrate uint32
-	Track   webrtc.TrackLocal
+	Track   *track.VideoTrack
 }
 
 type encodingRuntime struct {
@@ -81,93 +82,46 @@ type publishedVideo struct {
 	mu        sync.Mutex
 }
 
-// RequiredVideoHeaderExtensionURIs returns the RTP header extensions callers
-// should register with their MediaEngine before creating the PeerConnection.
-func RequiredVideoHeaderExtensionURIs(cfg VideoPublishConfig) []string {
-	uris := []string{midRTPHeaderExtensionURI}
-	if cfg.SVC != nil && cfg.SVC.Mode.IsSimulcast() {
-		uris = append(uris, rtpStreamIDHeaderExtensionURI, repairedStreamIDHeaderExtensionURI)
-	}
-	if cfg.SVC != nil && !cfg.SVC.Mode.IsSimulcast() {
-		uris = append(uris, track.DependencyDescriptorRTPHeaderExtensionURI)
-	}
-	return uris
-}
-
-// PublishVideo creates one or more libgowebrtc-backed local tracks and wires
-// them into a Pion RTPSender using explicit caller-provided publish settings.
+// PublishVideo wires one or more already-configured local tracks into a single
+// Pion RTPSender. Track construction, codec policy, and simulcast layout all
+// live with the caller.
 func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedVideo, error) {
 	if pc == nil {
 		return nil, ErrNilPeerConnection
 	}
-	if cfg.TrackID == "" || cfg.StreamID == "" || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Bitrate == 0 || cfg.FPS <= 0 || cfg.MTU == 0 || len(cfg.CodecPreferences) == 0 {
+	if len(cfg.Encodings) == 0 {
 		return nil, ErrInvalidConfig
 	}
-	selectedCodec, ok := codecFromPreferences(cfg.CodecPreferences)
-	if !ok {
+	if !validVideoPublishEncodings(cfg.Encodings) {
 		return nil, ErrInvalidConfig
 	}
-	cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), cfg.CodecPreferences...)
-
-	layers := deriveEncodingConfigs(cfg)
-	if len(layers) == 0 {
-		return nil, ErrInvalidConfig
-	}
-
-	runtimeEncodings := make([]*encodingRuntime, 0, len(layers))
-	for i, layer := range layers {
-		videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
-			ID:               cfg.TrackID,
-			StreamID:         cfg.StreamID,
-			RID:              layer.RID,
-			Codec:            selectedCodec,
-			Width:            layer.Width,
-			Height:           layer.Height,
-			Bitrate:          layer.Bitrate,
-			FPS:              cfg.FPS,
-			MTU:              cfg.MTU,
-			AutoKeyframe:     true,
-			AutoBitrate:      true,
-			AutoFramerate:    true,
-			AutoResolution:   true,
-			CodecPreferences: cfg.CodecPreferences,
-			SVC:              layer.SVC,
-		})
-		if err != nil {
-			if closeErr := closePublishedTracks(runtimeEncodings); closeErr != nil {
-				return nil, errors.Join(err, closeErr)
-			}
-			return nil, err
-		}
-
+	cfg.RequiredHeaderExtensions = append([]string(nil), cfg.RequiredHeaderExtensions...)
+	runtimeEncodings := make([]*encodingRuntime, 0, len(cfg.Encodings))
+	for i, encoding := range cfg.Encodings {
 		runtimeEncodings = append(runtimeEncodings, &encodingRuntime{
 			PublishedEncoding: PublishedEncoding{
 				Index:   i,
-				RID:     layer.RID,
-				Width:   layer.Width,
-				Height:  layer.Height,
-				Bitrate: layer.Bitrate,
-				Track:   videoTrack,
+				RID:     encoding.Track.RID(),
+				Width:   encoding.Width,
+				Height:  encoding.Height,
+				Bitrate: encoding.Bitrate,
+				Track:   encoding.Track,
 			},
-			videoTrack: videoTrack,
-			active:     layer.Active,
-			scale:      layer.Scale,
-			scaled:     layer.AllocScaledFrame(),
+			videoTrack: encoding.Track,
+			active:     encoding.Active,
+			scale:      encoding.ScaleResolutionDownBy,
+			scaled:     allocScaledFrame(encoding),
 		})
 	}
 
+	cfg.Encodings = nil
+
 	sender, err := pc.AddTrack(runtimeEncodings[0].videoTrack)
 	if err != nil {
-		if closeErr := closePublishedTracks(runtimeEncodings); closeErr != nil {
-			return nil, errors.Join(err, closeErr)
-		}
 		return nil, err
 	}
 	for i := 1; i < len(runtimeEncodings); i++ {
 		if err := sender.AddEncoding(runtimeEncodings[i].videoTrack); err != nil {
-			if closeErr := closePublishedTracks(runtimeEncodings); closeErr != nil {
-				return nil, errors.Join(err, closeErr)
-			}
 			return nil, err
 		}
 	}
@@ -280,7 +234,6 @@ func (p *publishedVideo) validateNegotiatedLocked() error {
 		return nil
 	}
 
-	required := RequiredVideoHeaderExtensionURIs(p.cfg)
 	var boundContext *track.RTPPacketContext
 	for _, encoding := range p.encodings {
 		ctx, ok := encoding.videoTrack.RTPContext()
@@ -293,14 +246,7 @@ func (p *publishedVideo) validateNegotiatedLocked() error {
 		return nil
 	}
 
-	if p.cfg.SVC != nil && !p.cfg.SVC.Mode.IsSimulcast() {
-		selectedCodec, ok := codec.ParseMimeType(boundContext.CodecParameters.MimeType)
-		if !ok || (selectedCodec != codec.VP9 && selectedCodec != codec.AV1) {
-			return ErrUnsupportedLayeredCodec
-		}
-	}
-
-	for _, uri := range required {
+	for _, uri := range p.cfg.RequiredHeaderExtensions {
 		if _, ok := boundContext.HeaderExtensionID(uri); !ok {
 			return fmt.Errorf("pionsend: negotiated RTP header extension missing: %s", uri)
 		}
@@ -310,102 +256,45 @@ func (p *publishedVideo) validateNegotiatedLocked() error {
 	return nil
 }
 
-type encodingConfig struct {
-	RID     string
-	Width   int
-	Height  int
-	Bitrate uint32
-	Scale   float64
-	SVC     *codec.SVCConfig
-	Active  bool
+func validVideoPublishEncoding(encoding VideoPublishEncoding) bool {
+	if encoding.Track == nil {
+		return false
+	}
+	if encoding.Width <= 0 || encoding.Height <= 0 || encoding.Bitrate == 0 {
+		return false
+	}
+	if encoding.Width%2 != 0 || encoding.Height%2 != 0 {
+		return false
+	}
+	if encoding.ScaleResolutionDownBy < 1.0 {
+		return false
+	}
+	return true
 }
 
-func (c encodingConfig) AllocScaledFrame() *frame.VideoFrame {
-	if c.Scale <= 1.0 {
-		return nil
+func validVideoPublishEncodings(encodings []VideoPublishEncoding) bool {
+	if len(encodings) == 0 || !validVideoPublishEncoding(encodings[0]) {
+		return false
 	}
-	return frame.NewI420Frame(c.Width, c.Height)
+	baseID := encodings[0].Track.ID()
+	baseStreamID := encodings[0].Track.StreamID()
+	for i := 1; i < len(encodings); i++ {
+		encoding := encodings[i]
+		if !validVideoPublishEncoding(encoding) {
+			return false
+		}
+		if encoding.Track.ID() != baseID || encoding.Track.StreamID() != baseStreamID {
+			return false
+		}
+	}
+	return true
 }
 
-func codecFromPreferences(preferred []webrtc.RTPCodecParameters) (codec.Type, bool) {
-	for _, params := range preferred {
-		if codecType, ok := codec.ParseMimeType(params.MimeType); ok {
-			return codecType, true
-		}
-	}
-	return 0, false
-}
-
-func deriveEncodingConfigs(cfg VideoPublishConfig) []encodingConfig {
-	if cfg.SVC == nil || !cfg.SVC.Mode.IsSimulcast() {
-		return []encodingConfig{{
-			Width:   cfg.Width,
-			Height:  cfg.Height,
-			Bitrate: cfg.Bitrate,
-			Scale:   1.0,
-			SVC:     cloneSVCConfig(cfg.SVC),
-			Active:  true,
-		}}
-	}
-
-	spatialLayers := cfg.SVC.Mode.SpatialLayers()
-	if spatialLayers <= 0 {
+func allocScaledFrame(encoding VideoPublishEncoding) *frame.VideoFrame {
+	if encoding.ScaleResolutionDownBy <= 1.0 {
 		return nil
 	}
-	if len(cfg.SVC.Layers) != spatialLayers {
-		return nil
-	}
-	temporalMode := codec.SVCModeL1T1
-	if cfg.SVC.Mode.TemporalLayers() >= 3 {
-		temporalMode = codec.SVCModeL1T3
-	}
-
-	layers := make([]encodingConfig, 0, spatialLayers)
-	for i := 0; i < spatialLayers; i++ {
-		layer := cfg.SVC.Layers[i]
-		if layer.RID == "" || layer.Width <= 0 || layer.Height <= 0 || layer.Bitrate == 0 {
-			return nil
-		}
-		if layer.Width > cfg.Width || layer.Height > cfg.Height {
-			return nil
-		}
-		if layer.Width%2 != 0 || layer.Height%2 != 0 {
-			return nil
-		}
-		if cfg.Width*layer.Height != cfg.Height*layer.Width {
-			return nil
-		}
-		scale := 1.0
-		if layer.Width != cfg.Width || layer.Height != cfg.Height {
-			scale = float64(cfg.Width) / float64(layer.Width)
-			if scale <= 1.0 {
-				return nil
-			}
-		}
-		layers = append(layers, encodingConfig{
-			RID:     layer.RID,
-			Width:   layer.Width,
-			Height:  layer.Height,
-			Bitrate: layer.Bitrate,
-			Scale:   scale,
-			SVC: &codec.SVCConfig{
-				Mode: temporalMode,
-			},
-			Active: layer.Active,
-		})
-	}
-	return layers
-}
-
-func cloneSVCConfig(in *codec.SVCConfig) *codec.SVCConfig {
-	if in == nil {
-		return nil
-	}
-	cloned := *in
-	if len(in.Layers) > 0 {
-		cloned.Layers = append([]codec.SVCLayerConfig(nil), in.Layers...)
-	}
-	return &cloned
+	return frame.NewI420Frame(encoding.Width, encoding.Height)
 }
 
 func closePublishedTracks(encodings []*encodingRuntime) error {

@@ -14,48 +14,6 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
-func explicitVideoCodecPreferences(mimeTypes ...string) []webrtc.RTPCodecParameters {
-	if len(mimeTypes) == 0 {
-		mimeTypes = []string{webrtc.MimeTypeVP8}
-	}
-	out := make([]webrtc.RTPCodecParameters, 0, len(mimeTypes))
-	for _, mimeType := range mimeTypes {
-		out = append(out, webrtc.RTPCodecParameters{
-			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType:  mimeType,
-				ClockRate: 90000,
-			},
-		})
-	}
-	return out
-}
-
-func explicitAudioPublishConfig() AudioPublishConfig {
-	return AudioPublishConfig{
-		TrackID:          "audio-track",
-		StreamID:         "stream-audio",
-		SampleRate:       48000,
-		Channels:         2,
-		Bitrate:          64000,
-		MTU:              1200,
-		PTime:            20 * time.Millisecond,
-		CodecPreferences: []webrtc.RTPCodecParameters{{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}}},
-	}
-}
-
-func explicitVideoPublishConfig() VideoPublishConfig {
-	return VideoPublishConfig{
-		TrackID:          "video-track",
-		StreamID:         "stream-video",
-		Width:            1280,
-		Height:           720,
-		Bitrate:          700000,
-		FPS:              30,
-		MTU:              1200,
-		CodecPreferences: explicitVideoCodecPreferences(),
-	}
-}
-
 func newTestPeerConnection(t *testing.T) *webrtc.PeerConnection {
 	t.Helper()
 
@@ -69,26 +27,81 @@ func newTestPeerConnection(t *testing.T) *webrtc.PeerConnection {
 	return pc
 }
 
+func newTestAudioTrack(t *testing.T) *track.AudioTrack {
+	t.Helper()
+
+	audioTrack, err := track.NewAudioTrack(track.AudioTrackConfig{
+		ID:         "audio-track",
+		StreamID:   "stream-audio",
+		SampleRate: 48_000,
+		Channels:   2,
+		Bitrate:    64_000,
+		MTU:        1200,
+	})
+	if err != nil {
+		t.Fatalf("NewAudioTrack: %v", err)
+	}
+	return audioTrack
+}
+
+func newTestVideoTrack(t *testing.T, id, rid string, width, height int, bitrate uint32, autoAdapt bool) *track.VideoTrack {
+	t.Helper()
+
+	videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
+		ID:             id,
+		StreamID:       "stream-video",
+		RID:            rid,
+		Codec:          codec.VP8,
+		Width:          width,
+		Height:         height,
+		Bitrate:        bitrate,
+		FPS:            30,
+		MTU:            1200,
+		AutoBitrate:    autoAdapt,
+		AutoFramerate:  autoAdapt,
+		AutoResolution: autoAdapt,
+		AutoKeyframe:   autoAdapt,
+	})
+	if err != nil {
+		t.Fatalf("NewVideoTrack(%s): %v", id, err)
+	}
+	return videoTrack
+}
+
+func explicitAudioPublishConfig(t *testing.T) AudioPublishConfig {
+	t.Helper()
+	return AudioPublishConfig{Track: newTestAudioTrack(t)}
+}
+
+func explicitVideoPublishConfig(t *testing.T) VideoPublishConfig {
+	t.Helper()
+
+	videoTrack := newTestVideoTrack(t, "video-track", "", 1280, 720, 700_000, false)
+	return VideoPublishConfig{
+		Encodings: []VideoPublishEncoding{{
+			Track:                 videoTrack,
+			Width:                 1280,
+			Height:                720,
+			Bitrate:               700_000,
+			ScaleResolutionDownBy: 1,
+			Active:                true,
+		}},
+		RequiredHeaderExtensions: []string{midRTPHeaderExtensionURI},
+	}
+}
+
 func TestPublishAudioLifecycle(t *testing.T) {
 	pc := newTestPeerConnection(t)
+	cfg := explicitAudioPublishConfig(t)
 
-	published, err := PublishAudio(pc, explicitAudioPublishConfig())
+	published, err := PublishAudio(pc, cfg)
 	if err != nil {
 		t.Fatalf("PublishAudio: %v", err)
 	}
 
 	audio := published.(*publishedAudio)
-	if audio.cfg.SampleRate != 48000 || audio.cfg.Channels != 2 {
-		t.Fatalf("audio config = %d Hz/%d ch, want 48000/2", audio.cfg.SampleRate, audio.cfg.Channels)
-	}
-	if audio.cfg.StreamID != "stream-audio" {
-		t.Fatalf("StreamID = %q, want %q", audio.cfg.StreamID, "stream-audio")
-	}
-	if audio.cfg.Bitrate != 64000 || audio.cfg.PTime != 20*time.Millisecond {
-		t.Fatalf("audio config bitrate/ptime = %d/%v, want 64000/20ms", audio.cfg.Bitrate, audio.cfg.PTime)
-	}
-	if len(audio.cfg.CodecPreferences) != 1 || audio.cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeOpus {
-		t.Fatalf("CodecPreferences = %+v, want explicit Opus prefs", audio.cfg.CodecPreferences)
+	if audio.track != cfg.Track {
+		t.Fatal("PublishAudio should reuse caller-provided track")
 	}
 	if audio.Sender() == nil {
 		t.Fatal("Sender() = nil, want sender")
@@ -99,9 +112,6 @@ func TestPublishAudioLifecycle(t *testing.T) {
 	}
 	if err := audio.SetBitrate(96_000); err != nil {
 		t.Fatalf("SetBitrate: %v", err)
-	}
-	if audio.cfg.Bitrate != 96_000 {
-		t.Fatalf("cfg.Bitrate = %d, want 96000", audio.cfg.Bitrate)
 	}
 
 	if err := audio.Close(); err != nil {
@@ -120,33 +130,17 @@ func TestPublishAudioLifecycle(t *testing.T) {
 	}
 }
 
-func TestPublishedAudioDelegatesToTrack(t *testing.T) {
-	audioTrack, err := track.NewAudioTrack(track.AudioTrackConfig{
-		ID:         "audio-track",
-		StreamID:   "stream-audio",
-		SampleRate: 48_000,
-		Channels:   2,
-		Bitrate:    64_000,
-		MTU:        1200,
-	})
-	if err != nil {
-		t.Fatalf("NewAudioTrack: %v", err)
-	}
+func TestPublishedAudioDelegatesWithoutFramePolicy(t *testing.T) {
+	audioTrack := newTestAudioTrack(t)
 
 	audio := &publishedAudio{
-		cfg: AudioPublishConfig{
-			TrackID:    "audio-track",
-			StreamID:   "stream-audio",
-			SampleRate: 48_000,
-			Channels:   2,
-			PTime:      20 * time.Millisecond,
-		},
-		track:           audioTrack,
-		samplesPerFrame: 960,
+		cfg:   AudioPublishConfig{Track: audioTrack},
+		track: audioTrack,
 	}
-	silence := frame.NewAudioFrameS16(48_000, 2, 960)
-	if err := audio.WriteFrame(silence); !errors.Is(err, track.ErrNotBound) {
-		t.Fatalf("WriteFrame(unbound) error = %v, want %v", err, track.ErrNotBound)
+
+	mismatched := frame.NewAudioFrameS16(44_100, 1, 480)
+	if err := audio.WriteFrame(mismatched); !errors.Is(err, track.ErrNotBound) {
+		t.Fatalf("WriteFrame(mismatched, unbound) error = %v, want %v", err, track.ErrNotBound)
 	}
 	if err := audio.SetBitrate(80_000); err != nil {
 		t.Fatalf("SetBitrate: %v", err)
@@ -159,90 +153,15 @@ func TestPublishedAudioDelegatesToTrack(t *testing.T) {
 	}
 }
 
-func TestPublishAudioRejectsInvalidPTime(t *testing.T) {
-	pc := newTestPeerConnection(t)
-
-	cfg := explicitAudioPublishConfig()
-	cfg.PTime = 333 * time.Microsecond
-	_, err := PublishAudio(pc, cfg)
-	if !errors.Is(err, ErrInvalidConfig) {
-		t.Fatalf("PublishAudio(invalid ptime) error = %v, want %v", err, ErrInvalidConfig)
-	}
-}
-
-func TestPublishAudioRequiresExplicitCodecPreferences(t *testing.T) {
-	pc := newTestPeerConnection(t)
-
-	cfg := explicitAudioPublishConfig()
-	cfg.CodecPreferences = nil
-	_, err := PublishAudio(pc, cfg)
-	if !errors.Is(err, ErrInvalidConfig) {
-		t.Fatalf("PublishAudio(empty codec preferences) error = %v, want %v", err, ErrInvalidConfig)
-	}
-}
-
-func TestPublishedAudioRejectsMismatchedFrameShape(t *testing.T) {
-	audioTrack, err := track.NewAudioTrack(track.AudioTrackConfig{
-		ID:         "audio-track",
-		StreamID:   "stream-audio",
-		SampleRate: 48_000,
-		Channels:   2,
-		Bitrate:    64_000,
-		MTU:        1200,
-	})
-	if err != nil {
-		t.Fatalf("NewAudioTrack: %v", err)
-	}
-
-	audio := &publishedAudio{
-		cfg: AudioPublishConfig{
-			TrackID:    "audio-track",
-			StreamID:   "stream-audio",
-			SampleRate: 48_000,
-			Channels:   2,
-			PTime:      10 * time.Millisecond,
-		},
-		track:           audioTrack,
-		samplesPerFrame: 480,
-	}
-
-	for _, tc := range []struct {
-		name string
-		src  *frame.AudioFrame
-	}{
-		{name: "sample rate", src: frame.NewAudioFrameS16(44_100, 2, 480)},
-		{name: "channels", src: frame.NewAudioFrameS16(48_000, 1, 480)},
-		{name: "ptime", src: frame.NewAudioFrameS16(48_000, 2, 960)},
-	} {
-		if err := audio.WriteFrame(tc.src); err == nil {
-			t.Fatalf("WriteFrame(%s mismatch) error = nil, want error", tc.name)
-		}
-	}
-
-	matching := frame.NewAudioFrameS16(48_000, 2, 480)
-	if err := audio.WriteFrame(matching); !errors.Is(err, track.ErrNotBound) {
-		t.Fatalf("WriteFrame(valid frame, unbound track) error = %v, want %v", err, track.ErrNotBound)
-	}
-}
-
 func TestPublishVideoLifecycle(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
-	published, err := PublishVideo(pc, explicitVideoPublishConfig())
+	published, err := PublishVideo(pc, explicitVideoPublishConfig(t))
 	if err != nil {
 		t.Fatalf("PublishVideo: %v", err)
 	}
 
 	video := published.(*publishedVideo)
-	if video.cfg.StreamID != "stream-video" {
-		t.Fatalf("StreamID = %q, want %q", video.cfg.StreamID, "stream-video")
-	}
-	if video.cfg.Bitrate != 700000 {
-		t.Fatalf("Bitrate = %d, want 700000", video.cfg.Bitrate)
-	}
-	if len(video.cfg.CodecPreferences) != 1 || video.cfg.CodecPreferences[0].MimeType != webrtc.MimeTypeVP8 {
-		t.Fatalf("CodecPreferences = %+v, want explicit VP8 prefs", video.cfg.CodecPreferences)
-	}
 	if video.Sender() == nil {
 		t.Fatal("Sender() = nil, want sender")
 	}
@@ -251,11 +170,11 @@ func TestPublishVideoLifecycle(t *testing.T) {
 	if len(encodings) != 1 {
 		t.Fatalf("len(Encodings()) = %d, want 1", len(encodings))
 	}
-	if encodings[0].Width != 1280 || encodings[0].Height != 720 {
-		t.Fatalf("encoding size = %dx%d, want 1280x720", encodings[0].Width, encodings[0].Height)
-	}
 	if encodings[0].Track == nil {
 		t.Fatal("encoding.Track = nil, want track")
+	}
+	if encodings[0].Width != 1280 || encodings[0].Height != 720 || encodings[0].Bitrate != 700_000 {
+		t.Fatalf("encoding = %+v, want 1280x720@700000", encodings[0])
 	}
 
 	if err := video.WriteFrame(nil, false); err != ErrNilVideoFrame {
@@ -284,48 +203,100 @@ func TestPublishVideoLifecycle(t *testing.T) {
 	}
 }
 
-func TestPublishVideoOptsInToTrackAdaptation(t *testing.T) {
+func TestPublishVideoLeavesAdaptationPolicyToCaller(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
-	published, err := PublishVideo(pc, explicitVideoPublishConfig())
-	if err != nil {
-		t.Fatalf("PublishVideo: %v", err)
-	}
+	t.Run("NoAutoAdaptation", func(t *testing.T) {
+		published, err := PublishVideo(pc, explicitVideoPublishConfig(t))
+		if err != nil {
+			t.Fatalf("PublishVideo: %v", err)
+		}
+		video := published.(*publishedVideo)
+		defer video.Close()
 
-	video := published.(*publishedVideo)
-	defer video.Close()
+		var calls int32
+		video.encodings[0].videoTrack.SetBWESource(func() *track.BandwidthEstimate {
+			atomic.AddInt32(&calls, 1)
+			return &track.BandwidthEstimate{TargetBitrateBps: 1_000_000}
+		})
+		defer video.encodings[0].videoTrack.SetBWESource(nil)
 
-	var calls int32
-	video.encodings[0].videoTrack.SetBWESource(func() *track.BandwidthEstimate {
-		atomic.AddInt32(&calls, 1)
-		return &track.BandwidthEstimate{TargetBitrateBps: 1_000_000}
+		time.Sleep(250 * time.Millisecond)
+		if got := atomic.LoadInt32(&calls); got != 0 {
+			t.Fatalf("BWE source calls = %d, want 0 when caller did not enable adaptation", got)
+		}
 	})
-	t.Cleanup(func() {
-		video.encodings[0].videoTrack.SetBWESource(nil)
-	})
 
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for atomic.LoadInt32(&calls) == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if atomic.LoadInt32(&calls) == 0 {
-		t.Fatal("SetBWESource did not start adaptation loop, want helper opt-in")
-	}
+	t.Run("CallerOptIn", func(t *testing.T) {
+		published, err := PublishVideo(pc, VideoPublishConfig{
+			Encodings: []VideoPublishEncoding{{
+				Track:                 newTestVideoTrack(t, "video-auto", "", 1280, 720, 700_000, true),
+				Width:                 1280,
+				Height:                720,
+				Bitrate:               700_000,
+				ScaleResolutionDownBy: 1,
+				Active:                true,
+			}},
+		})
+		if err != nil {
+			t.Fatalf("PublishVideo(auto): %v", err)
+		}
+		video := published.(*publishedVideo)
+		defer video.Close()
+
+		var calls int32
+		video.encodings[0].videoTrack.SetBWESource(func() *track.BandwidthEstimate {
+			atomic.AddInt32(&calls, 1)
+			return &track.BandwidthEstimate{TargetBitrateBps: 1_000_000}
+		})
+		defer video.encodings[0].videoTrack.SetBWESource(nil)
+
+		deadline := time.Now().Add(500 * time.Millisecond)
+		for atomic.LoadInt32(&calls) == 0 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if atomic.LoadInt32(&calls) == 0 {
+			t.Fatal("SetBWESource did not start adaptation loop, want caller opt-in to work")
+		}
+	})
 }
 
 func TestPublishVideoSimulcastControls(t *testing.T) {
 	pc := newTestPeerConnection(t)
 
-	cfg := explicitVideoPublishConfig()
-	cfg.SVC = &codec.SVCConfig{
-		Mode: codec.SVCModeS3T3,
-		Layers: []codec.SVCLayerConfig{
-			{RID: "q", Width: 320, Height: 180, Bitrate: 120_000, Active: true},
-			{RID: "h", Width: 640, Height: 360, Bitrate: 240_000, Active: true},
-			{RID: "f", Width: 1280, Height: 720, Bitrate: 480_000, Active: true},
+	published, err := PublishVideo(pc, VideoPublishConfig{
+		Encodings: []VideoPublishEncoding{
+			{
+				Track:                 newTestVideoTrack(t, "video-track", "q", 320, 180, 120_000, false),
+				Width:                 320,
+				Height:                180,
+				Bitrate:               120_000,
+				ScaleResolutionDownBy: 4,
+				Active:                true,
+			},
+			{
+				Track:                 newTestVideoTrack(t, "video-track", "h", 640, 360, 240_000, false),
+				Width:                 640,
+				Height:                360,
+				Bitrate:               240_000,
+				ScaleResolutionDownBy: 2,
+				Active:                true,
+			},
+			{
+				Track:                 newTestVideoTrack(t, "video-track", "f", 1280, 720, 480_000, false),
+				Width:                 1280,
+				Height:                720,
+				Bitrate:               480_000,
+				ScaleResolutionDownBy: 1,
+				Active:                true,
+			},
 		},
-	}
-	published, err := PublishVideo(pc, cfg)
+		RequiredHeaderExtensions: []string{
+			midRTPHeaderExtensionURI,
+			rtpStreamIDHeaderExtensionURI,
+			repairedStreamIDHeaderExtensionURI,
+		},
+	})
 	if err != nil {
 		t.Fatalf("PublishVideo(simulcast): %v", err)
 	}
@@ -368,40 +339,12 @@ func TestPublishVideoSimulcastControls(t *testing.T) {
 }
 
 func TestPublishedVideoHelpers(t *testing.T) {
-	firstTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
-		ID:       "video-1",
-		StreamID: "stream-video",
-		Codec:    codec.VP8,
-		Width:    640,
-		Height:   360,
-		Bitrate:  300_000,
-		FPS:      30,
-		MTU:      1200,
-	})
-	if err != nil {
-		t.Fatalf("NewVideoTrack(first): %v", err)
-	}
-	secondTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
-		ID:       "video-2",
-		StreamID: "stream-video",
-		Codec:    codec.VP8,
-		Width:    320,
-		Height:   180,
-		Bitrate:  120_000,
-		FPS:      30,
-		MTU:      1200,
-	})
-	if err != nil {
-		t.Fatalf("NewVideoTrack(second): %v", err)
-	}
+	firstTrack := newTestVideoTrack(t, "video-1", "f", 640, 360, 300_000, false)
+	secondTrack := newTestVideoTrack(t, "video-2", "h", 320, 180, 120_000, false)
 
 	published := &publishedVideo{
 		cfg: VideoPublishConfig{
-			TrackID: "video-track",
-			Width:   640,
-			Height:  360,
-			FPS:     30,
-			SVC:     &codec.SVCConfig{Mode: codec.SVCModeL3T3_KEY},
+			RequiredHeaderExtensions: []string{midRTPHeaderExtensionURI},
 		},
 		encodings: []*encodingRuntime{
 			{
@@ -434,38 +377,6 @@ func TestPublishedVideoHelpers(t *testing.T) {
 		t.Fatalf("validateNegotiatedLocked(unbound): %v", err)
 	}
 
-	if got, ok := codecFromPreferences([]webrtc.RTPCodecParameters{{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeAV1}}}); !ok || got != codec.AV1 {
-		t.Fatalf("codecFromPreferences() = (%v, %v), want (%v, true)", got, ok, codec.AV1)
-	}
-	if _, ok := codecFromPreferences(nil); ok {
-		t.Fatal("codecFromPreferences(nil) = ok, want no match")
-	}
-
-	original := &codec.SVCConfig{
-		Mode: codec.SVCModeS2T3,
-		Layers: []codec.SVCLayerConfig{
-			{RID: "h", Width: 320, Height: 180, Bitrate: 100_000, Active: true},
-		},
-	}
-	cloned := cloneSVCConfig(original)
-	cloned.Layers[0].RID = "mutated"
-	if cloned.Mode != codec.SVCModeS2T3 {
-		t.Fatalf("cloneSVCConfig().Mode = %v, want %v", cloned.Mode, codec.SVCModeS2T3)
-	}
-	if original.Layers[0].RID != "h" {
-		t.Fatalf("cloneSVCConfig() should deep-copy layers, got RID %q", original.Layers[0].RID)
-	}
-	if cloneSVCConfig(nil) != nil {
-		t.Fatal("cloneSVCConfig(nil) != nil")
-	}
-
-	if frame := (encodingConfig{Scale: 2.0, Width: 320, Height: 180}).AllocScaledFrame(); frame == nil {
-		t.Fatal("AllocScaledFrame() = nil, want frame")
-	}
-	if frame := (encodingConfig{Scale: 1.0, Width: 320, Height: 180}).AllocScaledFrame(); frame != nil {
-		t.Fatalf("AllocScaledFrame(scale=1) = %v, want nil", frame)
-	}
-
 	if err := closePublishedTracks(published.encodings); err != nil {
 		t.Fatalf("closePublishedTracks: %v", err)
 	}
@@ -475,23 +386,10 @@ func TestPublishedVideoHelpers(t *testing.T) {
 	if err := secondTrack.WriteFrame(nil, false); err != track.ErrTrackClosed {
 		t.Fatalf("secondTrack.WriteFrame after close error = %v, want %v", err, track.ErrTrackClosed)
 	}
-
 }
 
 func TestPublishedVideoRejectsUnsupportedScaledInput(t *testing.T) {
-	videoTrack, err := track.NewVideoTrack(track.VideoTrackConfig{
-		ID:       "video-invalid-scaled",
-		StreamID: "stream-video",
-		Codec:    codec.VP8,
-		Width:    640,
-		Height:   360,
-		Bitrate:  300_000,
-		FPS:      30,
-		MTU:      1200,
-	})
-	if err != nil {
-		t.Fatalf("NewVideoTrack: %v", err)
-	}
+	videoTrack := newTestVideoTrack(t, "video-invalid-scaled", "", 640, 360, 300_000, false)
 	defer videoTrack.Close()
 
 	published := &publishedVideo{
