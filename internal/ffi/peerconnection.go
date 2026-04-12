@@ -803,6 +803,13 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 	}
 
 	params := newVideoTrackSourcePushFrameParams(source, yPlane, uPlane, vPlane, yStride, uStride, vStride, timestampUs)
+	var pinner runtime.Pinner
+	pinner.Pin(params)
+	pinByteSlice(&pinner, yPlane)
+	pinByteSlice(&pinner, uPlane)
+	pinByteSlice(&pinner, vPlane)
+	defer pinner.Unpin()
+
 	result := shimVideoTrackSourcePushFrame(uintptr(unsafe.Pointer(params)))
 	runtime.KeepAlive(yPlane)
 	runtime.KeepAlive(uPlane)
@@ -879,6 +886,11 @@ func AudioTrackSourcePushFrame(source uintptr, samples []int16, numSamples int, 
 	}
 
 	params := newAudioTrackSourcePushFrameParams(source, samples, numSamples, timestampUs)
+	var pinner runtime.Pinner
+	pinner.Pin(params)
+	pinInt16Slice(&pinner, samples)
+	defer pinner.Unpin()
+
 	result := shimAudioTrackSourcePushFrame(uintptr(unsafe.Pointer(params)))
 	runtime.KeepAlive(samples)
 	runtime.KeepAlive(params)
@@ -892,6 +904,20 @@ func newAudioTrackSourcePushFrameParams(source uintptr, samples []int16, numSamp
 		NumSamples:  int32(numSamples),
 		TimestampUs: timestampUs,
 	}
+}
+
+func pinByteSlice(pinner *runtime.Pinner, data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	pinner.Pin(&data[0])
+}
+
+func pinInt16Slice(pinner *runtime.Pinner, data []int16) {
+	if len(data) == 0 {
+		return
+	}
+	pinner.Pin(&data[0])
 }
 
 // PeerConnectionAddAudioTrackFromSource adds an audio track using a source.
