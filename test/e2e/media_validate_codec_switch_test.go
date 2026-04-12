@@ -11,7 +11,6 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
 )
 
@@ -24,7 +23,7 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	defer pp.Close()
 
 	session := validate.NewPCSession(pp.Receiver, validate.SessionConfig{
-		Browser:                 pioncodec.BrowserChrome,
+		Profile:                 validate.ProfileChrome,
 		StatsPollInterval:       50 * time.Millisecond,
 		EventHistory:            64,
 		SwitchRecoveryThreshold: 4 * time.Second,

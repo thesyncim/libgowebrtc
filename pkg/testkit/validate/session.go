@@ -219,11 +219,11 @@ type dataChannelState struct {
 	heartbeatOn  bool
 }
 
-// Session is the browser-style validation surface for media, data channels,
-// and transport state.
+// Session is the explicit validation surface for media, data channels, and
+// transport state.
 type Session struct {
 	cfg    SessionConfig
-	policy BrowserPolicy
+	policy ProfilePolicy
 	peer   peerAdapter
 
 	mu sync.Mutex
@@ -279,8 +279,8 @@ func newSession(peer peerAdapter, cfg SessionConfig) *Session {
 	return s
 }
 
-// PionOnTrack returns an OnTrack handler that binds browser-shaped remote
-// tracks and passive subscriber monitors into the session.
+// PionOnTrack returns an OnTrack handler that binds remote tracks and passive
+// subscriber monitors into the session.
 func (s *Session) PionOnTrack() func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
 	return func(trackRemote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		if trackRemote == nil {
@@ -323,8 +323,8 @@ func (s *Session) PionOnTrack() func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
 	}
 }
 
-// PCOnTrack returns an OnTrack handler that binds browser-shaped remote tracks
-// into the session.
+// PCOnTrack returns an OnTrack handler that binds native remote tracks into the
+// session.
 func (s *Session) PCOnTrack() func(*pc.Track, *pc.RTPReceiver, string) {
 	return func(trackRemote *pc.Track, receiver *pc.RTPReceiver, streamID string) {
 		if trackRemote == nil {
@@ -340,9 +340,8 @@ func (s *Session) PCOnTrack() func(*pc.Track, *pc.RTPReceiver, string) {
 	}
 }
 
-// ObserveRemoteTrack adds a previously-bound browser-style remote track to the
-// session. This is best-effort when a track already has caller-installed frame
-// callbacks.
+// ObserveRemoteTrack adds a previously-bound remote track to the session. This
+// is best-effort when a track already has caller-installed frame callbacks.
 func (s *Session) ObserveRemoteTrack(track media.RemoteTrack) {
 	s.observeRemoteTrackInternal(track, "manual", nil, nil)
 }
@@ -714,7 +713,7 @@ func (s *Session) Reset() {
 }
 
 // Validate returns an aggregated validation error when the session is not in a
-// healthy browser-visible state.
+// healthy subscriber-visible state.
 func (s *Session) Validate() error {
 	snap := s.Snapshot()
 	var problems []string
@@ -802,7 +801,7 @@ func (s *Session) WaitForAudioContinuous(ctx context.Context, trackID string) er
 // WaitForCodecSwitch waits until the target track reflects the requested MIME type.
 func (s *Session) WaitForCodecSwitch(ctx context.Context, trackID, mime string) error {
 	if !s.policy.SupportsCodecSwitchAssertions {
-		s.recordSkip(fmt.Sprintf("codec switch assertions are not guaranteed for browser profile %q", s.policy.Browser))
+		s.recordSkip(fmt.Sprintf("codec switch assertions are not guaranteed for validation profile %q", s.policy.Profile))
 		return nil
 	}
 	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
@@ -820,7 +819,7 @@ func (s *Session) WaitForCodecSwitch(ctx context.Context, trackID, mime string) 
 // spatial/temporal layer through the subscriber-visible monitor.
 func (s *Session) WaitForVideoLayer(ctx context.Context, trackID string, spatial, temporal int) error {
 	if !s.policy.SupportsDependencyDescriptor {
-		s.recordSkip(fmt.Sprintf("dependency-descriptor layer assertions are not guaranteed for browser profile %q", s.policy.Browser))
+		s.recordSkip(fmt.Sprintf("dependency-descriptor layer assertions are not guaranteed for validation profile %q", s.policy.Profile))
 		return nil
 	}
 	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
@@ -832,7 +831,7 @@ func (s *Session) WaitForVideoLayer(ctx context.Context, trackID string, spatial
 // WaitForVideoRID waits until the target video track reports the desired RID.
 func (s *Session) WaitForVideoRID(ctx context.Context, trackID, rid string) error {
 	if !s.policy.SupportsRID {
-		s.recordSkip(fmt.Sprintf("RID assertions are not guaranteed for browser profile %q", s.policy.Browser))
+		s.recordSkip(fmt.Sprintf("RID assertions are not guaranteed for validation profile %q", s.policy.Profile))
 		return nil
 	}
 	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
@@ -958,7 +957,7 @@ func (s *Session) snapshotLocked() SessionSnapshot {
 	}
 
 	return SessionSnapshot{
-		Browser:             s.cfg.Browser,
+		Profile:             s.cfg.Profile,
 		Policy:              s.policy,
 		ConnectionStates:    append([]PeerConnectionStateEvent(nil), s.connectionStates...),
 		ICEConnectionStates: append([]ICEConnectionStateEvent(nil), s.iceConnectionStates...),

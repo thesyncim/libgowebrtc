@@ -2,14 +2,22 @@ package validate
 
 import (
 	"time"
-
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 )
 
-// BrowserPolicy captures browser-shaped defaults and feature gates used by the
-// validation suite.
-type BrowserPolicy struct {
-	Browser                       pioncodec.Browser
+// Profile identifies the validation capability envelope the session should
+// assume when deciding what assertions are meaningful.
+type Profile string
+
+const (
+	ProfileChrome  Profile = "chrome"
+	ProfileFirefox Profile = "firefox"
+	ProfileSafari  Profile = "safari"
+)
+
+// ProfilePolicy captures profile-specific defaults and feature gates used by
+// the validation suite.
+type ProfilePolicy struct {
+	Profile                       Profile
 	SupportsSimulcast             bool
 	SupportsDependencyDescriptor  bool
 	SupportsLayeredVP9            bool
@@ -26,12 +34,13 @@ type BrowserPolicy struct {
 	DefaultHeartbeatTimeout        time.Duration
 }
 
-// PolicyForBrowser returns the browser-shaped policy used by the validator.
-func PolicyForBrowser(browser pioncodec.Browser) BrowserPolicy {
-	switch browser {
-	case pioncodec.BrowserFirefox:
-		return BrowserPolicy{
-			Browser:                        pioncodec.BrowserFirefox,
+// PolicyForProfile returns the policy used by the validator for the requested
+// validation profile.
+func PolicyForProfile(profile Profile) ProfilePolicy {
+	switch profile {
+	case ProfileFirefox:
+		return ProfilePolicy{
+			Profile:                        ProfileFirefox,
 			SupportsSimulcast:              true,
 			SupportsDependencyDescriptor:   false,
 			SupportsLayeredVP9:             false,
@@ -46,9 +55,9 @@ func PolicyForBrowser(browser pioncodec.Browser) BrowserPolicy {
 			DefaultHeartbeatInterval:       2 * time.Second,
 			DefaultHeartbeatTimeout:        6 * time.Second,
 		}
-	case pioncodec.BrowserSafari:
-		return BrowserPolicy{
-			Browser:                        pioncodec.BrowserSafari,
+	case ProfileSafari:
+		return ProfilePolicy{
+			Profile:                        ProfileSafari,
 			SupportsSimulcast:              false,
 			SupportsDependencyDescriptor:   false,
 			SupportsLayeredVP9:             false,
@@ -64,8 +73,8 @@ func PolicyForBrowser(browser pioncodec.Browser) BrowserPolicy {
 			DefaultHeartbeatTimeout:        6 * time.Second,
 		}
 	default:
-		return BrowserPolicy{
-			Browser:                        pioncodec.BrowserChrome,
+		return ProfilePolicy{
+			Profile:                        ProfileChrome,
 			SupportsSimulcast:              true,
 			SupportsDependencyDescriptor:   true,
 			SupportsLayeredVP9:             true,
@@ -83,11 +92,11 @@ func PolicyForBrowser(browser pioncodec.Browser) BrowserPolicy {
 	}
 }
 
-func normalizeSessionConfig(cfg SessionConfig) (SessionConfig, BrowserPolicy) {
-	if cfg.Browser == "" {
-		cfg.Browser = pioncodec.BrowserChrome
+func normalizeSessionConfig(cfg SessionConfig) (SessionConfig, ProfilePolicy) {
+	if cfg.Profile == "" {
+		cfg.Profile = ProfileChrome
 	}
-	policy := PolicyForBrowser(cfg.Browser)
+	policy := PolicyForProfile(cfg.Profile)
 	if cfg.StatsPollInterval <= 0 {
 		cfg.StatsPollInterval = policy.DefaultStatsPollInterval
 	}

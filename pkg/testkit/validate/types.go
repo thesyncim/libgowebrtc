@@ -6,16 +6,15 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
-	"github.com/thesyncim/libgowebrtc/pkg/pioncodec"
 	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
-// SessionConfig configures browser-shaped validation behavior.
+// SessionConfig configures validation behavior for a subscriber session.
 type SessionConfig struct {
-	Browser           pioncodec.Browser
+	Profile           Profile
 	StatsPollInterval time.Duration
 	EventHistory      int
-	// Zero threshold values use adaptive browser-shaped defaults.
+	// Zero threshold values use adaptive profile defaults.
 	FreezeThreshold             time.Duration
 	PacketGapThreshold          time.Duration
 	AudioGapThreshold           time.Duration
@@ -119,7 +118,7 @@ type TransportSnapshot struct {
 	DataChannels     []DataChannelStatsSample
 }
 
-// VideoTrackSnapshot captures browser-visible and wire-visible video state.
+// VideoTrackSnapshot captures subscriber-visible and wire-visible video state.
 type VideoTrackSnapshot struct {
 	TrackID           string
 	StreamID          string
@@ -149,7 +148,7 @@ type VideoTrackSnapshot struct {
 	Wire              *pionrecv.VideoSubscriberSnapshot
 }
 
-// AudioTrackSnapshot captures browser-visible and wire-visible audio state.
+// AudioTrackSnapshot captures subscriber-visible and wire-visible audio state.
 type AudioTrackSnapshot struct {
 	TrackID           string
 	StreamID          string
@@ -186,7 +185,7 @@ type DataChannelStateEvent struct {
 	State string
 }
 
-// DataChannelSnapshot captures browser-visible data-channel continuity state.
+// DataChannelSnapshot captures subscriber-visible data-channel continuity state.
 type DataChannelSnapshot struct {
 	Label                string
 	ID                   int
@@ -211,10 +210,10 @@ type DataChannelSnapshot struct {
 	Stats                []DataChannelStatsSample
 }
 
-// SessionSnapshot is the aggregate browser-style validation view.
+// SessionSnapshot is the aggregate validation view.
 type SessionSnapshot struct {
-	Browser             pioncodec.Browser
-	Policy              BrowserPolicy
+	Profile             Profile
+	Policy              ProfilePolicy
 	ConnectionStates    []PeerConnectionStateEvent
 	ICEConnectionStates []ICEConnectionStateEvent
 	SignalingStates     []SignalingStateEvent

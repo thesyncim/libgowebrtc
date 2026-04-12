@@ -209,13 +209,13 @@ func (f *fakeMediaTrack) ReadyState() string            { return "live" }
 func (f *fakeMediaTrack) Stop()                         {}
 func (f *fakeMediaTrack) Clone() media.MediaStreamTrack { return &fakeMediaTrack{enabled: f.enabled} }
 
-func TestPolicyForBrowser(t *testing.T) {
-	chrome := PolicyForBrowser("chrome")
+func TestPolicyForProfile(t *testing.T) {
+	chrome := PolicyForProfile(ProfileChrome)
 	if !chrome.SupportsSimulcast || !chrome.SupportsDependencyDescriptor {
 		t.Fatalf("chrome policy = %+v, want simulcast and DD support", chrome)
 	}
 
-	safari := PolicyForBrowser("safari")
+	safari := PolicyForProfile(ProfileSafari)
 	if safari.SupportsDependencyDescriptor || safari.SupportsLayeredVP9 {
 		t.Fatalf("safari policy = %+v, want conservative layered support flags disabled", safari)
 	}
@@ -227,8 +227,8 @@ func TestNewSessionsAndTrackWrappers(t *testing.T) {
 	if pionSession == nil {
 		t.Fatal("NewPionSession() = nil")
 	}
-	if got := pionSession.Snapshot().Browser; got != "chrome" {
-		t.Fatalf("pionSession browser = %q, want chrome", got)
+	if got := pionSession.Snapshot().Profile; got != ProfileChrome {
+		t.Fatalf("pionSession profile = %q, want chrome", got)
 	}
 
 	dc, err := pionPC.CreateDataChannel("control", nil)
@@ -1030,8 +1030,8 @@ func TestHasOpenDataChannel(t *testing.T) {
 	}
 }
 
-func TestSessionBrowserPolicySkipsUnsupportedAssertions(t *testing.T) {
-	session := newSession(nil, SessionConfig{Browser: "safari"})
+func TestSessionProfilePolicySkipsUnsupportedAssertions(t *testing.T) {
+	session := newSession(nil, SessionConfig{Profile: ProfileSafari})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{id: "video-1"}
 	session.mu.Unlock()
@@ -1086,7 +1086,7 @@ func TestSessionVideoSpecificWaiters(t *testing.T) {
 }
 
 func TestScenarioLabSkipsUnsupportedLayerScenarios(t *testing.T) {
-	session := newSession(nil, SessionConfig{Browser: "safari"})
+	session := newSession(nil, SessionConfig{Profile: ProfileSafari})
 	lab := NewScenarioLab(session, LabConfig{})
 	video := &fakePublishedVideo{}
 

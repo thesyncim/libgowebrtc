@@ -64,7 +64,7 @@ type ScenarioStep struct {
 	Expect   ScenarioExpectation
 }
 
-// ScenarioExpectation describes the browser-visible outcome that should be
+// ScenarioExpectation describes the subscriber-visible outcome that should be
 // observed after a scenario step completes.
 type ScenarioExpectation struct {
 	Within  time.Duration
@@ -103,7 +103,7 @@ type LabConfig struct {
 	StepDelay time.Duration
 }
 
-// ScenarioLab executes browser-style scenario scripts against a Session.
+// ScenarioLab executes validation scenario scripts against a Session.
 type ScenarioLab struct {
 	session *Session
 	cfg     LabConfig
@@ -164,7 +164,7 @@ func (l *ScenarioLab) runStep(ctx context.Context, step ScenarioStep) error {
 	switch step.Action {
 	case ScenarioActionSetLayerActive:
 		if !l.session.policy.SupportsSimulcast && !l.session.policy.SupportsLayeredVP9 && !l.session.policy.SupportsLayeredAV1 {
-			l.session.recordSkip(fmt.Sprintf("layer activation scenarios are not guaranteed for browser profile %q", l.session.policy.Browser))
+			l.session.recordSkip(fmt.Sprintf("layer activation scenarios are not guaranteed for validation profile %q", l.session.policy.Profile))
 			return nil
 		}
 		if step.Video == nil {
@@ -174,7 +174,7 @@ func (l *ScenarioLab) runStep(ctx context.Context, step ScenarioStep) error {
 
 	case ScenarioActionSetLayerBitrate:
 		if !l.session.policy.SupportsSimulcast && !l.session.policy.SupportsLayeredVP9 && !l.session.policy.SupportsLayeredAV1 {
-			l.session.recordSkip(fmt.Sprintf("layer bitrate scenarios are not guaranteed for browser profile %q", l.session.policy.Browser))
+			l.session.recordSkip(fmt.Sprintf("layer bitrate scenarios are not guaranteed for validation profile %q", l.session.policy.Profile))
 			return nil
 		}
 		if step.Video == nil {
@@ -190,7 +190,7 @@ func (l *ScenarioLab) runStep(ctx context.Context, step ScenarioStep) error {
 
 	case ScenarioActionCodecRenegotiation, ScenarioActionICERestart, ScenarioActionTrackAdd, ScenarioActionTrackRemove, ScenarioActionExternal:
 		if step.Action == ScenarioActionCodecRenegotiation && !l.session.policy.SupportsCodecSwitchAssertions {
-			l.session.recordSkip(fmt.Sprintf("codec renegotiation assertions are not guaranteed for browser profile %q", l.session.policy.Browser))
+			l.session.recordSkip(fmt.Sprintf("codec renegotiation assertions are not guaranteed for validation profile %q", l.session.policy.Profile))
 			return nil
 		}
 		if step.Callback == nil {
@@ -309,15 +309,15 @@ func (l *ScenarioLab) awaitExpectation(ctx context.Context, expect ScenarioExpec
 
 func (l *ScenarioLab) normalizeExpectation(expect ScenarioExpectation) ScenarioExpectation {
 	if expect.CodecMime != "" && !l.session.policy.SupportsCodecSwitchAssertions {
-		l.session.recordSkip(fmt.Sprintf("codec switch assertions are not guaranteed for browser profile %q", l.session.policy.Browser))
+		l.session.recordSkip(fmt.Sprintf("codec switch assertions are not guaranteed for validation profile %q", l.session.policy.Profile))
 		expect.CodecMime = ""
 	}
 	if expect.VideoRID != "" && !l.session.policy.SupportsRID {
-		l.session.recordSkip(fmt.Sprintf("RID assertions are not guaranteed for browser profile %q", l.session.policy.Browser))
+		l.session.recordSkip(fmt.Sprintf("RID assertions are not guaranteed for validation profile %q", l.session.policy.Profile))
 		expect.VideoRID = ""
 	}
 	if expect.HasVideoLayer && !l.session.policy.SupportsDependencyDescriptor {
-		l.session.recordSkip(fmt.Sprintf("dependency-descriptor layer assertions are not guaranteed for browser profile %q", l.session.policy.Browser))
+		l.session.recordSkip(fmt.Sprintf("dependency-descriptor layer assertions are not guaranteed for validation profile %q", l.session.policy.Profile))
 		expect.HasVideoLayer = false
 		expect.VideoLayer = pionrecv.VideoLayer{}
 	}
