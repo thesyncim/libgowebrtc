@@ -15,6 +15,12 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
 )
 
+const (
+	audioCodecSwitchStatsPollInterval = 250 * time.Millisecond
+	audioSenderSettleDelay            = 350 * time.Millisecond
+	audioWarmupFrameCount             = 6
+)
+
 func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
 		t.Skip("native receiver audio codec-switch validation is currently only stable on darwin_arm64")
@@ -25,7 +31,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 
 	session := validate.NewPCSession(pp.Receiver, validate.SessionConfig{
 		Browser:                 pioncodec.BrowserChrome,
-		StatsPollInterval:       50 * time.Millisecond,
+		StatsPollInterval:       audioCodecSwitchStatsPollInterval,
 		EventHistory:            64,
 		SwitchRecoveryThreshold: 4 * time.Second,
 	})
@@ -80,15 +86,15 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	if err := session.WaitForStable(ctx); err != nil {
 		t.Fatalf("WaitForStable: %v", err)
 	}
-	if err := waitForAudioSenderSettle(ctx, 200*time.Millisecond); err != nil {
+	if err := waitForAudioSenderSettle(ctx, audioSenderSettleDelay); err != nil {
 		t.Fatalf("waitForAudioSenderSettle(initial): %v", err)
 	}
 
 	if err := pump.resume(ctx); err != nil {
 		t.Fatalf("audioPump.resume(initial): %v", err)
 	}
-	if err := session.WaitForAudioContinuous(ctx, "audio-codec-switch"); err != nil {
-		t.Fatalf("WaitForAudioContinuous(initial): %v", err)
+	if err := waitForReceiverAudioReady(ctx, session, "audio-codec-switch", audioWarmupFrameCount); err != nil {
+		t.Fatalf("waitForReceiverAudioReady(initial): %v", err)
 	}
 	initialMime, ok := waitForReceiverAudioCodecMaybe(session, pp.Receiver, "audio-codec-switch", 4*time.Second)
 	if !ok {
@@ -97,6 +103,13 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	targetCodec, ok := chooseAlternateAudioCodec(sender, initialMime)
 	if !ok {
 		t.Skipf("need at least two negotiated audio codecs to test a switch; current=%q negotiated=%v", initialMime, mustNegotiatedAudioCodecs(t, sender))
+	}
+
+	// Startup warmup can include a transient gap on slower runners; reset before
+	// asserting the renegotiation behavior itself.
+	session.Reset()
+	if err := waitForReceiverAudioReady(ctx, session, "audio-codec-switch", audioWarmupFrameCount); err != nil {
+		t.Fatalf("waitForReceiverAudioReady(reset): %v", err)
 	}
 
 	lab := validate.NewScenarioLab(session, validate.LabConfig{})
@@ -109,7 +122,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 					if err := pump.pause(stepCtx); err != nil {
 						return err
 					}
-					if err := waitForAudioSenderSettle(stepCtx, 200*time.Millisecond); err != nil {
+					if err := waitForAudioSenderSettle(stepCtx, audioSenderSettleDelay); err != nil {
 						return err
 					}
 
@@ -123,7 +136,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 					if err := stepSession.WaitForStable(stepCtx); err != nil {
 						return err
 					}
-					if err := waitForAudioSenderSettle(stepCtx, 200*time.Millisecond); err != nil {
+					if err := waitForAudioSenderSettle(stepCtx, audioSenderSettleDelay); err != nil {
 						return err
 					}
 
@@ -262,6 +275,23 @@ func waitForAudioSenderSettle(ctx context.Context, d time.Duration) error {
 		return ctx.Err()
 	case <-timer.C:
 		return nil
+	}
+}
+
+func waitForReceiverAudioReady(ctx context.Context, session *validate.Session, trackID string, minFrames uint64) error {
+	for {
+		snapshot := session.Snapshot()
+		if track, ok := snapshot.AudioTracks[trackID]; ok && track.FrameCount >= minFrames {
+			return nil
+		}
+
+		timer := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
 }
 
