@@ -367,7 +367,7 @@ import (
     "github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
-codecSet := pioncodec.CodecSetFromParameters([]webrtc.RTPCodecParameters{
+videoCodecs := []webrtc.RTPCodecParameters{
     {
         RTPCodecCapability: webrtc.RTPCodecCapability{
             MimeType:  webrtc.MimeTypeVP8,
@@ -383,7 +383,7 @@ codecSet := pioncodec.CodecSetFromParameters([]webrtc.RTPCodecParameters{
         },
         PayloadType: 120,
     },
-})
+}
 
 videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
     ID:               "video",
@@ -392,7 +392,7 @@ videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
     Bitrate:          2_000_000,
     FPS:              30,
     MTU:              1200,
-    CodecPreferences: codecSet.SupportedOnly().VideoCodecs(),
+    CodecPreferences: pioncodec.VideoCodecParameters(videoCodecs),
 })
 
 // Apply the same explicit preferences to libgowebrtc's native PeerConnection wrapper.
@@ -404,12 +404,12 @@ pc, _ := pc.NewPeerConnection(pc.Configuration{
     ICEServers:         nil,
 })
 transceiver, _ := pc.AddTransceiver("video", &pc.TransceiverInit{Direction: pc.TransceiverDirectionSendOnly})
-_ = transceiver.SetCodecPreferences(codecSet.SupportedOnly().VideoCodecs())
+_ = transceiver.SetCodecPreferences(pioncodec.VideoCodecParameters(videoCodecs))
 
 // For direct Pion use, hand Pion the full RTP codec list you want negotiated.
 pionPC, _ := webrtc.NewPeerConnection(webrtc.Configuration{})
 recv, _ := pionPC.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
-_ = recv.SetCodecPreferences(codecSet.VideoCodecs())
+_ = recv.SetCodecPreferences(videoCodecs)
 ```
 
 ### Migration Notes
@@ -431,7 +431,7 @@ _ = peerConnection.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.S
 _ = peerConnection.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
 
 // The advanced codec path is raw Pion RTP codec parameters everywhere.
-codecSet := pioncodec.CodecSetFromParameters([]webrtc.RTPCodecParameters{
+prefs := []webrtc.RTPCodecParameters{
     {
         RTPCodecCapability: webrtc.RTPCodecCapability{
             MimeType:  webrtc.MimeTypeVP8,
@@ -439,8 +439,7 @@ codecSet := pioncodec.CodecSetFromParameters([]webrtc.RTPCodecParameters{
         },
         PayloadType: 96,
     },
-})
-prefs := codecSet.SupportedOnly().VideoCodecs()
+}
 
 _ = transceiver.SetCodecPreferences(prefs)
 _ = sender.SetPreferredCodec(prefs[0])

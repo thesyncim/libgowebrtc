@@ -153,7 +153,7 @@ func TestNewVideoEncoderAcceptsVP9Profile0(t *testing.T) {
 func TestMultiVideoEncoderLazyCreationAndSwitch(t *testing.T) {
 	testutil.SkipIfNoShim(t)
 
-	codecs := CodecSetFromParameters([]webrtc.RTPCodecParameters{
+	codecs := VideoCodecParameters([]webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:  webrtc.MimeTypeVP8,
@@ -169,7 +169,7 @@ func TestMultiVideoEncoderLazyCreationAndSwitch(t *testing.T) {
 			},
 			PayloadType: 120,
 		},
-	}).VideoCodecs()
+	})
 	multi, err := NewMultiVideoEncoder(codecs, VideoFactoryConfig{
 		Width: 320, Height: 240, Bitrate: 400_000, FPS: 30, KeyInterval: 30,
 	})

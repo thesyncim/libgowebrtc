@@ -6,8 +6,8 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-func TestCodecSetFromParametersPreservesExplicitOrder(t *testing.T) {
-	set := CodecSetFromParameters([]webrtc.RTPCodecParameters{
+func TestVideoAndAudioCodecParametersPreserveExplicitOrder(t *testing.T) {
+	codecs := []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:  webrtc.MimeTypeVP8,
@@ -39,10 +39,10 @@ func TestCodecSetFromParametersPreservesExplicitOrder(t *testing.T) {
 			},
 			PayloadType: 111,
 		},
-	})
+	}
 
-	video := set.VideoCodecs()
-	audio := set.AudioCodecs()
+	video := VideoCodecParameters(codecs)
+	audio := AudioCodecParameters(codecs)
 
 	if len(video) != 3 {
 		t.Fatalf("video codecs len = %d, want 3", len(video))
@@ -58,8 +58,8 @@ func TestCodecSetFromParametersPreservesExplicitOrder(t *testing.T) {
 	}
 }
 
-func TestCodecSetSupportedOnlyFiltersUnsupportedEntries(t *testing.T) {
-	set := CodecSetFromParameters([]webrtc.RTPCodecParameters{
+func TestCloneCodecParametersReturnsIndependentCopy(t *testing.T) {
+	codecs := []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:  webrtc.MimeTypeVP8,
@@ -83,23 +83,26 @@ func TestCodecSetSupportedOnlyFiltersUnsupportedEntries(t *testing.T) {
 			},
 			PayloadType: 98,
 		},
-	})
-
-	supported := set.SupportedOnly().VideoCodecs()
-	if len(supported) != 2 {
-		t.Fatalf("supported video codecs len = %d, want 2", len(supported))
 	}
-	if supported[0].MimeType != webrtc.MimeTypeVP8 || supported[1].MimeType != webrtc.MimeTypeVP9 {
-		t.Fatalf("supported video codecs = %+v, want VP8 then VP9", supported)
+
+	cloned := CloneCodecParameters(codecs)
+	if len(cloned) != len(codecs) {
+		t.Fatalf("len(cloned) = %d, want %d", len(cloned), len(codecs))
+	}
+
+	codecs[0].MimeType = webrtc.MimeTypeH264
+	if cloned[0].MimeType != webrtc.MimeTypeVP8 {
+		t.Fatalf("cloned[0].MimeType = %q, want %q", cloned[0].MimeType, webrtc.MimeTypeVP8)
 	}
 }
 
-func TestCodecSetSelectUsesCanonicalFMTPMatching(t *testing.T) {
-	set := CodecSetFromParameters([]webrtc.RTPCodecParameters{
+func TestSelectCodecUsesPreferredOrderAndCanonicalFMTPMatching(t *testing.T) {
+	preferred := []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType:  webrtc.MimeTypeH264,
-				ClockRate: 90000,
+				MimeType:    webrtc.MimeTypeH264,
+				ClockRate:   90000,
+				SDPFmtpLine: "packetization-mode=1;profile-level-id=42e01f;level-asymmetry-allowed=1",
 			},
 			PayloadType: 120,
 		},
@@ -110,7 +113,7 @@ func TestCodecSetSelectUsesCanonicalFMTPMatching(t *testing.T) {
 			},
 			PayloadType: 96,
 		},
-	})
+	}
 	offered := []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
@@ -129,25 +132,26 @@ func TestCodecSetSelectUsesCanonicalFMTPMatching(t *testing.T) {
 		},
 	}
 
-	selected, ok := set.Select(offered)
+	selected, ok := SelectCodec(preferred, offered)
 	if !ok {
-		t.Fatal("Select() ok = false, want true")
+		t.Fatal("SelectCodec() ok = false, want true")
 	}
-	if selected.MimeType != webrtc.MimeTypeVP8 {
-		t.Fatalf("Select().MimeType = %q, want %q", selected.MimeType, webrtc.MimeTypeVP8)
+	if selected.MimeType != webrtc.MimeTypeH264 {
+		t.Fatalf("SelectCodec().MimeType = %q, want %q", selected.MimeType, webrtc.MimeTypeH264)
 	}
 }
 
-func TestCodecSetSelectRejectsUnsupportedH264Variant(t *testing.T) {
-	set := CodecSetFromParameters([]webrtc.RTPCodecParameters{
+func TestSelectCodecRejectsMismatchedH264Variant(t *testing.T) {
+	preferred := []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType:  webrtc.MimeTypeH264,
-				ClockRate: 90000,
+				MimeType:    webrtc.MimeTypeH264,
+				ClockRate:   90000,
+				SDPFmtpLine: "profile-level-id=42e01f;packetization-mode=1;level-asymmetry-allowed=1",
 			},
 			PayloadType: 120,
 		},
-	})
+	}
 	offered := []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
@@ -159,13 +163,13 @@ func TestCodecSetSelectRejectsUnsupportedH264Variant(t *testing.T) {
 		},
 	}
 
-	if _, ok := set.Select(offered); ok {
-		t.Fatal("Select() ok = true, want false for non-preferred H264 profile in supported mode")
+	if _, ok := SelectCodec(preferred, offered); ok {
+		t.Fatal("SelectCodec() ok = true, want false for mismatched H264 profile")
 	}
 }
 
-func TestCodecSetSelectKeepsOfferedPayloadTypeExact(t *testing.T) {
-	set := CodecSetFromParameters([]webrtc.RTPCodecParameters{
+func TestSelectCodecKeepsOfferedPayloadTypeExact(t *testing.T) {
+	preferred := []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:  webrtc.MimeTypeVP8,
@@ -173,7 +177,7 @@ func TestCodecSetSelectKeepsOfferedPayloadTypeExact(t *testing.T) {
 			},
 			PayloadType: 96,
 		},
-	})
+	}
 	offered := []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
@@ -183,11 +187,11 @@ func TestCodecSetSelectKeepsOfferedPayloadTypeExact(t *testing.T) {
 		},
 	}
 
-	selected, ok := set.Select(offered)
+	selected, ok := SelectCodec(preferred, offered)
 	if !ok {
-		t.Fatal("Select() ok = false, want true")
+		t.Fatal("SelectCodec() ok = false, want true")
 	}
 	if selected.PayloadType != 0 {
-		t.Fatalf("Select().PayloadType = %d, want 0 from offered codec without backfill", selected.PayloadType)
+		t.Fatalf("SelectCodec().PayloadType = %d, want 0 from offered codec without backfill", selected.PayloadType)
 	}
 }
