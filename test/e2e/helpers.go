@@ -104,7 +104,7 @@ func NewLibPeerPair(t *testing.T) *LibPeerPair {
 	})
 
 	// Set up OnTrack handler on receiver
-	receiver.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streamID string) {
+	receiver.SetOnTrack(func(track *pc.Track, _ *pc.RTPReceiver) {
 		pp.receivedTracksMu.Lock()
 		pp.ReceivedTracks = append(pp.ReceivedTracks, track)
 		pp.receivedTracksMu.Unlock()
@@ -136,7 +136,7 @@ func NewLibPeerPair(t *testing.T) *LibPeerPair {
 		case pp.trackReceived <- struct{}{}:
 		default:
 		}
-		t.Logf("Receiver got track: id=%s stream=%s kind=%s", track.ID(), streamID, track.Kind())
+		t.Logf("Receiver got track: id=%s stream=%s kind=%s", track.ID(), track.StreamID(), track.Kind())
 	})
 
 	return pp

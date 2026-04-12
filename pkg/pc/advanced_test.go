@@ -37,37 +37,15 @@ func TestPeerConnectionWrapperStringers(t *testing.T) {
 	}
 }
 
-func TestSplitStreamIDs(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		expect []string
-	}{
-		{name: "empty", input: "", expect: nil},
-		{name: "single", input: "stream-1", expect: []string{"stream-1"}},
-		{name: "multiple", input: "stream-a,stream-b,stream-c", expect: []string{"stream-a", "stream-b", "stream-c"}},
-		{name: "trim and skip empty", input: " stream-a, ,stream-b ,, stream-c ", expect: []string{"stream-a", "stream-b", "stream-c"}},
+func TestTrackAndSenderStreamID(t *testing.T) {
+	track := &Track{id: "track-1", kind: "video", label: "camera", streamID: "stream-a"}
+	if got := track.StreamID(); got != "stream-a" {
+		t.Fatalf("Track.StreamID() = %q, want stream-a", got)
 	}
 
-	for _, tt := range tests {
-		got := splitStreamIDs(tt.input)
-		if len(got) != len(tt.expect) {
-			t.Fatalf("%s len = %d, want %d", tt.name, len(got), len(tt.expect))
-		}
-		for i := range got {
-			if got[i] != tt.expect[i] {
-				t.Fatalf("%s[%d] = %q, want %q", tt.name, i, got[i], tt.expect[i])
-			}
-		}
-	}
-}
-
-func TestFirstStreamID(t *testing.T) {
-	if got := firstStreamID(nil); got != "" {
-		t.Fatalf("firstStreamID(nil) = %q, want empty", got)
-	}
-	if got := firstStreamID([]string{"stream-a", "stream-b"}); got != "stream-a" {
-		t.Fatalf("firstStreamID(...) = %q, want stream-a", got)
+	sender := &RTPSender{track: track, streamID: "stream-a"}
+	if got := sender.StreamID(); got != "stream-a" {
+		t.Fatalf("RTPSender.StreamID() = %q, want stream-a", got)
 	}
 }
 

@@ -102,11 +102,11 @@ func BindDecodedTrack(decoded *pionrecv.DecodedTrack) (RemoteTrack, error) {
 
 // BindPCTrack binds a libwebrtc-backed pkg/pc track into the same
 // browser-like remote track wrapper used by BindPionTrack.
-func BindPCTrack(track *pc.Track, receiver *pc.RTPReceiver, streamID string) (RemoteTrack, error) {
+func BindPCTrack(track *pc.Track, receiver *pc.RTPReceiver) (RemoteTrack, error) {
 	if track == nil {
 		return nil, ErrTrackNotFound
 	}
-	return bindRemoteTrackSource(newPCTrackAdapter(track, receiver, streamID))
+	return bindRemoteTrackSource(newPCTrackAdapter(track, receiver, track.StreamID()))
 }
 
 func bindRemoteTrackSource(source remoteFrameTrack) (RemoteTrack, error) {

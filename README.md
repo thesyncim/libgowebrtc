@@ -306,8 +306,8 @@ peerConnection, _ := webrtc.NewPeerConnection(webrtc.Configuration{
 
 // Add capture-backed tracks to a Pion PeerConnection explicitly
 for _, track := range stream.GetTracks() {
-    if trackLocal, ok := media.TrackLocal(track); ok {
-        _, _ = peerConnection.AddTrack(trackLocal)
+    if trackLocal, ok := media.PionTrackLocal(track); ok {
+        _, _ = peerConnection.AddTrack(trackLocal, "camera-stream")
     }
 }
 
@@ -351,10 +351,11 @@ frame := frame.NewI420Frame(1280, 720)
 videoTrack.WriteFrame(frame, false)
 ```
 
-`media.TrackLocal(track)` is the raw escape hatch when you want to hand a
+`media.PionTrackLocal(track)` is the raw escape hatch when you want to hand a
 capture-backed track to Pion yourself. If you need exact stream-ID/msid
 semantics, use the lower-level `pkg/track` or `pkg/pc` constructors directly
-and set stream IDs there instead of relying on `pkg/media` helpers.
+and spell the stream ID at `AddTrack(...)` instead of relying on `pkg/media`
+helpers to batch tracks or infer stream grouping.
 
 ### Explicit Codec Preferences
 
@@ -577,8 +578,8 @@ import (
     "github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
-peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
-    remoteTrack, err := media.BindPCTrack(track, receiver, streamID)
+peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver) {
+    remoteTrack, err := media.BindPCTrack(track, receiver)
     if err != nil {
         println("remote bind error:", err.Error())
         return
@@ -723,7 +724,7 @@ libgowebrtc/
 | `SetOnICEGatheringStateChange(...)` | ICE gathering progress events |
 | `SetOnNegotiationNeeded(...)` | Renegotiation trigger events |
 | `SetOnICECandidate(...)` | New ICE candidate events |
-| `SetOnTrack(...)` | Remote track received events with one explicit stream ID |
+| `SetOnTrack(...)` | Remote track received events; read `track.StreamID()` for the explicit stream ID |
 | `SetOnDataChannel(...)` | Data channel received events |
 </details>
 
@@ -734,7 +735,7 @@ libgowebrtc/
 - Browser-style capture constraints with explicit per-track settings
 - `EnumerateDevices` and `EnumerateScreens` require the capture shim and return `ErrCaptureNotSupported` when it is unavailable
 - Manual frame injection lives in `pkg/track`
-- Pion interop, including MediaStream-aware `msid` preservation via `AddTracksToPC`
+- Pion interop, including explicit `msid`/stream-ID preservation at `AddTrack(...)`
 </details>
 
 <details>

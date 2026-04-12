@@ -498,13 +498,14 @@ type AudioFrameHandler func(f *frame.AudioFrame)
 
 // Track represents a media track (can be local or remote).
 type Track struct {
-	handle  uintptr
-	id      string
-	kind    string // "video" or "audio"
-	label   string
-	enabled atomic.Bool
-	muted   atomic.Bool
-	pc      *PeerConnection
+	handle   uintptr
+	id       string
+	kind     string // "video" or "audio"
+	label    string
+	streamID string
+	enabled  atomic.Bool
+	muted    atomic.Bool
+	pc       *PeerConnection
 
 	// Video/audio track source for frame injection (local tracks)
 	sourceHandle uintptr
@@ -535,6 +536,9 @@ func (t *Track) Kind() string { return t.kind }
 
 // Label returns the track label.
 func (t *Track) Label() string { return t.label }
+
+// StreamID returns the explicit MediaStream ID associated with the track.
+func (t *Track) StreamID() string { return t.streamID }
 
 // Enabled returns whether the track is enabled.
 func (t *Track) Enabled() bool { return t.enabled.Load() }
@@ -734,7 +738,7 @@ type PeerConnection struct {
 	onICEGatheringStateChange  func(state ICEGatheringState)
 	onSignalingStateChange     func(state SignalingState)
 	onConnectionStateChange    func(state PeerConnectionState)
-	onTrack                    func(track *Track, receiver *RTPReceiver, streamID string)
+	onTrack                    func(track *Track, receiver *RTPReceiver)
 	onNegotiationNeeded        func()
 	onDataChannel              func(dc *DataChannel)
 
@@ -777,7 +781,9 @@ func (pc *PeerConnection) SetOnConnectionStateChange(cb func(state PeerConnectio
 	pc.onConnectionStateChange = cb
 }
 
-func (pc *PeerConnection) SetOnTrack(cb func(track *Track, receiver *RTPReceiver, streamID string)) {
+// SetOnTrack registers a callback for remote tracks.
+// Use track.StreamID() inside the callback when you need the explicit MediaStream ID.
+func (pc *PeerConnection) SetOnTrack(cb func(track *Track, receiver *RTPReceiver)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onTrack = cb
@@ -1056,12 +1062,21 @@ func NewPeerConnection(config webrtc.Configuration) (*PeerConnection, error) {
 			// Create track wrapper
 			kind := ffi.TrackKind(trackHandle)
 			trackID := ffi.TrackID(trackHandle)
+			streamID := ""
+			for _, rawStreamID := range strings.Split(streams, ",") {
+				rawStreamID = strings.TrimSpace(rawStreamID)
+				if rawStreamID != "" {
+					streamID = rawStreamID
+					break
+				}
+			}
 
 			track := &Track{
-				handle: trackHandle,
-				id:     trackID,
-				kind:   kind,
-				pc:     pc,
+				handle:   trackHandle,
+				id:       trackID,
+				kind:     kind,
+				streamID: streamID,
+				pc:       pc,
 			}
 			track.enabled.Store(true)
 
@@ -1075,7 +1090,8 @@ func NewPeerConnection(config webrtc.Configuration) (*PeerConnection, error) {
 			pc.receivers = append(pc.receivers, receiver)
 			pc.mu.Unlock()
 
-			cb(track, receiver, firstStreamID(splitStreamIDs(streams)))
+			track.streamID = streamID
+			cb(track, receiver)
 		}
 	})
 
@@ -1380,6 +1396,7 @@ func (pc *PeerConnection) AddTrack(track *Track, streamID string) (*RTPSender, e
 		id:       track.id,
 		streamID: streamID,
 	}
+	track.streamID = streamID
 
 	pc.senders = append(pc.senders, sender)
 	pc.localTracks = append(pc.localTracks, track)
@@ -1683,32 +1700,6 @@ func (pc *PeerConnection) CreateDataChannel(label string, options *webrtc.DataCh
 	}
 
 	return dc, nil
-}
-
-func splitStreamIDs(streams string) []string {
-	if streams == "" {
-		return nil
-	}
-
-	rawStreamIDs := strings.Split(streams, ",")
-	streamIDs := make([]string, 0, len(rawStreamIDs))
-	for _, streamID := range rawStreamIDs {
-		streamID = strings.TrimSpace(streamID)
-		if streamID != "" {
-			streamIDs = append(streamIDs, streamID)
-		}
-	}
-	if len(streamIDs) == 0 {
-		return nil
-	}
-	return streamIDs
-}
-
-func firstStreamID(streamIDs []string) string {
-	if len(streamIDs) == 0 {
-		return ""
-	}
-	return streamIDs[0]
 }
 
 // Close closes the peer connection.

@@ -8,18 +8,19 @@ type pionTrackProvider interface {
 	pionTrack() webrtc.TrackLocal
 }
 
-// TrackLocal extracts the underlying Pion TrackLocal from a MediaStreamTrack.
-// This is the raw escape hatch for callers who want direct Pion integration.
+// PionTrackLocal extracts the underlying Pion TrackLocal from a MediaStreamTrack.
+// Use it when you want to hand the track to Pion directly and spell the
+// stream ID at the AddTrack call site.
 //
 // Returns (nil, false) if the track doesn't support Pion integration.
 //
 // Example usage:
 //
 //	track := stream.GetVideoTracks()[0]
-//	if pionTrack, ok := media.TrackLocal(track); ok {
-//	    pc.AddTrack(pionTrack)
+//	if pionTrack, ok := media.PionTrackLocal(track); ok {
+//	    _, _ = pc.AddTrack(pionTrack, "stream-0")
 //	}
-func TrackLocal(t MediaStreamTrack) (webrtc.TrackLocal, bool) {
+func PionTrackLocal(t MediaStreamTrack) (webrtc.TrackLocal, bool) {
 	if p, ok := t.(pionTrackProvider); ok {
 		return p.pionTrack(), true
 	}

@@ -180,8 +180,8 @@ func TestPionToLibWebRTCVideo(t *testing.T) {
 
 	// Track received on libwebrtc side
 	trackReceived := make(chan struct{})
-	libPC.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
-		t.Logf("libwebrtc received track: %s, stream: %s, kind: %s", track.ID(), streamID, track.Kind())
+	libPC.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver) {
+		t.Logf("libwebrtc received track: %s, stream: %s, kind: %s", track.ID(), track.StreamID(), track.Kind())
 		close(trackReceived)
 	})
 

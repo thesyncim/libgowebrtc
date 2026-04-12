@@ -289,7 +289,7 @@ func TestAudioStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
 	}
 }
 
-func TestTrackLocalExtractsUnderlyingPionTrack(t *testing.T) {
+func TestPionTrackLocalExtractsUnderlyingPionTrack(t *testing.T) {
 	stream := NewMediaStream()
 	video := newTestVideoTrack(t)
 	stream.AddTrack(video)
@@ -301,10 +301,10 @@ func TestTrackLocalExtractsUnderlyingPionTrack(t *testing.T) {
 		readyState: "live",
 	})
 
-	if pionTrack, ok := TrackLocal(video); !ok || pionTrack == nil {
-		t.Fatal("TrackLocal() should succeed for real media track")
+	if pionTrack, ok := PionTrackLocal(video); !ok || pionTrack == nil {
+		t.Fatal("PionTrackLocal() should succeed for real media track")
 	}
-	if pionTrack, ok := TrackLocal(stream.GetTrackByID("fake-video")); ok || pionTrack != nil {
-		t.Fatal("TrackLocal() should fail for fake media track")
+	if pionTrack, ok := PionTrackLocal(stream.GetTrackByID("fake-video")); ok || pionTrack != nil {
+		t.Fatal("PionTrackLocal() should fail for fake media track")
 	}
 }

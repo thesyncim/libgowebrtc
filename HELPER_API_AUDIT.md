@@ -18,7 +18,7 @@ thumb should be:
 - `pkg/pc.NewPeerConnection` no longer silently normalizes zero-value config.
 - `pkg/pc` no longer rewrites SDP/MSID lines to fake multi-stream sender semantics; callers now provide one explicit stream ID per native track.
 - `pkg/media` remote-track helpers no longer pretend tracks belong to multiple stream IDs; the helper layer now mirrors the native single-stream contract.
-- `pkg/media` no longer exposes stream-scoping or batch-add Pion convenience helpers; the package now offers only a raw `TrackLocal(...)` escape hatch.
+- `pkg/media` no longer exposes stream-scoping or batch-add Pion convenience helpers; the package now offers only a raw `PionTrackLocal(...)` escape hatch.
 - `pkg/media` no longer exposes browser-style supported-constraint or per-track capability discovery surfaces.
 - `pkg/media` no longer exposes `RemoteStreamRegistry` or browser-style `ontrack` event wrappers; remote-track binding is explicit.
 - `pkg/testkit/validate` now binds remote tracks directly instead of depending on `pkg/media.RemoteStreamRegistry`.

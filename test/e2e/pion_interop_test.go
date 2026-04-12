@@ -108,8 +108,8 @@ func NewPionLibPeerPair(t *testing.T) *PionLibPeerPair {
 	})
 
 	// Setup lib OnTrack handler
-	lib.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streamID string) {
-		t.Logf("Lib received track: id=%s stream=%s kind=%s", track.ID(), streamID, track.Kind())
+	lib.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver) {
+		t.Logf("Lib received track: id=%s stream=%s kind=%s", track.ID(), track.StreamID(), track.Kind())
 		select {
 		case pp.libTrackReceived <- track:
 		default:

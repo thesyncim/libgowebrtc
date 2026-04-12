@@ -227,6 +227,9 @@ func TestAddTrack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddTrack failed: %v", err)
 	}
+	if got := sender.StreamID(); got != "stream-0" {
+		t.Fatalf("Sender.StreamID() = %q, want stream-0", got)
+	}
 
 	if sender == nil {
 		t.Error("AddTrack should return a sender")
@@ -258,9 +261,9 @@ func TestAddTrackUsesSingleExplicitStreamID(t *testing.T) {
 	defer receiverPC.Close()
 
 	streamCh := make(chan string, 1)
-	receiverPC.SetOnTrack(func(track *Track, receiver *RTPReceiver, streamID string) {
+	receiverPC.SetOnTrack(func(track *Track, receiver *RTPReceiver) {
 		select {
-		case streamCh <- streamID:
+		case streamCh <- track.StreamID():
 		default:
 		}
 	})
@@ -269,8 +272,12 @@ func TestAddTrackUsesSingleExplicitStreamID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateVideoTrack: %v", err)
 	}
-	if _, err := senderPC.AddTrack(videoTrack, "stream-a"); err != nil {
+	sender, err := senderPC.AddTrack(videoTrack, "stream-a")
+	if err != nil {
 		t.Fatalf("AddTrack: %v", err)
+	}
+	if got := sender.StreamID(); got != "stream-a" {
+		t.Fatalf("Sender.StreamID() = %q, want stream-a", got)
 	}
 
 	offer, err := senderPC.CreateOffer(nil)
@@ -315,6 +322,9 @@ func TestRemoveTrack(t *testing.T) {
 	// Add track
 	track, _ := pc.CreateVideoTrack("video-0", 640, 480)
 	sender, _ := pc.AddTrack(track, "stream-0")
+	if got := sender.StreamID(); got != "stream-0" {
+		t.Fatalf("Sender.StreamID() = %q, want stream-0", got)
+	}
 
 	// Verify added
 	if len(pc.GetSenders()) != 1 {
