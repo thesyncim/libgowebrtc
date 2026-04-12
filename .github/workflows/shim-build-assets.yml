@@ -15,7 +15,7 @@ env:
 
 jobs:
   build-macos:
-    name: ${{ matrix.platform }}
+    name: ${{ matrix.platform }} (X11)
     runs-on: macos-latest
     strategy:
       fail-fast: false

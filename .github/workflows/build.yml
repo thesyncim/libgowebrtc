@@ -184,7 +184,7 @@ jobs:
 
   validate-linux-386-docker:
     if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
-    name: linux_386 (Docker)
+    name: linux_386 (Docker, X11)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -220,7 +220,7 @@ jobs:
 
   validate-linux-amd64-docker:
     if: ${{ (github.event_name != 'workflow_dispatch' || !inputs.build_assets) && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'shim-v')) }}
-    name: linux_amd64 (Docker compatibility)
+    name: linux_amd64 (Docker, X11 compatibility)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
