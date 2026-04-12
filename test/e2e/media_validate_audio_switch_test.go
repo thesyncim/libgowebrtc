@@ -72,6 +72,9 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 
 	pump := newAudioPump(track, audioSampleRate, audioChannels, audioSamples)
 	defer func() {
+		if pump == nil {
+			return
+		}
 		if err := pump.stop(2 * time.Second); err != nil {
 			t.Fatalf("audioPump.stop: %v", err)
 		}
@@ -122,6 +125,10 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 					if err := pump.pause(stepCtx); err != nil {
 						return err
 					}
+					if err := pump.stop(2 * time.Second); err != nil {
+						return err
+					}
+					pump = nil
 					if err := waitForAudioSenderSettle(stepCtx, audioSenderSettleDelay); err != nil {
 						return err
 					}
@@ -140,6 +147,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 						return err
 					}
 
+					pump = newAudioPump(track, audioSampleRate, audioChannels, audioSamples)
 					return pump.resume(stepCtx)
 				},
 				Expect: validate.ScenarioExpectation{
