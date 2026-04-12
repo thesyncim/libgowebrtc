@@ -288,6 +288,7 @@ stream, _ := media.GetUserMedia(media.Constraints{
         Height:    media.ExactInt(720),
         FrameRate: media.ExactFloat(30),
         Codec:     codec.VP9,
+        Bitrate:   2_000_000,
     },
     Audio: &media.AudioConstraints{
         SampleRate:   media.ExactInt(48000),

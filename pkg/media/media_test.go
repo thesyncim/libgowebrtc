@@ -451,12 +451,13 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 
 	stream, err := GetDisplayMedia(DisplayConstraints{
 		Video: &DisplayVideoConstraints{
-			WindowID:  7,
-			Width:     IdealInt(1920),
-			Height:    IdealInt(1080),
-			FrameRate: IdealFloat(30),
-			Codec:     codec.VP8,
-			Bitrate:   3_000_000,
+			DisplaySurface: DisplaySurfaceWindow,
+			WindowID:       7,
+			Width:          IdealInt(1920),
+			Height:         IdealInt(1080),
+			FrameRate:      IdealFloat(30),
+			Codec:          codec.VP8,
+			Bitrate:        3_000_000,
 		},
 		Audio: &AudioConstraints{
 			SampleRate:   ExactInt(48_000),
@@ -503,12 +504,13 @@ func TestGetDisplayMediaLeavesEmptyLabelWhenSourceTitleMissing(t *testing.T) {
 
 	stream, err := GetDisplayMedia(DisplayConstraints{
 		Video: &DisplayVideoConstraints{
-			ScreenID:  1,
-			Width:     ExactInt(1920),
-			Height:    ExactInt(1080),
-			FrameRate: ExactFloat(30),
-			Codec:     codec.VP8,
-			Bitrate:   3_000_000,
+			DisplaySurface: DisplaySurfaceMonitor,
+			ScreenID:       1,
+			Width:          ExactInt(1920),
+			Height:         ExactInt(1080),
+			FrameRate:      ExactFloat(30),
+			Codec:          codec.VP8,
+			Bitrate:        3_000_000,
 		},
 	})
 	if err != nil {
@@ -536,11 +538,12 @@ func TestGetDisplayMediaRejectsMissingVideoCodec(t *testing.T) {
 
 	stream, err := GetDisplayMedia(DisplayConstraints{
 		Video: &DisplayVideoConstraints{
-			ScreenID:  1,
-			Width:     ExactInt(1920),
-			Height:    ExactInt(1080),
-			FrameRate: ExactFloat(30),
-			Bitrate:   3_000_000,
+			DisplaySurface: DisplaySurfaceMonitor,
+			ScreenID:       1,
+			Width:          ExactInt(1920),
+			Height:         ExactInt(1080),
+			FrameRate:      ExactFloat(30),
+			Bitrate:        3_000_000,
 		},
 	})
 	if !errors.Is(err, ErrInvalidConstraints) {
@@ -548,6 +551,79 @@ func TestGetDisplayMediaRejectsMissingVideoCodec(t *testing.T) {
 	}
 	if stream != nil {
 		t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
+	}
+}
+
+func TestGetDisplayMediaRejectsMissingDisplaySurfaceOrGeometry(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateScreen: func() ([]ffi.ScreenInfo, error) {
+			return []ffi.ScreenInfo{
+				{ID: 1, Title: "Main Display", IsWindow: false},
+			}, nil
+		},
+	})
+
+	cases := []struct {
+		name  string
+		video DisplayVideoConstraints
+	}{
+		{
+			name: "missing display surface",
+			video: DisplayVideoConstraints{
+				ScreenID:  1,
+				Width:     ExactInt(1920),
+				Height:    ExactInt(1080),
+				FrameRate: ExactFloat(30),
+				Codec:     codec.VP8,
+				Bitrate:   3_000_000,
+			},
+		},
+		{
+			name: "missing width",
+			video: DisplayVideoConstraints{
+				DisplaySurface: DisplaySurfaceMonitor,
+				ScreenID:       1,
+				Height:         ExactInt(1080),
+				FrameRate:      ExactFloat(30),
+				Codec:          codec.VP8,
+				Bitrate:        3_000_000,
+			},
+		},
+		{
+			name: "missing height",
+			video: DisplayVideoConstraints{
+				DisplaySurface: DisplaySurfaceMonitor,
+				ScreenID:       1,
+				Width:          ExactInt(1920),
+				FrameRate:      ExactFloat(30),
+				Codec:          codec.VP8,
+				Bitrate:        3_000_000,
+			},
+		},
+		{
+			name: "missing frame rate",
+			video: DisplayVideoConstraints{
+				DisplaySurface: DisplaySurfaceMonitor,
+				ScreenID:       1,
+				Width:          ExactInt(1920),
+				Height:         ExactInt(1080),
+				Codec:          codec.VP8,
+				Bitrate:        3_000_000,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stream, err := GetDisplayMedia(DisplayConstraints{Video: &tc.video})
+			if !errors.Is(err, ErrInvalidConstraints) {
+				t.Fatalf("GetDisplayMedia() error = %v, want %v", err, ErrInvalidConstraints)
+			}
+			if stream != nil {
+				t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
+			}
+		})
 	}
 }
 
@@ -565,8 +641,9 @@ func TestGetDisplayMediaRejectsConflictingTargets(t *testing.T) {
 
 	stream, err := GetDisplayMedia(DisplayConstraints{
 		Video: &DisplayVideoConstraints{
-			ScreenID: 1,
-			WindowID: 2,
+			DisplaySurface: DisplaySurfaceMonitor,
+			ScreenID:       1,
+			WindowID:       2,
 		},
 	})
 	if !errors.Is(err, ErrInvalidConstraints) {
