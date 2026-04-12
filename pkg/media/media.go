@@ -809,12 +809,7 @@ func resolveVideoCaptureRequest(request VideoConstraints, devices []MediaDeviceI
 	resolved.Height = ExactInt(height)
 	resolved.FrameRate = ExactFloat(frameRate)
 	resolved.DeviceID = ExactString(device.DeviceID)
-	label := device.Label
-	if label == "" {
-		label = "camera"
-	}
-
-	return settings, resolved, label, nil
+	return settings, resolved, device.Label, nil
 }
 
 func resolveAudioCaptureRequest(request AudioConstraints, devices []MediaDeviceInfo) (AudioTrackSettings, AudioConstraints, string, error) {
@@ -849,12 +844,7 @@ func resolveAudioCaptureRequest(request AudioConstraints, devices []MediaDeviceI
 	resolved.NoiseSuppression = ExactBool(settings.NoiseSuppression)
 	resolved.AutoGainControl = ExactBool(settings.AutoGainControl)
 
-	label := device.Label
-	if label == "" {
-		label = "microphone"
-	}
-
-	return settings, resolved, label, nil
+	return settings, resolved, device.Label, nil
 }
 
 func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []ScreenInfo) (VideoTrackSettings, VideoConstraints, DisplayVideoConstraints, string, error) {
