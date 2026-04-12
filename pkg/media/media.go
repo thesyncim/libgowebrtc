@@ -866,9 +866,13 @@ func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []Scr
 		return VideoTrackSettings{}, VideoConstraints{}, DisplayVideoConstraints{}, "", err
 	}
 
-	width := resolveIntConstraint(request.Width, 1920)
-	height := resolveIntConstraint(request.Height, 1080)
-	frameRate := resolveFloatConstraint(request.FrameRate, 30)
+	if !request.Width.IsSet() || !request.Height.IsSet() || !request.FrameRate.IsSet() {
+		return VideoTrackSettings{}, VideoConstraints{}, DisplayVideoConstraints{}, "", ErrInvalidConstraints
+	}
+
+	width := resolveIntConstraint(request.Width, 0)
+	height := resolveIntConstraint(request.Height, 0)
+	frameRate := resolveFloatConstraint(request.FrameRate, 0)
 	if width <= 0 || height <= 0 || frameRate <= 0 {
 		return VideoTrackSettings{}, VideoConstraints{}, DisplayVideoConstraints{}, "", ErrInvalidConstraints
 	}
@@ -881,9 +885,6 @@ func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []Scr
 		Bitrate:          request.Bitrate,
 		SVC:              request.SVC,
 		CodecPreferences: append([]webrtc.RTPCodecParameters(nil), request.CodecPreferences...),
-	}
-	if videoConstraints.SVC == nil {
-		videoConstraints.SVC = codec.SVCPresetScreenShare()
 	}
 
 	displayConstraints := request
@@ -951,6 +952,9 @@ func validateAudioConstraints(c AudioConstraints) error {
 
 func validateDisplayVideoConstraints(c DisplayVideoConstraints) error {
 	if !c.DisplaySurface.IsValid() {
+		return ErrInvalidConstraints
+	}
+	if c.DisplaySurface == "" {
 		return ErrInvalidConstraints
 	}
 	if !hasExplicitVideoCodecSelection(c.Codec, c.CodecPreferences) {
@@ -1091,7 +1095,7 @@ func selectDisplayTarget(screens []ScreenInfo, request DisplayVideoConstraints) 
 
 	surface := request.DisplaySurface
 	if surface == "" {
-		surface = DisplaySurfaceMonitor
+		return ScreenInfo{}, "", ErrInvalidConstraints
 	}
 	switch surface {
 	case DisplaySurfaceWindow:

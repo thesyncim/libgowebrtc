@@ -408,11 +408,13 @@ stream, _ := media.GetUserMedia(media.Constraints{
         Height:    720,
         FrameRate: 30,
         Codec:     codec.VP9,
+        Bitrate:   2_000_000,
         SVC:       codec.SVCPresetSFU(), // L3T3_KEY for SFU
     },
     Audio: &media.AudioConstraints{
         SampleRate:       48000,
         ChannelCount:     2,
+        Bitrate:          64_000,
         EchoCancellation: true,
         NoiseSuppression: true,
     },
@@ -421,9 +423,12 @@ stream, _ := media.GetUserMedia(media.Constraints{
 // Screen sharing (like getDisplayMedia)
 screenStream, _ := media.GetDisplayMedia(media.DisplayConstraints{
     Video: &media.DisplayVideoConstraints{
+        DisplaySurface: media.DisplaySurfaceMonitor,
         Width:  1920,
         Height: 1080,
+        FrameRate: 30,
         Codec:  codec.AV1,
+        Bitrate: 8_000_000,
         SVC:    codec.SVCPresetScreenShare(),
     },
 })
@@ -540,6 +545,7 @@ func main() {
             Height:    720,
             FrameRate: 30,
             Codec:     codec.VP9,              // Best SVC support
+            Bitrate:   2_000_000,
             SVC:       codec.SVCPresetChrome(), // L3T3_KEY for SFU
         },
         Audio: &media.AudioConstraints{
@@ -1010,25 +1016,31 @@ for _, d := range devices {
 // Capture from camera (like browser getUserMedia)
 stream, _ := media.GetUserMedia(media.Constraints{
     Video: &media.VideoConstraints{
-        DeviceID: "device-id",  // or omit for default
-        Width:    1280,
-        Height:   720,
-        FPS:      30,
+        DeviceID:  "device-id", // or omit for default
+        Width:     1280,
+        Height:    720,
+        FrameRate: 30,
+        Codec:     codec.VP8,
+        Bitrate:   1_500_000,
     },
     Audio: &media.AudioConstraints{
-        DeviceID:     "mic-id",
-        SampleRate:   48000,
+        DeviceID:   "mic-id",
+        SampleRate: 48000,
         ChannelCount: 2,
-        Bitrate:      64000,
+        Bitrate:    64000,
     },
 })
 
 // Capture screen (like browser getDisplayMedia)
 screenStream, _ := media.GetDisplayMedia(media.DisplayConstraints{
     Video: &media.DisplayVideoConstraints{
-        ScreenID: 0,  // or WindowID for window capture
-        Codec:    codec.VP9,
-        SVC:      codec.SVCPresetScreenShare(),
+        DisplaySurface: media.DisplaySurfaceMonitor,
+        Width:          1920,
+        Height:         1080,
+        FrameRate:      30,
+        Codec:          codec.VP9,
+        Bitrate:        3_000_000,
+        SVC:            codec.SVCPresetScreenShare(),
     },
 })
 
@@ -1089,7 +1101,13 @@ for _, s := range screens {
 func main() {
     // Capture camera
     stream, _ := media.GetUserMedia(media.Constraints{
-        Video: &media.VideoConstraints{Width: 1280, Height: 720},
+        Video: &media.VideoConstraints{
+            Width:     1280,
+            Height:    720,
+            FrameRate: 30,
+            Codec:     codec.VP8,
+            Bitrate:   1_500_000,
+        },
     })
 
     // Create PeerConnection
