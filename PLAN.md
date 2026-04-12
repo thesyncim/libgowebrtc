@@ -393,17 +393,17 @@ dec, _ := decoder.NewVideoDecoder(codec.H264)
 dec, _ := decoder.NewAudioDecoder(codec.Opus)
 ```
 
-## Browser-Like API
+## Capture API
 
-The library provides a browser-like API that mirrors the Web APIs, making it easy for developers familiar with WebRTC in browsers.
+The library provides an explicit capture API for camera, microphone, and display sources.
 
-### pkg/media - MediaStream & Tracks (like getUserMedia)
+### pkg/media - MediaStream & Tracks
 ```go
 import "github.com/thesyncim/libgowebrtc/pkg/media"
 
-// Just like navigator.mediaDevices.getUserMedia()
-stream, _ := media.GetUserMedia(media.Constraints{
-    Video: &media.VideoConstraints{
+// Open camera and microphone capture.
+stream, _ := media.OpenCapture(media.CaptureConfig{
+    Video: &media.VideoCaptureConfig{
         Width:     1280,
         Height:    720,
         FrameRate: 30,
@@ -411,7 +411,7 @@ stream, _ := media.GetUserMedia(media.Constraints{
         Bitrate:   2_000_000,
         SVC:       codec.SVCPresetSFU(), // L3T3_KEY for SFU
     },
-    Audio: &media.AudioConstraints{
+    Audio: &media.AudioCaptureConfig{
         SampleRate:       48000,
         ChannelCount:     2,
         Bitrate:          64_000,
@@ -420,10 +420,10 @@ stream, _ := media.GetUserMedia(media.Constraints{
     },
 })
 
-// Screen sharing (like getDisplayMedia)
-screenStream, _ := media.GetDisplayMedia(media.DisplayConstraints{
-    Video: &media.DisplayVideoConstraints{
-        DisplaySurface: media.DisplaySurfaceMonitor,
+// Open monitor capture.
+screenStream, _ := media.OpenDisplay(media.DisplayCaptureConfig{
+    Video: &media.DisplayVideoConfig{
+        Kind: media.DisplayKindMonitor,
         Width:  1920,
         Height: 1080,
         FrameRate: 30,
@@ -505,7 +505,7 @@ for frame := range videoSource {
 
 | Browser JavaScript | libgowebrtc Go |
 |-------------------|----------------|
-| `navigator.mediaDevices.getUserMedia(constraints)` | `media.GetUserMedia(constraints)` |
+| `navigator.mediaDevices.getUserMedia(constraints)` | `media.OpenCapture(config)` |
 | `new RTCPeerConnection(config)` | `pc.NewPeerConnection(config)` |
 | `pc.addTrack(track, stream)` | `pc.AddTrack(track, "stream")` |
 | `pc.createOffer()` | `pc.CreateOffer(nil)` |
@@ -539,8 +539,8 @@ func main() {
     })
 
     // Get camera+mic with SFU-optimized SVC (Chrome-like)
-    stream, _ := media.GetUserMedia(media.Constraints{
-        Video: &media.VideoConstraints{
+    stream, _ := media.OpenCapture(media.CaptureConfig{
+        Video: &media.VideoCaptureConfig{
             Width:     1280,
             Height:    720,
             FrameRate: 30,
@@ -548,7 +548,7 @@ func main() {
             Bitrate:   2_000_000,
             SVC:       codec.SVCPresetChrome(), // L3T3_KEY for SFU
         },
-        Audio: &media.AudioConstraints{
+        Audio: &media.AudioCaptureConfig{
             SampleRate:       48000,
             ChannelCount:     2,
             Bitrate:          64000,
@@ -582,8 +582,8 @@ func main() {
 ### Example 2: Screen Share with High-Quality AV1
 ```go
 // 4K Screen sharing with AV1 for maximum quality
-stream, _ := media.GetDisplayMedia(media.DisplayConstraints{
-    Video: &media.DisplayVideoConstraints{
+stream, _ := media.OpenDisplay(media.DisplayCaptureConfig{
+    Video: &media.DisplayVideoConfig{
         Width:     3840,
         Height:    2160,
         FrameRate: 60,
@@ -601,10 +601,10 @@ go func() {
     for {
         stats := getNetworkStats()
         if stats.PacketLoss > 5 {
-            // Reduce quality under packet loss
-            videoTrack.ApplyConstraints(media.VideoConstraints{
-                Bitrate: 4_000_000,
-            })
+            // Reduce quality under packet loss.
+            cfg := videoTrack.Config()
+            cfg.Bitrate = 4_000_000
+            _ = videoTrack.Reconfigure(cfg)
         }
     }
 }()
@@ -852,8 +852,8 @@ audioTrack.WriteEncodedData(opusPacket, rtpTimestamp)
 - [x] EncoderStats for monitoring
 - [x] VideoEncoderSVC for layer control
 
-### Phase 7: Browser-Like API ✅
-- [x] pkg/media - API defined (getUserMedia pattern)
+### Phase 7: Capture And Interop API ✅
+- [x] pkg/media - explicit capture API defined
 - [x] pkg/pc - API defined (PeerConnection, event handlers)
 - [x] Browser-like event handlers (OnTrack, OnICECandidate, etc.)
 - [x] RTPSender/RTPReceiver/RTPTransceiver API
@@ -879,7 +879,7 @@ audioTrack.WriteEncodedData(opusPacket, rtpTimestamp)
 - [x] pkg/decoder - Interface validation, error handling
 - [x] pkg/packetizer - Packetizer interface tests
 - [x] pkg/depacketizer - Depacketizer interface tests
-- [x] pkg/media - MediaStream, Constraints
+- [x] pkg/media - MediaStream, CaptureConfig
 - [x] pkg/pc - Enums, states, type tests
 
 **FFI Tests (internal layer):**
@@ -966,12 +966,12 @@ func TestDataChannel(t *testing.T) {
 
 ### Phase 11: Device Capture (via libwebrtc)
 
-**Goal:** Wrap libwebrtc's native device capture APIs so `pkg/media.GetUserMedia()` actually captures from camera/mic.
+**Goal:** Wrap libwebrtc's native device capture APIs so `pkg/media.OpenCapture()` actually captures from camera/mic.
 
 **libwebrtc APIs to wrap:**
 - `webrtc::VideoCaptureModule` - Camera enumeration and capture
 - `webrtc::AudioDeviceModule` - Microphone/speaker enumeration and capture
-- `webrtc::DesktopCapturer` - Screen/window capture for `GetDisplayMedia()`
+- `webrtc::DesktopCapturer` - Screen/window capture for `OpenDisplay()`
 
 **Shim additions (shim/shim.h):**
 ```c
@@ -1003,14 +1003,14 @@ void screen_capture_destroy(ScreenCapture* cap);
 **Go API (pkg/media):**
 ```go
 // Enumerate available devices
-devices, _ := media.EnumerateDevices()
+devices, _ := media.ListDevices()
 for _, d := range devices {
     fmt.Printf("%s: %s (%s)\n", d.Kind, d.Label, d.DeviceID)
 }
 
-// Capture from camera (like browser getUserMedia)
-stream, _ := media.GetUserMedia(media.Constraints{
-    Video: &media.VideoConstraints{
+// Capture from camera.
+stream, _ := media.OpenCapture(media.CaptureConfig{
+    Video: &media.VideoCaptureConfig{
         DeviceID:  "device-id", // or omit for default
         Width:     1280,
         Height:    720,
@@ -1018,7 +1018,7 @@ stream, _ := media.GetUserMedia(media.Constraints{
         Codec:     codec.VP8,
         Bitrate:   1_500_000,
     },
-    Audio: &media.AudioConstraints{
+    Audio: &media.AudioCaptureConfig{
         DeviceID:   "mic-id",
         SampleRate: 48000,
         ChannelCount: 2,
@@ -1026,10 +1026,10 @@ stream, _ := media.GetUserMedia(media.Constraints{
     },
 })
 
-// Capture screen (like browser getDisplayMedia)
-screenStream, _ := media.GetDisplayMedia(media.DisplayConstraints{
-    Video: &media.DisplayVideoConstraints{
-        DisplaySurface: media.DisplaySurfaceMonitor,
+// Capture screen.
+screenStream, _ := media.OpenDisplay(media.DisplayCaptureConfig{
+    Video: &media.DisplayVideoConfig{
+        Kind: media.DisplayKindMonitor,
         Width:          1920,
         Height:         1080,
         FrameRate:      30,
@@ -1040,7 +1040,7 @@ screenStream, _ := media.GetDisplayMedia(media.DisplayConstraints{
 })
 
 // Enumerate screens/windows
-screens, _ := media.EnumerateScreens()
+screens, _ := media.ListDisplays()
 for _, s := range screens {
     fmt.Printf("Screen %d: %s (window=%v)\n", s.ID, s.Title, s.IsWindow)
 }
@@ -1052,10 +1052,10 @@ for _, s := range screens {
 - [x] Add audio capture to shim (shim.h + shim.cc stubs)
 - [x] Add screen capture to shim (shim.h + shim.cc stubs)
 - [x] Add FFI bindings for device APIs (internal/ffi/device.go)
-- [x] Implement pkg/media.EnumerateDevices()
-- [x] Implement pkg/media.EnumerateScreens() - extension API
-- [x] Implement pkg/media.GetDisplayMedia() with DisplayConstraints
-- [ ] Implement pkg/media.GetUserMedia() with real capture (requires built shim)
+- [x] Implement pkg/media.ListDevices()
+- [x] Implement pkg/media.ListDisplays() - extension API
+- [x] Implement pkg/media.OpenDisplay() with DisplayCaptureConfig
+- [ ] Implement pkg/media.OpenCapture() with real capture (requires built shim)
 - [ ] Complete shim with libwebrtc device APIs (VideoCaptureModule, AudioDeviceModule, DesktopCapturer)
 - [ ] Test on macOS (AVFoundation backend)
 - [ ] Test on Linux (V4L2/PulseAudio backend)
@@ -1095,8 +1095,8 @@ for _, s := range screens {
 // examples/camera_to_browser/main.go
 func main() {
     // Capture camera
-    stream, _ := media.GetUserMedia(media.Constraints{
-        Video: &media.VideoConstraints{
+    stream, _ := media.OpenCapture(media.CaptureConfig{
+        Video: &media.VideoCaptureConfig{
             Width:     1280,
             Height:    720,
             FrameRate: 30,
@@ -1168,7 +1168,7 @@ func main() {
 **Key Outcomes:**
 - Full device enumeration (camera, microphone, screens)
 - Callback-based frame delivery with thread-safe lifecycle
-- Browser-compatible `GetUserMedia`/`GetDisplayMedia` API
+- Browser-compatible `OpenCapture`/`OpenDisplay` API
 - Type-safe interfaces (no `interface{}` in public API)
 
 **Design Decisions:**
@@ -1382,7 +1382,7 @@ Cleaned up public API to hide C implementation details and provide more browser/
 | Removed `NewAudioEncoder(codec, interface{})` | Use `NewOpusEncoder()` directly |
 | Removed `VideoTrack.Encoder()` | Use track methods: `SetBitrate()`, `SetFramerate()`, `RequestKeyFrame()` |
 | Removed `AudioTrack.Encoder()` | Use track methods: `SetBitrate()` |
-| Changed `GetDisplayMedia(interface{})` | Use `GetDisplayMedia(DisplayConstraints)` directly |
+| Changed `OpenDisplay(interface{})` | Use `OpenDisplay(DisplayCaptureConfig)` directly |
 
 ### New APIs
 
@@ -1395,15 +1395,13 @@ Cleaned up public API to hide C implementation details and provide more browser/
 | `RTPTransceiver.IsValid()` | Validation helper for RTPTransceiver |
 | `DataChannel.IsValid()` | Validation helper for DataChannel |
 | `media.PionTrackLocal()` | Extract Pion TrackLocal from MediaStreamTrack |
-| `media.IntConstraint` | Browser-like exact/ideal/min/max constraint for integers |
-| `media.FloatConstraint` | Browser-like exact/ideal/min/max constraint for floats |
-| `media.FacingMode` | Camera facing mode enum (`user`, `environment`) |
-| `media.DisplaySurface` | Screen capture surface enum (`monitor`, `window`) |
-| `media.OverconstrainedError` | Error type for constraint validation failures |
+| `media.CameraFacing` | Camera facing enum (`user`, `environment`) |
+| `media.DisplayKind` | Display target enum (`monitor`, `window`) |
+| `media.ConfigError` | Typed capture-config validation failure |
 
 ### Deferred Changes
 
-- **VideoConstraints migration**: Converting existing `int`/`float64` fields to `IntConstraint`/`FloatConstraint` is deferred due to invasive changes required across the codebase
+- Continue shrinking `pkg/media` away from browser-derived stream/track vocabulary and toward explicit capture/runtime helpers.
 
 ---
 
@@ -1434,7 +1432,7 @@ type VideoTrackConfig struct {
     AutoFramerate  bool  // BWE → adjust framerate
     AutoResolution bool  // BWE → scale resolution
 
-    // Constraints (like browser MediaTrackConstraints)
+    // CaptureConfig (like browser MediaTrackConstraints)
     MinBitrate   uint32  // Floor for bitrate adaptation
     MaxBitrate   uint32  // Ceiling for bitrate adaptation
     MinFramerate float64 // Floor for framerate

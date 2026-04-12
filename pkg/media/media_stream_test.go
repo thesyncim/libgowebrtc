@@ -37,16 +37,19 @@ func (f *fakeMediaTrack) Clone() MediaStreamTrack {
 func newTestVideoTrack(t *testing.T) *videoStreamTrack {
 	t.Helper()
 
-	constraints := VideoConstraints{
-		Codec:   codec.VP8,
-		Bitrate: 500_000,
+	config := VideoCaptureConfig{
+		Width:     640,
+		Height:    480,
+		FrameRate: 30,
+		Codec:     codec.VP8,
+		Bitrate:   500_000,
 	}
 	settings := VideoTrackSettings{
 		Width:     640,
 		Height:    480,
 		FrameRate: 30,
 	}
-	cfg, resolved := buildVideoTrackConfig(constraints, settings)
+	cfg, resolved := buildVideoTrackConfig(config, settings)
 	track, err := newVideoStreamTrack(
 		cfg,
 		resolved,
@@ -63,14 +66,12 @@ func newTestVideoTrack(t *testing.T) *videoStreamTrack {
 func newTestAudioTrack(t *testing.T) *audioStreamTrack {
 	t.Helper()
 
-	constraints := AudioConstraints{
-		Bitrate: 64_000,
-	}
+	config := AudioCaptureConfig{SampleRate: 48_000, ChannelCount: 2, Bitrate: 64_000}
 	settings := AudioTrackSettings{
 		SampleRate:   48_000,
 		ChannelCount: 2,
 	}
-	cfg, resolved := buildAudioTrackConfig(constraints, settings)
+	cfg, resolved := buildAudioTrackConfig(config, settings)
 	track, err := newAudioStreamTrack(
 		cfg,
 		resolved,
@@ -207,35 +208,32 @@ func TestMediaStreamClonePreservesTrackState(t *testing.T) {
 	}
 }
 
-func TestVideoStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
+func TestVideoStreamTrackReconfigureAndLifecycle(t *testing.T) {
 	video := newTestVideoTrack(t)
 
-	if err := video.ApplyConstraints(VideoConstraints{
-		Bitrate:   900_000,
-		FrameRate: ExactFloat(15),
-	}); err != nil {
-		t.Fatalf("ApplyConstraints() error = %v", err)
+	cfg := video.Config()
+	cfg.Bitrate = 900_000
+	cfg.FrameRate = 15
+	if err := video.Reconfigure(cfg); err != nil {
+		t.Fatalf("Reconfigure() error = %v", err)
 	}
 
-	if got := video.GetConstraints().Bitrate; got != 900_000 {
-		t.Fatalf("Bitrate after ApplyConstraints() = %d, want 900000", got)
+	if got := video.Config().Bitrate; got != 900_000 {
+		t.Fatalf("Bitrate after Reconfigure() = %d, want 900000", got)
 	}
-	if got := video.GetSettings().FrameRate; got != 15 {
-		t.Fatalf("FrameRate after ApplyConstraints() = %.0f, want 15", got)
-	}
-
-	if err := video.ApplyConstraints(VideoConstraints{FrameRate: IdealFloat(60)}); err != nil {
-		t.Fatalf("ApplyConstraints() with ideal frame rate above supported max = %v", err)
-	}
-	if got := video.GetSettings().FrameRate; got != 30 {
-		t.Fatalf("FrameRate after ideal clamp = %.0f, want 30", got)
+	if got := video.Settings().FrameRate; got != 15 {
+		t.Fatalf("FrameRate after Reconfigure() = %.0f, want 15", got)
 	}
 
-	if err := video.ApplyConstraints(VideoConstraints{FrameRate: ExactFloat(60)}); err == nil {
-		t.Fatal("ApplyConstraints() with unsupported exact frame rate = nil, want error")
+	cfg = video.Config()
+	cfg.FrameRate = 60
+	if err := video.Reconfigure(cfg); err == nil {
+		t.Fatal("Reconfigure() with unsupported frame rate = nil, want error")
 	}
-	if err := video.ApplyConstraints(VideoConstraints{Width: ExactInt(800)}); err == nil {
-		t.Fatal("ApplyConstraints() with incompatible width = nil, want error")
+	cfg = video.Config()
+	cfg.Width = 800
+	if err := video.Reconfigure(cfg); err == nil {
+		t.Fatal("Reconfigure() with incompatible width = nil, want error")
 	}
 
 	video.SetEnabled(false)
@@ -249,33 +247,35 @@ func TestVideoStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
 	}
 }
 
-func TestAudioStreamTrackApplyConstraintsAndLifecycle(t *testing.T) {
+func TestAudioStreamTrackReconfigureAndLifecycle(t *testing.T) {
 	audio := newTestAudioTrack(t)
 
-	if err := audio.ApplyConstraints(AudioConstraints{
-		Bitrate:          96_000,
-		EchoCancellation: ExactBool(true),
-		NoiseSuppression: ExactBool(true),
-		AutoGainControl:  ExactBool(true),
-	}); err != nil {
-		t.Fatalf("ApplyConstraints() error = %v", err)
+	cfg := audio.Config()
+	cfg.Bitrate = 96_000
+	cfg.EchoCancellation = true
+	cfg.NoiseSuppression = true
+	cfg.AutoGainControl = true
+	if err := audio.Reconfigure(cfg); err != nil {
+		t.Fatalf("Reconfigure() error = %v", err)
 	}
 
-	if got := audio.GetConstraints().Bitrate; got != 96_000 {
-		t.Fatalf("Bitrate after ApplyConstraints() = %d, want 96000", got)
+	if got := audio.Config().Bitrate; got != 96_000 {
+		t.Fatalf("Bitrate after Reconfigure() = %d, want 96000", got)
 	}
-	if !audio.GetSettings().EchoCancellation {
+	if !audio.Settings().EchoCancellation {
 		t.Fatal("EchoCancellation = false, want true")
 	}
-	if !audio.GetSettings().NoiseSuppression {
+	if !audio.Settings().NoiseSuppression {
 		t.Fatal("NoiseSuppression = false, want true")
 	}
-	if !audio.GetSettings().AutoGainControl {
+	if !audio.Settings().AutoGainControl {
 		t.Fatal("AutoGainControl = false, want true")
 	}
 
-	if err := audio.ApplyConstraints(AudioConstraints{SampleRate: ExactInt(44_100)}); err == nil {
-		t.Fatal("ApplyConstraints() with incompatible sample rate = nil, want error")
+	cfg = audio.Config()
+	cfg.SampleRate = 44_100
+	if err := audio.Reconfigure(cfg); err == nil {
+		t.Fatal("Reconfigure() with incompatible sample rate = nil, want error")
 	}
 
 	audio.SetEnabled(false)
