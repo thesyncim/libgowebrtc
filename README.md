@@ -12,7 +12,7 @@
 - **Opus** audio encoding/decoding
 - **Allocation-free** hot paths - caller provides all buffers
 - **Pion-compatible** - implements `webrtc.TrackLocal` for seamless integration
-- **Browser-like capture API** - `GetUserMedia()`, `GetDisplayMedia()`, `PeerConnection`
+- **Explicit capture API** - `ListDevices()`, `ListDisplays()`, `OpenCapture()`, `OpenDisplay()`
 - **SVC/Simulcast** support with Chrome/Firefox-compatible presets
 - **purego FFI** - no CGO required by default, optional CGO mode for 5x faster FFI
 - **Device capture** - camera, microphone, screen/window capture
@@ -22,19 +22,19 @@
 
 libgowebrtc brings native codec performance to Go WebRTC applications. It's designed to **complement** [Pion](https://github.com/pion/webrtc) - use Pion for networking and signaling, libgowebrtc for encoding/decoding.
 
-The core packages stay intentionally thin. Browser-like capture, publishing, and validation helpers are available, but they are layered on top of the core API rather than defining it.
+The core packages stay intentionally thin. Capture, publishing, and validation helpers are available, but they are layered on top of the core API rather than defining it.
 
 **Key benefits:**
 - **Native codec performance** - H.264, VP8, VP9, AV1 via Google's libwebrtc
 - **Hardware acceleration** - VideoToolbox on macOS for H.264
 - **SVC/Simulcast** - Full support with Chrome/Firefox-compatible presets
-- **Browser-like capture API** - `GetUserMedia`, `GetDisplayMedia`, `PeerConnection`
+- **Explicit capture API** - `OpenCapture`, `OpenDisplay`, `PeerConnection`
 - **No CGO required** - Uses purego by default (optional CGO mode for 5x faster FFI)
 - **Pion integration** - Implements `webrtc.TrackLocal` for seamless interop
 
 **Use cases:**
 - Add native codecs to your Pion-based SFU/MCU
-- Build browser-like WebRTC apps in Go
+- Build native capture and WebRTC apps in Go
 - High-throughput media processing pipelines
 - Hardware-accelerated transcoding
 
@@ -271,7 +271,7 @@ See [VERSIONING.md](VERSIONING.md) for the bump policy and release flow details.
 
 ## Quick Start
 
-### Browser-Like API
+### Capture API
 
 ```go
 import (
@@ -281,18 +281,18 @@ import (
     "github.com/thesyncim/libgowebrtc/pkg/codec"
 )
 
-// Get camera and microphone (like navigator.mediaDevices.getUserMedia)
-stream, _ := media.GetUserMedia(media.Constraints{
-    Video: &media.VideoConstraints{
-        Width:     media.ExactInt(1280),
-        Height:    media.ExactInt(720),
-        FrameRate: media.ExactFloat(30),
+// Open camera and microphone capture.
+stream, _ := media.OpenCapture(media.CaptureConfig{
+    Video: &media.VideoCaptureConfig{
+        Width:     1280,
+        Height:    720,
+        FrameRate: 30,
         Codec:     codec.VP9,
         Bitrate:   2_000_000,
     },
-    Audio: &media.AudioConstraints{
-        SampleRate:   media.ExactInt(48000),
-        ChannelCount: media.ExactInt(2),
+    Audio: &media.AudioCaptureConfig{
+        SampleRate:   48000,
+        ChannelCount: 2,
         Bitrate:      64000,
     },
 })
@@ -318,8 +318,8 @@ peerConnection.SetLocalDescription(offer)
 
 `pkg/media` is capture-only. For synthetic/manual frame production, use [`pkg/track`](./pkg/track).
 For native libwebrtc-backed senders, create tracks through [`pkg/pc`](./pkg/pc).
-Use concrete track settings and explicit constraints instead of browser-style
-capability probing.
+Use concrete track settings and explicit capture config instead of browser-style
+constraint probing.
 
 ### Pion Integration
 
@@ -731,9 +731,9 @@ libgowebrtc/
 <details>
 <summary><strong>Media Capture</strong></summary>
 
-- Capture-backed device/screen streams via `GetUserMedia`/`GetDisplayMedia`
-- Browser-style capture constraints with explicit per-track settings
-- `EnumerateDevices` and `EnumerateScreens` require the capture shim and return `ErrCaptureNotSupported` when it is unavailable
+- Capture-backed device/screen streams via `OpenCapture`/`OpenDisplay`
+- Explicit capture config with per-track `Config()`, `Reconfigure(...)`, and `Settings()`
+- `ListDevices` and `ListDisplays` require the capture shim and return `ErrCaptureNotSupported` when it is unavailable
 - Manual frame injection lives in `pkg/track`
 - Pion interop, including explicit `msid`/stream-ID preservation at `AddTrack(...)`
 </details>

@@ -1,11 +1,12 @@
-// Package media provides a browser-like API for media capture and track management.
-// This mirrors the Web APIs like getUserMedia, getDisplayMedia, MediaStream, and MediaStreamTrack.
+// Package media provides native capture helpers and track wrappers on top of
+// libwebrtc-backed capture sources.
 package media
 
 import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -21,43 +22,37 @@ const defaultTrackMTU uint16 = 1200
 
 // Errors
 var (
-	ErrInvalidConstraints  = errors.New("invalid constraints")
-	ErrTrackNotFound       = errors.New("track not found")
-	ErrStreamClosed        = errors.New("stream closed")
-	ErrDeviceNotFound      = errors.New("device not found")
-	ErrCaptureNotSupported = errors.New("capture not supported without shim library")
+	ErrInvalidCaptureConfig = errors.New("invalid capture config")
+	ErrTrackNotFound        = errors.New("track not found")
+	ErrStreamClosed         = errors.New("stream closed")
+	ErrDeviceNotFound       = errors.New("device not found")
+	ErrCaptureNotSupported  = errors.New("capture not supported without shim library")
 )
 
-// MediaDeviceKind represents the type of media device.
-type MediaDeviceKind string
+// DeviceKind represents the type of capture device.
+type DeviceKind string
 
 const (
-	// MediaDeviceKindVideoInput represents a camera.
-	MediaDeviceKindVideoInput MediaDeviceKind = "videoinput"
-	// MediaDeviceKindAudioInput represents a microphone.
-	MediaDeviceKindAudioInput MediaDeviceKind = "audioinput"
-	// MediaDeviceKindAudioOutput represents a speaker.
-	MediaDeviceKindAudioOutput MediaDeviceKind = "audiooutput"
+	// DeviceKindVideoInput represents a camera.
+	DeviceKindVideoInput DeviceKind = "videoinput"
+	// DeviceKindAudioInput represents a microphone.
+	DeviceKindAudioInput DeviceKind = "audioinput"
+	// DeviceKindAudioOutput represents a speaker.
+	DeviceKindAudioOutput DeviceKind = "audiooutput"
 )
 
-// MediaDeviceInfo mirrors browser's MediaDeviceInfo interface.
-// Returned by EnumerateDevices().
-type MediaDeviceInfo struct {
+// DeviceInfo describes an enumerated native capture device.
+type DeviceInfo struct {
 	// DeviceID is a unique identifier for the device.
 	DeviceID string
 	// Kind is the type of device (videoinput, audioinput, audiooutput).
-	Kind MediaDeviceKind
+	Kind DeviceKind
 	// Label is a human-readable name for the device.
-	// May be empty if permission not granted.
 	Label string
-	// GroupID identifies devices that belong together (e.g., camera + mic on same device).
-	GroupID string
 }
 
-// EnumerateDevices mirrors browser's navigator.mediaDevices.enumerateDevices().
-// Returns a list of available media input and output devices.
-// If the capture shim is unavailable, it returns ErrCaptureNotSupported.
-func EnumerateDevices() ([]MediaDeviceInfo, error) {
+// ListDevices returns available native media input and output devices.
+func ListDevices() ([]DeviceInfo, error) {
 	ffiDevices, err := ffi.EnumerateDevices()
 	if err != nil {
 		if errors.Is(err, ffi.ErrLibraryNotLoaded) {
@@ -69,8 +64,8 @@ func EnumerateDevices() ([]MediaDeviceInfo, error) {
 	return mapFFIDevices(ffiDevices), nil
 }
 
-// ScreenInfo represents a screen or window available for capture.
-type ScreenInfo struct {
+// DisplayInfo describes an available monitor or window capture target.
+type DisplayInfo struct {
 	// ID is a unique identifier for the screen/window.
 	ID int64
 	// Title is the window title or screen name.
@@ -79,10 +74,8 @@ type ScreenInfo struct {
 	IsWindow bool
 }
 
-// EnumerateScreens returns a list of available screens and windows for capture.
-// This is an extension to the browser API (browsers use getDisplayMedia picker).
-// If the capture shim is unavailable, it returns ErrCaptureNotSupported.
-func EnumerateScreens() ([]ScreenInfo, error) {
+// ListDisplays returns available monitor and window capture targets.
+func ListDisplays() ([]DisplayInfo, error) {
 	ffiScreens, err := ffi.EnumerateScreens()
 	if err != nil {
 		if errors.Is(err, ffi.ErrLibraryNotLoaded) {
@@ -94,92 +87,88 @@ func EnumerateScreens() ([]ScreenInfo, error) {
 	return mapFFIScreens(ffiScreens), nil
 }
 
-// DisplayConstraints is used with GetDisplayMedia for screen/window capture.
-type DisplayConstraints struct {
-	Video *DisplayVideoConstraints // Video configures the required display-capture video source.
-	Audio *AudioConstraints        // Audio optionally requests additional audio capture alongside video.
+// DisplayCaptureConfig opens a monitor or window capture source.
+type DisplayCaptureConfig struct {
+	Video *DisplayVideoConfig // Video configures the required display-capture video source.
+	Audio *AudioCaptureConfig // Audio optionally requests additional audio capture alongside video.
 }
 
-// DisplayVideoConstraints for screen/window capture.
-type DisplayVideoConstraints struct {
-	DisplaySurface DisplaySurface // DisplaySurface narrows capture to monitor, window, or browser-like sources.
-	// ScreenID specifies which screen to capture (from EnumerateScreens).
-	// If 0 and WindowID is 0, captures the first matching screen for the requested DisplaySurface.
+// DisplayVideoConfig configures monitor or window capture.
+type DisplayVideoConfig struct {
+	Kind DisplayKind // Kind narrows capture to monitors or windows.
+	// ScreenID selects a specific monitor from ListDisplays.
 	ScreenID int64
-	// WindowID specifies which window to capture (from EnumerateScreens).
-	// Takes precedence over ScreenID if non-zero.
-	WindowID  int64            // WindowID targets one specific capture window when non-zero.
-	FrameRate FloatConstraint  // FrameRate constrains the captured frame rate.
-	Width     IntConstraint    // Width constrains the captured frame width in pixels.
-	Height    IntConstraint    // Height constrains the captured frame height in pixels.
-	Codec     codec.Type       // Codec picks the preferred encoder codec for the resulting track.
-	Bitrate   uint32           // Bitrate sets the initial encoder target bitrate in bps.
-	SVC       *codec.SVCConfig // SVC configures scalable or simulcast video output when supported.
-	// CodecPreferences is the advanced codec selection path and takes precedence over Codec.
+	// WindowID selects a specific window from ListDisplays and takes precedence over ScreenID.
+	WindowID         int64
+	FrameRate        float64
+	Width            int
+	Height           int
+	Codec            codec.Type
+	Bitrate          uint32
+	SVC              *codec.SVCConfig // SVC configures scalable or simulcast video output when supported.
 	CodecPreferences []webrtc.RTPCodecParameters
 }
 
-// VideoConstraints mirrors the supported subset of browser MediaTrackConstraints for video capture.
-type VideoConstraints struct {
-	Width      IntConstraint    // Width constrains the captured frame width in pixels.
-	Height     IntConstraint    // Height constrains the captured frame height in pixels.
-	FrameRate  FloatConstraint  // FrameRate constrains the captured frame rate.
-	FacingMode FacingMode       // FacingMode prefers a front, rear, left, or right camera.
-	DeviceID   StringConstraint // DeviceID selects a specific capture device when available.
-	Codec      codec.Type       // Codec picks the preferred encoder codec for the resulting track.
-	Bitrate    uint32           // Bitrate sets the initial encoder target bitrate in bps.
-	SVC        *codec.SVCConfig // SVC configures scalable or simulcast video output when supported.
-	// CodecPreferences is the advanced codec selection path and takes precedence over Codec.
+// VideoCaptureConfig configures camera-backed capture.
+type VideoCaptureConfig struct {
+	Width            int
+	Height           int
+	FrameRate        float64
+	FacingMode       CameraFacing
+	DeviceID         string
+	Codec            codec.Type
+	Bitrate          uint32
+	SVC              *codec.SVCConfig // SVC configures scalable or simulcast video output when supported.
 	CodecPreferences []webrtc.RTPCodecParameters
 }
 
-// AudioConstraints mirrors the supported subset of browser MediaTrackConstraints for audio capture.
-type AudioConstraints struct {
-	SampleRate       IntConstraint    // SampleRate constrains the captured sample rate in Hz.
-	ChannelCount     IntConstraint    // ChannelCount constrains the captured number of channels.
-	EchoCancellation BoolConstraint   // EchoCancellation prefers or requires echo cancellation.
-	NoiseSuppression BoolConstraint   // NoiseSuppression prefers or requires noise suppression.
-	AutoGainControl  BoolConstraint   // AutoGainControl prefers or requires automatic gain control.
-	DeviceID         StringConstraint // DeviceID selects a specific audio device when available.
-	Bitrate          uint32           // Bitrate sets the initial encoder target bitrate in bps.
-	// CodecPreferences is the advanced codec selection path.
+// AudioCaptureConfig configures microphone-backed capture.
+type AudioCaptureConfig struct {
+	SampleRate       int
+	ChannelCount     int
+	EchoCancellation bool
+	NoiseSuppression bool
+	AutoGainControl  bool
+	DeviceID         string
+	Bitrate          uint32
 	CodecPreferences []webrtc.RTPCodecParameters
 }
 
-// Constraints mirrors browser's MediaStreamConstraints.
-type Constraints struct {
-	Video *VideoConstraints // Video requests a video capture track when non-nil.
-	Audio *AudioConstraints // Audio requests an audio capture track when non-nil.
+// CaptureConfig opens camera and microphone capture sources.
+type CaptureConfig struct {
+	Video *VideoCaptureConfig
+	Audio *AudioCaptureConfig
 }
 
-// MediaStreamTrack mirrors browser's MediaStreamTrack interface.
-// Use VideoStreamTrack or AudioStreamTrack for type-safe constraint access.
+// MediaStreamTrack is the common track surface exposed by pkg/media streams.
 type MediaStreamTrack interface {
 	ID() string              // ID returns the stable track identifier.
-	Kind() string            // Kind returns the browser-shaped media kind, such as "audio" or "video".
+	Kind() string            // Kind returns the media kind, such as "audio" or "video".
 	Label() string           // Label returns the human-readable source label when available.
 	Enabled() bool           // Enabled reports whether the track is enabled for delivery.
 	SetEnabled(enabled bool) // SetEnabled enables or disables the track without stopping it.
 	Muted() bool             // Muted reports whether the source is currently muted.
-	ReadyState() string      // ReadyState returns the browser-shaped lifecycle state.
+	ReadyState() string      // ReadyState returns the current lifecycle state.
 	Stop()                   // Stop permanently ends the track.
 	Clone() MediaStreamTrack // Clone returns an independent track view for the same source.
 }
 
-// VideoStreamTrack provides type-safe access to video track constraints and settings.
+// VideoStreamTrack provides type-safe access to capture-backed video track
+// config and settings.
 type VideoStreamTrack interface {
 	MediaStreamTrack
-	GetConstraints() VideoConstraints                    // GetConstraints returns the currently applied video constraints.
-	ApplyConstraints(constraints VideoConstraints) error // ApplyConstraints updates the active video constraints.
-	GetSettings() VideoTrackSettings                     // GetSettings returns the current concrete video settings.
+	Config() VideoCaptureConfig                  // Config returns the currently applied video config.
+	Reconfigure(config VideoCaptureConfig) error // Reconfigure updates the active video config.
+	Settings() VideoTrackSettings                // Settings returns the current concrete video settings.
 }
 
-// AudioStreamTrack provides type-safe access to audio track constraints and settings.
+// AudioStreamTrack provides type-safe access to capture-backed audio track
+// config and settings.
 type AudioStreamTrack interface {
 	MediaStreamTrack
-	GetConstraints() AudioConstraints                    // GetConstraints returns the currently applied audio constraints.
-	ApplyConstraints(constraints AudioConstraints) error // ApplyConstraints updates the active audio constraints.
-	GetSettings() AudioTrackSettings                     // GetSettings returns the current concrete audio settings.
+	Config() AudioCaptureConfig                  // Config returns the currently applied audio config.
+	Reconfigure(config AudioCaptureConfig) error // Reconfigure updates the active audio config.
+	Settings() AudioTrackSettings                // Settings returns the current concrete audio settings.
 }
 
 // MediaStream mirrors browser's MediaStream interface.
@@ -363,11 +352,11 @@ func (s *MediaStream) Active() bool {
 
 // VideoTrackSettings represents current video track settings.
 type VideoTrackSettings struct {
-	Width      int        // Width is the current frame width in pixels.
-	Height     int        // Height is the current frame height in pixels.
-	FrameRate  float64    // FrameRate is the current capture frame rate.
-	DeviceID   string     // DeviceID is the selected capture device identifier, when known.
-	FacingMode FacingMode // FacingMode is the selected camera direction, when applicable.
+	Width      int          // Width is the current frame width in pixels.
+	Height     int          // Height is the current frame height in pixels.
+	FrameRate  float64      // FrameRate is the current capture frame rate.
+	DeviceID   string       // DeviceID is the selected capture device identifier, when known.
+	FacingMode CameraFacing // FacingMode is the selected camera direction, when applicable.
 }
 
 // AudioTrackSettings represents current audio track settings.
@@ -420,16 +409,16 @@ var (
 
 // videoStreamTrack wraps track.VideoTrack as MediaStreamTrack.
 type videoStreamTrack struct {
-	track              *track.VideoTrack
-	constraints        VideoConstraints
-	settings           VideoTrackSettings
-	maxFrameRate       float64
-	displayConstraints *DisplayVideoConstraints
-	enabled            atomic.Bool
-	muted              atomic.Bool
-	readyState         atomic.Value
-	label              string
-	source             mediaSourceKind
+	track         *track.VideoTrack
+	config        VideoCaptureConfig
+	settings      VideoTrackSettings
+	maxFrameRate  float64
+	displayConfig *DisplayVideoConfig
+	enabled       atomic.Bool
+	muted         atomic.Bool
+	readyState    atomic.Value
+	label         string
+	source        mediaSourceKind
 
 	videoCapture  videoCaptureHandle
 	screenCapture screenCaptureHandle
@@ -438,32 +427,31 @@ type videoStreamTrack struct {
 
 // audioStreamTrack wraps track.AudioTrack as MediaStreamTrack.
 type audioStreamTrack struct {
-	track       *track.AudioTrack
-	constraints AudioConstraints
-	settings    AudioTrackSettings
-	enabled     atomic.Bool
-	muted       atomic.Bool
-	readyState  atomic.Value
-	label       string
-	source      mediaSourceKind
+	track      *track.AudioTrack
+	config     AudioCaptureConfig
+	settings   AudioTrackSettings
+	enabled    atomic.Bool
+	muted      atomic.Bool
+	readyState atomic.Value
+	label      string
+	source     mediaSourceKind
 
 	audioCapture audioCaptureHandle
 	mu           sync.Mutex
 }
 
-// GetUserMedia mirrors browser's navigator.mediaDevices.getUserMedia().
-// Returns a MediaStream with real capture-backed tracks.
-func GetUserMedia(constraints Constraints) (*MediaStream, error) {
-	if constraints.Video == nil && constraints.Audio == nil {
-		return nil, ErrInvalidConstraints
+// OpenCapture opens camera and microphone capture tracks.
+func OpenCapture(config CaptureConfig) (*MediaStream, error) {
+	if config.Video == nil && config.Audio == nil {
+		return nil, ErrInvalidCaptureConfig
 	}
-	if constraints.Video != nil {
-		if err := validateVideoConstraints(*constraints.Video); err != nil {
+	if config.Video != nil {
+		if err := validateVideoCaptureConfig(*config.Video); err != nil {
 			return nil, err
 		}
 	}
-	if constraints.Audio != nil {
-		if err := validateAudioConstraints(*constraints.Audio); err != nil {
+	if config.Audio != nil {
+		if err := validateAudioCaptureConfig(*config.Audio); err != nil {
 			return nil, err
 		}
 	}
@@ -483,8 +471,8 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 		}
 	}
 
-	if constraints.Video != nil {
-		vt, err := createUserVideoTrack(*constraints.Video, devices)
+	if config.Video != nil {
+		vt, err := createUserVideoTrack(*config.Video, devices)
 		if err != nil {
 			cleanup()
 			return nil, err
@@ -492,8 +480,8 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 		stream.AddTrack(vt)
 	}
 
-	if constraints.Audio != nil {
-		at, err := createUserAudioTrack(*constraints.Audio, devices)
+	if config.Audio != nil {
+		at, err := createUserAudioTrack(*config.Audio, devices)
 		if err != nil {
 			cleanup()
 			return nil, err
@@ -504,17 +492,16 @@ func GetUserMedia(constraints Constraints) (*MediaStream, error) {
 	return stream, nil
 }
 
-// GetDisplayMedia mirrors browser's navigator.mediaDevices.getDisplayMedia().
-// Returns a MediaStream configured for screen sharing.
-func GetDisplayMedia(c DisplayConstraints) (*MediaStream, error) {
+// OpenDisplay opens monitor or window capture.
+func OpenDisplay(c DisplayCaptureConfig) (*MediaStream, error) {
 	if c.Video == nil {
-		return nil, ErrInvalidConstraints
+		return nil, ErrInvalidCaptureConfig
 	}
-	if err := validateDisplayVideoConstraints(*c.Video); err != nil {
+	if err := validateDisplayVideoConfig(*c.Video); err != nil {
 		return nil, err
 	}
 	if c.Audio != nil {
-		if err := validateAudioConstraints(*c.Audio); err != nil {
+		if err := validateAudioCaptureConfig(*c.Audio); err != nil {
 			return nil, err
 		}
 	}
@@ -564,7 +551,7 @@ func ensureCaptureBackend() error {
 	return nil
 }
 
-func listCaptureDevices() ([]MediaDeviceInfo, error) {
+func listCaptureDevices() ([]DeviceInfo, error) {
 	ffiDevices, err := enumerateDevices()
 	if err != nil {
 		if errors.Is(err, ffi.ErrLibraryNotLoaded) {
@@ -575,7 +562,7 @@ func listCaptureDevices() ([]MediaDeviceInfo, error) {
 	return mapFFIDevices(ffiDevices), nil
 }
 
-func listCaptureScreens() ([]ScreenInfo, error) {
+func listCaptureScreens() ([]DisplayInfo, error) {
 	ffiScreens, err := enumerateScreens()
 	if err != nil {
 		if errors.Is(err, ffi.ErrLibraryNotLoaded) {
@@ -586,32 +573,31 @@ func listCaptureScreens() ([]ScreenInfo, error) {
 	return mapFFIScreens(ffiScreens), nil
 }
 
-func mapFFIDevices(ffiDevices []ffi.DeviceInfo) []MediaDeviceInfo {
-	devices := make([]MediaDeviceInfo, len(ffiDevices))
+func mapFFIDevices(ffiDevices []ffi.DeviceInfo) []DeviceInfo {
+	devices := make([]DeviceInfo, len(ffiDevices))
 	for i, d := range ffiDevices {
-		var kind MediaDeviceKind
+		var kind DeviceKind
 		switch d.Kind {
 		case ffi.DeviceKindVideoInput:
-			kind = MediaDeviceKindVideoInput
+			kind = DeviceKindVideoInput
 		case ffi.DeviceKindAudioInput:
-			kind = MediaDeviceKindAudioInput
+			kind = DeviceKindAudioInput
 		case ffi.DeviceKindAudioOutput:
-			kind = MediaDeviceKindAudioOutput
+			kind = DeviceKindAudioOutput
 		}
-		devices[i] = MediaDeviceInfo{
+		devices[i] = DeviceInfo{
 			DeviceID: d.DeviceID,
 			Kind:     kind,
 			Label:    d.Label,
-			GroupID:  "",
 		}
 	}
 	return devices
 }
 
-func mapFFIScreens(ffiScreens []ffi.ScreenInfo) []ScreenInfo {
-	screens := make([]ScreenInfo, len(ffiScreens))
+func mapFFIScreens(ffiScreens []ffi.ScreenInfo) []DisplayInfo {
+	screens := make([]DisplayInfo, len(ffiScreens))
 	for i, s := range ffiScreens {
-		screens[i] = ScreenInfo{
+		screens[i] = DisplayInfo{
 			ID:       s.ID,
 			Title:    s.Title,
 			IsWindow: s.IsWindow,
@@ -620,8 +606,8 @@ func mapFFIScreens(ffiScreens []ffi.ScreenInfo) []ScreenInfo {
 	return screens
 }
 
-func createUserVideoTrack(request VideoConstraints, devices []MediaDeviceInfo) (*videoStreamTrack, error) {
-	settings, resolved, label, err := resolveVideoCaptureRequest(request, devices)
+func createUserVideoTrack(config VideoCaptureConfig, devices []DeviceInfo) (*videoStreamTrack, error) {
+	settings, resolved, label, err := resolveVideoCaptureConfig(config, devices)
 	if err != nil {
 		return nil, err
 	}
@@ -638,8 +624,8 @@ func createUserVideoTrack(request VideoConstraints, devices []MediaDeviceInfo) (
 	return t, nil
 }
 
-func createDisplayVideoTrack(request DisplayVideoConstraints, screens []ScreenInfo) (*videoStreamTrack, error) {
-	settings, resolvedVideo, resolvedDisplay, label, err := resolveDisplayCaptureRequest(request, screens)
+func createDisplayVideoTrack(config DisplayVideoConfig, screens []DisplayInfo) (*videoStreamTrack, error) {
+	settings, resolvedVideo, resolvedDisplay, label, err := resolveDisplayCaptureConfig(config, screens)
 	if err != nil {
 		return nil, err
 	}
@@ -649,7 +635,7 @@ func createDisplayVideoTrack(request DisplayVideoConstraints, screens []ScreenIn
 		return nil, err
 	}
 	t.source = sourceDisplay
-	t.displayConstraints = &resolvedDisplay
+	t.displayConfig = &resolvedDisplay
 	if err := t.startScreenCapture(); err != nil {
 		t.Stop()
 		return nil, err
@@ -657,8 +643,8 @@ func createDisplayVideoTrack(request DisplayVideoConstraints, screens []ScreenIn
 	return t, nil
 }
 
-func createUserAudioTrack(request AudioConstraints, devices []MediaDeviceInfo) (*audioStreamTrack, error) {
-	settings, resolved, label, err := resolveAudioCaptureRequest(request, devices)
+func createUserAudioTrack(config AudioCaptureConfig, devices []DeviceInfo) (*audioStreamTrack, error) {
+	settings, resolved, label, err := resolveAudioCaptureConfig(config, devices)
 	if err != nil {
 		return nil, err
 	}
@@ -675,12 +661,12 @@ func createUserAudioTrack(request AudioConstraints, devices []MediaDeviceInfo) (
 	return t, nil
 }
 
-func newVideoStreamTrack(cfg track.VideoTrackConfig, constraints VideoConstraints, settings VideoTrackSettings, label string) (*videoStreamTrack, error) {
+func newVideoStreamTrack(cfg track.VideoTrackConfig, config VideoCaptureConfig, settings VideoTrackSettings, label string) (*videoStreamTrack, error) {
 	if cfg.Bitrate == 0 || cfg.Width <= 0 || cfg.Height <= 0 || cfg.FPS <= 0 {
-		return nil, fmt.Errorf("%w: video track config must be fully resolved (bitrate=%d width=%d height=%d fps=%v)", ErrInvalidConstraints, cfg.Bitrate, cfg.Width, cfg.Height, cfg.FPS)
+		return nil, fmt.Errorf("%w: video track config must be fully resolved (bitrate=%d width=%d height=%d fps=%v)", ErrInvalidCaptureConfig, cfg.Bitrate, cfg.Width, cfg.Height, cfg.FPS)
 	}
 	if settings.Width <= 0 || settings.Height <= 0 || settings.FrameRate <= 0 {
-		return nil, fmt.Errorf("%w: video track settings must be fully resolved (width=%d height=%d frameRate=%v)", ErrInvalidConstraints, settings.Width, settings.Height, settings.FrameRate)
+		return nil, fmt.Errorf("%w: video track settings must be fully resolved (width=%d height=%d frameRate=%v)", ErrInvalidCaptureConfig, settings.Width, settings.Height, settings.FrameRate)
 	}
 
 	vt, err := track.NewVideoTrack(cfg)
@@ -690,7 +676,7 @@ func newVideoStreamTrack(cfg track.VideoTrackConfig, constraints VideoConstraint
 
 	t := &videoStreamTrack{
 		track:        vt,
-		constraints:  constraints,
+		config:       config,
 		settings:     settings,
 		maxFrameRate: settings.FrameRate,
 		label:        label,
@@ -701,12 +687,12 @@ func newVideoStreamTrack(cfg track.VideoTrackConfig, constraints VideoConstraint
 	return t, nil
 }
 
-func newAudioStreamTrack(cfg track.AudioTrackConfig, constraints AudioConstraints, settings AudioTrackSettings, label string) (*audioStreamTrack, error) {
+func newAudioStreamTrack(cfg track.AudioTrackConfig, config AudioCaptureConfig, settings AudioTrackSettings, label string) (*audioStreamTrack, error) {
 	if cfg.Bitrate == 0 || cfg.SampleRate == 0 || cfg.Channels == 0 {
-		return nil, fmt.Errorf("%w: audio track config must be fully resolved (bitrate=%d sampleRate=%d channels=%d)", ErrInvalidConstraints, cfg.Bitrate, cfg.SampleRate, cfg.Channels)
+		return nil, fmt.Errorf("%w: audio track config must be fully resolved (bitrate=%d sampleRate=%d channels=%d)", ErrInvalidCaptureConfig, cfg.Bitrate, cfg.SampleRate, cfg.Channels)
 	}
 	if settings.SampleRate <= 0 || settings.ChannelCount <= 0 {
-		return nil, fmt.Errorf("%w: audio track settings must be fully resolved (sampleRate=%d channelCount=%d)", ErrInvalidConstraints, settings.SampleRate, settings.ChannelCount)
+		return nil, fmt.Errorf("%w: audio track settings must be fully resolved (sampleRate=%d channelCount=%d)", ErrInvalidCaptureConfig, settings.SampleRate, settings.ChannelCount)
 	}
 
 	at, err := track.NewAudioTrack(cfg)
@@ -715,10 +701,10 @@ func newAudioStreamTrack(cfg track.AudioTrackConfig, constraints AudioConstraint
 	}
 
 	t := &audioStreamTrack{
-		track:       at,
-		constraints: constraints,
-		settings:    settings,
-		label:       label,
+		track:    at,
+		config:   config,
+		settings: settings,
+		label:    label,
 	}
 	t.enabled.Store(true)
 	t.muted.Store(false)
@@ -726,11 +712,11 @@ func newAudioStreamTrack(cfg track.AudioTrackConfig, constraints AudioConstraint
 	return t, nil
 }
 
-func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSettings) (track.VideoTrackConfig, VideoConstraints) {
-	resolved := constraints
-	resolved.Width = ExactInt(settings.Width)
-	resolved.Height = ExactInt(settings.Height)
-	resolved.FrameRate = ExactFloat(settings.FrameRate)
+func buildVideoTrackConfig(config VideoCaptureConfig, settings VideoTrackSettings) (track.VideoTrackConfig, VideoCaptureConfig) {
+	resolved := config
+	resolved.Width = settings.Width
+	resolved.Height = settings.Height
+	resolved.FrameRate = settings.FrameRate
 	trackID := generateID()
 	cfg := track.VideoTrackConfig{
 		ID:             trackID,
@@ -761,10 +747,10 @@ func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSett
 	return cfg, resolved
 }
 
-func buildAudioTrackConfig(constraints AudioConstraints, settings AudioTrackSettings) (track.AudioTrackConfig, AudioConstraints) {
-	resolved := constraints
-	resolved.SampleRate = ExactInt(settings.SampleRate)
-	resolved.ChannelCount = ExactInt(settings.ChannelCount)
+func buildAudioTrackConfig(config AudioCaptureConfig, settings AudioTrackSettings) (track.AudioTrackConfig, AudioCaptureConfig) {
+	resolved := config
+	resolved.SampleRate = settings.SampleRate
+	resolved.ChannelCount = settings.ChannelCount
 	trackID := generateID()
 	cfg := track.AudioTrackConfig{
 		ID:         trackID,
@@ -780,241 +766,148 @@ func buildAudioTrackConfig(constraints AudioConstraints, settings AudioTrackSett
 	return cfg, resolved
 }
 
-func resolveVideoCaptureRequest(request VideoConstraints, devices []MediaDeviceInfo) (VideoTrackSettings, VideoConstraints, string, error) {
-	if err := validateVideoConstraints(request); err != nil {
-		return VideoTrackSettings{}, VideoConstraints{}, "", err
+func resolveVideoCaptureConfig(config VideoCaptureConfig, devices []DeviceInfo) (VideoTrackSettings, VideoCaptureConfig, string, error) {
+	if err := validateVideoCaptureConfig(config); err != nil {
+		return VideoTrackSettings{}, VideoCaptureConfig{}, "", err
 	}
-	device, err := selectDevice(devices, MediaDeviceKindVideoInput, request.DeviceID)
+	device, err := selectDevice(devices, DeviceKindVideoInput, config.DeviceID)
 	if err != nil {
-		return VideoTrackSettings{}, VideoConstraints{}, "", err
+		return VideoTrackSettings{}, VideoCaptureConfig{}, "", err
 	}
 
-	width := resolveIntConstraint(request.Width, 0)
-	height := resolveIntConstraint(request.Height, 0)
-	frameRate := resolveFloatConstraint(request.FrameRate, 0)
-	if width <= 0 || height <= 0 || frameRate <= 0 {
-		return VideoTrackSettings{}, VideoConstraints{}, "", ErrInvalidConstraints
-	}
-
+	resolved := config
+	resolved.DeviceID = device.DeviceID
 	settings := VideoTrackSettings{
-		Width:      width,
-		Height:     height,
-		FrameRate:  frameRate,
-		DeviceID:   device.DeviceID,
-		FacingMode: request.FacingMode,
+		Width:      resolved.Width,
+		Height:     resolved.Height,
+		FrameRate:  resolved.FrameRate,
+		DeviceID:   resolved.DeviceID,
+		FacingMode: resolved.FacingMode,
 	}
-
-	resolved := request
-	resolved.Width = ExactInt(width)
-	resolved.Height = ExactInt(height)
-	resolved.FrameRate = ExactFloat(frameRate)
-	resolved.DeviceID = ExactString(device.DeviceID)
 	return settings, resolved, device.Label, nil
 }
 
-func resolveAudioCaptureRequest(request AudioConstraints, devices []MediaDeviceInfo) (AudioTrackSettings, AudioConstraints, string, error) {
-	if err := validateAudioConstraints(request); err != nil {
-		return AudioTrackSettings{}, AudioConstraints{}, "", err
+func resolveAudioCaptureConfig(config AudioCaptureConfig, devices []DeviceInfo) (AudioTrackSettings, AudioCaptureConfig, string, error) {
+	if err := validateAudioCaptureConfig(config); err != nil {
+		return AudioTrackSettings{}, AudioCaptureConfig{}, "", err
 	}
-	device, err := selectDevice(devices, MediaDeviceKindAudioInput, request.DeviceID)
+	device, err := selectDevice(devices, DeviceKindAudioInput, config.DeviceID)
 	if err != nil {
-		return AudioTrackSettings{}, AudioConstraints{}, "", err
+		return AudioTrackSettings{}, AudioCaptureConfig{}, "", err
 	}
 
-	sampleRate := resolveIntConstraint(request.SampleRate, 0)
-	channelCount := resolveIntConstraint(request.ChannelCount, 0)
-	if sampleRate <= 0 || channelCount <= 0 {
-		return AudioTrackSettings{}, AudioConstraints{}, "", ErrInvalidConstraints
-	}
-
+	resolved := config
+	resolved.DeviceID = device.DeviceID
 	settings := AudioTrackSettings{
-		SampleRate:       sampleRate,
-		ChannelCount:     channelCount,
-		DeviceID:         device.DeviceID,
-		EchoCancellation: resolveBoolConstraint(request.EchoCancellation, false),
-		NoiseSuppression: resolveBoolConstraint(request.NoiseSuppression, false),
-		AutoGainControl:  resolveBoolConstraint(request.AutoGainControl, false),
+		SampleRate:       resolved.SampleRate,
+		ChannelCount:     resolved.ChannelCount,
+		DeviceID:         resolved.DeviceID,
+		EchoCancellation: resolved.EchoCancellation,
+		NoiseSuppression: resolved.NoiseSuppression,
+		AutoGainControl:  resolved.AutoGainControl,
 	}
-
-	resolved := request
-	resolved.SampleRate = ExactInt(sampleRate)
-	resolved.ChannelCount = ExactInt(channelCount)
-	resolved.DeviceID = ExactString(device.DeviceID)
-	resolved.EchoCancellation = ExactBool(settings.EchoCancellation)
-	resolved.NoiseSuppression = ExactBool(settings.NoiseSuppression)
-	resolved.AutoGainControl = ExactBool(settings.AutoGainControl)
-
 	return settings, resolved, device.Label, nil
 }
 
-func resolveDisplayCaptureRequest(request DisplayVideoConstraints, screens []ScreenInfo) (VideoTrackSettings, VideoConstraints, DisplayVideoConstraints, string, error) {
-	if err := validateDisplayVideoConstraints(request); err != nil {
-		return VideoTrackSettings{}, VideoConstraints{}, DisplayVideoConstraints{}, "", err
+func resolveDisplayCaptureConfig(config DisplayVideoConfig, displays []DisplayInfo) (VideoTrackSettings, VideoCaptureConfig, DisplayVideoConfig, string, error) {
+	if err := validateDisplayVideoConfig(config); err != nil {
+		return VideoTrackSettings{}, VideoCaptureConfig{}, DisplayVideoConfig{}, "", err
 	}
-	target, surface, err := selectDisplayTarget(screens, request)
+	target, kind, err := selectDisplayTarget(displays, config)
 	if err != nil {
-		return VideoTrackSettings{}, VideoConstraints{}, DisplayVideoConstraints{}, "", err
+		return VideoTrackSettings{}, VideoCaptureConfig{}, DisplayVideoConfig{}, "", err
 	}
 
-	if !request.Width.IsSet() || !request.Height.IsSet() || !request.FrameRate.IsSet() {
-		return VideoTrackSettings{}, VideoConstraints{}, DisplayVideoConstraints{}, "", ErrInvalidConstraints
+	videoConfig := VideoCaptureConfig{
+		Width:            config.Width,
+		Height:           config.Height,
+		FrameRate:        config.FrameRate,
+		Codec:            config.Codec,
+		Bitrate:          config.Bitrate,
+		SVC:              config.SVC,
+		CodecPreferences: append([]webrtc.RTPCodecParameters(nil), config.CodecPreferences...),
 	}
 
-	width := resolveIntConstraint(request.Width, 0)
-	height := resolveIntConstraint(request.Height, 0)
-	frameRate := resolveFloatConstraint(request.FrameRate, 0)
-	if width <= 0 || height <= 0 || frameRate <= 0 {
-		return VideoTrackSettings{}, VideoConstraints{}, DisplayVideoConstraints{}, "", ErrInvalidConstraints
-	}
-
-	videoConstraints := VideoConstraints{
-		Width:            ExactInt(width),
-		Height:           ExactInt(height),
-		FrameRate:        ExactFloat(frameRate),
-		Codec:            request.Codec,
-		Bitrate:          request.Bitrate,
-		SVC:              request.SVC,
-		CodecPreferences: append([]webrtc.RTPCodecParameters(nil), request.CodecPreferences...),
-	}
-
-	displayConstraints := request
-	displayConstraints.DisplaySurface = surface
-	displayConstraints.Width = ExactInt(width)
-	displayConstraints.Height = ExactInt(height)
-	displayConstraints.FrameRate = ExactFloat(frameRate)
+	displayConfig := config
+	displayConfig.Kind = kind
 	if target.IsWindow {
-		displayConstraints.WindowID = target.ID
-		displayConstraints.ScreenID = 0
+		displayConfig.WindowID = target.ID
+		displayConfig.ScreenID = 0
 	} else {
-		displayConstraints.ScreenID = target.ID
-		displayConstraints.WindowID = 0
+		displayConfig.ScreenID = target.ID
+		displayConfig.WindowID = 0
 	}
 
 	settings := VideoTrackSettings{
-		Width:     width,
-		Height:    height,
-		FrameRate: frameRate,
+		Width:     config.Width,
+		Height:    config.Height,
+		FrameRate: config.FrameRate,
 	}
-
-	return settings, videoConstraints, displayConstraints, target.Title, nil
+	return settings, videoConfig, displayConfig, target.Title, nil
 }
 
-func validateVideoConstraints(c VideoConstraints) error {
-	if !c.FacingMode.IsValid() {
-		return ErrInvalidConstraints
+func validateVideoCaptureConfig(config VideoCaptureConfig) error {
+	if !config.FacingMode.IsValid() {
+		return &ConfigError{Field: "facingMode", Message: "must be empty or a supported camera facing value"}
 	}
-	if !hasExplicitVideoCodecSelection(c.Codec, c.CodecPreferences) {
-		return ErrInvalidConstraints
+	if !hasExplicitVideoCodecSelection(config.Codec, config.CodecPreferences) {
+		return &ConfigError{Field: "codec", Message: "must provide Codec or CodecPreferences"}
 	}
-	if c.Bitrate == 0 {
-		return ErrInvalidConstraints
+	if config.Bitrate == 0 {
+		return &ConfigError{Field: "bitrate", Message: "must be greater than zero"}
 	}
-	if !c.Width.IsSet() || !c.Height.IsSet() || !c.FrameRate.IsSet() {
-		return ErrInvalidConstraints
+	if config.Width <= 0 {
+		return &ConfigError{Field: "width", Message: "must be greater than zero"}
 	}
-	if err := validateStringConstraintShape(c.DeviceID); err != nil {
-		return err
+	if config.Height <= 0 {
+		return &ConfigError{Field: "height", Message: "must be greater than zero"}
 	}
-	if err := validateIntConstraintShape(c.Width); err != nil {
-		return err
+	if config.FrameRate <= 0 {
+		return &ConfigError{Field: "frameRate", Message: "must be greater than zero"}
 	}
-	if err := validateIntConstraintShape(c.Height); err != nil {
-		return err
-	}
-	if err := validateFloatConstraintShape(c.FrameRate); err != nil {
-		return err
+	if strings.TrimSpace(config.DeviceID) == "" && config.DeviceID != "" {
+		return &ConfigError{Field: "deviceID", Message: "must not be blank"}
 	}
 	return nil
 }
 
-func validateAudioConstraints(c AudioConstraints) error {
-	if err := validateStringConstraintShape(c.DeviceID); err != nil {
-		return err
+func validateAudioCaptureConfig(config AudioCaptureConfig) error {
+	if config.SampleRate <= 0 {
+		return &ConfigError{Field: "sampleRate", Message: "must be greater than zero"}
 	}
-	if err := validateIntConstraintShape(c.SampleRate); err != nil {
-		return err
+	if config.ChannelCount <= 0 {
+		return &ConfigError{Field: "channelCount", Message: "must be greater than zero"}
 	}
-	if err := validateIntConstraintShape(c.ChannelCount); err != nil {
-		return err
-	}
-	return nil
-}
-
-func validateDisplayVideoConstraints(c DisplayVideoConstraints) error {
-	if !c.DisplaySurface.IsValid() {
-		return ErrInvalidConstraints
-	}
-	if c.DisplaySurface == "" {
-		return ErrInvalidConstraints
-	}
-	if !hasExplicitVideoCodecSelection(c.Codec, c.CodecPreferences) {
-		return ErrInvalidConstraints
-	}
-	if c.ScreenID != 0 && c.WindowID != 0 {
-		return ErrInvalidConstraints
-	}
-	if c.DisplaySurface == DisplaySurfaceBrowser {
-		return &OverconstrainedError{
-			Constraint: "displaySurface",
-			Message:    "browser surface capture is not supported",
-		}
-	}
-	if err := validateIntConstraintShape(c.Width); err != nil {
-		return err
-	}
-	if err := validateIntConstraintShape(c.Height); err != nil {
-		return err
-	}
-	if err := validateFloatConstraintShape(c.FrameRate); err != nil {
-		return err
+	if strings.TrimSpace(config.DeviceID) == "" && config.DeviceID != "" {
+		return &ConfigError{Field: "deviceID", Message: "must not be blank"}
 	}
 	return nil
 }
 
-func validateIntConstraintShape(c IntConstraint) error {
-	if c.Exact != nil && *c.Exact <= 0 {
-		return ErrInvalidConstraints
+func validateDisplayVideoConfig(config DisplayVideoConfig) error {
+	if !config.Kind.IsValid() {
+		return &ConfigError{Field: "kind", Message: "must be empty or a supported display kind"}
 	}
-	if c.Ideal != nil && *c.Ideal <= 0 {
-		return ErrInvalidConstraints
+	if config.Kind == "" {
+		return &ConfigError{Field: "kind", Message: "must specify a display kind"}
 	}
-	if c.Min != nil && *c.Min <= 0 {
-		return ErrInvalidConstraints
+	if config.ScreenID != 0 && config.WindowID != 0 {
+		return &ConfigError{Field: "screenID", Message: "screenID and windowID are mutually exclusive"}
 	}
-	if c.Max != nil && *c.Max <= 0 {
-		return ErrInvalidConstraints
+	if !hasExplicitVideoCodecSelection(config.Codec, config.CodecPreferences) {
+		return &ConfigError{Field: "codec", Message: "must provide Codec or CodecPreferences"}
 	}
-	if c.Min != nil && c.Max != nil && *c.Min > *c.Max {
-		return ErrInvalidConstraints
+	if config.Bitrate == 0 {
+		return &ConfigError{Field: "bitrate", Message: "must be greater than zero"}
 	}
-	return nil
-}
-
-func validateFloatConstraintShape(c FloatConstraint) error {
-	if c.Exact != nil && *c.Exact <= 0 {
-		return ErrInvalidConstraints
+	if config.Width <= 0 {
+		return &ConfigError{Field: "width", Message: "must be greater than zero"}
 	}
-	if c.Ideal != nil && *c.Ideal <= 0 {
-		return ErrInvalidConstraints
+	if config.Height <= 0 {
+		return &ConfigError{Field: "height", Message: "must be greater than zero"}
 	}
-	if c.Min != nil && *c.Min <= 0 {
-		return ErrInvalidConstraints
-	}
-	if c.Max != nil && *c.Max <= 0 {
-		return ErrInvalidConstraints
-	}
-	if c.Min != nil && c.Max != nil && *c.Min > *c.Max {
-		return ErrInvalidConstraints
-	}
-	return nil
-}
-
-func validateStringConstraintShape(c StringConstraint) error {
-	if c.Exact != nil && *c.Exact == "" {
-		return ErrInvalidConstraints
-	}
-	if c.Ideal != nil && *c.Ideal == "" {
-		return ErrInvalidConstraints
+	if config.FrameRate <= 0 {
+		return &ConfigError{Field: "frameRate", Message: "must be greater than zero"}
 	}
 	return nil
 }
@@ -1031,277 +924,94 @@ func hasExplicitVideoCodecSelection(codecType codec.Type, preferences []webrtc.R
 	return false
 }
 
-func selectDevice(devices []MediaDeviceInfo, kind MediaDeviceKind, requested StringConstraint) (MediaDeviceInfo, error) {
-	candidates := make([]MediaDeviceInfo, 0, len(devices))
+func selectDevice(devices []DeviceInfo, kind DeviceKind, requested string) (DeviceInfo, error) {
+	candidates := make([]DeviceInfo, 0, len(devices))
 	for _, device := range devices {
 		if device.Kind == kind {
 			candidates = append(candidates, device)
 		}
 	}
 	if len(candidates) == 0 {
-		return MediaDeviceInfo{}, ErrDeviceNotFound
+		return DeviceInfo{}, ErrDeviceNotFound
 	}
-	if requested.Exact != nil {
+	if requested != "" {
 		for _, device := range candidates {
-			if device.DeviceID == *requested.Exact {
+			if device.DeviceID == requested {
 				return device, nil
 			}
 		}
-		return MediaDeviceInfo{}, &OverconstrainedError{
-			Constraint: "deviceId",
-			Message:    fmt.Sprintf("requires exact %q", *requested.Exact),
-		}
-	}
-	if requested.Ideal != nil {
-		for _, device := range candidates {
-			if device.DeviceID == *requested.Ideal {
-				return device, nil
-			}
+		return DeviceInfo{}, &ConfigError{
+			Field:   "deviceID",
+			Message: fmt.Sprintf("device %q is not available", requested),
 		}
 	}
 	return candidates[0], nil
 }
 
-func selectDisplayTarget(screens []ScreenInfo, request DisplayVideoConstraints) (ScreenInfo, DisplaySurface, error) {
-	if len(screens) == 0 {
-		return ScreenInfo{}, "", ErrDeviceNotFound
+func selectDisplayTarget(displays []DisplayInfo, config DisplayVideoConfig) (DisplayInfo, DisplayKind, error) {
+	if len(displays) == 0 {
+		return DisplayInfo{}, "", ErrDeviceNotFound
 	}
-	if request.WindowID != 0 {
-		for _, screen := range screens {
-			if screen.IsWindow && screen.ID == request.WindowID {
-				return screen, DisplaySurfaceWindow, nil
+	if config.WindowID != 0 {
+		for _, display := range displays {
+			if display.IsWindow && display.ID == config.WindowID {
+				return display, DisplayKindWindow, nil
 			}
 		}
-		return ScreenInfo{}, "", ErrDeviceNotFound
+		return DisplayInfo{}, "", ErrDeviceNotFound
 	}
-	if request.ScreenID != 0 {
-		for _, screen := range screens {
-			if !screen.IsWindow && screen.ID == request.ScreenID {
-				return screen, DisplaySurfaceMonitor, nil
+	if config.ScreenID != 0 {
+		for _, display := range displays {
+			if !display.IsWindow && display.ID == config.ScreenID {
+				return display, DisplayKindMonitor, nil
 			}
 		}
-		onlyWindows := true
-		for _, screen := range screens {
-			if !screen.IsWindow {
-				onlyWindows = false
-				break
+		return DisplayInfo{}, "", ErrDeviceNotFound
+	}
+	switch config.Kind {
+	case DisplayKindWindow:
+		for _, display := range displays {
+			if display.IsWindow {
+				return display, DisplayKindWindow, nil
 			}
 		}
-		if onlyWindows {
-			return ScreenInfo{
-				ID:       request.ScreenID,
-				Title:    fmt.Sprintf("screen-%d", request.ScreenID),
-				IsWindow: false,
-			}, DisplaySurfaceMonitor, nil
-		}
-		return ScreenInfo{}, "", ErrDeviceNotFound
-	}
-
-	surface := request.DisplaySurface
-	if surface == "" {
-		return ScreenInfo{}, "", ErrInvalidConstraints
-	}
-	switch surface {
-	case DisplaySurfaceWindow:
-		for _, screen := range screens {
-			if screen.IsWindow {
-				return screen, surface, nil
-			}
-		}
-	case DisplaySurfaceMonitor:
-		for _, screen := range screens {
-			if !screen.IsWindow {
-				return screen, surface, nil
+	case DisplayKindMonitor:
+		for _, display := range displays {
+			if !display.IsWindow {
+				return display, DisplayKindMonitor, nil
 			}
 		}
 	}
-	return ScreenInfo{}, "", ErrDeviceNotFound
+	return DisplayInfo{}, "", ErrDeviceNotFound
 }
 
-func resolveIntConstraint(c IntConstraint, def int) int {
-	if v, ok := c.Value(); ok {
-		return v
+func validateVideoConfigAgainstSettings(config VideoCaptureConfig, settings VideoTrackSettings) error {
+	if config.Width != settings.Width {
+		return &ConfigError{Field: "width", Message: fmt.Sprintf("capture is fixed at %d", settings.Width)}
 	}
-	return def
-}
-
-func resolveFloatConstraint(c FloatConstraint, def float64) float64 {
-	if v, ok := c.Value(); ok {
-		return v
+	if config.Height != settings.Height {
+		return &ConfigError{Field: "height", Message: fmt.Sprintf("capture is fixed at %d", settings.Height)}
 	}
-	return def
-}
-
-func resolveBoolConstraint(c BoolConstraint, def bool) bool {
-	if v, ok := c.Value(); ok {
-		return v
+	if config.DeviceID != "" && config.DeviceID != settings.DeviceID {
+		return &ConfigError{Field: "deviceID", Message: fmt.Sprintf("capture is fixed to %q", settings.DeviceID)}
 	}
-	return def
-}
-
-func resolveVideoFrameRateConstraint(c FloatConstraint, current, maxSupported float64) (float64, error) {
-	if !c.IsSet() {
-		return current, nil
-	}
-
-	minSupported := 1.0
-	if maxSupported <= 0 {
-		maxSupported = current
-	}
-
-	if c.Min != nil && *c.Min > maxSupported {
-		return 0, &OverconstrainedError{
-			Constraint: "frameRate",
-			Message:    fmt.Sprintf("minimum is %.2f, max supported is %.2f", *c.Min, maxSupported),
-		}
-	}
-	if c.Max != nil && *c.Max < minSupported {
-		return 0, &OverconstrainedError{
-			Constraint: "frameRate",
-			Message:    fmt.Sprintf("maximum is %.2f, min supported is %.2f", *c.Max, minSupported),
-		}
-	}
-	if c.Exact != nil {
-		if *c.Exact < minSupported || *c.Exact > maxSupported {
-			return 0, &OverconstrainedError{
-				Constraint: "frameRate",
-				Message:    fmt.Sprintf("requires exact %.2f, supported range is %.2f-%.2f", *c.Exact, minSupported, maxSupported),
-			}
-		}
-		return *c.Exact, nil
-	}
-
-	target := current
-	if c.Ideal != nil {
-		target = *c.Ideal
-	}
-	if target < minSupported {
-		target = minSupported
-	}
-	if target > maxSupported {
-		target = maxSupported
-	}
-	if c.Max != nil && target > *c.Max {
-		target = *c.Max
-	}
-	if c.Min != nil && target < *c.Min {
-		target = *c.Min
-	}
-	if target < minSupported || target > maxSupported {
-		return 0, &OverconstrainedError{
-			Constraint: "frameRate",
-			Message:    fmt.Sprintf("supported range is %.2f-%.2f", minSupported, maxSupported),
-		}
-	}
-	return target, nil
-}
-
-func mergeVideoConstraints(base, update VideoConstraints) VideoConstraints {
-	merged := base
-	if update.Width.IsSet() {
-		merged.Width = update.Width
-	}
-	if update.Height.IsSet() {
-		merged.Height = update.Height
-	}
-	if update.FrameRate.IsSet() {
-		merged.FrameRate = update.FrameRate
-	}
-	if update.FacingMode != "" {
-		merged.FacingMode = update.FacingMode
-	}
-	if update.DeviceID.IsSet() {
-		merged.DeviceID = update.DeviceID
-	}
-	if update.Codec != 0 {
-		merged.Codec = update.Codec
-	}
-	if update.Bitrate != 0 {
-		merged.Bitrate = update.Bitrate
-	}
-	if update.SVC != nil {
-		merged.SVC = update.SVC
-	}
-	if len(update.CodecPreferences) > 0 {
-		merged.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), update.CodecPreferences...)
-	}
-	return merged
-}
-
-func mergeAudioConstraints(base, update AudioConstraints) AudioConstraints {
-	merged := base
-	if update.SampleRate.IsSet() {
-		merged.SampleRate = update.SampleRate
-	}
-	if update.ChannelCount.IsSet() {
-		merged.ChannelCount = update.ChannelCount
-	}
-	if update.EchoCancellation.IsSet() {
-		merged.EchoCancellation = update.EchoCancellation
-	}
-	if update.NoiseSuppression.IsSet() {
-		merged.NoiseSuppression = update.NoiseSuppression
-	}
-	if update.AutoGainControl.IsSet() {
-		merged.AutoGainControl = update.AutoGainControl
-	}
-	if update.DeviceID.IsSet() {
-		merged.DeviceID = update.DeviceID
-	}
-	if update.Bitrate != 0 {
-		merged.Bitrate = update.Bitrate
-	}
-	if len(update.CodecPreferences) > 0 {
-		merged.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), update.CodecPreferences...)
-	}
-	return merged
-}
-
-func validateVideoConstraintsAgainstSettings(c VideoConstraints, settings VideoTrackSettings) error {
-	if err := c.Width.Validate(settings.Width); err != nil {
-		return withConstraintName(err, "width")
-	}
-	if err := c.Height.Validate(settings.Height); err != nil {
-		return withConstraintName(err, "height")
-	}
-	if c.DeviceID.Exact != nil && settings.DeviceID != *c.DeviceID.Exact {
-		return &OverconstrainedError{
-			Constraint: "deviceId",
-			Message:    fmt.Sprintf("requires exact %q", *c.DeviceID.Exact),
-		}
-	}
-	if c.FacingMode != "" && settings.FacingMode != "" && settings.FacingMode != c.FacingMode {
-		return &OverconstrainedError{
-			Constraint: "facingMode",
-			Message:    fmt.Sprintf("requires %q", c.FacingMode),
-		}
+	if config.FacingMode != "" && settings.FacingMode != "" && settings.FacingMode != config.FacingMode {
+		return &ConfigError{Field: "facingMode", Message: fmt.Sprintf("capture is fixed to %q", settings.FacingMode)}
 	}
 	return nil
 }
 
-func validateAudioConstraintsAgainstSettings(c AudioConstraints, settings AudioTrackSettings) error {
-	if err := c.SampleRate.Validate(settings.SampleRate); err != nil {
-		return withConstraintName(err, "sampleRate")
+func validateAudioConfigAgainstSettings(config AudioCaptureConfig, settings AudioTrackSettings) error {
+	if config.SampleRate != settings.SampleRate {
+		return &ConfigError{Field: "sampleRate", Message: fmt.Sprintf("capture is fixed at %d", settings.SampleRate)}
 	}
-	if err := c.ChannelCount.Validate(settings.ChannelCount); err != nil {
-		return withConstraintName(err, "channelCount")
+	if config.ChannelCount != settings.ChannelCount {
+		return &ConfigError{Field: "channelCount", Message: fmt.Sprintf("capture is fixed at %d", settings.ChannelCount)}
 	}
-	if c.DeviceID.Exact != nil && settings.DeviceID != *c.DeviceID.Exact {
-		return &OverconstrainedError{
-			Constraint: "deviceId",
-			Message:    fmt.Sprintf("requires exact %q", *c.DeviceID.Exact),
-		}
+	if config.DeviceID != "" && config.DeviceID != settings.DeviceID {
+		return &ConfigError{Field: "deviceID", Message: fmt.Sprintf("capture is fixed to %q", settings.DeviceID)}
 	}
 	return nil
-}
-
-func withConstraintName(err error, constraint string) error {
-	var overconstrained *OverconstrainedError
-	if errors.As(err, &overconstrained) {
-		overconstrained.Constraint = constraint
-		return overconstrained
-	}
-	return err
 }
 
 // --- videoStreamTrack implementation ---
@@ -1339,22 +1049,22 @@ func (t *videoStreamTrack) Clone() MediaStreamTrack {
 		if err != nil {
 			return nil
 		}
-		clone, err = createUserVideoTrack(t.constraints, devices)
+		clone, err = createUserVideoTrack(t.config, devices)
 		if err != nil {
 			return nil
 		}
 	case sourceDisplay:
 		screens, err := listCaptureScreens()
-		if err != nil || t.displayConstraints == nil {
+		if err != nil || t.displayConfig == nil {
 			return nil
 		}
-		clone, err = createDisplayVideoTrack(*t.displayConstraints, screens)
+		clone, err = createDisplayVideoTrack(*t.displayConfig, screens)
 		if err != nil {
 			return nil
 		}
 	default:
 		var err error
-		cfg, resolved := buildVideoTrackConfig(t.constraints, t.settings)
+		cfg, resolved := buildVideoTrackConfig(t.config, t.settings)
 		clone, err = newVideoStreamTrack(cfg, resolved, t.settings, t.label)
 		if err != nil {
 			return nil
@@ -1369,43 +1079,39 @@ func (t *videoStreamTrack) Clone() MediaStreamTrack {
 	return clone
 }
 
-func (t *videoStreamTrack) GetConstraints() VideoConstraints { return t.constraints }
-func (t *videoStreamTrack) GetSettings() VideoTrackSettings  { return t.settings }
+func (t *videoStreamTrack) Config() VideoCaptureConfig   { return t.config }
+func (t *videoStreamTrack) Settings() VideoTrackSettings { return t.settings }
 
-func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
-	merged := mergeVideoConstraints(t.constraints, vc)
-	if err := validateVideoConstraints(merged); err != nil {
+func (t *videoStreamTrack) Reconfigure(config VideoCaptureConfig) error {
+	if err := validateVideoCaptureConfig(config); err != nil {
 		return err
 	}
-	if err := validateVideoConstraintsAgainstSettings(merged, t.settings); err != nil {
+	if err := validateVideoConfigAgainstSettings(config, t.settings); err != nil {
 		return err
 	}
 
-	if merged.Bitrate > 0 && merged.Bitrate != t.constraints.Bitrate {
-		if err := t.track.SetBitrate(merged.Bitrate); err != nil {
+	if config.Bitrate != t.config.Bitrate {
+		if err := t.track.SetBitrate(config.Bitrate); err != nil {
 			return err
 		}
 	}
 
-	nextFrameRate, err := resolveVideoFrameRateConstraint(
-		merged.FrameRate,
-		t.settings.FrameRate,
-		t.maxFrameRate,
-	)
-	if err != nil {
-		return err
+	if config.FrameRate > t.maxFrameRate {
+		return &ConfigError{
+			Field:   "frameRate",
+			Message: fmt.Sprintf("capture supports at most %.2f fps", t.maxFrameRate),
+		}
 	}
-	if nextFrameRate != t.settings.FrameRate {
-		if err := t.track.SetFramerate(nextFrameRate); err != nil {
+	if config.FrameRate != t.settings.FrameRate {
+		if err := t.track.SetFramerate(config.FrameRate); err != nil {
 			return err
 		}
-		t.settings.FrameRate = nextFrameRate
-		merged.FrameRate = ExactFloat(nextFrameRate)
+		t.settings.FrameRate = config.FrameRate
 	}
 
-	t.constraints = merged
-	if merged.FacingMode != "" {
-		t.settings.FacingMode = merged.FacingMode
+	t.config = config
+	if config.FacingMode != "" {
+		t.settings.FacingMode = config.FacingMode
 	}
 	return nil
 }
@@ -1462,14 +1168,14 @@ func (t *videoStreamTrack) startScreenCapture() error {
 	if t.screenCapture != nil {
 		return nil
 	}
-	if t.displayConstraints == nil {
-		return ErrInvalidConstraints
+	if t.displayConfig == nil {
+		return ErrInvalidCaptureConfig
 	}
 
-	screenID := t.displayConstraints.ScreenID
+	screenID := t.displayConfig.ScreenID
 	isWindow := false
-	if t.displayConstraints.WindowID != 0 {
-		screenID = t.displayConstraints.WindowID
+	if t.displayConfig.WindowID != 0 {
+		screenID = t.displayConfig.WindowID
 		isWindow = true
 	}
 
@@ -1532,13 +1238,13 @@ func (t *audioStreamTrack) Clone() MediaStreamTrack {
 		if err != nil {
 			return nil
 		}
-		clone, err = createUserAudioTrack(t.constraints, devices)
+		clone, err = createUserAudioTrack(t.config, devices)
 		if err != nil {
 			return nil
 		}
 	default:
 		var err error
-		cfg, resolved := buildAudioTrackConfig(t.constraints, t.settings)
+		cfg, resolved := buildAudioTrackConfig(t.config, t.settings)
 		clone, err = newAudioStreamTrack(cfg, resolved, t.settings, t.label)
 		if err != nil {
 			return nil
@@ -1553,39 +1259,27 @@ func (t *audioStreamTrack) Clone() MediaStreamTrack {
 	return clone
 }
 
-func (t *audioStreamTrack) GetConstraints() AudioConstraints { return t.constraints }
-func (t *audioStreamTrack) GetSettings() AudioTrackSettings  { return t.settings }
+func (t *audioStreamTrack) Config() AudioCaptureConfig   { return t.config }
+func (t *audioStreamTrack) Settings() AudioTrackSettings { return t.settings }
 
-func (t *audioStreamTrack) ApplyConstraints(ac AudioConstraints) error {
-	if err := validateAudioConstraints(ac); err != nil {
+func (t *audioStreamTrack) Reconfigure(config AudioCaptureConfig) error {
+	if err := validateAudioCaptureConfig(config); err != nil {
+		return err
+	}
+	if err := validateAudioConfigAgainstSettings(config, t.settings); err != nil {
 		return err
 	}
 
-	merged := mergeAudioConstraints(t.constraints, ac)
-	if err := validateAudioConstraintsAgainstSettings(merged, t.settings); err != nil {
-		return err
-	}
-
-	if merged.Bitrate > 0 && merged.Bitrate != t.constraints.Bitrate {
-		if err := t.track.SetBitrate(merged.Bitrate); err != nil {
+	if config.Bitrate != t.config.Bitrate {
+		if err := t.track.SetBitrate(config.Bitrate); err != nil {
 			return err
 		}
 	}
 
-	if merged.EchoCancellation.IsSet() {
-		t.settings.EchoCancellation = resolveBoolConstraint(merged.EchoCancellation, t.settings.EchoCancellation)
-		merged.EchoCancellation = ExactBool(t.settings.EchoCancellation)
-	}
-	if merged.NoiseSuppression.IsSet() {
-		t.settings.NoiseSuppression = resolveBoolConstraint(merged.NoiseSuppression, t.settings.NoiseSuppression)
-		merged.NoiseSuppression = ExactBool(t.settings.NoiseSuppression)
-	}
-	if merged.AutoGainControl.IsSet() {
-		t.settings.AutoGainControl = resolveBoolConstraint(merged.AutoGainControl, t.settings.AutoGainControl)
-		merged.AutoGainControl = ExactBool(t.settings.AutoGainControl)
-	}
-
-	t.constraints = merged
+	t.settings.EchoCancellation = config.EchoCancellation
+	t.settings.NoiseSuppression = config.NoiseSuppression
+	t.settings.AutoGainControl = config.AutoGainControl
+	t.config = config
 	return nil
 }
 

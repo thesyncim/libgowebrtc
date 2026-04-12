@@ -79,44 +79,44 @@ func installMediaFFIStubs(t *testing.T, stubs mediaFFIStubs) {
 func TestEnumerateDevicesWithoutLibrary(t *testing.T) {
 	_ = ffi.Close()
 
-	devices, err := EnumerateDevices()
+	devices, err := ListDevices()
 	if !errors.Is(err, ErrCaptureNotSupported) {
-		t.Fatalf("EnumerateDevices() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
+		t.Fatalf("ListDevices() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
 	}
 	if devices != nil {
-		t.Fatal("EnumerateDevices() should return nil when capture is unavailable")
+		t.Fatal("ListDevices() should return nil when capture is unavailable")
 	}
 }
 
 func TestEnumerateScreensWithoutLibrary(t *testing.T) {
 	_ = ffi.Close()
 
-	screens, err := EnumerateScreens()
+	screens, err := ListDisplays()
 	if !errors.Is(err, ErrCaptureNotSupported) {
-		t.Fatalf("EnumerateScreens() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
+		t.Fatalf("ListDisplays() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
 	}
 	if screens != nil {
-		t.Fatal("EnumerateScreens() should return nil when capture is unavailable")
+		t.Fatal("ListDisplays() should return nil when capture is unavailable")
 	}
 }
 
 func TestGetUserMediaRejectsEmptyConstraints(t *testing.T) {
-	stream, err := GetUserMedia(Constraints{})
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	stream, err := OpenCapture(CaptureConfig{})
+	if !errors.Is(err, ErrInvalidCaptureConfig) {
+		t.Fatalf("OpenCapture() error = %v, want %v", err, ErrInvalidCaptureConfig)
 	}
 	if stream != nil {
-		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+		t.Fatal("OpenCapture() stream = non-nil, want nil")
 	}
 }
 
 func TestGetDisplayMediaRejectsMissingVideo(t *testing.T) {
-	stream, err := GetDisplayMedia(DisplayConstraints{})
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Fatalf("GetDisplayMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	stream, err := OpenDisplay(DisplayCaptureConfig{})
+	if !errors.Is(err, ErrInvalidCaptureConfig) {
+		t.Fatalf("OpenDisplay() error = %v, want %v", err, ErrInvalidCaptureConfig)
 	}
 	if stream != nil {
-		t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
+		t.Fatal("OpenDisplay() stream = non-nil, want nil")
 	}
 }
 
@@ -125,34 +125,39 @@ func TestGetUserMediaReturnsCaptureNotSupportedWhenLoadFails(t *testing.T) {
 		loadLibrary: func() error { return ffi.ErrLibraryNotLoaded },
 	})
 
-	stream, err := GetUserMedia(Constraints{
-		Video: &VideoConstraints{
-			Width:     ExactInt(640),
-			Height:    ExactInt(480),
-			FrameRate: ExactFloat(30),
+	stream, err := OpenCapture(CaptureConfig{
+		Video: &VideoCaptureConfig{
+			Width:     640,
+			Height:    480,
+			FrameRate: 30,
 			Codec:     codec.VP8,
 			Bitrate:   500_000,
 		},
 	})
 	if !errors.Is(err, ErrCaptureNotSupported) {
-		t.Fatalf("GetUserMedia() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
+		t.Fatalf("OpenCapture() error = %v, want wrapped %v", err, ErrCaptureNotSupported)
 	}
 	if stream != nil {
-		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+		t.Fatal("OpenCapture() stream = non-nil, want nil")
 	}
 }
 
-func TestGetUserMediaRejectsEmptyExactDeviceID(t *testing.T) {
-	stream, err := GetUserMedia(Constraints{
-		Video: &VideoConstraints{
-			DeviceID: ExactString(""),
+func TestOpenCaptureRejectsBlankDeviceID(t *testing.T) {
+	stream, err := OpenCapture(CaptureConfig{
+		Video: &VideoCaptureConfig{
+			Width:     640,
+			Height:    480,
+			FrameRate: 30,
+			DeviceID:  "   ",
+			Codec:     codec.VP8,
+			Bitrate:   500_000,
 		},
 	})
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	if !errors.Is(err, ErrInvalidCaptureConfig) {
+		t.Fatalf("OpenCapture() error = %v, want %v", err, ErrInvalidCaptureConfig)
 	}
 	if stream != nil {
-		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+		t.Fatal("OpenCapture() stream = non-nil, want nil")
 	}
 }
 
@@ -170,26 +175,26 @@ func TestGetUserMediaResolvesDevicesAndSettings(t *testing.T) {
 		newAudio: func(string, int, int) (audioCaptureHandle, error) { return stubAudioCapture{}, nil },
 	})
 
-	stream, err := GetUserMedia(Constraints{
-		Video: &VideoConstraints{
-			Width:      IdealInt(640),
-			Height:     ExactInt(480),
-			FrameRate:  IdealFloat(24),
-			DeviceID:   IdealString("cam-2"),
-			FacingMode: FacingModeEnvironment,
+	stream, err := OpenCapture(CaptureConfig{
+		Video: &VideoCaptureConfig{
+			Width:      640,
+			Height:     480,
+			FrameRate:  24,
+			DeviceID:   "cam-2",
+			FacingMode: CameraFacingEnvironment,
 			Codec:      codec.VP8,
 			Bitrate:    500_000,
 		},
-		Audio: &AudioConstraints{
-			SampleRate:       ExactInt(48_000),
-			ChannelCount:     ExactInt(2),
-			DeviceID:         ExactString("mic-1"),
-			EchoCancellation: IdealBool(true),
+		Audio: &AudioCaptureConfig{
+			SampleRate:       48_000,
+			ChannelCount:     2,
+			DeviceID:         "mic-1",
+			EchoCancellation: true,
 			Bitrate:          64_000,
 		},
 	})
 	if err != nil {
-		t.Fatalf("GetUserMedia() error = %v", err)
+		t.Fatalf("OpenCapture() error = %v", err)
 	}
 
 	videoTracks := stream.GetVideoTracks()
@@ -207,22 +212,22 @@ func TestGetUserMediaResolvesDevicesAndSettings(t *testing.T) {
 	if got := video.Label(); got != "Rear Camera" {
 		t.Fatalf("video Label() = %q, want %q", got, "Rear Camera")
 	}
-	if got := video.GetSettings().DeviceID; got != "cam-2" {
+	if got := video.Settings().DeviceID; got != "cam-2" {
 		t.Fatalf("video DeviceID = %q, want %q", got, "cam-2")
 	}
-	if got := video.GetSettings().FacingMode; got != FacingModeEnvironment {
-		t.Fatalf("video FacingMode = %q, want %q", got, FacingModeEnvironment)
+	if got := video.Settings().FacingMode; got != CameraFacingEnvironment {
+		t.Fatalf("video FacingMode = %q, want %q", got, CameraFacingEnvironment)
 	}
-	if got := video.GetSettings().FrameRate; got != 24 {
+	if got := video.Settings().FrameRate; got != 24 {
 		t.Fatalf("video FrameRate = %.0f, want 24", got)
 	}
 	if got := audio.Label(); got != "Studio Mic" {
 		t.Fatalf("audio Label() = %q, want %q", got, "Studio Mic")
 	}
-	if got := audio.GetSettings().DeviceID; got != "mic-1" {
+	if got := audio.Settings().DeviceID; got != "mic-1" {
 		t.Fatalf("audio DeviceID = %q, want %q", got, "mic-1")
 	}
-	if !audio.GetSettings().EchoCancellation {
+	if !audio.Settings().EchoCancellation {
 		t.Fatal("audio EchoCancellation = false, want true")
 	}
 }
@@ -240,24 +245,24 @@ func TestGetUserMediaPreservesEmptyDeviceLabels(t *testing.T) {
 		newAudio: func(string, int, int) (audioCaptureHandle, error) { return stubAudioCapture{}, nil },
 	})
 
-	stream, err := GetUserMedia(Constraints{
-		Video: &VideoConstraints{
-			Width:     ExactInt(640),
-			Height:    ExactInt(480),
-			FrameRate: ExactFloat(30),
-			DeviceID:  ExactString("cam-1"),
+	stream, err := OpenCapture(CaptureConfig{
+		Video: &VideoCaptureConfig{
+			Width:     640,
+			Height:    480,
+			FrameRate: 30,
+			DeviceID:  "cam-1",
 			Codec:     codec.VP8,
 			Bitrate:   500_000,
 		},
-		Audio: &AudioConstraints{
-			SampleRate:   ExactInt(48_000),
-			ChannelCount: ExactInt(2),
-			DeviceID:     ExactString("mic-1"),
+		Audio: &AudioCaptureConfig{
+			SampleRate:   48_000,
+			ChannelCount: 2,
+			DeviceID:     "mic-1",
 			Bitrate:      64_000,
 		},
 	})
 	if err != nil {
-		t.Fatalf("GetUserMedia() error = %v", err)
+		t.Fatalf("OpenCapture() error = %v", err)
 	}
 
 	videoTracks := stream.GetVideoTracks()
@@ -286,19 +291,19 @@ func TestGetUserMediaRejectsMissingVideoBitrate(t *testing.T) {
 		},
 	})
 
-	stream, err := GetUserMedia(Constraints{
-		Video: &VideoConstraints{
-			Width:     ExactInt(640),
-			Height:    ExactInt(480),
-			FrameRate: ExactFloat(30),
+	stream, err := OpenCapture(CaptureConfig{
+		Video: &VideoCaptureConfig{
+			Width:     640,
+			Height:    480,
+			FrameRate: 30,
 			Codec:     codec.VP8,
 		},
 	})
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	if !errors.Is(err, ErrInvalidCaptureConfig) {
+		t.Fatalf("OpenCapture() error = %v, want %v", err, ErrInvalidCaptureConfig)
 	}
 	if stream != nil {
-		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+		t.Fatal("OpenCapture() stream = non-nil, want nil")
 	}
 }
 
@@ -314,31 +319,31 @@ func TestGetUserMediaRejectsMissingVideoDimensionsOrFramerate(t *testing.T) {
 
 	cases := []struct {
 		name  string
-		video VideoConstraints
+		video VideoCaptureConfig
 	}{
 		{
 			name: "missing width",
-			video: VideoConstraints{
-				Height:    ExactInt(480),
-				FrameRate: ExactFloat(30),
+			video: VideoCaptureConfig{
+				Height:    480,
+				FrameRate: 30,
 				Codec:     codec.VP8,
 				Bitrate:   500_000,
 			},
 		},
 		{
 			name: "missing height",
-			video: VideoConstraints{
-				Width:     ExactInt(640),
-				FrameRate: ExactFloat(30),
+			video: VideoCaptureConfig{
+				Width:     640,
+				FrameRate: 30,
 				Codec:     codec.VP8,
 				Bitrate:   500_000,
 			},
 		},
 		{
 			name: "missing frame rate",
-			video: VideoConstraints{
-				Width:   ExactInt(640),
-				Height:  ExactInt(480),
+			video: VideoCaptureConfig{
+				Width:   640,
+				Height:  480,
 				Codec:   codec.VP8,
 				Bitrate: 500_000,
 			},
@@ -347,12 +352,12 @@ func TestGetUserMediaRejectsMissingVideoDimensionsOrFramerate(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stream, err := GetUserMedia(Constraints{Video: &tc.video})
-			if !errors.Is(err, ErrInvalidConstraints) {
-				t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+			stream, err := OpenCapture(CaptureConfig{Video: &tc.video})
+			if !errors.Is(err, ErrInvalidCaptureConfig) {
+				t.Fatalf("OpenCapture() error = %v, want %v", err, ErrInvalidCaptureConfig)
 			}
 			if stream != nil {
-				t.Fatal("GetUserMedia() stream = non-nil, want nil")
+				t.Fatal("OpenCapture() stream = non-nil, want nil")
 			}
 		})
 	}
@@ -368,19 +373,19 @@ func TestGetUserMediaRejectsMissingVideoCodec(t *testing.T) {
 		},
 	})
 
-	stream, err := GetUserMedia(Constraints{
-		Video: &VideoConstraints{
-			Width:     ExactInt(640),
-			Height:    ExactInt(480),
-			FrameRate: ExactFloat(30),
+	stream, err := OpenCapture(CaptureConfig{
+		Video: &VideoCaptureConfig{
+			Width:     640,
+			Height:    480,
+			FrameRate: 30,
 			Bitrate:   500_000,
 		},
 	})
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	if !errors.Is(err, ErrInvalidCaptureConfig) {
+		t.Fatalf("OpenCapture() error = %v, want %v", err, ErrInvalidCaptureConfig)
 	}
 	if stream != nil {
-		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+		t.Fatal("OpenCapture() stream = non-nil, want nil")
 	}
 }
 
@@ -394,17 +399,17 @@ func TestGetUserMediaRejectsMissingAudioBitrate(t *testing.T) {
 		},
 	})
 
-	stream, err := GetUserMedia(Constraints{
-		Audio: &AudioConstraints{
-			SampleRate:   ExactInt(48_000),
-			ChannelCount: ExactInt(2),
+	stream, err := OpenCapture(CaptureConfig{
+		Audio: &AudioCaptureConfig{
+			SampleRate:   48_000,
+			ChannelCount: 2,
 		},
 	})
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Fatalf("GetUserMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	if !errors.Is(err, ErrInvalidCaptureConfig) {
+		t.Fatalf("OpenCapture() error = %v, want %v", err, ErrInvalidCaptureConfig)
 	}
 	if stream != nil {
-		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+		t.Fatal("OpenCapture() stream = non-nil, want nil")
 	}
 }
 
@@ -420,34 +425,34 @@ func TestGetUserMediaRejectsMissingAudioSampleRateOrChannelCount(t *testing.T) {
 
 	for _, tc := range []struct {
 		name        string
-		constraints AudioConstraints
+		constraints AudioCaptureConfig
 	}{
 		{
 			name: "missing sample rate",
-			constraints: AudioConstraints{
-				ChannelCount: ExactInt(2),
+			constraints: AudioCaptureConfig{
+				ChannelCount: 2,
 				Bitrate:      64_000,
 			},
 		},
 		{
 			name: "missing channel count",
-			constraints: AudioConstraints{
-				SampleRate: ExactInt(48_000),
+			constraints: AudioCaptureConfig{
+				SampleRate: 48_000,
 				Bitrate:    64_000,
 			},
 		},
 	} {
-		stream, err := GetUserMedia(Constraints{Audio: &tc.constraints})
-		if !errors.Is(err, ErrInvalidConstraints) {
-			t.Fatalf("%s: GetUserMedia() error = %v, want %v", tc.name, err, ErrInvalidConstraints)
+		stream, err := OpenCapture(CaptureConfig{Audio: &tc.constraints})
+		if !errors.Is(err, ErrInvalidCaptureConfig) {
+			t.Fatalf("%s: OpenCapture() error = %v, want %v", tc.name, err, ErrInvalidCaptureConfig)
 		}
 		if stream != nil {
-			t.Fatalf("%s: GetUserMedia() stream = non-nil, want nil", tc.name)
+			t.Fatalf("%s: OpenCapture() stream = non-nil, want nil", tc.name)
 		}
 	}
 }
 
-func TestGetUserMediaMissingExactDeviceReturnsOverconstrained(t *testing.T) {
+func TestOpenCaptureMissingDeviceReturnsConfigError(t *testing.T) {
 	installMediaFFIStubs(t, mediaFFIStubs{
 		loadLibrary: func() error { return nil },
 		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
@@ -457,26 +462,26 @@ func TestGetUserMediaMissingExactDeviceReturnsOverconstrained(t *testing.T) {
 		},
 	})
 
-	stream, err := GetUserMedia(Constraints{
-		Video: &VideoConstraints{
-			DeviceID:  ExactString("cam-404"),
-			Width:     ExactInt(640),
-			Height:    ExactInt(480),
-			FrameRate: ExactFloat(30),
+	stream, err := OpenCapture(CaptureConfig{
+		Video: &VideoCaptureConfig{
+			DeviceID:  "cam-404",
+			Width:     640,
+			Height:    480,
+			FrameRate: 30,
 			Codec:     codec.VP8,
 			Bitrate:   500_000,
 		},
 	})
 	if stream != nil {
-		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+		t.Fatal("OpenCapture() stream = non-nil, want nil")
 	}
 
-	var overconstrained *OverconstrainedError
-	if !errors.As(err, &overconstrained) {
-		t.Fatalf("GetUserMedia() error = %v, want OverconstrainedError", err)
+	var cfgErr *ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Fatalf("OpenCapture() error = %v, want ConfigError", err)
 	}
-	if overconstrained.Constraint != "deviceId" {
-		t.Fatalf("Constraint = %q, want %q", overconstrained.Constraint, "deviceId")
+	if cfgErr.Field != "deviceID" {
+		t.Fatalf("Field = %q, want %q", cfgErr.Field, "deviceID")
 	}
 }
 
@@ -498,25 +503,25 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 		newAudio:  func(string, int, int) (audioCaptureHandle, error) { return stubAudioCapture{}, nil },
 	})
 
-	stream, err := GetDisplayMedia(DisplayConstraints{
-		Video: &DisplayVideoConstraints{
-			DisplaySurface: DisplaySurfaceWindow,
-			WindowID:       7,
-			Width:          IdealInt(1920),
-			Height:         IdealInt(1080),
-			FrameRate:      IdealFloat(30),
-			Codec:          codec.VP8,
-			Bitrate:        3_000_000,
+	stream, err := OpenDisplay(DisplayCaptureConfig{
+		Video: &DisplayVideoConfig{
+			Kind:      DisplayKindWindow,
+			WindowID:  7,
+			Width:     1920,
+			Height:    1080,
+			FrameRate: 30,
+			Codec:     codec.VP8,
+			Bitrate:   3_000_000,
 		},
-		Audio: &AudioConstraints{
-			SampleRate:   ExactInt(48_000),
-			ChannelCount: ExactInt(2),
-			DeviceID:     ExactString("mic-1"),
+		Audio: &AudioCaptureConfig{
+			SampleRate:   48_000,
+			ChannelCount: 2,
+			DeviceID:     "mic-1",
 			Bitrate:      64_000,
 		},
 	})
 	if err != nil {
-		t.Fatalf("GetDisplayMedia() error = %v", err)
+		t.Fatalf("OpenDisplay() error = %v", err)
 	}
 
 	videoTracks := stream.GetVideoTracks()
@@ -532,10 +537,10 @@ func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 	if got := video.Label(); got != "Slides" {
 		t.Fatalf("video Label() = %q, want %q", got, "Slides")
 	}
-	if video.displayConstraints == nil || video.displayConstraints.DisplaySurface != DisplaySurfaceWindow {
-		t.Fatalf("display surface = %+v, want %q", video.displayConstraints, DisplaySurfaceWindow)
+	if video.displayConfig == nil || video.displayConfig.Kind != DisplayKindWindow {
+		t.Fatalf("display kind = %+v, want %q", video.displayConfig, DisplayKindWindow)
 	}
-	if got := audioTracks[0].GetSettings().DeviceID; got != "mic-1" {
+	if got := audioTracks[0].Settings().DeviceID; got != "mic-1" {
 		t.Fatalf("audio DeviceID = %q, want %q", got, "mic-1")
 	}
 }
@@ -551,19 +556,19 @@ func TestGetDisplayMediaLeavesEmptyLabelWhenSourceTitleMissing(t *testing.T) {
 		newScreen: func(int64, bool, int) (screenCaptureHandle, error) { return stubScreenCapture{}, nil },
 	})
 
-	stream, err := GetDisplayMedia(DisplayConstraints{
-		Video: &DisplayVideoConstraints{
-			DisplaySurface: DisplaySurfaceMonitor,
-			ScreenID:       1,
-			Width:          ExactInt(1920),
-			Height:         ExactInt(1080),
-			FrameRate:      ExactFloat(30),
-			Codec:          codec.VP8,
-			Bitrate:        3_000_000,
+	stream, err := OpenDisplay(DisplayCaptureConfig{
+		Video: &DisplayVideoConfig{
+			Kind:      DisplayKindMonitor,
+			ScreenID:  1,
+			Width:     1920,
+			Height:    1080,
+			FrameRate: 30,
+			Codec:     codec.VP8,
+			Bitrate:   3_000_000,
 		},
 	})
 	if err != nil {
-		t.Fatalf("GetDisplayMedia() error = %v", err)
+		t.Fatalf("OpenDisplay() error = %v", err)
 	}
 
 	videoTracks := stream.GetVideoTracks()
@@ -585,21 +590,21 @@ func TestGetDisplayMediaRejectsMissingVideoCodec(t *testing.T) {
 		},
 	})
 
-	stream, err := GetDisplayMedia(DisplayConstraints{
-		Video: &DisplayVideoConstraints{
-			DisplaySurface: DisplaySurfaceMonitor,
-			ScreenID:       1,
-			Width:          ExactInt(1920),
-			Height:         ExactInt(1080),
-			FrameRate:      ExactFloat(30),
-			Bitrate:        3_000_000,
+	stream, err := OpenDisplay(DisplayCaptureConfig{
+		Video: &DisplayVideoConfig{
+			Kind:      DisplayKindMonitor,
+			ScreenID:  1,
+			Width:     1920,
+			Height:    1080,
+			FrameRate: 30,
+			Bitrate:   3_000_000,
 		},
 	})
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Fatalf("GetDisplayMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	if !errors.Is(err, ErrInvalidCaptureConfig) {
+		t.Fatalf("OpenDisplay() error = %v, want %v", err, ErrInvalidCaptureConfig)
 	}
 	if stream != nil {
-		t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
+		t.Fatal("OpenDisplay() stream = non-nil, want nil")
 	}
 }
 
@@ -615,62 +620,62 @@ func TestGetDisplayMediaRejectsMissingDisplaySurfaceOrGeometry(t *testing.T) {
 
 	cases := []struct {
 		name  string
-		video DisplayVideoConstraints
+		video DisplayVideoConfig
 	}{
 		{
 			name: "missing display surface",
-			video: DisplayVideoConstraints{
+			video: DisplayVideoConfig{
 				ScreenID:  1,
-				Width:     ExactInt(1920),
-				Height:    ExactInt(1080),
-				FrameRate: ExactFloat(30),
+				Width:     1920,
+				Height:    1080,
+				FrameRate: 30,
 				Codec:     codec.VP8,
 				Bitrate:   3_000_000,
 			},
 		},
 		{
 			name: "missing width",
-			video: DisplayVideoConstraints{
-				DisplaySurface: DisplaySurfaceMonitor,
-				ScreenID:       1,
-				Height:         ExactInt(1080),
-				FrameRate:      ExactFloat(30),
-				Codec:          codec.VP8,
-				Bitrate:        3_000_000,
+			video: DisplayVideoConfig{
+				Kind:      DisplayKindMonitor,
+				ScreenID:  1,
+				Height:    1080,
+				FrameRate: 30,
+				Codec:     codec.VP8,
+				Bitrate:   3_000_000,
 			},
 		},
 		{
 			name: "missing height",
-			video: DisplayVideoConstraints{
-				DisplaySurface: DisplaySurfaceMonitor,
-				ScreenID:       1,
-				Width:          ExactInt(1920),
-				FrameRate:      ExactFloat(30),
-				Codec:          codec.VP8,
-				Bitrate:        3_000_000,
+			video: DisplayVideoConfig{
+				Kind:      DisplayKindMonitor,
+				ScreenID:  1,
+				Width:     1920,
+				FrameRate: 30,
+				Codec:     codec.VP8,
+				Bitrate:   3_000_000,
 			},
 		},
 		{
 			name: "missing frame rate",
-			video: DisplayVideoConstraints{
-				DisplaySurface: DisplaySurfaceMonitor,
-				ScreenID:       1,
-				Width:          ExactInt(1920),
-				Height:         ExactInt(1080),
-				Codec:          codec.VP8,
-				Bitrate:        3_000_000,
+			video: DisplayVideoConfig{
+				Kind:     DisplayKindMonitor,
+				ScreenID: 1,
+				Width:    1920,
+				Height:   1080,
+				Codec:    codec.VP8,
+				Bitrate:  3_000_000,
 			},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stream, err := GetDisplayMedia(DisplayConstraints{Video: &tc.video})
-			if !errors.Is(err, ErrInvalidConstraints) {
-				t.Fatalf("GetDisplayMedia() error = %v, want %v", err, ErrInvalidConstraints)
+			stream, err := OpenDisplay(DisplayCaptureConfig{Video: &tc.video})
+			if !errors.Is(err, ErrInvalidCaptureConfig) {
+				t.Fatalf("OpenDisplay() error = %v, want %v", err, ErrInvalidCaptureConfig)
 			}
 			if stream != nil {
-				t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
+				t.Fatal("OpenDisplay() stream = non-nil, want nil")
 			}
 		})
 	}
@@ -679,33 +684,33 @@ func TestGetDisplayMediaRejectsMissingDisplaySurfaceOrGeometry(t *testing.T) {
 func TestGetDisplayMediaRejectsConflictingTargets(t *testing.T) {
 	installMediaFFIStubs(t, mediaFFIStubs{
 		loadLibrary: func() error {
-			t.Fatal("GetDisplayMedia should validate conflicting targets before loading the capture backend")
+			t.Fatal("OpenDisplay should validate conflicting targets before loading the capture backend")
 			return nil
 		},
 		enumerateScreen: func() ([]ffi.ScreenInfo, error) {
-			t.Fatal("GetDisplayMedia should validate conflicting targets before enumerating screens")
+			t.Fatal("OpenDisplay should validate conflicting targets before enumerating screens")
 			return nil, nil
 		},
 	})
 
-	stream, err := GetDisplayMedia(DisplayConstraints{
-		Video: &DisplayVideoConstraints{
-			DisplaySurface: DisplaySurfaceMonitor,
-			ScreenID:       1,
-			WindowID:       2,
+	stream, err := OpenDisplay(DisplayCaptureConfig{
+		Video: &DisplayVideoConfig{
+			Kind:     DisplayKindMonitor,
+			ScreenID: 1,
+			WindowID: 2,
 		},
 	})
-	if !errors.Is(err, ErrInvalidConstraints) {
-		t.Fatalf("GetDisplayMedia() error = %v, want %v", err, ErrInvalidConstraints)
+	if !errors.Is(err, ErrInvalidCaptureConfig) {
+		t.Fatalf("OpenDisplay() error = %v, want %v", err, ErrInvalidCaptureConfig)
 	}
 	if stream != nil {
-		t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
+		t.Fatal("OpenDisplay() stream = non-nil, want nil")
 	}
 }
 
 func TestBuildVideoTrackConfigPrefersCodecPreferences(t *testing.T) {
 	cfg, resolved := buildVideoTrackConfig(
-		VideoConstraints{
+		VideoCaptureConfig{
 			Codec:   codec.H264,
 			Bitrate: 500_000,
 			CodecPreferences: []webrtc.RTPCodecParameters{{
@@ -738,28 +743,31 @@ func TestBuildVideoTrackConfigPrefersCodecPreferences(t *testing.T) {
 	if resolved.Bitrate != 500_000 {
 		t.Fatalf("resolved.Bitrate = %d, want %d", resolved.Bitrate, 500_000)
 	}
-	if got := resolved.Width; !got.IsExact() || got.Exact == nil || *got.Exact != 640 {
-		t.Fatalf("resolved.Width = %+v, want exact 640", got)
+	if got := resolved.Width; got != 640 {
+		t.Fatalf("resolved.Width = %d, want 640", got)
 	}
-	if got := resolved.Height; !got.IsExact() || got.Exact == nil || *got.Exact != 480 {
-		t.Fatalf("resolved.Height = %+v, want exact 480", got)
+	if got := resolved.Height; got != 480 {
+		t.Fatalf("resolved.Height = %d, want 480", got)
 	}
-	if got := resolved.FrameRate; !got.IsExact() || got.Exact == nil || *got.Exact != 30 {
-		t.Fatalf("resolved.FrameRate = %+v, want exact 30", got)
+	if got := resolved.FrameRate; got != 30 {
+		t.Fatalf("resolved.FrameRate = %v, want 30", got)
 	}
 }
 
 func TestNewVideoStreamTrackOptsInToAutoAdaptation(t *testing.T) {
-	constraints := VideoConstraints{
-		Codec:   codec.H264,
-		Bitrate: 500_000,
+	config := VideoCaptureConfig{
+		Width:     640,
+		Height:    480,
+		FrameRate: 30,
+		Codec:     codec.H264,
+		Bitrate:   500_000,
 	}
 	settings := VideoTrackSettings{
 		Width:     640,
 		Height:    480,
 		FrameRate: 30,
 	}
-	cfg, resolved := buildVideoTrackConfig(constraints, settings)
+	cfg, resolved := buildVideoTrackConfig(config, settings)
 	video, err := newVideoStreamTrack(
 		cfg,
 		resolved,
@@ -787,14 +795,16 @@ func TestNewVideoStreamTrackOptsInToAutoAdaptation(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if atomic.LoadInt32(&calls) == 0 {
-		t.Fatal("SetBWESource did not start adaptation loop, want browser-like helper opt-in")
+		t.Fatal("SetBWESource did not start adaptation loop, want capture helper opt-in")
 	}
 }
 
 func TestBuildAudioTrackConfigPreservesCodecPreferences(t *testing.T) {
 	cfg, resolved := buildAudioTrackConfig(
-		AudioConstraints{
-			Bitrate: 64_000,
+		AudioCaptureConfig{
+			SampleRate:   48_000,
+			ChannelCount: 2,
+			Bitrate:      64_000,
 			CodecPreferences: []webrtc.RTPCodecParameters{{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
 					MimeType:  webrtc.MimeTypeOpus,
@@ -818,10 +828,10 @@ func TestBuildAudioTrackConfigPreservesCodecPreferences(t *testing.T) {
 	if resolved.Bitrate != 64_000 {
 		t.Fatalf("resolved.Bitrate = %d, want %d", resolved.Bitrate, 64_000)
 	}
-	if got := resolved.SampleRate; !got.IsExact() || got.Exact == nil || *got.Exact != 48_000 {
-		t.Fatalf("resolved.SampleRate = %+v, want exact 48000", got)
+	if got := resolved.SampleRate; got != 48_000 {
+		t.Fatalf("resolved.SampleRate = %d, want 48000", got)
 	}
-	if got := resolved.ChannelCount; !got.IsExact() || got.Exact == nil || *got.Exact != 2 {
-		t.Fatalf("resolved.ChannelCount = %+v, want exact 2", got)
+	if got := resolved.ChannelCount; got != 2 {
+		t.Fatalf("resolved.ChannelCount = %d, want 2", got)
 	}
 }
