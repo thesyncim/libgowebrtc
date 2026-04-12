@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 #include <vector>
@@ -29,16 +30,67 @@
 #if defined(SHIM_ENABLE_DEVICE_CAPTURE)
 namespace {
 
+bool EnvHasValue(const char* name) {
+    const char* value = std::getenv(name);
+    return value && value[0] != '\0';
+}
+
+bool EnvTruthy(const char* name, bool default_value) {
+    const char* value = std::getenv(name);
+    if (!value || value[0] == '\0') {
+        return default_value;
+    }
+
+    if (strcmp(value, "1") == 0 ||
+        strcmp(value, "true") == 0 ||
+        strcmp(value, "TRUE") == 0 ||
+        strcmp(value, "yes") == 0 ||
+        strcmp(value, "YES") == 0 ||
+        strcmp(value, "on") == 0 ||
+        strcmp(value, "ON") == 0) {
+        return true;
+    }
+
+    if (strcmp(value, "0") == 0 ||
+        strcmp(value, "false") == 0 ||
+        strcmp(value, "FALSE") == 0 ||
+        strcmp(value, "no") == 0 ||
+        strcmp(value, "NO") == 0 ||
+        strcmp(value, "off") == 0 ||
+        strcmp(value, "OFF") == 0) {
+        return false;
+    }
+
+    return default_value;
+}
+
 webrtc::DesktopCaptureOptions CreateDesktopCaptureOptions() {
-    webrtc::DesktopCaptureOptions options;
+    webrtc::DesktopCaptureOptions options =
+        webrtc::DesktopCaptureOptions::CreateDefault();
 
 #if defined(WEBRTC_USE_X11)
-    options.set_x_display(webrtc::SharedXDisplay::CreateDefault());
+    if (EnvHasValue("DISPLAY")) {
+        options.set_x_display(webrtc::SharedXDisplay::CreateDefault());
+    }
 #endif
 
 #if defined(WEBRTC_USE_PIPEWIRE)
-    options.set_allow_pipewire(true);
-    options.set_screencast_stream(webrtc::SharedScreenCastStream::CreateDefault());
+    // Prefer X11 capture whenever a DISPLAY is available. PipeWire remains
+    // available for Wayland/headless portal flows and can be forced on with
+    // LIBWEBRTC_ENABLE_PIPEWIRE=1 when desired.
+    bool allow_pipewire = EnvTruthy(
+        "LIBWEBRTC_ENABLE_PIPEWIRE",
+        EnvHasValue("WAYLAND_DISPLAY") && !EnvHasValue("DISPLAY")
+    );
+    options.set_allow_pipewire(allow_pipewire);
+    if (allow_pipewire) {
+        options.set_screencast_stream(webrtc::SharedScreenCastStream::CreateDefault());
+    }
+#endif
+
+#if defined(WEBRTC_MAC) && !defined(WEBRTC_IOS)
+    options.set_allow_iosurface(true);
+    options.set_allow_sck_capturer(true);
 #endif
 
     return options;

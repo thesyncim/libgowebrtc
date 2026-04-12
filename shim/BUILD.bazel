@@ -197,7 +197,10 @@ cc_library(
     }),
     defines = _COMMON_DEFINES + select({
         "@platforms//os:macos": _UNIX_DEFINES + ["WEBRTC_MAC"],
-        "@platforms//os:linux": _UNIX_DEFINES + ["WEBRTC_LINUX"],
+        "@platforms//os:linux": _UNIX_DEFINES + [
+            "WEBRTC_LINUX",
+            "WEBRTC_USE_X11",
+        ],
         "@platforms//os:windows": ["WEBRTC_WIN", "NOMINMAX", "WIN32_LEAN_AND_MEAN"],
         "//conditions:default": _UNIX_DEFINES,
     }),
