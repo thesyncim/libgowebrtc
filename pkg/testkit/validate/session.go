@@ -279,19 +279,20 @@ func newSession(peer peerAdapter, cfg SessionConfig) *Session {
 	return s
 }
 
-// PionOnTrack returns an OnTrack handler that binds remote tracks and passive
-// subscriber monitors into the session.
-func (s *Session) PionOnTrack() func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
+// PionOnTrack returns an OnTrack handler that binds browser-shaped remote
+// tracks and passive subscriber monitors into the session.
+//
+// Callers must pass any explicit Pion receive policy, such as RTCP writers,
+// through the opts parameter.
+func (s *Session) PionOnTrack(opts ...pionrecv.Option) func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
 	return func(trackRemote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		if trackRemote == nil {
 			s.recordFailure("validate: nil pion remote track")
 			return
 		}
 
-		opts := make([]pionrecv.Option, 0, 3)
-		if receiver != nil && receiver.Transport() != nil {
-			opts = append(opts, pionrecv.WithRTCPWriter(receiver.Transport()))
-		}
+		bindOpts := make([]pionrecv.Option, 0, len(opts)+2)
+		bindOpts = append(bindOpts, opts...)
 
 		var (
 			videoMonitor *pionrecv.VideoSubscriberMonitor
@@ -304,17 +305,17 @@ func (s *Session) PionOnTrack() func(*webrtc.TrackRemote, *webrtc.RTPReceiver) {
 				PacketGapThreshold: s.cfg.PacketGapThreshold,
 				EventHistory:       s.cfg.EventHistory,
 			})
-			opts = append(opts, pionrecv.WithVideoSubscriberMonitor(videoMonitor))
+			bindOpts = append(bindOpts, pionrecv.WithVideoSubscriberMonitor(videoMonitor))
 		case webrtc.RTPCodecTypeAudio:
 			audioMonitor = pionrecv.NewAudioSubscriberMonitor(pionrecv.AudioSubscriberMonitorConfig{
 				FreezeThreshold:    s.cfg.AudioGapThreshold,
 				PacketGapThreshold: s.cfg.PacketGapThreshold,
 				EventHistory:       s.cfg.EventHistory,
 			})
-			opts = append(opts, pionrecv.WithAudioSubscriberMonitor(audioMonitor))
+			bindOpts = append(bindOpts, pionrecv.WithAudioSubscriberMonitor(audioMonitor))
 		}
 
-		remoteTrack, err := media.BindPionTrack(trackRemote, receiver, opts...)
+		remoteTrack, err := media.BindPionTrack(trackRemote, receiver, bindOpts...)
 		if err != nil {
 			s.recordFailure(fmt.Sprintf("validate: bind pion track %q: %v", trackRemote.ID(), err))
 			return

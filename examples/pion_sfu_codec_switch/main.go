@@ -32,6 +32,7 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/packetizer"
+	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 	"github.com/thesyncim/libgowebrtc/pkg/testkit/validate"
 	libtrack "github.com/thesyncim/libgowebrtc/pkg/track"
 )
@@ -262,7 +263,13 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 		}()
 	})
 
-	subscriberPC.OnTrack(subscriberValidator.PionOnTrack())
+	subscriberPC.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		var opts []pionrecv.Option
+		if receiver != nil && receiver.Transport() != nil {
+			opts = append(opts, pionrecv.WithRTCPWriter(receiver.Transport()))
+		}
+		subscriberValidator.PionOnTrack(opts...)(track, receiver)
+	})
 
 	log.Printf("Negotiating subscriber leg first so the relay is ready before publisher traffic starts")
 	if err := connectPeers("sfu-downstream", sfuDownstreamPC, "subscriber", subscriberPC); err != nil {
