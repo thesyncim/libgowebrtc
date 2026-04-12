@@ -17,7 +17,7 @@ WEBRTC_CACHE_DIR="${WEBRTC_CACHE_DIR:-}"
 DEPOT_TOOLS_DIR="${DEPOT_TOOLS_DIR:-}"
 TARGET_PLATFORM="${TARGET_PLATFORM:-}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/libwebrtc}"
-WEBRTC_INSTALL_BUILD_DEPS="${WEBRTC_INSTALL_BUILD_DEPS:-0}"
+WEBRTC_INSTALL_BUILD_DEPS="${WEBRTC_INSTALL_BUILD_DEPS:-auto}"
 WEBRTC_GCLIENT_JOBS="${WEBRTC_GCLIENT_JOBS:-2}"
 
 log_info()    { echo -e "\033[0;34m[INFO]\033[0m $1"; }
@@ -64,6 +64,7 @@ Options:
   --target PLATFORM      Target platform (darwin_arm64, darwin_amd64, linux_386, linux_amd64, linux_arm64, linux_arm)
   --install-dir DIR      Install prefix for the built archive and headers
   --install-build-deps   Run WebRTC's Linux build dependency installer
+  --check-linux-x11      Validate Linux X11 source-build dependencies and exit
   --help                 Show this help
 
 Environment:
@@ -71,13 +72,15 @@ Environment:
   WEBRTC_BRANCH_HEAD         Informational branch-head marker (default: $WEBRTC_BRANCH_HEAD)
   WEBRTC_CACHE_DIR           Checkout/cache location (default: $WEBRTC_CACHE_DIR)
   DEPOT_TOOLS_DIR            depot_tools checkout location (default: $DEPOT_TOOLS_DIR)
-  WEBRTC_INSTALL_BUILD_DEPS  Linux-only dependency bootstrap flag (default: $WEBRTC_INSTALL_BUILD_DEPS)
+  WEBRTC_INSTALL_BUILD_DEPS  Linux-only dependency mode: auto, true, or false
+                             (default: $WEBRTC_INSTALL_BUILD_DEPS)
   WEBRTC_GCLIENT_JOBS        gclient parallelism (default: $WEBRTC_GCLIENT_JOBS)
 
 Examples:
   ./scripts/build_libwebrtc_source.sh --target linux_amd64 --install-dir /tmp/libwebrtc
   ./scripts/build_libwebrtc_source.sh --target linux_386 --install-dir /tmp/libwebrtc_x86
-  WEBRTC_INSTALL_BUILD_DEPS=1 ./scripts/build_libwebrtc_source.sh --target linux_arm64
+  WEBRTC_INSTALL_BUILD_DEPS=true ./scripts/build_libwebrtc_source.sh --target linux_arm64
+  ./scripts/build_libwebrtc_source.sh --target linux_amd64 --check-linux-x11
 EOF
     exit 0
 }
@@ -223,6 +226,163 @@ EOF
             return 1
             ;;
     esac
+}
+
+linux_build_deps_mode() {
+    local mode
+    mode="$(echo "$WEBRTC_INSTALL_BUILD_DEPS" | tr '[:upper:]' '[:lower:]')"
+    case "$mode" in
+        ""|auto)
+            echo "auto"
+            ;;
+        1|true|yes|on)
+            echo "install"
+            ;;
+        0|false|no|off)
+            echo "skip"
+            ;;
+        *)
+            log_error "Invalid WEBRTC_INSTALL_BUILD_DEPS mode: $WEBRTC_INSTALL_BUILD_DEPS"
+            log_error "Expected auto, true, or false"
+            exit 1
+            ;;
+    esac
+}
+
+linux_x11_dev_packages() {
+    cat <<'EOF'
+libasound2-dev
+libdrm-dev
+libgbm-dev
+libglib2.0-dev
+libpulse-dev
+libx11-dev
+libxcomposite-dev
+libxdamage-dev
+libxext-dev
+libxfixes-dev
+libxrandr-dev
+libxrender-dev
+libxtst-dev
+EOF
+}
+
+linux_386_multilib_packages() {
+    local gxx_major libstdcxx_dev_pkg
+    gxx_major="$(g++ -dumpversion | cut -d. -f1)"
+    libstdcxx_dev_pkg="libstdc++-${gxx_major}-dev:i386"
+    cat <<EOF
+gcc-multilib
+g++-multilib
+libc6-dev-i386
+lib32gcc-s1
+lib32stdc++6
+$libstdcxx_dev_pkg
+libasound2-dev:i386
+libdrm-dev:i386
+libgbm-dev:i386
+libglib2.0-dev:i386
+libpulse-dev:i386
+libx11-dev:i386
+libxcomposite-dev:i386
+libxdamage-dev:i386
+libxext-dev:i386
+libxfixes-dev:i386
+libxrandr-dev:i386
+libxrender-dev:i386
+libxtst-dev:i386
+EOF
+}
+
+linux_required_apt_packages() {
+    linux_x11_dev_packages
+    if [[ "$TARGET_PLATFORM" == "linux_386" ]]; then
+        linux_386_multilib_packages
+    fi
+}
+
+linux_missing_apt_packages() {
+    local pkg
+    while IFS= read -r pkg; do
+        [[ -n "$pkg" ]] || continue
+        if ! dpkg-query -W -f='${db:Status-Abbrev}' "$pkg" 2>/dev/null | grep -q '^ii'; then
+            printf '%s\n' "$pkg"
+        fi
+    done < <(linux_required_apt_packages)
+}
+
+verify_linux_x11_build_deps() {
+    local target_os compiler_label
+    local -a cc
+    local tmpdir src output log_file
+    target_os="$(target_os_for "$TARGET_PLATFORM")"
+    if [[ "$target_os" != "linux" ]]; then
+        return
+    fi
+    if [[ "$(uname -s)" != "Linux" ]]; then
+        log_error "Linux X11 source-build preflight can only run on a Linux host"
+        exit 1
+    fi
+
+    if [[ "$TARGET_PLATFORM" == "linux_386" ]]; then
+        cc=(gcc -m32)
+    else
+        cc=(cc)
+    fi
+    compiler_label="${cc[*]}"
+
+    if ! command -v "${cc[0]}" >/dev/null 2>&1; then
+        log_error "Missing Linux compiler for X11 preflight: ${cc[0]}"
+        exit 1
+    fi
+
+    tmpdir="$(mktemp -d)"
+    src="$tmpdir/x11_preflight.c"
+    output="$tmpdir/x11_preflight"
+    log_file="$tmpdir/x11_preflight.log"
+    cat > "$src" <<'EOF'
+#include <X11/Xlib.h>
+#include <X11/extensions/Xcomposite.h>
+#include <X11/extensions/Xdamage.h>
+#include <X11/extensions/Xfixes.h>
+#include <X11/extensions/Xrandr.h>
+#include <X11/extensions/Xrender.h>
+#include <X11/extensions/XTest.h>
+
+int main(void) {
+    return 0;
+}
+EOF
+
+    if ! "${cc[@]}" "$src" -o "$output" \
+        -lX11 \
+        -lXcomposite \
+        -lXdamage \
+        -lXext \
+        -lXfixes \
+        -lXrandr \
+        -lXrender \
+        -lXtst \
+        -lgio-2.0 \
+        -lgobject-2.0 \
+        -lglib-2.0 \
+        >"$log_file" 2>&1; then
+        log_error "Linux X11 source-build preflight failed for $TARGET_PLATFORM"
+        log_error "Compiler: $compiler_label"
+        if command -v dpkg-query >/dev/null 2>&1; then
+            log_error "Install the required packages or rerun with WEBRTC_INSTALL_BUILD_DEPS=true"
+            log_error "Expected Debian packages:"
+            linux_required_apt_packages | sed 's/^/  /'
+        else
+            log_error "Install the equivalent X11 capture development headers and libraries for this distro"
+        fi
+        cat "$log_file" >&2
+        rm -rf "$tmpdir"
+        exit 1
+    fi
+
+    rm -rf "$tmpdir"
+    log_success "Verified Linux X11 source-build dependencies for $TARGET_PLATFORM"
 }
 
 ensure_depot_tools() {
@@ -404,27 +564,39 @@ sync_webrtc_checkout() {
 }
 
 maybe_install_linux_build_deps() {
-    local target_os
+    local target_os install_mode install_script
+    local sudo_cmd=()
+    local -a missing_packages=()
     target_os="$(target_os_for "$TARGET_PLATFORM")"
-    if [[ "$target_os" != "linux" || "$WEBRTC_INSTALL_BUILD_DEPS" != "1" ]]; then
+    if [[ "$target_os" != "linux" ]]; then
         return
     fi
 
-    local install_script="$WEBRTC_CACHE_DIR/src/build/install-build-deps.sh"
+    install_mode="$(linux_build_deps_mode)"
+    if [[ "$install_mode" == "skip" ]]; then
+        verify_linux_x11_build_deps
+        return
+    fi
+
+    if command -v dpkg-query >/dev/null 2>&1; then
+        mapfile -t missing_packages < <(linux_missing_apt_packages)
+        if [[ "$install_mode" == "auto" && ${#missing_packages[@]} -eq 0 ]]; then
+            log_info "Linux X11 source-build dependencies already present"
+            verify_linux_x11_build_deps
+            return
+        fi
+    elif [[ "$install_mode" == "auto" ]]; then
+        log_warn "Automatic Linux dependency bootstrap is only implemented for apt-based distros"
+        verify_linux_x11_build_deps
+        return
+    fi
+
+    install_script="$WEBRTC_CACHE_DIR/src/build/install-build-deps.sh"
     if [[ ! -x "$install_script" ]]; then
         log_error "Missing Linux dependency installer: $install_script"
         exit 1
     fi
 
-    log_step "Installing WebRTC Linux build dependencies"
-    "$install_script" --no-prompt --no-chromeos-fonts
-
-    if ! command -v apt-get >/dev/null 2>&1; then
-        log_warn "Skipping explicit Linux X11 build dependency install on this distro; ensure X11 capture dev packages are present manually"
-        return
-    fi
-
-    local sudo_cmd=()
     if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
         if ! command -v sudo >/dev/null 2>&1; then
             log_error "Linux source builds need sudo or root to install explicit X11 capture build dependencies"
@@ -433,52 +605,32 @@ maybe_install_linux_build_deps() {
         sudo_cmd=(sudo)
     fi
 
+    if ! command -v apt-get >/dev/null 2>&1; then
+        log_error "Linux source builds cannot auto-install explicit X11 dependencies on this distro"
+        log_error "Install the required packages manually, then rerun with WEBRTC_INSTALL_BUILD_DEPS=false"
+        exit 1
+    fi
+
+    log_step "Installing WebRTC Linux build dependencies"
+    "$install_script" --no-prompt --no-chromeos-fonts
+
+    if [[ "$TARGET_PLATFORM" == "linux_386" ]]; then
+        "${sudo_cmd[@]}" dpkg --add-architecture i386
+    fi
+
     log_step "Installing explicit Linux X11 capture build dependencies"
     "${sudo_cmd[@]}" apt-get update
-    "${sudo_cmd[@]}" apt-get install -y \
-        libasound2-dev \
-        libdrm-dev \
-        libgbm-dev \
-        libglib2.0-dev \
-        libpulse-dev \
-        libx11-dev \
-        libxcomposite-dev \
-        libxdamage-dev \
-        libxext-dev \
-        libxfixes-dev \
-        libxrandr-dev \
-        libxrender-dev \
-        libxtst-dev
+    mapfile -t missing_packages < <(linux_required_apt_packages)
+    if (( ${#missing_packages[@]} > 0 )); then
+        "${sudo_cmd[@]}" apt-get install -y "${missing_packages[@]}"
+    fi
 
     if [[ "$TARGET_PLATFORM" != "linux_386" ]]; then
+        verify_linux_x11_build_deps
         return
     fi
 
-    log_step "Installing Linux x86 multilib build dependencies"
-    local gxx_major libstdcxx_dev_pkg
-    gxx_major="$(g++ -dumpversion | cut -d. -f1)"
-    libstdcxx_dev_pkg="libstdc++-${gxx_major}-dev:i386"
-    "${sudo_cmd[@]}" dpkg --add-architecture i386
-    "${sudo_cmd[@]}" apt-get install -y \
-        gcc-multilib \
-        g++-multilib \
-        libc6-dev-i386 \
-        lib32gcc-s1 \
-        lib32stdc++6 \
-        "$libstdcxx_dev_pkg" \
-        libasound2-dev:i386 \
-        libdrm-dev:i386 \
-        libgbm-dev:i386 \
-        libglib2.0-dev:i386 \
-        libpulse-dev:i386 \
-        libx11-dev:i386 \
-        libxcomposite-dev:i386 \
-        libxdamage-dev:i386 \
-        libxext-dev:i386 \
-        libxfixes-dev:i386 \
-        libxrandr-dev:i386 \
-        libxrender-dev:i386 \
-        libxtst-dev:i386
+    verify_linux_x11_build_deps
 }
 
 build_webrtc() {
@@ -736,6 +888,7 @@ install_webrtc() {
 }
 
 main() {
+    local check_linux_x11=false
     if [[ -z "$TARGET_PLATFORM" ]]; then
         TARGET_PLATFORM="$(detect_platform)"
     fi
@@ -751,7 +904,11 @@ main() {
                 shift 2
                 ;;
             --install-build-deps)
-                WEBRTC_INSTALL_BUILD_DEPS=1
+                WEBRTC_INSTALL_BUILD_DEPS=true
+                shift
+                ;;
+            --check-linux-x11)
+                check_linux_x11=true
                 shift
                 ;;
             --help)
@@ -777,6 +934,14 @@ main() {
     log_info "Branch head: $WEBRTC_BRANCH_HEAD"
     log_info "Cache dir: $WEBRTC_CACHE_DIR"
     log_info "Install dir: $INSTALL_DIR"
+    if [[ "$TARGET_PLATFORM" == linux_* ]]; then
+        log_info "Linux dependency mode: $(linux_build_deps_mode)"
+    fi
+
+    if $check_linux_x11; then
+        verify_linux_x11_build_deps
+        exit 0
+    fi
 
     ensure_depot_tools
     bootstrap_depot_tools

@@ -152,6 +152,10 @@ Environment:
                       also enable the X11/Ozone desktop-capture path and need
                       the corresponding X11 development packages when building
                       outside the Docker validator.
+  WEBRTC_INSTALL_BUILD_DEPS
+                      Linux source-build dependency mode passed through to
+                      build_libwebrtc_source.sh: auto (default), true, or
+                      false.
   MAX_GLIBC_VERSION   Maximum allowed GLIBC symbol version for Linux release
                       artifacts (default: $MAX_GLIBC_VERSION)
 
@@ -162,6 +166,8 @@ Examples:
   ./scripts/build.sh --target linux_arm     # Build for 32-bit Linux ARM
   ./scripts/build.sh --target linux_amd64 --source-libwebrtc
                                             # Force an X11-enabled Linux source build
+  ./scripts/build_libwebrtc_source.sh --target linux_amd64 --check-linux-x11
+                                            # Preflight Linux X11 source-build deps
   ./scripts/build.sh --source-libwebrtc     # Force a pinned libwebrtc source build
   ./scripts/build.sh --release              # Create release tarball
 
@@ -196,6 +202,10 @@ should_build_libwebrtc_from_source() {
 
 build_libwebrtc_from_source() {
     log_step "Building libwebrtc from source"
+    if [[ "$TARGET_OS" == "linux" ]]; then
+        log_info "Linux source builds require explicit X11 capture development packages"
+        log_info "Preflight with: ./scripts/build_libwebrtc_source.sh --target $TARGET_PLATFORM --check-linux-x11"
+    fi
     "$SCRIPT_DIR/build_libwebrtc_source.sh" \
         --target "$TARGET_PLATFORM" \
         --install-dir "$INSTALL_DIR"

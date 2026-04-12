@@ -48,6 +48,7 @@ Usage: ./scripts/validate_linux_docker.sh [OPTIONS]
 Options:
   --target PLATFORM  linux_amd64 (default), linux_386, linux_arm64, or linux_arm
                      Docker validation images include the X11 capture development deps
+                     and run the Linux X11 source-build preflight before building
   --go VERSION       Go toolchain version for the validator image (default: $GO_VERSION)
   --download-only    Validate the published shim artifact instead of building it
   --artifact-dir DIR Copy the built shim and public headers to DIR after validation
@@ -210,7 +211,7 @@ COPY . .
 
 ENV PATH=/usr/local/go/bin:/go/bin:/usr/local/bin:/usr/bin:/bin
 ENV GOWORK=off
-ENV WEBRTC_INSTALL_BUILD_DEPS=0
+ENV WEBRTC_INSTALL_BUILD_DEPS=auto
 ENV WEBRTC_GCLIENT_JOBS=1
 
 VALIDATION_STEPS_PLACEHOLDER
@@ -281,6 +282,7 @@ PY
 
 if [[ "$VALIDATION_MODE" == "build" ]]; then
     VALIDATION_STEPS=$(cat <<'EOF'
+RUN ./scripts/build_libwebrtc_source.sh --target TARGET_PLACEHOLDER --check-linux-x11
 RUN --mount=type=cache,target=/root/.cache/libgowebrtc \
     --mount=type=cache,target=/root/.cache/bazel \
     CC=clang CXX=clang++ TARGET_PLATFORM=TARGET_PLACEHOLDER INSTALL_DIR=/tmp/libwebrtc ./scripts/build.sh
