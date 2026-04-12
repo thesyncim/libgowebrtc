@@ -127,9 +127,19 @@ func TestDecodedTrackDecodeAudioFromPionRTP(t *testing.T) {
 
 func TestNewDecodedTrackValidation(t *testing.T) {
 	t.Run("NilTrack", func(t *testing.T) {
-		decoded, err := New(nil)
+		decoded, err := BindRemoteTrack(nil, nil)
 		if !errors.Is(err, ErrNilTrack) {
-			t.Fatalf("New(nil) error = %v, want %v", err, ErrNilTrack)
+			t.Fatalf("BindRemoteTrack(nil, nil) error = %v, want %v", err, ErrNilTrack)
+		}
+		if decoded != nil {
+			t.Fatal("expected nil decoded track")
+		}
+	})
+
+	t.Run("NilReceiver", func(t *testing.T) {
+		decoded, err := BindRemoteTrack(new(webrtc.TrackRemote), nil)
+		if !errors.Is(err, ErrNilReceiver) {
+			t.Fatalf("BindRemoteTrack(non-nil, nil) error = %v, want %v", err, ErrNilReceiver)
 		}
 		if decoded != nil {
 			t.Fatal("expected nil decoded track")

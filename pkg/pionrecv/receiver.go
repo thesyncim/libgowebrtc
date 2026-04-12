@@ -1,10 +1,9 @@
-// Package pionrecv bridges Pion remote tracks into libgowebrtc decoders.
+// Package pionrecv bridges Pion OnTrack pairs into libgowebrtc decoders.
 //
-// BindRemoteTrack is the preferred entrypoint inside a Pion OnTrack handler.
-// It turns a Pion TrackRemote into decoded pkg/frame callbacks while reusing
-// libgowebrtc's video/audio decoders. The bridge uses Pion's RTP sample
-// builder, so callers do not need to manually read RTP, depacketize, or
-// instantiate decoders inside OnTrack handlers.
+// BindRemoteTrack turns a Pion TrackRemote/RTPReceiver pair into decoded
+// pkg/frame callbacks while reusing libgowebrtc's video/audio decoders. The
+// bridge uses Pion's RTP sample builder, so callers do not need to manually
+// read RTP, depacketize, or instantiate decoders inside OnTrack handlers.
 package pionrecv
 
 import (
@@ -29,8 +28,10 @@ import (
 )
 
 var (
-	// ErrNilTrack is returned when a nil TrackRemote is passed to New.
+	// ErrNilTrack is returned when a nil TrackRemote is passed to BindRemoteTrack.
 	ErrNilTrack = errors.New("nil TrackRemote")
+	// ErrNilReceiver is returned when a nil RTPReceiver is passed to BindRemoteTrack.
+	ErrNilReceiver = errors.New("nil RTPReceiver")
 	// ErrClosed is returned when operating on a closed decoded track.
 	ErrClosed = errors.New("decoded track is closed")
 	// ErrAlreadyRunning is returned when Run is invoked more than once.
@@ -301,21 +302,16 @@ type DecodedTrack struct {
 	audioDecoder *pioncodec.MultiAudioDecoder
 }
 
-// New creates a decoded bridge for a Pion remote track.
-//
-// This is a convenience wrapper for callers that only have a TrackRemote.
-// Prefer BindRemoteTrack inside Pion's OnTrack callback when a receiver is
-// available.
-func New(track *webrtc.TrackRemote, opts ...Option) (*DecodedTrack, error) {
-	return BindRemoteTrack(track, nil, opts...)
-}
-
 // BindRemoteTrack creates a decoded bridge for a Pion OnTrack pair.
-// The receiver is optional but kept for inspection and to support Pion-native
-// options like WithRTCPWriter(receiver.Transport()).
+// The receiver is required so the bridge stays aligned with Pion's explicit
+// OnTrack callback surface and can support receiver-native hooks like
+// WithRTCPWriter(receiver.Transport()) without a helper fallback path.
 func BindRemoteTrack(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, opts ...Option) (*DecodedTrack, error) {
 	if track == nil {
 		return nil, ErrNilTrack
+	}
+	if receiver == nil {
+		return nil, ErrNilReceiver
 	}
 	return newDecodedTrack(&pionTrackAdapter{track: track}, track, receiver, opts...)
 }

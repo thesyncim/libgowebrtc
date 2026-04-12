@@ -445,7 +445,7 @@ This wave changes the shim ABI. After updating Go code, publish a fresh shim ass
 
 ### Pion Receive Integration
 
-`pionrecv.BindRemoteTrack(...)` is the preferred entrypoint inside a Pion `OnTrack` callback. Automatic PLI requests are best-effort; explicit `RequestKeyframe()` calls still return writer errors.
+`pionrecv.BindRemoteTrack(...)` is the explicit entrypoint inside a Pion `OnTrack` callback and always requires both the `TrackRemote` and `RTPReceiver`. Automatic PLI requests are best-effort; explicit `RequestKeyframe()` calls still return writer errors.
 
 ```go
 import (
@@ -585,8 +585,8 @@ peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string)
 }))
 ```
 
-If you already manage the Pion receive pipeline yourself with `pionrecv.New(...)`
-or `pionrecv.BindRemoteTrack(...)`, use `media.BindDecodedTrack(decoded)`
+If you already manage the Pion receive pipeline yourself with
+`pionrecv.BindRemoteTrack(...)`, use `media.BindDecodedTrack(decoded)`
 to project that decoded track into the same browser-like remote-track model.
 
 ### Low-Level Encoding (Allocation-Free)
