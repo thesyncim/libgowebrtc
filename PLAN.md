@@ -557,19 +557,14 @@ func main() {
         },
     })
 
-    // Add all tracks to peer connection
-    senders, _ := media.AddTracksToPionPeerConnection(peerConnection, stream)
-
-    // Configure simulcast layers for SFU on video senders
-    for _, sender := range senders {
-        if sender.Track().Kind() == webrtc.RTPCodecTypeVideo {
-            sender.SetParameters(webrtc.RTPSendParameters{
-                Encodings: []webrtc.RTPEncodingParameters{
-                    {RID: "q", MaxBitrate: 150_000, ScaleResolutionDownBy: 4},  // 320x180
-                    {RID: "h", MaxBitrate: 500_000, ScaleResolutionDownBy: 2},  // 640x360
-                    {RID: "f", MaxBitrate: 2_500_000},                          // 1280x720
-                },
-            })
+    // Add each track explicitly so stream IDs stay visible at the call site.
+    for _, track := range stream.GetTracks() {
+        if trackLocal, ok := media.PionTrackLocal(track); ok {
+            streamID := stream.ID()
+            if track.Kind() == "video" {
+                streamID = "camera-stream"
+            }
+            _, _ = peerConnection.AddTrack(trackLocal, streamID)
         }
     }
 
@@ -1400,7 +1395,6 @@ Cleaned up public API to hide C implementation details and provide more browser/
 | `RTPTransceiver.IsValid()` | Validation helper for RTPTransceiver |
 | `DataChannel.IsValid()` | Validation helper for DataChannel |
 | `media.PionTrackLocal()` | Extract Pion TrackLocal from MediaStreamTrack |
-| `media.AddTracksToPionPeerConnection()` | Add all tracks from MediaStream to Pion PeerConnection |
 | `media.IntConstraint` | Browser-like exact/ideal/min/max constraint for integers |
 | `media.FloatConstraint` | Browser-like exact/ideal/min/max constraint for floats |
 | `media.FacingMode` | Camera facing mode enum (`user`, `environment`) |

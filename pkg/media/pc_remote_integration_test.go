@@ -38,8 +38,8 @@ func TestBindPCTrackIntegration(t *testing.T) {
 	trackCh := make(chan PCRemoteVideoTrack, 1)
 	errCh := make(chan error, 1)
 
-	receiver.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver, streamID string) {
-		videoTrack, err := BindPCTrack(track, receiver, streamID)
+	receiver.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver) {
+		videoTrack, err := BindPCTrack(track, receiver)
 		if err != nil {
 			select {
 			case errCh <- err:

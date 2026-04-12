@@ -41,12 +41,12 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 
 	trackReceived := make(chan struct{}, 1)
 	pcOnTrack := session.PCOnTrack()
-	pp.Lib.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streamID string) {
+	pp.Lib.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver) {
 		select {
 		case trackReceived <- struct{}{}:
 		default:
 		}
-		pcOnTrack(track, recv, streamID)
+		pcOnTrack(track, recv)
 	})
 
 	const trackID = "audio-codec-switch"

@@ -30,11 +30,11 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	})
 
 	pcOnTrack := session.PCOnTrack()
-	pp.Receiver.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver, streamID string) {
+	pp.Receiver.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver) {
 		pp.receivedTracksMu.Lock()
 		pp.ReceivedTracks = append(pp.ReceivedTracks, track)
 		pp.receivedTracksMu.Unlock()
-		pcOnTrack(track, recv, streamID)
+		pcOnTrack(track, recv)
 		select {
 		case pp.trackReceived <- struct{}{}:
 		default:
