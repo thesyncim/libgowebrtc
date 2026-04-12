@@ -655,6 +655,11 @@ func (t *Track) WriteVideoFrame(f *frame.VideoFrame) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	if t.pc != nil {
+		t.pc.ioMu.RLock()
+		defer t.pc.ioMu.RUnlock()
+	}
+
 	// Push frame to the native track source via FFI
 	// PTS is in 90kHz RTP clock units, convert to microseconds for libwebrtc
 	// microseconds = pts_90khz * 1_000_000 / 90_000
@@ -695,6 +700,11 @@ func (t *Track) WriteAudioFrame(f *frame.AudioFrame) error {
 		return errors.New("failed to get audio samples")
 	}
 
+	if t.pc != nil {
+		t.pc.ioMu.RLock()
+		defer t.pc.ioMu.RUnlock()
+	}
+
 	// Push audio samples to the native track source via FFI
 	// PTS is in 90kHz RTP clock units, convert to microseconds for libwebrtc
 	timestampUs := int64(f.PTS) * 1000000 / 90000
@@ -724,6 +734,7 @@ type PeerConnection struct {
 	localTracks  []*Track
 
 	callbackMu sync.RWMutex
+	ioMu       sync.RWMutex
 
 	onICECandidate             func(candidate *webrtc.ICECandidateInit)
 	onICEConnectionStateChange func(state ICEConnectionState)
@@ -1802,6 +1813,9 @@ func (pc *PeerConnection) GetStats() (webrtc.StatsReport, error) {
 	if pc.handle == 0 {
 		return nil, errors.New("peer connection not initialized")
 	}
+
+	pc.ioMu.Lock()
+	defer pc.ioMu.Unlock()
 
 	data, err := ffi.PeerConnectionGetStatsJSON(pc.handle)
 	if err != nil {

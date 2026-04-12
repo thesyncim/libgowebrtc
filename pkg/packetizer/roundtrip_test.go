@@ -38,6 +38,7 @@ func TestPacketizeIntoRoundTripVideo(t *testing.T) {
 		Codec:       codec.H264,
 		SSRC:        1234,
 		PayloadType: 96,
+		MTU:         1200,
 		ClockRate:   codec.H264.ClockRate(),
 	})
 	if err != nil {
@@ -95,6 +96,7 @@ func TestPacketizerErrorPaths(t *testing.T) {
 		Codec:       codec.H264,
 		SSRC:        1234,
 		PayloadType: 96,
+		MTU:         1200,
 		ClockRate:   codec.H264.ClockRate(),
 	})
 	if err != nil {

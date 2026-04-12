@@ -16,6 +16,22 @@ func TestNewRequiresExplicitClockRate(t *testing.T) {
 		Codec:       codec.H264,
 		SSRC:        1,
 		PayloadType: 96,
+		MTU:         1200,
+	})
+	if err == nil {
+		t.Fatal("New() error = nil, want error")
+	}
+	if p != nil {
+		t.Fatalf("New() = %v, want nil packetizer", p)
+	}
+}
+
+func TestNewRequiresExplicitMTU(t *testing.T) {
+	p, err := New(Config{
+		Codec:       codec.H264,
+		SSRC:        1,
+		PayloadType: 96,
+		ClockRate:   codec.H264.ClockRate(),
 	})
 	if err == nil {
 		t.Fatal("New() error = nil, want error")

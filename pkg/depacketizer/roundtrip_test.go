@@ -65,6 +65,7 @@ func TestDepacketizerRoundTripVP8(t *testing.T) {
 		Codec:       codec.VP8,
 		SSRC:        3333,
 		PayloadType: 96,
+		MTU:         1200,
 		ClockRate:   codec.VP8.ClockRate(),
 	})
 	if err != nil {
