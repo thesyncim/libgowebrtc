@@ -3,6 +3,9 @@
 ## Goal
 Create a Go library wrapping libwebrtc for encode/decode/packetize with a **Pion-compatible interface** - no networking, just media processing. Uses **purego** instead of CGO for cleaner builds.
 
+The shim/runtime parity backlog for the thin public layer is tracked in
+`SHIM_PARITY_PLAN.md`.
+
 ## Design Principles
 
 1. **Allocation-free hot paths** - All encode/decode operations write into caller-provided buffers
