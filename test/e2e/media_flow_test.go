@@ -490,15 +490,23 @@ func TestPeerConnectionLifecycle(t *testing.T) {
 
 // TestConcurrentFrameWrites tests concurrent frame writing.
 func TestConcurrentFrameWrites(t *testing.T) {
+	pp := NewLibPeerPair(t)
+	defer pp.Close()
 
-	p, err := pc.NewPeerConnection(defaultTestConfig())
-	if err != nil {
-		t.Fatalf("NewPeerConnection failed: %v", err)
+	track := CreateTestVideoTrack(t, pp.Sender, "video-concurrent", codec.VP8, 640, 480)
+	if _, err := pp.Sender.AddTrack(track, "stream-0"); err != nil {
+		t.Fatalf("AddTrack failed: %v", err)
 	}
-	defer p.Close()
-
-	track, _ := p.CreateVideoTrack("video-concurrent", 640, 480)
-	p.AddTrack(track, "stream-0")
+	if err := pp.Connect(); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	if !pp.WaitForConnection(shortConnectTimeout) {
+		t.Fatal("Timeout waiting for peer connection")
+	}
+	if !pp.WaitForTrack(shortTrackTimeout) {
+		t.Fatal("Timeout waiting for negotiated remote track")
+	}
+	time.Sleep(shortPostSendDelay)
 
 	// Generate frames concurrently, but keep the native track write path single-writer.
 	// The sender path is not a concurrency primitive; this still stresses concurrent
