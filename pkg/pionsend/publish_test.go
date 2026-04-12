@@ -86,9 +86,9 @@ func TestDeriveEncodingConfigsForSimulcast(t *testing.T) {
 		SVC: &codec.SVCConfig{
 			Mode: codec.SVCModeS3T3,
 			Layers: []codec.SVCLayerConfig{
-				{Bitrate: 120_000, Active: true},
-				{Bitrate: 240_000, Active: false},
-				{Bitrate: 480_000, Active: true},
+				{RID: "q", Width: 320, Height: 180, Bitrate: 120_000, Active: true},
+				{RID: "h", Width: 640, Height: 360, Bitrate: 240_000, Active: false},
+				{RID: "f", Width: 1280, Height: 720, Bitrate: 480_000, Active: true},
 			},
 		},
 	})
@@ -121,7 +121,7 @@ func TestDeriveEncodingConfigsForSimulcast(t *testing.T) {
 	}
 }
 
-func TestDeriveEncodingConfigsForSimulcastRequiresExplicitLayerBitrates(t *testing.T) {
+func TestDeriveEncodingConfigsForSimulcastRequiresExplicitLayerLayout(t *testing.T) {
 	if layers := deriveEncodingConfigs(VideoPublishConfig{
 		Width:   1280,
 		Height:  720,
@@ -129,12 +129,12 @@ func TestDeriveEncodingConfigsForSimulcastRequiresExplicitLayerBitrates(t *testi
 		SVC: &codec.SVCConfig{
 			Mode: codec.SVCModeS3T3,
 			Layers: []codec.SVCLayerConfig{
-				{Bitrate: 120_000},
-				{Bitrate: 0},
-				{Bitrate: 480_000},
+				{RID: "q", Bitrate: 120_000},
+				{RID: "h", Width: 640, Height: 360, Bitrate: 240_000},
+				{RID: "f", Width: 1280, Height: 720, Bitrate: 480_000},
 			},
 		},
 	}); layers != nil {
-		t.Fatalf("deriveEncodingConfigs(missing simulcast bitrate) = %+v, want nil", layers)
+		t.Fatalf("deriveEncodingConfigs(missing simulcast layer layout) = %+v, want nil", layers)
 	}
 }

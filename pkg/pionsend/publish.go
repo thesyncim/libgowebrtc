@@ -352,22 +352,9 @@ func deriveEncodingConfigs(cfg VideoPublishConfig) []encodingConfig {
 	if spatialLayers <= 0 {
 		return nil
 	}
-	if len(cfg.SVC.Layers) < spatialLayers {
+	if len(cfg.SVC.Layers) != spatialLayers {
 		return nil
 	}
-
-	widths := make([]int, spatialLayers)
-	heights := make([]int, spatialLayers)
-	for i := 0; i < spatialLayers; i++ {
-		shift := spatialLayers - i - 1
-		widths[i] = evenDimension(maxInt(2, cfg.Width>>shift))
-		heights[i] = evenDimension(maxInt(2, cfg.Height>>shift))
-		layer := cfg.SVC.Layers[i]
-		widths[i] = clampPositive(layer.Width, widths[i])
-		heights[i] = clampPositive(layer.Height, heights[i])
-	}
-
-	rids := defaultRIDs(spatialLayers)
 	temporalMode := codec.SVCModeL1T1
 	if cfg.SVC.Mode.TemporalLayers() >= 3 {
 		temporalMode = codec.SVCModeL1T3
@@ -376,14 +363,29 @@ func deriveEncodingConfigs(cfg VideoPublishConfig) []encodingConfig {
 	layers := make([]encodingConfig, 0, spatialLayers)
 	for i := 0; i < spatialLayers; i++ {
 		layer := cfg.SVC.Layers[i]
-		if layer.Bitrate == 0 {
+		if layer.RID == "" || layer.Width <= 0 || layer.Height <= 0 || layer.Bitrate == 0 {
 			return nil
 		}
-		scale := float64(cfg.Width) / float64(widths[i])
+		if layer.Width > cfg.Width || layer.Height > cfg.Height {
+			return nil
+		}
+		if layer.Width%2 != 0 || layer.Height%2 != 0 {
+			return nil
+		}
+		if cfg.Width*layer.Height != cfg.Height*layer.Width {
+			return nil
+		}
+		scale := 1.0
+		if layer.Width != cfg.Width || layer.Height != cfg.Height {
+			scale = float64(cfg.Width) / float64(layer.Width)
+			if scale <= 1.0 {
+				return nil
+			}
+		}
 		layers = append(layers, encodingConfig{
-			RID:     rids[i],
-			Width:   widths[i],
-			Height:  heights[i],
+			RID:     layer.RID,
+			Width:   layer.Width,
+			Height:  layer.Height,
 			Bitrate: layer.Bitrate,
 			Scale:   scale,
 			SVC: &codec.SVCConfig{
@@ -417,46 +419,4 @@ func closePublishedTracks(encodings []*encodingRuntime) error {
 		}
 	}
 	return firstErr
-}
-
-func defaultRIDs(count int) []string {
-	switch count {
-	case 2:
-		return []string{"h", "f"}
-	case 3:
-		return []string{"q", "h", "f"}
-	default:
-		return []string{""}
-	}
-}
-
-func clampPositive(v, fallback int) int {
-	if v > 0 {
-		return evenDimension(v)
-	}
-	return evenDimension(fallback)
-}
-
-func clampPositiveUint32(v, fallback uint32) uint32 {
-	if v > 0 {
-		return v
-	}
-	return fallback
-}
-
-func evenDimension(v int) int {
-	if v <= 2 {
-		return 2
-	}
-	if v%2 == 0 {
-		return v
-	}
-	return v - 1
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
