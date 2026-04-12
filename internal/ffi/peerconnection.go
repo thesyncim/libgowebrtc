@@ -867,8 +867,9 @@ func AudioTrackSourceCreate(pc uintptr, sampleRate, channels int) uintptr {
 	return result
 }
 
-// AudioTrackSourcePushFrame pushes audio samples to the audio track source.
-func AudioTrackSourcePushFrame(source uintptr, samples []int16, timestampUs int64) error {
+// AudioTrackSourcePushFrame pushes interleaved audio samples to the audio track
+// source. numSamples is the number of samples per channel.
+func AudioTrackSourcePushFrame(source uintptr, samples []int16, numSamples int, timestampUs int64) error {
 	if !libLoaded.Load() || shimAudioTrackSourcePushFrame == nil {
 		return ErrLibraryNotLoaded
 	}
@@ -876,7 +877,7 @@ func AudioTrackSourcePushFrame(source uintptr, samples []int16, timestampUs int6
 	params := shimAudioTrackSourcePushFrameParams{
 		Source:      source,
 		Samples:     Int16SlicePtr(samples),
-		NumSamples:  int32(len(samples)),
+		NumSamples:  int32(numSamples),
 		TimestampUs: timestampUs,
 	}
 	result := shimAudioTrackSourcePushFrame(uintptr(unsafe.Pointer(&params)))

@@ -287,7 +287,7 @@ func TestSourcePushAndEncoderHelpers(t *testing.T) {
 	defer AudioTrackSourceDestroy(audioSource)
 
 	audioSamples := make([]int16, 960*2)
-	if err := AudioTrackSourcePushFrame(audioSource, audioSamples, 20_000); err != nil {
+	if err := AudioTrackSourcePushFrame(audioSource, audioSamples, 960, 20_000); err != nil {
 		t.Fatalf("AudioTrackSourcePushFrame: %v", err)
 	}
 
@@ -354,6 +354,44 @@ func TestSourcePushAndEncoderHelpers(t *testing.T) {
 	}
 	if after := PacketizerSequenceNumber(packetizer); after <= before {
 		t.Fatalf("PacketizerSequenceNumber did not advance: before=%d after=%d", before, after)
+	}
+}
+
+func TestAudioTrackSourcePushFrameUsesPerChannelCount(t *testing.T) {
+	release := withFFITestSerialExecution(t)
+	defer release()
+
+	oldLoaded := libLoaded.Load()
+	libLoaded.Store(true)
+	defer libLoaded.Store(oldLoaded)
+
+	oldPush := shimAudioTrackSourcePushFrame
+	defer func() {
+		shimAudioTrackSourcePushFrame = oldPush
+	}()
+
+	var got shimAudioTrackSourcePushFrameParams
+	shimAudioTrackSourcePushFrame = func(params uintptr) int32 {
+		got = *(*shimAudioTrackSourcePushFrameParams)(unsafe.Pointer(params))
+		return 0
+	}
+
+	samples := make([]int16, 960*2)
+	if err := AudioTrackSourcePushFrame(123, samples, 960, 20_000); err != nil {
+		t.Fatalf("AudioTrackSourcePushFrame: %v", err)
+	}
+
+	if got.Source != 123 {
+		t.Fatalf("Source = %d, want 123", got.Source)
+	}
+	if got.NumSamples != 960 {
+		t.Fatalf("NumSamples = %d, want 960", got.NumSamples)
+	}
+	if got.Samples == 0 {
+		t.Fatal("Samples pointer was not forwarded")
+	}
+	if got.TimestampUs != 20_000 {
+		t.Fatalf("TimestampUs = %d, want 20000", got.TimestampUs)
 	}
 }
 

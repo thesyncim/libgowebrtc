@@ -203,7 +203,7 @@ public:
     }
 
     // Push audio data to all registered sinks
-    void PushAudio(const int16_t* samples, int num_samples, int64_t timestamp_us) {
+    void PushAudio(const int16_t* samples, int frames_per_channel, int64_t timestamp_us) {
         std::lock_guard<std::mutex> lock(mutex_);
 
         for (auto* sink : sinks_) {
@@ -212,7 +212,7 @@ public:
                 16,  // bits per sample
                 sample_rate_,
                 channels_,
-                num_samples
+                frames_per_channel
             );
         }
     }
@@ -341,18 +341,18 @@ SHIM_EXPORT int shim_audio_track_source_push_frame(
 
     auto source = params->source;
     const int16_t* samples = params->samples;
-    int num_samples = params->num_samples;
+    int frames_per_channel = params->num_samples;
     int64_t timestamp_us = params->timestamp_us;
 
     auto source_ref = source->source;
     auto* worker_thread = shim::GetWorkerThread();
     if (!worker_thread || worker_thread->IsCurrent()) {
-        source_ref->PushAudio(samples, num_samples, timestamp_us);
+        source_ref->PushAudio(samples, frames_per_channel, timestamp_us);
         return SHIM_OK;
     }
 
-    worker_thread->BlockingCall([source_ref, samples, num_samples, timestamp_us]() {
-        source_ref->PushAudio(samples, num_samples, timestamp_us);
+    worker_thread->BlockingCall([source_ref, samples, frames_per_channel, timestamp_us]() {
+        source_ref->PushAudio(samples, frames_per_channel, timestamp_us);
     });
     return SHIM_OK;
 }
