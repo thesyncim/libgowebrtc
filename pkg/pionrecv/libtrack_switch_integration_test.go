@@ -242,6 +242,7 @@ func mustCaptureLibTrackPackets(t testing.TB, codecType codec.Type, payloadType 
 		Height:   libTrackSmokeHeight,
 		Bitrate:  libTrackSmokeBitrate,
 		FPS:      libTrackSmokeFPS,
+		MTU:      1200,
 	})
 	if err != nil {
 		t.Fatalf("NewVideoTrack(%s): %v", codecType, err)

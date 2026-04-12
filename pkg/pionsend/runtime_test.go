@@ -37,6 +37,7 @@ func explicitAudioPublishConfig() AudioPublishConfig {
 		SampleRate:       48000,
 		Channels:         2,
 		Bitrate:          64000,
+		MTU:              1200,
 		PTime:            20 * time.Millisecond,
 		CodecPreferences: []webrtc.RTPCodecParameters{{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}}},
 	}
@@ -50,6 +51,7 @@ func explicitVideoPublishConfig() VideoPublishConfig {
 		Height:           720,
 		Bitrate:          700000,
 		FPS:              30,
+		MTU:              1200,
 		CodecPreferences: explicitVideoCodecPreferences(),
 	}
 }
@@ -125,6 +127,7 @@ func TestPublishedAudioDelegatesToTrack(t *testing.T) {
 		SampleRate: 48_000,
 		Channels:   2,
 		Bitrate:    64_000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("NewAudioTrack: %v", err)
@@ -185,6 +188,7 @@ func TestPublishedAudioRejectsMismatchedFrameShape(t *testing.T) {
 		SampleRate: 48_000,
 		Channels:   2,
 		Bitrate:    64_000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("NewAudioTrack: %v", err)
@@ -372,6 +376,7 @@ func TestPublishedVideoHelpers(t *testing.T) {
 		Height:   360,
 		Bitrate:  300_000,
 		FPS:      30,
+		MTU:      1200,
 	})
 	if err != nil {
 		t.Fatalf("NewVideoTrack(first): %v", err)
@@ -384,6 +389,7 @@ func TestPublishedVideoHelpers(t *testing.T) {
 		Height:   180,
 		Bitrate:  120_000,
 		FPS:      30,
+		MTU:      1200,
 	})
 	if err != nil {
 		t.Fatalf("NewVideoTrack(second): %v", err)
@@ -515,6 +521,7 @@ func TestPublishedVideoRejectsUnsupportedScaledInput(t *testing.T) {
 		Height:   360,
 		Bitrate:  300_000,
 		FPS:      30,
+		MTU:      1200,
 	})
 	if err != nil {
 		t.Fatalf("NewVideoTrack: %v", err)

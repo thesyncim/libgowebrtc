@@ -885,6 +885,7 @@ func newLibVideoTrack(trackID, streamID string, codecType codec.Type, width, hei
 		Height:   height,
 		Bitrate:  bitrate,
 		FPS:      float64(max(fps, 1)),
+		MTU:      1200,
 	})
 }
 

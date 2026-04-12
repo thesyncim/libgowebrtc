@@ -167,6 +167,7 @@ func TestVideoTrackBindWriteAndUnbind(t *testing.T) {
 		Height:  240,
 		Bitrate: 400_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		t.Fatalf("NewVideoTrack: %v", err)
@@ -225,6 +226,7 @@ func TestVideoTrackBindDoubleBindAndWriteRTPError(t *testing.T) {
 		Height:  240,
 		Bitrate: 400_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		t.Fatalf("NewVideoTrack: %v", err)
@@ -266,6 +268,7 @@ func TestVideoTrackWriteFrameRejectsUnsupportedScaledInput(t *testing.T) {
 		Height:  360,
 		Bitrate: 400_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		t.Fatalf("NewVideoTrack: %v", err)
@@ -301,6 +304,7 @@ func TestVideoTrackBindSelectsPreferredCodecFromPreferences(t *testing.T) {
 		Height:  240,
 		Bitrate: 400_000,
 		FPS:     30,
+		MTU:     1200,
 		CodecPreferences: []webrtc.RTPCodecParameters{
 			{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
@@ -372,6 +376,7 @@ func TestVideoTrackSetParametersAndAdaptationMath(t *testing.T) {
 		Height:       480,
 		Bitrate:      1_000_000,
 		FPS:          30,
+		MTU:          1200,
 		MinBitrate:   150_000,
 		MaxBitrate:   2_000_000,
 		MinWidth:     160,
@@ -437,6 +442,7 @@ func TestAudioTrackBindWriteAndUnbind(t *testing.T) {
 		SampleRate: 48_000,
 		Channels:   2,
 		Bitrate:    64_000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("NewAudioTrack: %v", err)

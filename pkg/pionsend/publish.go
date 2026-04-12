@@ -100,7 +100,7 @@ func PublishVideo(pc *webrtc.PeerConnection, cfg VideoPublishConfig) (PublishedV
 	if pc == nil {
 		return nil, ErrNilPeerConnection
 	}
-	if cfg.TrackID == "" || cfg.StreamID == "" || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Bitrate == 0 || cfg.FPS <= 0 || len(cfg.CodecPreferences) == 0 {
+	if cfg.TrackID == "" || cfg.StreamID == "" || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Bitrate == 0 || cfg.FPS <= 0 || cfg.MTU == 0 || len(cfg.CodecPreferences) == 0 {
 		return nil, ErrInvalidConfig
 	}
 	selectedCodec, ok := codecFromPreferences(cfg.CodecPreferences)

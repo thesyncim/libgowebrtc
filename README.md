@@ -339,6 +339,7 @@ videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
     Width:   1280,
     Height:  720,
     Bitrate: 2_000_000,
+    MTU:     1200,
 })
 
 // Add to Pion - seamless interop!
@@ -377,6 +378,7 @@ videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
     Height:           720,
     Bitrate:          2_000_000,
     FPS:              30,
+    MTU:              1200,
     CodecPreferences: preset.SupportedOnly().VideoCodecs(),
 })
 

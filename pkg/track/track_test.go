@@ -25,6 +25,7 @@ func TestNewVideoTrack(t *testing.T) {
 				Width:    1920,
 				Height:   1080,
 				Bitrate:  4_000_000,
+				MTU:      1200,
 			},
 			expectErr: false,
 		},
@@ -36,6 +37,7 @@ func TestNewVideoTrack(t *testing.T) {
 				Width:   1280,
 				Height:  720,
 				Bitrate: 2_000_000,
+				MTU:     1200,
 			},
 			expectErr: false,
 		},
@@ -47,6 +49,7 @@ func TestNewVideoTrack(t *testing.T) {
 				Width:   1920,
 				Height:  1080,
 				Bitrate: 3_000_000,
+				MTU:     1200,
 			},
 			expectErr: false,
 		},
@@ -58,12 +61,25 @@ func TestNewVideoTrack(t *testing.T) {
 				Width:   1920,
 				Height:  1080,
 				Bitrate: 2_500_000,
+				MTU:     1200,
 			},
 			expectErr: false,
 		},
 		{
 			name: "empty ID",
 			cfg: VideoTrackConfig{
+				Codec:   codec.H264,
+				Width:   1920,
+				Height:  1080,
+				Bitrate: 4_000_000,
+				MTU:     1200,
+			},
+			expectErr: true,
+		},
+		{
+			name: "missing MTU",
+			cfg: VideoTrackConfig{
+				ID:      "video-4",
 				Codec:   codec.H264,
 				Width:   1920,
 				Height:  1080,
@@ -97,12 +113,13 @@ func TestNewVideoTrack(t *testing.T) {
 	}
 }
 
-func TestVideoTrackDefaults(t *testing.T) {
+func TestVideoTrackConfigPreserved(t *testing.T) {
 	track, err := NewVideoTrack(VideoTrackConfig{
 		ID:     "video-0",
 		Codec:  codec.H264,
 		Width:  1920,
 		Height: 1080,
+		MTU:    1200,
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -117,6 +134,9 @@ func TestVideoTrackDefaults(t *testing.T) {
 	if track.config.MinFramerate != 0 {
 		t.Errorf("MinFramerate = %v, want 0 unless explicitly configured", track.config.MinFramerate)
 	}
+	if track.config.MTU != 1200 {
+		t.Errorf("MTU = %v, want 1200", track.config.MTU)
+	}
 }
 
 func TestVideoTrackProperties(t *testing.T) {
@@ -126,6 +146,7 @@ func TestVideoTrackProperties(t *testing.T) {
 		Codec:    codec.VP9,
 		Width:    1920,
 		Height:   1080,
+		MTU:      1200,
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -159,6 +180,7 @@ func TestVideoTrackCodecPreferencesDoNotOverrideExplicitCodecAtConstruction(t *t
 		Codec:            codec.H264,
 		Width:            1280,
 		Height:           720,
+		MTU:              1200,
 		CodecPreferences: input,
 	})
 	if err != nil {
@@ -181,6 +203,7 @@ func TestVideoTrackNotBound(t *testing.T) {
 		Codec:  codec.H264,
 		Width:  1920,
 		Height: 1080,
+		MTU:    1200,
 	})
 
 	// WriteFrame should fail when not bound
@@ -202,6 +225,7 @@ func TestVideoTrackClose(t *testing.T) {
 		Codec:  codec.H264,
 		Width:  1920,
 		Height: 1080,
+		MTU:    1200,
 	})
 
 	// Close should succeed
@@ -230,6 +254,7 @@ func TestVideoTrackSetBitrateUnbound(t *testing.T) {
 		Width:   1920,
 		Height:  1080,
 		Bitrate: 2_000_000,
+		MTU:     1200,
 	})
 
 	// SetBitrate should succeed even when unbound (stores for later)
@@ -246,6 +271,7 @@ func TestVideoTrackSetFramerateUnbound(t *testing.T) {
 		Width:  1920,
 		Height: 1080,
 		FPS:    30,
+		MTU:    1200,
 	})
 
 	err := track.SetFramerate(60)
@@ -268,13 +294,25 @@ func TestNewAudioTrack(t *testing.T) {
 				SampleRate: 48000,
 				Channels:   2,
 				Bitrate:    64000,
+				MTU:        1200,
 			},
 			expectErr: false,
 		},
 		{
 			name: "missing audio shape",
 			cfg: AudioTrackConfig{
-				ID: "audio-1",
+				ID:  "audio-1",
+				MTU: 1200,
+			},
+			expectErr: true,
+		},
+		{
+			name: "missing MTU",
+			cfg: AudioTrackConfig{
+				ID:         "audio-2",
+				SampleRate: 48000,
+				Channels:   2,
+				Bitrate:    64000,
 			},
 			expectErr: true,
 		},
@@ -282,6 +320,7 @@ func TestNewAudioTrack(t *testing.T) {
 			name: "empty ID",
 			cfg: AudioTrackConfig{
 				SampleRate: 48000,
+				MTU:        1200,
 			},
 			expectErr: true,
 		},
@@ -307,12 +346,13 @@ func TestNewAudioTrack(t *testing.T) {
 	}
 }
 
-func TestAudioTrackDefaults(t *testing.T) {
+func TestAudioTrackConfigPreserved(t *testing.T) {
 	track, err := NewAudioTrack(AudioTrackConfig{
 		ID:         "audio-0",
 		SampleRate: 48_000,
 		Channels:   2,
 		Bitrate:    64_000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -331,7 +371,7 @@ func TestAudioTrackDefaults(t *testing.T) {
 		t.Errorf("Bitrate = %v, want 64000", track.config.Bitrate)
 	}
 	if track.config.MTU != 1200 {
-		t.Errorf("MTU should default to 1200, got %v", track.config.MTU)
+		t.Errorf("MTU = %v, want 1200", track.config.MTU)
 	}
 }
 
@@ -342,6 +382,7 @@ func TestAudioTrackProperties(t *testing.T) {
 		SampleRate: 48_000,
 		Channels:   2,
 		Bitrate:    64_000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -367,6 +408,7 @@ func TestAudioTrackNotBound(t *testing.T) {
 		SampleRate: 48_000,
 		Channels:   2,
 		Bitrate:    64_000,
+		MTU:        1200,
 	})
 
 	err := track.WriteFrame(nil)
@@ -386,6 +428,7 @@ func TestAudioTrackClose(t *testing.T) {
 		SampleRate: 48_000,
 		Channels:   2,
 		Bitrate:    64_000,
+		MTU:        1200,
 	})
 
 	err := track.Close()
@@ -412,6 +455,7 @@ func TestAudioTrackSetBitrateUnbound(t *testing.T) {
 		SampleRate: 48_000,
 		Channels:   2,
 		Bitrate:    64_000,
+		MTU:        1200,
 	})
 
 	err := track.SetBitrate(128000)
@@ -428,6 +472,7 @@ func TestVideoTrackSetParameters(t *testing.T) {
 		Height:  1080,
 		Bitrate: 2_000_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create track: %v", err)
@@ -487,6 +532,7 @@ func TestVideoTrackAutoAdaptationRequiresExplicitOptIn(t *testing.T) {
 		Height:  720,
 		Bitrate: 2_000_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create track: %v", err)
@@ -520,6 +566,7 @@ func TestVideoTrackAutoAdaptationRequiresExplicitOptIn(t *testing.T) {
 		Height:         720,
 		Bitrate:        2_000_000,
 		FPS:            30,
+		MTU:            1200,
 		AutoKeyframe:   true,
 		AutoBitrate:    true,
 		AutoFramerate:  true,
@@ -550,6 +597,7 @@ func TestVideoTrackHandleRTCPFeedback(t *testing.T) {
 		Codec:        codec.H264,
 		Width:        1280,
 		Height:       720,
+		MTU:          1200,
 		AutoKeyframe: true,
 	})
 	if err != nil {
@@ -579,6 +627,7 @@ func TestVideoTrackSetBWESource(t *testing.T) {
 		Codec:       codec.H264,
 		Width:       1280,
 		Height:      720,
+		MTU:         1200,
 		AutoBitrate: true,
 	})
 	if err != nil {
@@ -607,6 +656,7 @@ func TestVideoTrackCloseImmediatelyAfterSetBWESource(t *testing.T) {
 			Codec:       codec.H264,
 			Width:       1280,
 			Height:      720,
+			MTU:         1200,
 			AutoBitrate: true,
 		})
 		if err != nil {
@@ -629,6 +679,7 @@ func TestVideoTrackSetBWESourceStartStopRepeatedly(t *testing.T) {
 		Codec:          codec.H264,
 		Width:          1280,
 		Height:         720,
+		MTU:            1200,
 		AutoBitrate:    true,
 		AutoFramerate:  true,
 		AutoResolution: true,
