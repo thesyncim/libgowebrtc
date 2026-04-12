@@ -148,6 +148,9 @@ For Linux, this is the recommended local build path.
 The script pins WebRTC to branch-head `7390` revision
 `d2eaa5570fc9959f8dbde32912a16366b8ee75f4` and builds Linux with
 `use_custom_libcxx=false` so the resulting archive links cleanly with the shim.
+Linux source builds also enable the X11 Ozone backend explicitly so desktop
+capture paths compile with X11 support when the X11 development packages are
+installed.
 
 ### Option 3: Community Pre-built Binaries
 
