@@ -1333,7 +1333,7 @@ func generateID() string {
 	return "libwebrtc-" + strconv.FormatUint(idCounter.Add(1), 10)
 }
 
-func ptsFromTimestampUs(timestampUs, clockRate int64) uint32 {
+func ptsFromTimestampUs(timestampUs int64, clockRate int64) uint32 {
 	if timestampUs <= 0 || clockRate <= 0 {
 		return 0
 	}
