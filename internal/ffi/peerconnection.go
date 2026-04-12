@@ -874,16 +874,20 @@ func AudioTrackSourcePushFrame(source uintptr, samples []int16, numSamples int, 
 		return ErrLibraryNotLoaded
 	}
 
-	params := shimAudioTrackSourcePushFrameParams{
+	params := newAudioTrackSourcePushFrameParams(source, samples, numSamples, timestampUs)
+	result := shimAudioTrackSourcePushFrame(uintptr(unsafe.Pointer(&params)))
+	runtime.KeepAlive(samples)
+	runtime.KeepAlive(&params)
+	return ShimError(result)
+}
+
+func newAudioTrackSourcePushFrameParams(source uintptr, samples []int16, numSamples int, timestampUs int64) shimAudioTrackSourcePushFrameParams {
+	return shimAudioTrackSourcePushFrameParams{
 		Source:      source,
 		Samples:     Int16SlicePtr(samples),
 		NumSamples:  int32(numSamples),
 		TimestampUs: timestampUs,
 	}
-	result := shimAudioTrackSourcePushFrame(uintptr(unsafe.Pointer(&params)))
-	runtime.KeepAlive(samples)
-	runtime.KeepAlive(&params)
-	return ShimError(result)
 }
 
 // PeerConnectionAddAudioTrackFromSource adds an audio track using a source.

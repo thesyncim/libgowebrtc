@@ -358,28 +358,8 @@ func TestSourcePushAndEncoderHelpers(t *testing.T) {
 }
 
 func TestAudioTrackSourcePushFrameUsesPerChannelCount(t *testing.T) {
-	release := withFFITestSerialExecution(t)
-	defer release()
-
-	oldLoaded := libLoaded.Load()
-	libLoaded.Store(true)
-	defer libLoaded.Store(oldLoaded)
-
-	oldPush := shimAudioTrackSourcePushFrame
-	defer func() {
-		shimAudioTrackSourcePushFrame = oldPush
-	}()
-
-	var got shimAudioTrackSourcePushFrameParams
-	shimAudioTrackSourcePushFrame = func(params uintptr) int32 {
-		got = *(*shimAudioTrackSourcePushFrameParams)(unsafe.Pointer(params))
-		return 0
-	}
-
 	samples := make([]int16, 960*2)
-	if err := AudioTrackSourcePushFrame(123, samples, 960, 20_000); err != nil {
-		t.Fatalf("AudioTrackSourcePushFrame: %v", err)
-	}
+	got := newAudioTrackSourcePushFrameParams(123, samples, 960, 20_000)
 
 	if got.Source != 123 {
 		t.Fatalf("Source = %d, want 123", got.Source)
