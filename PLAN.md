@@ -763,6 +763,7 @@ videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
     Width:   1280,
     Height:  720,
     Bitrate: 2_000_000,
+    MTU:     1200,
 })
 defer videoTrack.Close()
 
@@ -775,6 +776,7 @@ audioTrack, _ := track.NewAudioTrack(track.AudioTrackConfig{
     SampleRate: 48000,
     Channels:   2,
     Bitrate:    64000,
+    MTU:        1200,
 })
 defer audioTrack.Close()
 

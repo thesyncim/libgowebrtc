@@ -30,6 +30,7 @@ func TestAudioTrackRoundtrip(t *testing.T) {
 		SampleRate: 48000,
 		Channels:   2,
 		Bitrate:    64000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create audio track: %v", err)
@@ -165,6 +166,7 @@ func TestAudioTrackWithPionIntegration(t *testing.T) {
 		SampleRate: 48000,
 		Channels:   2,
 		Bitrate:    64000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create audio track: %v", err)
@@ -210,6 +212,7 @@ func TestWriteAudioFrameToTrack(t *testing.T) {
 		SampleRate: 48000,
 		Channels:   2,
 		Bitrate:    64000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create audio track: %v", err)

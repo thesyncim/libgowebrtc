@@ -40,6 +40,7 @@ func TestVideoTrackRoundtrip(t *testing.T) {
 		Height:   480,
 		Bitrate:  1_000_000,
 		FPS:      30,
+		MTU:      1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
@@ -252,6 +253,7 @@ func TestVideoTrackWithEncodedVideoTrack(t *testing.T) {
 		Height:   720,
 		Bitrate:  2_000_000,
 		FPS:      30,
+		MTU:      1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
@@ -302,6 +304,7 @@ func TestWriteFrameToTrack(t *testing.T) {
 		Height:   480,
 		Bitrate:  1_000_000,
 		FPS:      30,
+		MTU:      1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)

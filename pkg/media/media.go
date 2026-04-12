@@ -17,6 +17,8 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
+const defaultTrackMTU uint16 = 1200
+
 // Errors
 var (
 	ErrInvalidConstraints  = errors.New("invalid constraints")
@@ -738,6 +740,7 @@ func buildVideoTrackConfig(constraints VideoConstraints, settings VideoTrackSett
 		Height:         settings.Height,
 		Bitrate:        resolved.Bitrate,
 		FPS:            settings.FrameRate,
+		MTU:            defaultTrackMTU,
 		AutoKeyframe:   true,
 		AutoBitrate:    true,
 		AutoFramerate:  true,
@@ -769,6 +772,7 @@ func buildAudioTrackConfig(constraints AudioConstraints, settings AudioTrackSett
 		SampleRate: settings.SampleRate,
 		Channels:   settings.ChannelCount,
 		Bitrate:    resolved.Bitrate,
+		MTU:        defaultTrackMTU,
 	}
 	if len(resolved.CodecPreferences) > 0 {
 		cfg.CodecPreferences = append([]webrtc.RTPCodecParameters(nil), resolved.CodecPreferences...)

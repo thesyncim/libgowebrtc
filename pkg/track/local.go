@@ -48,7 +48,7 @@ type VideoTrackConfig struct {
 	Height   int        // Height is the source frame height in pixels.
 	Bitrate  uint32     // Bitrate is the initial encoder target bitrate in bps.
 	FPS      float64    // FPS is the initial encoder target frame rate.
-	MTU      uint16     // RTP MTU (default 1200)
+	MTU      uint16     // MTU is the RTP packetization budget in bytes and must be set explicitly.
 
 	// Auto adaptation is opt-in so helpers can choose browser-like defaults
 	// explicitly instead of the base constructor guessing from zero values.
@@ -147,12 +147,13 @@ type VideoTrack struct {
 
 // NewVideoTrack creates a new video track backed by libwebrtc encoder.
 // Auto adaptation stays disabled unless the caller opts in explicitly.
+// MTU must be set to a positive value by the caller.
 func NewVideoTrack(cfg VideoTrackConfig) (*VideoTrack, error) {
 	if cfg.ID == "" {
 		return nil, ErrInvalidConfig
 	}
 	if cfg.MTU == 0 {
-		cfg.MTU = 1200
+		return nil, ErrInvalidConfig
 	}
 
 	t := &VideoTrack{
@@ -910,7 +911,7 @@ type AudioTrackConfig struct {
 	SampleRate int    // SampleRate is the source PCM sample rate in Hz.
 	Channels   int    // Channels is the number of PCM channels in source frames.
 	Bitrate    uint32 // Bitrate is the initial Opus target bitrate in bps.
-	MTU        uint16 // MTU is the RTP packet size budget used during packetization.
+	MTU        uint16 // MTU is the RTP packet size budget used during packetization and must be set explicitly.
 
 	// Optional codec preferences used during TrackLocal binding.
 	CodecPreferences []webrtc.RTPCodecParameters
@@ -945,6 +946,7 @@ type AudioTrack struct {
 }
 
 // NewAudioTrack creates a new audio track backed by libwebrtc Opus encoder.
+// MTU must be set to a positive value by the caller.
 func NewAudioTrack(cfg AudioTrackConfig) (*AudioTrack, error) {
 	if cfg.ID == "" {
 		return nil, ErrInvalidConfig
@@ -953,7 +955,7 @@ func NewAudioTrack(cfg AudioTrackConfig) (*AudioTrack, error) {
 		return nil, ErrInvalidConfig
 	}
 	if cfg.MTU == 0 {
-		cfg.MTU = 1200
+		return nil, ErrInvalidConfig
 	}
 
 	return &AudioTrack{

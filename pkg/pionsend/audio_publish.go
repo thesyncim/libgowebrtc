@@ -48,7 +48,7 @@ func PublishAudio(pc *webrtc.PeerConnection, cfg AudioPublishConfig) (PublishedA
 	if pc == nil {
 		return nil, ErrNilPeerConnection
 	}
-	if cfg.TrackID == "" || cfg.StreamID == "" || cfg.SampleRate <= 0 || cfg.Channels <= 0 || cfg.Bitrate == 0 || cfg.PTime <= 0 || len(cfg.CodecPreferences) == 0 {
+	if cfg.TrackID == "" || cfg.StreamID == "" || cfg.SampleRate <= 0 || cfg.Channels <= 0 || cfg.Bitrate == 0 || cfg.PTime <= 0 || cfg.MTU == 0 || len(cfg.CodecPreferences) == 0 {
 		return nil, ErrInvalidConfig
 	}
 	samplesPerFrame, ok := samplesForPTime(cfg.SampleRate, cfg.PTime)

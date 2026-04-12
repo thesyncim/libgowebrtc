@@ -21,6 +21,7 @@ func TestVideoTrackFullPipeline(t *testing.T) {
 		Height:  480,
 		Bitrate: 1_000_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
@@ -59,6 +60,7 @@ func TestAudioTrackFullPipeline(t *testing.T) {
 		SampleRate: 48000,
 		Channels:   2,
 		Bitrate:    64000,
+		MTU:        1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create audio track: %v", err)
@@ -92,6 +94,7 @@ func TestVideoTrackBitrateChange(t *testing.T) {
 		Height:  720,
 		Bitrate: 2_000_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
@@ -124,6 +127,7 @@ func TestVideoTrackKeyframeRequest(t *testing.T) {
 		Height:  480,
 		Bitrate: 1_000_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create video track: %v", err)
@@ -171,6 +175,7 @@ func TestMultipleCodecs(t *testing.T) {
 				Height:  480,
 				Bitrate: 1_000_000,
 				FPS:     30,
+				MTU:     1200,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create %s track: %v", tc.name, err)
@@ -204,6 +209,7 @@ func BenchmarkVideoTrackWrite(b *testing.B) {
 		Height:  720,
 		Bitrate: 2_000_000,
 		FPS:     30,
+		MTU:     1200,
 	})
 	if err != nil {
 		b.Fatalf("Failed to create video track: %v", err)
