@@ -64,29 +64,10 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		t.Fatal("timed out waiting for receiver audio track")
 	}
 
-	startPump := func() (chan struct{}, chan error) {
-		stop := make(chan struct{})
-		done := make(chan error, 1)
-		go pumpAudioFrames(track, audioSampleRate, audioChannels, audioSamples, stop, done)
-		return stop, done
-	}
-	stopPump := func(stop chan struct{}, done chan error) {
-		close(stop)
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Fatalf("pumpAudioFrames: %v", err)
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for audio pump shutdown")
-		}
-	}
-
-	var pumpStop chan struct{}
-	var pumpDone chan error
+	pump := newAudioPump(track, audioSampleRate, audioChannels, audioSamples)
 	defer func() {
-		if pumpStop != nil {
-			stopPump(pumpStop, pumpDone)
+		if err := pump.stop(2 * time.Second); err != nil {
+			t.Fatalf("audioPump.stop: %v", err)
 		}
 	}()
 
@@ -103,7 +84,9 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 		t.Fatalf("waitForAudioSenderSettle(initial): %v", err)
 	}
 
-	pumpStop, pumpDone = startPump()
+	if err := pump.resume(ctx); err != nil {
+		t.Fatalf("audioPump.resume(initial): %v", err)
+	}
 	if err := session.WaitForAudioContinuous(ctx, "audio-codec-switch"); err != nil {
 		t.Fatalf("WaitForAudioContinuous(initial): %v", err)
 	}
@@ -123,8 +106,9 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 				Name:   "audio-codec-switch",
 				Action: validate.ScenarioActionCodecRenegotiation,
 				Callback: func(stepCtx context.Context, stepSession *validate.Session) error {
-					stopPump(pumpStop, pumpDone)
-					pumpStop, pumpDone = nil, nil
+					if err := pump.pause(stepCtx); err != nil {
+						return err
+					}
 					if err := waitForAudioSenderSettle(stepCtx, 200*time.Millisecond); err != nil {
 						return err
 					}
@@ -143,8 +127,7 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 						return err
 					}
 
-					pumpStop, pumpDone = startPump()
-					return nil
+					return pump.resume(stepCtx)
 				},
 				Expect: validate.ScenarioExpectation{
 					Within:            4 * time.Second,
@@ -184,24 +167,89 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	}
 }
 
-func pumpAudioFrames(track *pc.Track, sampleRate, channels, numSamples int, stop <-chan struct{}, done chan<- error) {
+type audioPumpCommand struct {
+	active bool
+	ack    chan struct{}
+}
+
+type audioPump struct {
+	stopCh chan struct{}
+	done   chan error
+	cmd    chan audioPumpCommand
+}
+
+func newAudioPump(track *pc.Track, sampleRate, channels, numSamples int) *audioPump {
+	p := &audioPump{
+		stopCh: make(chan struct{}),
+		done:   make(chan error, 1),
+		cmd:    make(chan audioPumpCommand),
+	}
+	go p.run(track, sampleRate, channels, numSamples)
+	return p
+}
+
+func (p *audioPump) run(track *pc.Track, sampleRate, channels, numSamples int) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 
 	var frameIndex uint32
+	active := false
 	for {
 		select {
-		case <-stop:
-			done <- nil
+		case <-p.stopCh:
+			p.done <- nil
 			return
+		case cmd := <-p.cmd:
+			active = cmd.active
+			close(cmd.ack)
 		case <-ticker.C:
+			if !active {
+				continue
+			}
 			frame := CreateTestAudioFrame(sampleRate, channels, numSamples, frameIndex*uint32(numSamples))
 			if err := track.WriteAudioFrame(frame); err != nil {
-				done <- err
+				p.done <- err
 				return
 			}
 			frameIndex++
 		}
+	}
+}
+
+func (p *audioPump) pause(ctx context.Context) error {
+	return p.setActive(ctx, false)
+}
+
+func (p *audioPump) resume(ctx context.Context) error {
+	return p.setActive(ctx, true)
+}
+
+func (p *audioPump) setActive(ctx context.Context, active bool) error {
+	ack := make(chan struct{})
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case p.cmd <- audioPumpCommand{active: active, ack: ack}:
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ack:
+		return nil
+	}
+}
+
+func (p *audioPump) stop(timeout time.Duration) error {
+	close(p.stopCh)
+	select {
+	case err := <-p.done:
+		return err
+	case <-time.After(timeout):
+		return errors.New("timed out waiting for audio pump shutdown")
 	}
 }
 
