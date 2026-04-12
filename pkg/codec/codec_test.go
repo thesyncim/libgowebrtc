@@ -189,6 +189,9 @@ func TestDefaultConfigs(t *testing.T) {
 		if !cfg.LowDelay {
 			t.Error("LowDelay should be true")
 		}
+		if cfg.PreferHW {
+			t.Error("PreferHW should default to false")
+		}
 	})
 
 	t.Run("DefaultVP9Config", func(t *testing.T) {
@@ -205,6 +208,22 @@ func TestDefaultConfigs(t *testing.T) {
 		if cfg.Profile != VP9Profile0 {
 			t.Errorf("Profile = %v, want %v", cfg.Profile, VP9Profile0)
 		}
+		if cfg.PreferHW {
+			t.Error("PreferHW should default to false")
+		}
+	})
+
+	t.Run("DefaultVP8Config", func(t *testing.T) {
+		cfg := DefaultVP8Config(1280, 720)
+		if cfg.Width != 1280 || cfg.Height != 720 {
+			t.Errorf("Resolution = %dx%d, want 1280x720", cfg.Width, cfg.Height)
+		}
+		if cfg.Bitrate == 0 {
+			t.Error("Bitrate should be auto-calculated")
+		}
+		if cfg.PreferHW {
+			t.Error("PreferHW should default to false")
+		}
 	})
 
 	t.Run("DefaultAV1Config", func(t *testing.T) {
@@ -214,6 +233,9 @@ func TestDefaultConfigs(t *testing.T) {
 		}
 		if cfg.Speed != 8 {
 			t.Errorf("Speed = %v, want 8 (fast preset for AV1)", cfg.Speed)
+		}
+		if cfg.PreferHW {
+			t.Error("PreferHW should default to false")
 		}
 	})
 

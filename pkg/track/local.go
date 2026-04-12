@@ -780,42 +780,61 @@ func (t *VideoTrack) Close() error {
 func (t *VideoTrack) createEncoder() (encoder.VideoEncoder, error) {
 	switch t.codec {
 	case codec.H264:
-		cfg := codec.DefaultH264Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
+		cfg := codec.H264Config{
+			Width:       t.config.Width,
+			Height:      t.config.Height,
+			Bitrate:     t.config.Bitrate,
+			FPS:         t.config.FPS,
+			KeyInterval: 0,
+			RateControl: codec.RateControlVBR,
+			Profile:     codec.H264ProfileConstrainedBase,
+			LowDelay:    true,
+			PreferHW:    false,
 		}
 		return encoder.NewH264Encoder(cfg)
 	case codec.VP8:
-		cfg := codec.DefaultVP8Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
-		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
+		cfg := codec.VP8Config{
+			Width:          t.config.Width,
+			Height:         t.config.Height,
+			Bitrate:        t.config.Bitrate,
+			FPS:            t.config.FPS,
+			KeyInterval:    0,
+			RateControl:    codec.RateControlVBR,
+			Deadline:       2,
+			LowDelay:       true,
+			ErrorResilient: true,
+			PreferHW:       false,
 		}
 		return encoder.NewVP8Encoder(cfg)
 	case codec.VP9:
-		cfg := codec.DefaultVP9Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
+		cfg := codec.VP9Config{
+			Width:       t.config.Width,
+			Height:      t.config.Height,
+			Bitrate:     t.config.Bitrate,
+			FPS:         t.config.FPS,
+			KeyInterval: 0,
+			RateControl: codec.RateControlVBR,
+			Profile:     codec.VP9Profile0,
+			Speed:       6,
+			LowDelay:    true,
+			PreferHW:    false,
+			SVC:         t.config.SVC,
 		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		cfg.SVC = t.config.SVC
 		return encoder.NewVP9Encoder(cfg)
 	case codec.AV1:
-		cfg := codec.DefaultAV1Config(t.config.Width, t.config.Height)
-		if t.config.Bitrate != 0 {
-			cfg.Bitrate = t.config.Bitrate
+		cfg := codec.AV1Config{
+			Width:       t.config.Width,
+			Height:      t.config.Height,
+			Bitrate:     t.config.Bitrate,
+			FPS:         t.config.FPS,
+			KeyInterval: 0,
+			RateControl: codec.RateControlVBR,
+			Profile:     codec.AV1ProfileMain,
+			Speed:       8,
+			LowDelay:    true,
+			PreferHW:    false,
+			SVC:         t.config.SVC,
 		}
-		if t.config.FPS != 0 {
-			cfg.FPS = t.config.FPS
-		}
-		cfg.SVC = t.config.SVC
 		return encoder.NewAV1Encoder(cfg)
 	default:
 		return nil, ErrInvalidConfig
