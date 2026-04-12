@@ -1080,6 +1080,20 @@ func selectDisplayTarget(screens []ScreenInfo, request DisplayVideoConstraints) 
 				return screen, DisplaySurfaceMonitor, nil
 			}
 		}
+		onlyWindows := true
+		for _, screen := range screens {
+			if !screen.IsWindow {
+				onlyWindows = false
+				break
+			}
+		}
+		if onlyWindows {
+			return ScreenInfo{
+				ID:       request.ScreenID,
+				Title:    fmt.Sprintf("screen-%d", request.ScreenID),
+				IsWindow: false,
+			}, DisplaySurfaceMonitor, nil
+		}
 		return ScreenInfo{}, "", ErrDeviceNotFound
 	}
 
@@ -1425,6 +1439,7 @@ func (t *videoStreamTrack) startVideoCapture() error {
 		videoFrame := &frame.VideoFrame{
 			Width:  int(captured.Width),
 			Height: int(captured.Height),
+			PTS:    ptsFromTimestampUs(captured.TimestampUs, 90000),
 			Format: frame.PixelFormatI420,
 			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
 			Stride: []int{int(captured.YStride), int(captured.UStride), int(captured.VStride)},
@@ -1470,6 +1485,7 @@ func (t *videoStreamTrack) startScreenCapture() error {
 		videoFrame := &frame.VideoFrame{
 			Width:  int(captured.Width),
 			Height: int(captured.Height),
+			PTS:    ptsFromTimestampUs(captured.TimestampUs, 90000),
 			Format: frame.PixelFormatI420,
 			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
 			Stride: []int{int(captured.YStride), int(captured.UStride), int(captured.VStride)},
@@ -1603,6 +1619,7 @@ func (t *audioStreamTrack) startAudioCapture() error {
 			int(captured.SampleRate),
 			int(captured.NumChannels),
 		)
+		audioFrame.PTS = ptsFromTimestampUs(captured.TimestampUs, int64(captured.SampleRate))
 		_ = t.track.WriteFrame(audioFrame)
 	})
 	if err != nil {
@@ -1620,4 +1637,11 @@ var idCounter atomic.Uint64
 
 func generateID() string {
 	return "libwebrtc-" + strconv.FormatUint(idCounter.Add(1), 10)
+}
+
+func ptsFromTimestampUs(timestampUs int64, clockRate int64) uint32 {
+	if timestampUs <= 0 || clockRate <= 0 {
+		return 0
+	}
+	return uint32((timestampUs * clockRate) / 1_000_000)
 }
