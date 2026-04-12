@@ -116,7 +116,7 @@ func (e *av1Encoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyframe
 }
 
 func (e *av1Encoder) MaxEncodedSize() int {
-	return e.config.Width * e.config.Height * 3 / 2
+	return maxVideoEncodedSize(e.config.Width, e.config.Height)
 }
 
 func (e *av1Encoder) SetBitrate(bps uint32) error {
