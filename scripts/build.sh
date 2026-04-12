@@ -148,7 +148,10 @@ Environment:
   LIBWEBRTC_SOURCE_BUILD
                       auto (default), true, or false. Linux defaults to source
                       builds because the upstream prebuilt archive uses an
-                      incompatible Chromium libc++ runtime.
+                      incompatible Chromium libc++ runtime. Linux source builds
+                      also enable the X11/Ozone desktop-capture path and need
+                      the corresponding X11 development packages when building
+                      outside the Docker validator.
   MAX_GLIBC_VERSION   Maximum allowed GLIBC symbol version for Linux release
                       artifacts (default: $MAX_GLIBC_VERSION)
 
@@ -157,6 +160,8 @@ Examples:
   ./scripts/build.sh --target darwin_amd64  # Cross-compile for Intel Mac
   ./scripts/build.sh --target linux_386     # Build for 32-bit Linux x86
   ./scripts/build.sh --target linux_arm     # Build for 32-bit Linux ARM
+  ./scripts/build.sh --target linux_amd64 --source-libwebrtc
+                                            # Force an X11-enabled Linux source build
   ./scripts/build.sh --source-libwebrtc     # Force a pinned libwebrtc source build
   ./scripts/build.sh --release              # Create release tarball
 

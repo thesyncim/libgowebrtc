@@ -47,6 +47,7 @@ Usage: ./scripts/validate_linux_docker.sh [OPTIONS]
 
 Options:
   --target PLATFORM  linux_amd64 (default), linux_386, linux_arm64, or linux_arm
+                     Docker validation images include the X11 capture development deps
   --go VERSION       Go toolchain version for the validator image (default: $GO_VERSION)
   --download-only    Validate the published shim artifact instead of building it
   --artifact-dir DIR Copy the built shim and public headers to DIR after validation

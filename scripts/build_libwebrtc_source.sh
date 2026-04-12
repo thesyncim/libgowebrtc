@@ -419,22 +419,39 @@ maybe_install_linux_build_deps() {
     log_step "Installing WebRTC Linux build dependencies"
     "$install_script" --no-prompt --no-chromeos-fonts
 
-    if [[ "$TARGET_PLATFORM" != "linux_386" ]]; then
-        return
-    fi
-
     if ! command -v apt-get >/dev/null 2>&1; then
-        log_warn "linux_386 source builds need a 32-bit multilib toolchain; install gcc-multilib/g++-multilib manually on this distro"
+        log_warn "Skipping explicit Linux X11 build dependency install on this distro; ensure X11 capture dev packages are present manually"
         return
     fi
 
     local sudo_cmd=()
     if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
         if ! command -v sudo >/dev/null 2>&1; then
-            log_error "linux_386 source builds need sudo or root to install multilib packages"
+            log_error "Linux source builds need sudo or root to install explicit X11 capture build dependencies"
             exit 1
         fi
         sudo_cmd=(sudo)
+    fi
+
+    log_step "Installing explicit Linux X11 capture build dependencies"
+    "${sudo_cmd[@]}" apt-get update
+    "${sudo_cmd[@]}" apt-get install -y \
+        libasound2-dev \
+        libdrm-dev \
+        libgbm-dev \
+        libglib2.0-dev \
+        libpulse-dev \
+        libx11-dev \
+        libxcomposite-dev \
+        libxdamage-dev \
+        libxext-dev \
+        libxfixes-dev \
+        libxrandr-dev \
+        libxrender-dev \
+        libxtst-dev
+
+    if [[ "$TARGET_PLATFORM" != "linux_386" ]]; then
+        return
     fi
 
     log_step "Installing Linux x86 multilib build dependencies"
@@ -442,7 +459,6 @@ maybe_install_linux_build_deps() {
     gxx_major="$(g++ -dumpversion | cut -d. -f1)"
     libstdcxx_dev_pkg="libstdc++-${gxx_major}-dev:i386"
     "${sudo_cmd[@]}" dpkg --add-architecture i386
-    "${sudo_cmd[@]}" apt-get update
     "${sudo_cmd[@]}" apt-get install -y \
         gcc-multilib \
         g++-multilib \

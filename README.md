@@ -108,8 +108,8 @@ different shim on disk.
 |----------|--------------------|------|-------|
 | `darwin_arm64` | Yes | Primary | Most complete local development path |
 | `darwin_amd64` | Yes | Primary | Validated via Rosetta in CI |
-| `linux_amd64` | Yes | Primary | Main Linux runtime target |
-| `linux_386` | Yes | Secondary | Release-validated in Docker |
+| `linux_amd64` | Yes | Primary | Main Linux runtime target; Docker/source builds include X11 desktop-capture support |
+| `linux_386` | Yes | Secondary | Release-validated in Docker with X11 desktop-capture support |
 | `windows_amd64` | Yes | Secondary | Shim release artifact supported |
 | `linux_arm`, `linux_arm64` | No | Experimental | Build shim locally and set `LIBWEBRTC_SHIM_PATH` |
 
