@@ -4,10 +4,16 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
 	"github.com/thesyncim/libgowebrtc/pkg/depacketizer"
 	"github.com/thesyncim/libgowebrtc/pkg/encoder"
+)
+
+const (
+	packetizerEncodeRetryStep     = 3000
+	packetizerEncodeRetryAttempts = 5
 )
 
 func encodeH264Frame(t *testing.T) ([]byte, bool) {
@@ -23,13 +29,22 @@ func encodeH264Frame(t *testing.T) ([]byte, bool) {
 	}
 	defer enc.Close()
 
+	src := testutil.CreateTestVideoFrame(320, 240)
+	basePTS := src.PTS
 	dst := make([]byte, enc.MaxEncodedSize())
-	result, err := enc.EncodeInto(testutil.CreateTestVideoFrame(320, 240), dst, true)
-	if err != nil {
-		t.Fatalf("EncodeInto: %v", err)
+	for i := 0; i < packetizerEncodeRetryAttempts; i++ {
+		src.PTS = basePTS + uint32(i*packetizerEncodeRetryStep)
+		result, err := enc.EncodeInto(src, dst, true)
+		if err == nil && result.N > 0 {
+			return append([]byte(nil), dst[:result.N]...), result.IsKeyframe
+		}
+		if err != nil && !errors.Is(err, ffi.ErrNeedMoreData) {
+			t.Fatalf("EncodeInto: %v", err)
+		}
 	}
 
-	return append([]byte(nil), dst[:result.N]...), result.IsKeyframe
+	t.Fatal("EncodeInto produced no output after warmup retries")
+	return nil, false
 }
 
 func TestPacketizeIntoRoundTripVideo(t *testing.T) {
