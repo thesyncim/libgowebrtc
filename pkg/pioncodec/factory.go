@@ -44,8 +44,17 @@ func NewVideoEncoder(params webrtc.RTPCodecParameters, cfg VideoFactoryConfig) (
 
 	switch codecType {
 	case libcodec.H264:
-		h264Cfg := libcodec.DefaultH264Config(cfg.Width, cfg.Height)
-		overrideCommonVideoConfig(&h264Cfg.Width, &h264Cfg.Height, &h264Cfg.Bitrate, &h264Cfg.FPS, &h264Cfg.KeyInterval, cfg)
+		h264Cfg := libcodec.H264Config{
+			Width:       cfg.Width,
+			Height:      cfg.Height,
+			Bitrate:     cfg.Bitrate,
+			FPS:         cfg.FPS,
+			KeyInterval: cfg.KeyInterval,
+			RateControl: libcodec.RateControlVBR,
+			Profile:     libcodec.H264ProfileConstrainedBase,
+			LowDelay:    true,
+			PreferHW:    false,
+		}
 		if profile, ok := libcodec.H264ProfileFromFMTP(params.SDPFmtpLine); ok {
 			h264Cfg.Profile = profile
 		}
@@ -57,25 +66,54 @@ func NewVideoEncoder(params webrtc.RTPCodecParameters, cfg VideoFactoryConfig) (
 		}
 		return encoder.NewH264Encoder(h264Cfg)
 	case libcodec.VP8:
-		vp8Cfg := libcodec.DefaultVP8Config(cfg.Width, cfg.Height)
-		overrideCommonVideoConfig(&vp8Cfg.Width, &vp8Cfg.Height, &vp8Cfg.Bitrate, &vp8Cfg.FPS, &vp8Cfg.KeyInterval, cfg)
+		vp8Cfg := libcodec.VP8Config{
+			Width:          cfg.Width,
+			Height:         cfg.Height,
+			Bitrate:        cfg.Bitrate,
+			FPS:            cfg.FPS,
+			KeyInterval:    cfg.KeyInterval,
+			RateControl:    libcodec.RateControlVBR,
+			Deadline:       2,
+			LowDelay:       true,
+			ErrorResilient: true,
+			PreferHW:       false,
+		}
 		if cfg.PreferHW != nil {
 			vp8Cfg.PreferHW = *cfg.PreferHW
 		}
 		return encoder.NewVP8Encoder(vp8Cfg)
 	case libcodec.VP9:
-		vp9Cfg := libcodec.DefaultVP9Config(cfg.Width, cfg.Height)
-		overrideCommonVideoConfig(&vp9Cfg.Width, &vp9Cfg.Height, &vp9Cfg.Bitrate, &vp9Cfg.FPS, &vp9Cfg.KeyInterval, cfg)
-		vp9Cfg.Profile = libcodec.VP9ProfileIDFromFMTP(params.SDPFmtpLine)
-		vp9Cfg.SVC = cfg.SVC
+		vp9Cfg := libcodec.VP9Config{
+			Width:       cfg.Width,
+			Height:      cfg.Height,
+			Bitrate:     cfg.Bitrate,
+			FPS:         cfg.FPS,
+			KeyInterval: cfg.KeyInterval,
+			RateControl: libcodec.RateControlVBR,
+			Profile:     libcodec.VP9ProfileIDFromFMTP(params.SDPFmtpLine),
+			Speed:       6,
+			LowDelay:    true,
+			PreferHW:    false,
+			SVC:         cfg.SVC,
+		}
 		if cfg.PreferHW != nil {
 			vp9Cfg.PreferHW = *cfg.PreferHW
 		}
 		return encoder.NewVP9Encoder(vp9Cfg)
 	case libcodec.AV1:
-		av1Cfg := libcodec.DefaultAV1Config(cfg.Width, cfg.Height)
-		overrideCommonVideoConfig(&av1Cfg.Width, &av1Cfg.Height, &av1Cfg.Bitrate, &av1Cfg.FPS, &av1Cfg.KeyInterval, cfg)
-		av1Cfg.SVC = cfg.SVC
+		av1Cfg := libcodec.AV1Config{
+			Width:       cfg.Width,
+			Height:      cfg.Height,
+			Bitrate:     cfg.Bitrate,
+			FPS:         cfg.FPS,
+			KeyInterval: cfg.KeyInterval,
+			RateControl: libcodec.RateControlVBR,
+			Profile:     libcodec.AV1ProfileMain,
+			Speed:       8,
+			LowDelay:    true,
+			PreferHW:    false,
+			SVC:         cfg.SVC,
+		}
 		if cfg.PreferHW != nil {
 			av1Cfg.PreferHW = *cfg.PreferHW
 		}
@@ -130,31 +168,6 @@ func NewAudioDecoder(params webrtc.RTPCodecParameters) (decoder.AudioDecoder, er
 		return nil, ErrInvalidConfig
 	}
 	return decoder.NewAudioDecoder(codecType, int(params.ClockRate), int(params.Channels))
-}
-
-func overrideCommonVideoConfig(
-	width *int,
-	height *int,
-	bitrate *uint32,
-	fps *float64,
-	keyInterval *int,
-	cfg VideoFactoryConfig,
-) {
-	if cfg.Width > 0 {
-		*width = cfg.Width
-	}
-	if cfg.Height > 0 {
-		*height = cfg.Height
-	}
-	if cfg.Bitrate != 0 {
-		*bitrate = cfg.Bitrate
-	}
-	if cfg.FPS > 0 {
-		*fps = cfg.FPS
-	}
-	if cfg.KeyInterval > 0 {
-		*keyInterval = cfg.KeyInterval
-	}
 }
 
 func codecCacheKey(params webrtc.RTPCodecParameters) (string, error) {

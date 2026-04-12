@@ -550,7 +550,7 @@ type OpusConfig struct {
 	PacketLoss int  // Expected packet loss percentage (for FEC tuning)
 }
 
-// DefaultH264Config returns sensible defaults for H.264.
+// DefaultH264Config returns a convenience preset for H.264.
 func DefaultH264Config(width, height int) H264Config {
 	return H264Config{
 		Width:       width,
@@ -565,7 +565,7 @@ func DefaultH264Config(width, height int) H264Config {
 	}
 }
 
-// DefaultVP8Config returns sensible defaults for VP8.
+// DefaultVP8Config returns a convenience preset for VP8.
 func DefaultVP8Config(width, height int) VP8Config {
 	return VP8Config{
 		Width:          width,
@@ -581,7 +581,7 @@ func DefaultVP8Config(width, height int) VP8Config {
 	}
 }
 
-// DefaultVP9Config returns sensible defaults for VP9.
+// DefaultVP9Config returns a convenience preset for VP9.
 func DefaultVP9Config(width, height int) VP9Config {
 	return VP9Config{
 		Width:       width,
@@ -597,7 +597,7 @@ func DefaultVP9Config(width, height int) VP9Config {
 	}
 }
 
-// DefaultAV1Config returns sensible defaults for AV1.
+// DefaultAV1Config returns a convenience preset for AV1.
 func DefaultAV1Config(width, height int) AV1Config {
 	return AV1Config{
 		Width:       width,
