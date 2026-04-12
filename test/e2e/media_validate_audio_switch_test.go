@@ -99,6 +99,9 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	if err := session.WaitForStable(ctx); err != nil {
 		t.Fatalf("WaitForStable: %v", err)
 	}
+	if err := waitForAudioSenderSettle(ctx, 200*time.Millisecond); err != nil {
+		t.Fatalf("waitForAudioSenderSettle(initial): %v", err)
+	}
 
 	pumpStop, pumpDone = startPump()
 	if err := session.WaitForAudioContinuous(ctx, "audio-codec-switch"); err != nil {
@@ -122,6 +125,9 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 				Callback: func(stepCtx context.Context, stepSession *validate.Session) error {
 					stopPump(pumpStop, pumpDone)
 					pumpStop, pumpDone = nil, nil
+					if err := waitForAudioSenderSettle(stepCtx, 200*time.Millisecond); err != nil {
+						return err
+					}
 
 					err := sender.SetPreferredCodec(targetCodec)
 					if err != nil && !errors.Is(err, pc.ErrRenegotiationNeeded) {
