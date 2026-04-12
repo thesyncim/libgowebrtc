@@ -18,13 +18,23 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.RunWithShim(m))
 }
 
+func libwebrtcBenchmarkConfig() pc.Configuration {
+	return pc.Configuration{
+		BundlePolicy:       pc.BundlePolicyBalanced,
+		RTCPMuxPolicy:      pc.RTCPMuxPolicyRequire,
+		ICETransportPolicy: pc.ICETransportPolicyAll,
+		SDPSemantics:       pc.SDPSemanticsUnifiedPlan,
+		ICEServers:         nil,
+	}
+}
+
 // ============================================================================
 // PeerConnection Creation Benchmarks
 // ============================================================================
 
 // BenchmarkLibwebrtcPeerConnectionCreate benchmarks libwebrtc PC creation.
 func BenchmarkLibwebrtcPeerConnectionCreate(b *testing.B) {
-	cfg := pc.DefaultConfiguration()
+	cfg := libwebrtcBenchmarkConfig()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pcConn, _ := pc.NewPeerConnection(cfg)
@@ -49,7 +59,7 @@ func BenchmarkPionPeerConnectionCreate(b *testing.B) {
 
 // BenchmarkLibwebrtcCreateOffer benchmarks libwebrtc offer creation.
 func BenchmarkLibwebrtcCreateOffer(b *testing.B) {
-	cfg := pc.DefaultConfiguration()
+	cfg := libwebrtcBenchmarkConfig()
 	pcConn, _ := pc.NewPeerConnection(cfg)
 	defer pcConn.Close()
 
@@ -78,7 +88,7 @@ func BenchmarkPionCreateOffer(b *testing.B) {
 
 // BenchmarkLibwebrtcOfferAnswer benchmarks libwebrtc offer/answer exchange.
 func BenchmarkLibwebrtcOfferAnswer(b *testing.B) {
-	cfg := pc.DefaultConfiguration()
+	cfg := libwebrtcBenchmarkConfig()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -127,7 +137,7 @@ func BenchmarkPionOfferAnswer(b *testing.B) {
 
 // BenchmarkLibwebrtcDataChannelCreate benchmarks libwebrtc DC creation.
 func BenchmarkLibwebrtcDataChannelCreate(b *testing.B) {
-	cfg := pc.DefaultConfiguration()
+	cfg := libwebrtcBenchmarkConfig()
 	pcConn, _ := pc.NewPeerConnection(cfg)
 	defer pcConn.Close()
 
@@ -158,7 +168,7 @@ func BenchmarkPionDataChannelCreate(b *testing.B) {
 
 // BenchmarkLibwebrtcAddTrack benchmarks libwebrtc add track.
 func BenchmarkLibwebrtcAddTrack(b *testing.B) {
-	cfg := pc.DefaultConfiguration()
+	cfg := libwebrtcBenchmarkConfig()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

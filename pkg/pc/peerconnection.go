@@ -110,16 +110,6 @@ const (
 	TransceiverDirectionInactive     = webrtc.RTPTransceiverDirectionInactive
 )
 
-// DefaultConfiguration returns a default configuration.
-func DefaultConfiguration() webrtc.Configuration {
-	return webrtc.Configuration{
-		BundlePolicy:       webrtc.BundlePolicyBalanced,
-		RTCPMuxPolicy:      webrtc.RTCPMuxPolicyRequire,
-		ICETransportPolicy: webrtc.ICETransportPolicyAll,
-		SDPSemantics:       webrtc.SDPSemanticsUnifiedPlan,
-	}
-}
-
 func codecParametersFromFFICapabilities(ffiCodecs []ffi.CodecCapability) []webrtc.RTPCodecParameters {
 	codecs := make([]webrtc.RTPCodecParameters, len(ffiCodecs))
 	for i, c := range ffiCodecs {

@@ -183,7 +183,8 @@ func TestMultiVideoEncoderLazyCreationAndSwitch(t *testing.T) {
 	}
 
 	src := testutil.CreateTestVideoFrame(320, 240)
-	dst := make([]byte, 320*240*3/2)
+	// Leave headroom above raw I420 size for codec overhead on keyframes.
+	dst := make([]byte, 320*240*2)
 
 	first, err := encodeVideoUntilOutput(multi, src, dst, true)
 	if err != nil {

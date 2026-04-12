@@ -125,10 +125,7 @@ func (e *h264Encoder) EncodeInto(src *frame.VideoFrame, dst []byte, forceKeyfram
 
 // MaxEncodedSize implements VideoEncoder.
 func (e *h264Encoder) MaxEncodedSize() int {
-	// Worst case: uncompressed frame size (though encoding should always be smaller)
-	// For H.264, a reasonable upper bound is width * height * 1.5 (YUV420)
-	// In practice, encoded frames are much smaller
-	return e.config.Width * e.config.Height * 3 / 2
+	return maxVideoEncodedSize(e.config.Width, e.config.Height)
 }
 
 // SetBitrate implements VideoEncoder.

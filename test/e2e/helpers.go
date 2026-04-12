@@ -26,9 +26,13 @@ const (
 )
 
 func defaultTestConfig() pc.Configuration {
-	cfg := pc.DefaultConfiguration()
-	cfg.ICEServers = nil
-	return cfg
+	return pc.Configuration{
+		BundlePolicy:       pc.BundlePolicyBalanced,
+		RTCPMuxPolicy:      pc.RTCPMuxPolicyRequire,
+		ICETransportPolicy: pc.ICETransportPolicyAll,
+		SDPSemantics:       pc.SDPSemanticsUnifiedPlan,
+		ICEServers:         nil,
+	}
 }
 
 // LibPeerPair represents two libwebrtc PeerConnections for loopback testing.

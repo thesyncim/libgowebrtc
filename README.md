@@ -381,7 +381,13 @@ videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
 })
 
 // Apply the same supported subset to libgowebrtc's native PeerConnection wrapper.
-pc, _ := pc.NewPeerConnection(pc.DefaultConfiguration())
+pc, _ := pc.NewPeerConnection(pc.Configuration{
+    BundlePolicy:       pc.BundlePolicyBalanced,
+    RTCPMuxPolicy:      pc.RTCPMuxPolicyRequire,
+    ICETransportPolicy: pc.ICETransportPolicyAll,
+    SDPSemantics:       pc.SDPSemanticsUnifiedPlan,
+    ICEServers:         nil,
+})
 transceiver, _ := pc.AddTransceiver("video", &pc.TransceiverInit{Direction: pc.TransceiverDirectionSendOnly})
 _ = transceiver.SetCodecPreferences(preset.SupportedOnly().VideoCodecs())
 

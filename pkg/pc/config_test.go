@@ -21,12 +21,12 @@ func TestNewPeerConnectionRejectsImplicitConfiguration(t *testing.T) {
 	}
 }
 
-func TestValidateConfigurationAllowsDefaultConfiguration(t *testing.T) {
-	cfg := DefaultConfiguration()
+func TestValidateConfigurationAllowsExplicitConfiguration(t *testing.T) {
+	cfg := testPeerConnectionConfig()
 	if len(cfg.ICEServers) != 0 {
-		t.Fatalf("DefaultConfiguration().ICEServers len = %d, want 0", len(cfg.ICEServers))
+		t.Fatalf("testPeerConnectionConfig().ICEServers len = %d, want 0", len(cfg.ICEServers))
 	}
 	if err := validateConfiguration(cfg); err != nil {
-		t.Fatalf("validateConfiguration(DefaultConfiguration()) = %v, want nil", err)
+		t.Fatalf("validateConfiguration(testPeerConnectionConfig()) = %v, want nil", err)
 	}
 }
