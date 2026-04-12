@@ -279,8 +279,9 @@ func (m SVCMode) IsKeyFrameDependent() bool {
 
 // SVCLayerConfig configures a single SVC/simulcast layer.
 type SVCLayerConfig struct {
-	Width      int     // Resolution width (0 = derive from base)
-	Height     int     // Resolution height (0 = derive from base)
+	RID        string  // RID identifies the simulcast RTP stream. Leave empty for non-simulcast SVC-only layers.
+	Width      int     // Resolution width in pixels.
+	Height     int     // Resolution height in pixels.
 	Bitrate    uint32  // Target bitrate for this layer
 	MaxBitrate uint32  // Max bitrate for this layer
 	FPS        float64 // Framerate for this layer (0 = same as base)
@@ -290,7 +291,7 @@ type SVCLayerConfig struct {
 // SVCConfig configures scalable video coding.
 type SVCConfig struct {
 	Mode   SVCMode          // SVC/simulcast mode
-	Layers []SVCLayerConfig // Per-layer configuration (optional, auto if nil)
+	Layers []SVCLayerConfig // Per-layer configuration. Simulcast helpers require one explicit entry per spatial layer.
 }
 
 // Browser-like SVC Presets (match Chrome/Firefox defaults)

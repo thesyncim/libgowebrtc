@@ -320,9 +320,9 @@ func TestPublishVideoSimulcastControls(t *testing.T) {
 	cfg.SVC = &codec.SVCConfig{
 		Mode: codec.SVCModeS3T3,
 		Layers: []codec.SVCLayerConfig{
-			{Bitrate: 120_000, Active: true},
-			{Bitrate: 240_000, Active: true},
-			{Bitrate: 480_000, Active: true},
+			{RID: "q", Width: 320, Height: 180, Bitrate: 120_000, Active: true},
+			{RID: "h", Width: 640, Height: 360, Bitrate: 240_000, Active: true},
+			{RID: "f", Width: 1280, Height: 720, Bitrate: 480_000, Active: true},
 		},
 	}
 	published, err := PublishVideo(pc, cfg)
@@ -444,16 +444,16 @@ func TestPublishedVideoHelpers(t *testing.T) {
 	original := &codec.SVCConfig{
 		Mode: codec.SVCModeS2T3,
 		Layers: []codec.SVCLayerConfig{
-			{Width: 320, Height: 180, Bitrate: 100_000, Active: true},
+			{RID: "h", Width: 320, Height: 180, Bitrate: 100_000, Active: true},
 		},
 	}
 	cloned := cloneSVCConfig(original)
-	cloned.Layers[0].Width = 999
+	cloned.Layers[0].RID = "mutated"
 	if cloned.Mode != codec.SVCModeS2T3 {
 		t.Fatalf("cloneSVCConfig().Mode = %v, want %v", cloned.Mode, codec.SVCModeS2T3)
 	}
-	if original.Layers[0].Width != 320 {
-		t.Fatalf("cloneSVCConfig() should deep-copy layers, got width %d", original.Layers[0].Width)
+	if original.Layers[0].RID != "h" {
+		t.Fatalf("cloneSVCConfig() should deep-copy layers, got RID %q", original.Layers[0].RID)
 	}
 	if cloneSVCConfig(nil) != nil {
 		t.Fatal("cloneSVCConfig(nil) != nil")
@@ -476,40 +476,6 @@ func TestPublishedVideoHelpers(t *testing.T) {
 		t.Fatalf("secondTrack.WriteFrame after close error = %v, want %v", err, track.ErrTrackClosed)
 	}
 
-	for _, tc := range []struct {
-		count    int
-		wantRIDs []string
-	}{
-		{count: 2, wantRIDs: []string{"h", "f"}},
-		{count: 3, wantRIDs: []string{"q", "h", "f"}},
-		{count: 4, wantRIDs: []string{""}},
-	} {
-		gotRIDs := defaultRIDs(tc.count)
-		if len(gotRIDs) != len(tc.wantRIDs) {
-			t.Fatalf("defaultRIDs(%d) len = %d, want %d", tc.count, len(gotRIDs), len(tc.wantRIDs))
-		}
-		for i, want := range tc.wantRIDs {
-			if gotRIDs[i] != want {
-				t.Fatalf("defaultRIDs(%d)[%d] = %q, want %q", tc.count, i, gotRIDs[i], want)
-			}
-		}
-	}
-
-	if got := clampPositive(319, 640); got != 318 {
-		t.Fatalf("clampPositive(319, 640) = %d, want 318", got)
-	}
-	if got := clampPositive(0, 641); got != 640 {
-		t.Fatalf("clampPositive(0, 641) = %d, want 640", got)
-	}
-	if got := clampPositiveUint32(0, 42); got != 42 {
-		t.Fatalf("clampPositiveUint32(0, 42) = %d, want 42", got)
-	}
-	if got := evenDimension(3); got != 2 {
-		t.Fatalf("evenDimension(3) = %d, want 2", got)
-	}
-	if got := maxInt(3, 4); got != 4 {
-		t.Fatalf("maxInt(3, 4) = %d, want 4", got)
-	}
 }
 
 func TestPublishedVideoRejectsUnsupportedScaledInput(t *testing.T) {
