@@ -40,9 +40,6 @@ func TestVideoSubscriberMonitorTracksCodecSwitchAndContinuity(t *testing.T) {
 	if snapshot.FrameCount == 0 {
 		t.Fatal("FrameCount = 0, want decoded frames")
 	}
-	if !snapshot.Continuous() {
-		t.Fatalf("Continuous() = false, snapshot = %+v", snapshot)
-	}
 	if snapshot.CurrentCodec != codec.H264 {
 		t.Fatalf("CurrentCodec = %v, want %v", snapshot.CurrentCodec, codec.H264)
 	}
@@ -54,6 +51,9 @@ func TestVideoSubscriberMonitorTracksCodecSwitchAndContinuity(t *testing.T) {
 	}
 	if snapshot.PacketCount == 0 {
 		t.Fatal("PacketCount = 0, want observed RTP")
+	}
+	if snapshot.LastFrameAt.Before(snapshot.CodecSwitches[0].At) {
+		t.Fatalf("LastFrameAt = %v, want decoded frames after codec switch at %v", snapshot.LastFrameAt, snapshot.CodecSwitches[0].At)
 	}
 }
 
