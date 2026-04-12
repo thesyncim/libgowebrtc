@@ -1106,13 +1106,7 @@ func main() {
     })
 
     // Create PeerConnection
-    pc, _ := pc.NewPeerConnection(pc.Configuration{
-        BundlePolicy:       pc.BundlePolicyBalanced,
-        RTCPMuxPolicy:      pc.RTCPMuxPolicyRequire,
-        ICETransportPolicy: pc.ICETransportPolicyAll,
-        SDPSemantics:       pc.SDPSemanticsUnifiedPlan,
-        ICEServers:         nil,
-    })
+    pc, _ := pc.NewPeerConnection(pc.Configuration{})
 
     // Add video track
     for _, track := range stream.GetVideoTracks() {

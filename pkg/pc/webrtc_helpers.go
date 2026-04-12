@@ -18,12 +18,9 @@ var (
 	ErrNilICECandidateInit          = errors.New("ice candidate init is nil")
 )
 
-func validateConfiguration(config webrtc.Configuration) error {
+func validateConfigurationSupport(config webrtc.Configuration) error {
 	if config.BundlePolicy == webrtc.BundlePolicyUnknown {
-		return fmt.Errorf("%w: bundle policy must be set explicitly", ErrUnsupportedConfiguration)
-	}
-	if config.RTCPMuxPolicy == webrtc.RTCPMuxPolicyUnknown {
-		return fmt.Errorf("%w: rtcp mux policy must be set explicitly", ErrUnsupportedConfiguration)
+		// Zero-value configuration is allowed and falls through to libwebrtc defaults.
 	}
 	if config.PeerIdentity != "" {
 		return fmt.Errorf("%w: peer identity", ErrUnsupportedConfiguration)
@@ -65,6 +62,8 @@ func credentialString(server webrtc.ICEServer) string {
 
 func bundlePolicyString(policy webrtc.BundlePolicy) (string, error) {
 	switch policy {
+	case webrtc.BundlePolicyUnknown:
+		return "", nil
 	case webrtc.BundlePolicyMaxBundle:
 		return "max-bundle", nil
 	case webrtc.BundlePolicyMaxCompat:
@@ -78,6 +77,8 @@ func bundlePolicyString(policy webrtc.BundlePolicy) (string, error) {
 
 func rtcpMuxPolicyString(policy webrtc.RTCPMuxPolicy) (string, error) {
 	switch policy {
+	case webrtc.RTCPMuxPolicyUnknown:
+		return "", nil
 	case webrtc.RTCPMuxPolicyRequire:
 		return "require", nil
 	case webrtc.RTCPMuxPolicyNegotiate:

@@ -418,13 +418,9 @@ _ = recv.SetCodecPreferences(videoCodecs)
 // CreateVideoTrack no longer accepts a codec selector.
 videoTrack, _ := peerConnection.CreateVideoTrack("video", 1280, 720)
 
-// pc.NewPeerConnection and DefaultConfiguration now use Pion types directly.
-cfg := webrtc.Configuration{
-    BundlePolicy:       webrtc.BundlePolicyBalanced,
-    RTCPMuxPolicy:      webrtc.RTCPMuxPolicyRequire,
-    ICETransportPolicy: webrtc.ICETransportPolicyAll,
-    SDPSemantics:       webrtc.SDPSemanticsUnifiedPlan,
-}
+// pc.NewPeerConnection now accepts raw Pion config directly.
+// Zero values pass through to libwebrtc defaults; only unsupported fields fail.
+cfg := webrtc.Configuration{}
 
 // Session descriptions and ICE candidates are value-based Pion types.
 _ = peerConnection.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offerSDP})

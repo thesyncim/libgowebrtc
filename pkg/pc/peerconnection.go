@@ -912,6 +912,10 @@ type ffiConfigData struct {
 // buildFFIConfig converts a Configuration to FFI-compatible format.
 // Returns config data that must be kept alive during the FFI call.
 func buildFFIConfig(config *webrtc.Configuration) (*ffiConfigData, error) {
+	if err := validateConfigurationSupport(*config); err != nil {
+		return nil, err
+	}
+
 	data := &ffiConfigData{
 		config: &ffi.PeerConnectionConfig{
 			ICECandidatePoolSize: int32(config.ICECandidatePoolSize),
@@ -956,33 +960,41 @@ func buildFFIConfig(config *webrtc.Configuration) (*ffiConfigData, error) {
 	if err != nil {
 		return nil, err
 	}
-	bundleStr := ffi.CString(bundlePolicy)
-	data.strings = append(data.strings, bundleStr)
-	data.config.BundlePolicy = &bundleStr[0]
+	if bundlePolicy != "" {
+		bundleStr := ffi.CString(bundlePolicy)
+		data.strings = append(data.strings, bundleStr)
+		data.config.BundlePolicy = &bundleStr[0]
+	}
 
 	rtcpMuxPolicy, err := rtcpMuxPolicyString(config.RTCPMuxPolicy)
 	if err != nil {
 		return nil, err
 	}
-	rtcpStr := ffi.CString(rtcpMuxPolicy)
-	data.strings = append(data.strings, rtcpStr)
-	data.config.RTCPMuxPolicy = &rtcpStr[0]
+	if rtcpMuxPolicy != "" {
+		rtcpStr := ffi.CString(rtcpMuxPolicy)
+		data.strings = append(data.strings, rtcpStr)
+		data.config.RTCPMuxPolicy = &rtcpStr[0]
+	}
 
 	iceTransportPolicy, err := iceTransportPolicyString(config.ICETransportPolicy)
 	if err != nil {
 		return nil, err
 	}
-	iceStr := ffi.CString(iceTransportPolicy)
-	data.strings = append(data.strings, iceStr)
-	data.config.ICETransportPolicy = &iceStr[0]
+	if iceTransportPolicy != "" {
+		iceStr := ffi.CString(iceTransportPolicy)
+		data.strings = append(data.strings, iceStr)
+		data.config.ICETransportPolicy = &iceStr[0]
+	}
 
 	sdpSemantics, err := sdpSemanticsString(config.SDPSemantics)
 	if err != nil {
 		return nil, err
 	}
-	sdpStr := ffi.CString(sdpSemantics)
-	data.strings = append(data.strings, sdpStr)
-	data.config.SDPSemantics = &sdpStr[0]
+	if sdpSemantics != "" {
+		sdpStr := ffi.CString(sdpSemantics)
+		data.strings = append(data.strings, sdpStr)
+		data.config.SDPSemantics = &sdpStr[0]
+	}
 
 	return data, nil
 }
@@ -990,9 +1002,6 @@ func buildFFIConfig(config *webrtc.Configuration) (*ffiConfigData, error) {
 // NewPeerConnection creates a new libwebrtc-backed PeerConnection.
 func NewPeerConnection(config webrtc.Configuration) (*PeerConnection, error) {
 	if err := ffi.LoadLibrary(); err != nil {
-		return nil, err
-	}
-	if err := validateConfiguration(config); err != nil {
 		return nil, err
 	}
 
