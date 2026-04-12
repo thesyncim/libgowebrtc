@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -519,6 +520,8 @@ func TestConcurrentFrameWrites(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		defer close(done)
 		for f := range frameCh {
 			if err := track.WriteVideoFrame(f); err != nil {
