@@ -222,9 +222,8 @@ type dataChannelState struct {
 // Session is the explicit validation surface for media, data channels, and
 // transport state.
 type Session struct {
-	cfg    SessionConfig
-	policy ProfilePolicy
-	peer   peerAdapter
+	cfg  SessionConfig
+	peer peerAdapter
 
 	mu sync.Mutex
 
@@ -264,11 +263,10 @@ func NewPCSession(pc *pc.PeerConnection, cfg SessionConfig) *Session {
 }
 
 func newSession(peer peerAdapter, cfg SessionConfig) *Session {
-	cfg, policy := normalizeSessionConfig(cfg)
+	cfg = normalizeSessionConfig(cfg)
 
 	s := &Session{
 		cfg:          cfg,
-		policy:       policy,
 		peer:         peer,
 		videoTracks:  make(map[string]*videoTrackState),
 		audioTracks:  make(map[string]*audioTrackState),
@@ -279,8 +277,8 @@ func newSession(peer peerAdapter, cfg SessionConfig) *Session {
 	return s
 }
 
-// PionOnTrack returns an OnTrack handler that binds browser-shaped remote
-// tracks and passive subscriber monitors into the session.
+// PionOnTrack returns an OnTrack handler that binds remote tracks and passive
+// subscriber monitors into the session.
 //
 // Callers must pass any explicit Pion receive policy, such as RTCP writers,
 // through the opts parameter.
@@ -301,14 +299,14 @@ func (s *Session) PionOnTrack(opts ...pionrecv.Option) func(*webrtc.TrackRemote,
 		switch trackRemote.Kind() {
 		case webrtc.RTPCodecTypeVideo:
 			videoMonitor = pionrecv.NewVideoSubscriberMonitor(pionrecv.VideoSubscriberMonitorConfig{
-				FreezeThreshold:    s.cfg.FreezeThreshold,
+				FreezeThreshold:    s.cfg.VideoFreezeThreshold,
 				PacketGapThreshold: s.cfg.PacketGapThreshold,
 				EventHistory:       s.cfg.EventHistory,
 			})
 			bindOpts = append(bindOpts, pionrecv.WithVideoSubscriberMonitor(videoMonitor))
 		case webrtc.RTPCodecTypeAudio:
 			audioMonitor = pionrecv.NewAudioSubscriberMonitor(pionrecv.AudioSubscriberMonitorConfig{
-				FreezeThreshold:    s.cfg.AudioGapThreshold,
+				FreezeThreshold:    s.cfg.AudioFreezeThreshold,
 				PacketGapThreshold: s.cfg.PacketGapThreshold,
 				EventHistory:       s.cfg.EventHistory,
 			})
@@ -373,7 +371,7 @@ func (s *Session) observeVideoTrack(track media.RemoteVideoTrack, source string,
 	if err := track.SetOnVideoFrame(func(f *frame.VideoFrame) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		state.observeFrameLocked(f, s.cfg.FreezeThreshold, s.policy.DefaultFreezeThreshold, s.cfg.EventHistory)
+		state.observeFrameLocked(f, s.cfg.VideoFreezeThreshold, 0, s.cfg.EventHistory)
 		s.signalLocked()
 	}); err != nil {
 		s.recordWarning(fmt.Sprintf("validate: install video frame callback for %q: %v", track.ID(), err))
@@ -401,7 +399,7 @@ func (s *Session) observeAudioTrack(track media.RemoteAudioTrack, source string,
 	if err := track.SetOnAudioFrame(func(f *frame.AudioFrame) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		state.observeFrameLocked(f, s.cfg.AudioGapThreshold, s.policy.DefaultAudioGapThreshold, s.cfg.EventHistory)
+		state.observeFrameLocked(f, s.cfg.AudioFreezeThreshold, 0, s.cfg.EventHistory)
 		s.signalLocked()
 	}); err != nil {
 		s.recordWarning(fmt.Sprintf("validate: install audio frame callback for %q: %v", track.ID(), err))
@@ -801,8 +799,8 @@ func (s *Session) WaitForAudioContinuous(ctx context.Context, trackID string) er
 
 // WaitForCodecSwitch waits until the target track reflects the requested MIME type.
 func (s *Session) WaitForCodecSwitch(ctx context.Context, trackID, mime string) error {
-	if !s.policy.SupportsCodecSwitchAssertions {
-		s.recordSkip(fmt.Sprintf("codec switch assertions are not guaranteed for validation profile %q", s.policy.Profile))
+	if !s.cfg.Assertions.CodecSwitch {
+		s.recordSkip("codec switch assertions are disabled by session config")
 		return nil
 	}
 	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
@@ -819,8 +817,8 @@ func (s *Session) WaitForCodecSwitch(ctx context.Context, trackID, mime string) 
 // WaitForVideoLayer waits until the target video track reports the desired
 // spatial/temporal layer through the subscriber-visible monitor.
 func (s *Session) WaitForVideoLayer(ctx context.Context, trackID string, spatial, temporal int) error {
-	if !s.policy.SupportsDependencyDescriptor {
-		s.recordSkip(fmt.Sprintf("dependency-descriptor layer assertions are not guaranteed for validation profile %q", s.policy.Profile))
+	if !s.cfg.Assertions.VideoLayer {
+		s.recordSkip("video layer assertions are disabled by session config")
 		return nil
 	}
 	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
@@ -831,8 +829,8 @@ func (s *Session) WaitForVideoLayer(ctx context.Context, trackID string, spatial
 
 // WaitForVideoRID waits until the target video track reports the desired RID.
 func (s *Session) WaitForVideoRID(ctx context.Context, trackID, rid string) error {
-	if !s.policy.SupportsRID {
-		s.recordSkip(fmt.Sprintf("RID assertions are not guaranteed for validation profile %q", s.policy.Profile))
+	if !s.cfg.Assertions.RID {
+		s.recordSkip("RID assertions are disabled by session config")
 		return nil
 	}
 	return s.waitFor(ctx, func(snapshot SessionSnapshot) bool {
@@ -958,8 +956,7 @@ func (s *Session) snapshotLocked() SessionSnapshot {
 	}
 
 	return SessionSnapshot{
-		Profile:             s.cfg.Profile,
-		Policy:              s.policy,
+		Config:              s.cfg,
 		ConnectionStates:    append([]PeerConnectionStateEvent(nil), s.connectionStates...),
 		ICEConnectionStates: append([]ICEConnectionStateEvent(nil), s.iceConnectionStates...),
 		SignalingStates:     append([]SignalingStateEvent(nil), s.signalingStates...),

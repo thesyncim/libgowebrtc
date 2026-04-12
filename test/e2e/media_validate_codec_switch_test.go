@@ -22,12 +22,12 @@ func TestReceiverSessionDetectsCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	pp := NewLibPeerPair(t)
 	defer pp.Close()
 
-	session := validate.NewPCSession(pp.Receiver, validate.SessionConfig{
-		Profile:                 validate.ProfileChrome,
-		StatsPollInterval:       50 * time.Millisecond,
-		EventHistory:            64,
-		SwitchRecoveryThreshold: 4 * time.Second,
-	})
+	cfg := validate.DefaultSessionConfig()
+	cfg.StatsPollInterval = 50 * time.Millisecond
+	cfg.EventHistory = 64
+	cfg.RecoveryTimeout = 4 * time.Second
+	cfg.Assertions.CodecSwitch = true
+	session := validate.NewPCSession(pp.Receiver, cfg)
 
 	pcOnTrack := session.PCOnTrack()
 	pp.Receiver.SetOnTrack(func(track *pc.Track, recv *pc.RTPReceiver) {

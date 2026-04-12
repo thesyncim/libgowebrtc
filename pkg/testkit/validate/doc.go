@@ -2,7 +2,7 @@
 // publisher/subscriber topologies, including:
 //   - session snapshots and waiters for connection, media, and data-channel state
 //   - subscriber-visible audio/video continuity monitoring
-//   - validation-profile policy gating for Chrome-, Firefox-, and Safari-like tests
+//   - explicit assertion gating for codec-switch, RID, and layered-video checks
 //   - scenario scripting for layer switches, renegotiation hooks, and impairments
 //   - an ICE-edge UDP relay for black-box SFU network impairment testing
 //

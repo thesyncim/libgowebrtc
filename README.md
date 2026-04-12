@@ -22,7 +22,7 @@
 
 libgowebrtc brings native codec performance to Go WebRTC applications. It's designed to **complement** [Pion](https://github.com/pion/webrtc) - use Pion for networking and signaling, libgowebrtc for encoding/decoding.
 
-The core packages stay intentionally thin. Capture, publishing, and validation helpers are available, but they are layered on top of the core API rather than defining it.
+The core packages stay intentionally thin. Capture, publishing, and validation helpers are available, but they are layered on top of the core API rather than defining it. Validation helpers under `pkg/testkit/validate` use explicit session config and assertion policy instead of browser-profile presets.
 
 **Key benefits:**
 - **Native codec performance** - H.264, VP8, VP9, AV1 via Google's libwebrtc
@@ -638,7 +638,8 @@ libgowebrtc/
 │   ├── track/          # Pion-compatible TrackLocal
 │   ├── pionrecv/       # Pion TrackRemote -> decoded frame bridge
 │   ├── pc/             # PeerConnection (libwebrtc-backed)
-│   └── media/          # Browser-like capture/stream API
+│   ├── media/          # Browser-like capture/stream API
+│   └── testkit/        # Validation and impairment helpers with explicit session config
 ├── internal/ffi/       # FFI bindings (purego default, CGO optional)
 ├── shim/               # C++ shim library
 ├── test/

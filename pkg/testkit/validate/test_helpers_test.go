@@ -13,6 +13,16 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
+func defaultSessionConfig() SessionConfig {
+	return DefaultSessionConfig()
+}
+
+func sessionConfigWithAssertions(policy AssertionPolicy) SessionConfig {
+	cfg := DefaultSessionConfig()
+	cfg.Assertions = policy
+	return cfg
+}
+
 func mustNewPionPeerConnection(t *testing.T) *webrtc.PeerConnection {
 	t.Helper()
 

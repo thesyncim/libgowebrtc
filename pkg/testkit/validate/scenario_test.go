@@ -168,7 +168,14 @@ func TestScenarioLabRunStepErrorsAndHelpers(t *testing.T) {
 }
 
 func TestScenarioLabRunStepWaitsForRecoveryExpectations(t *testing.T) {
-	session := newSession(nil, SessionConfig{SwitchRecoveryThreshold: 80 * time.Millisecond})
+	session := newSession(nil, SessionConfig{
+		RecoveryTimeout: 80 * time.Millisecond,
+		Assertions: AssertionPolicy{
+			CodecSwitch: true,
+			RID:         true,
+			VideoLayer:  true,
+		},
+	})
 	session.mu.Lock()
 	session.appendConnectionStateLocked(time.Now(), webrtc.PeerConnectionStateDisconnected)
 	session.appendSignalingStateLocked(time.Now(), webrtc.SignalingStateHaveLocalOffer)
@@ -232,7 +239,7 @@ func TestScenarioLabRunStepWaitsForRecoveryExpectations(t *testing.T) {
 }
 
 func TestScenarioLabRunStepExpectationTracksFrameDeltasAndHold(t *testing.T) {
-	session := newSession(nil, SessionConfig{SwitchRecoveryThreshold: 120 * time.Millisecond})
+	session := newSession(nil, SessionConfig{RecoveryTimeout: 120 * time.Millisecond})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{id: "video-1", frameCount: 3}
 	session.audioTracks["audio-1"] = &audioTrackState{id: "audio-1", frameCount: 5}
@@ -281,7 +288,13 @@ func TestScenarioLabRunStepExpectationTracksFrameDeltasAndHold(t *testing.T) {
 }
 
 func TestScenarioLabRunStepExpectationTimeoutIncludesReason(t *testing.T) {
-	session := newSession(nil, SessionConfig{SwitchRecoveryThreshold: 20 * time.Millisecond})
+	session := newSession(nil, SessionConfig{
+		RecoveryTimeout: 20 * time.Millisecond,
+		Assertions: AssertionPolicy{
+			CodecSwitch: true,
+			RID:         true,
+		},
+	})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{
 		id:          "video-1",
@@ -335,8 +348,8 @@ func TestScenarioLabRunStepRejectsAmbiguousUnlabeledDataChannelActions(t *testin
 	}
 }
 
-func TestScenarioLabRunStepExpectationSkipsUnsupportedProfileAssertions(t *testing.T) {
-	session := newSession(nil, SessionConfig{Profile: ProfileSafari})
+func TestScenarioLabRunStepExpectationSkipsDisabledAssertions(t *testing.T) {
+	session := newSession(nil, DefaultSessionConfig())
 	lab := NewScenarioLab(session, LabConfig{})
 
 	err := lab.Run(context.Background(), ScenarioScript{

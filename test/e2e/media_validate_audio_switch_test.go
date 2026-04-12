@@ -32,12 +32,12 @@ func TestReceiverSessionDetectsAudioCodecSwitchViaLibWebRTCStats(t *testing.T) {
 	pp := NewPionLibPeerPair(t)
 	defer pp.Close()
 
-	session := validate.NewPCSession(pp.Lib, validate.SessionConfig{
-		Profile:                 validate.ProfileChrome,
-		StatsPollInterval:       audioCodecSwitchStatsPollInterval,
-		EventHistory:            64,
-		SwitchRecoveryThreshold: 4 * time.Second,
-	})
+	cfg := validate.DefaultSessionConfig()
+	cfg.StatsPollInterval = audioCodecSwitchStatsPollInterval
+	cfg.EventHistory = 64
+	cfg.RecoveryTimeout = 4 * time.Second
+	cfg.Assertions.CodecSwitch = true
+	session := validate.NewPCSession(pp.Lib, cfg)
 
 	trackReceived := make(chan struct{}, 1)
 	pcOnTrack := session.PCOnTrack()

@@ -205,12 +205,12 @@ func runExample(cfg exampleConfig) (exampleStats, error) {
 	if err := subscriberRecv.SetCodecPreferences(codecPreferences(codecCycle)); err != nil {
 		return exampleStats{}, fmt.Errorf("set subscriber codec preferences: %w", err)
 	}
-	subscriberValidator = validate.NewPionSession(subscriberPC, validate.SessionConfig{
-		Profile:                 validate.ProfileChrome,
-		StatsPollInterval:       250 * time.Millisecond,
-		EventHistory:            64,
-		SwitchRecoveryThreshold: 1500 * time.Millisecond,
-	})
+	validatorCfg := validate.DefaultSessionConfig()
+	validatorCfg.StatsPollInterval = 250 * time.Millisecond
+	validatorCfg.EventHistory = 64
+	validatorCfg.RecoveryTimeout = 1500 * time.Millisecond
+	validatorCfg.Assertions.CodecSwitch = true
+	subscriberValidator = validate.NewPionSession(subscriberPC, validatorCfg)
 	initialCodec := codecCycle[0]
 
 	publisherTrack := newPassthroughRTPTrack(codecCapabilityFor(initialCodec), "publisher-video", "publisher-stream")

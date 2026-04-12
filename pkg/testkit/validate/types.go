@@ -11,17 +11,17 @@ import (
 
 // SessionConfig configures validation behavior for a subscriber session.
 type SessionConfig struct {
-	Profile           Profile
 	StatsPollInterval time.Duration
 	EventHistory      int
-	// Zero threshold values use adaptive profile defaults.
-	FreezeThreshold             time.Duration
+	// Zero threshold values use package defaults.
+	VideoFreezeThreshold        time.Duration
 	PacketGapThreshold          time.Duration
-	AudioGapThreshold           time.Duration
-	SwitchRecoveryThreshold     time.Duration
+	AudioFreezeThreshold        time.Duration
+	RecoveryTimeout             time.Duration
 	EnableDataChannelHeartbeats bool
 	HeartbeatInterval           time.Duration
 	HeartbeatTimeout            time.Duration
+	Assertions                  AssertionPolicy
 }
 
 // PeerConnectionStateEvent records a connection state transition.
@@ -212,8 +212,7 @@ type DataChannelSnapshot struct {
 
 // SessionSnapshot is the aggregate validation view.
 type SessionSnapshot struct {
-	Profile             Profile
-	Policy              ProfilePolicy
+	Config              SessionConfig
 	ConnectionStates    []PeerConnectionStateEvent
 	ICEConnectionStates []ICEConnectionStateEvent
 	SignalingStates     []SignalingStateEvent
