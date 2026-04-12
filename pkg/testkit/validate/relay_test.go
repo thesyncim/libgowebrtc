@@ -43,16 +43,23 @@ func TestICEEdgeRelayLifecycleAndPause(t *testing.T) {
 	defer client.Close()
 
 	expectEcho := func(message string, timeout time.Duration) bool {
-		if _, err := client.WriteToUDP([]byte(message), mustResolveUDPAddr(relay.LocalAddr())); err != nil {
-			t.Fatalf("WriteToUDP(%q): %v", message, err)
-		}
-		_ = client.SetReadDeadline(time.Now().Add(timeout))
 		buf := make([]byte, 2048)
-		n, _, err := client.ReadFromUDP(buf)
-		if err != nil {
-			return false
+		deadline := time.Now().Add(timeout)
+		for time.Now().Before(deadline) {
+			if _, err := client.WriteToUDP([]byte(message), mustResolveUDPAddr(relay.LocalAddr())); err != nil {
+				t.Fatalf("WriteToUDP(%q): %v", message, err)
+			}
+			readDeadline := time.Now().Add(25 * time.Millisecond)
+			if readDeadline.After(deadline) {
+				readDeadline = deadline
+			}
+			_ = client.SetReadDeadline(readDeadline)
+			n, _, err := client.ReadFromUDP(buf)
+			if err == nil && string(buf[:n]) == message {
+				return true
+			}
 		}
-		return string(buf[:n]) == message
+		return false
 	}
 
 	if !expectEcho("hello", 200*time.Millisecond) {
