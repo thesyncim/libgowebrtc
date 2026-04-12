@@ -51,6 +51,8 @@ they reach libwebrtc.
 | P1 | Receiver-local stats | Provide `RTPReceiver.GetStats()` parity instead of returning an empty placeholder | Shim currently returns zeroed stats "for API consistency"; `PeerConnection.GetStats()` works, but receiver-local parity is incomplete | `pkg/pc` + `internal/ffi` + `shim` | `pkg/pc/peerconnection.go`, `internal/ffi/peerconnection.go`, `shim/shim.h`, `shim/shim_rtp_receiver.cc` |
 | P1 | Fuller RTP sender parameter mutation | Let `RTPSender.SetParameters(...)` express more of libwebrtc's supported surface before we reject it in Go | Go validation currently blocks codec mutation, header-extension mutation, and most non-RID encoding fields before the shim gets a chance | `pkg/pc` first, then possibly `internal/ffi` + `shim` | `pkg/pc/webrtc_helpers.go`, `pkg/pc/peerconnection.go`, `internal/ffi/peerconnection.go`, `shim/shim.h` |
 | P1 | Simulcast/SVC encoder parity | Make multi-layer and scalability behavior predictable across the thin path | Sender layer/scalability controls exist, but encoder init can still report `"simulcast parameters not supported"` and the exact supported matrix is not mapped cleanly | likely `shim` + `internal/ffi`, maybe some `pkg/encoder` / `pkg/pc` follow-up | `shim/shim_video_codec.cc`, `internal/ffi/*encoder*`, `pkg/encoder`, `pkg/pc/peerconnection.go` |
+| P1 | Capture-enabled shim packaging parity | Make thin capture APIs reliably usable on shipped Linux shim assets | Thin `pkg/media` APIs already exist, but runtime parity depends on publishing the right capture-enabled shim builds, especially for Linux desktop capture | release/build + `shim` + runtime validation | `pkg/media/media.go`, `internal/ffi/device.go`, `shim/shim_capture.cc`, build/release workflows |
+| P2 | PeerConnection configuration parity | Keep the constructor as close as possible to real `webrtc.Configuration` semantics without fake helper policy | Zero-value config support is landing, but some config fields are still intentionally narrower than Pion/browser behavior because the shim does not represent them yet | mostly `pkg/pc` + `internal/ffi`, possibly `shim` later | `pkg/pc/webrtc_helpers.go`, `pkg/pc/peerconnection.go`, `internal/ffi/peerconnection.go`, `shim/shim_peer_connection.cc` |
 | P2 | Receiver feedback/telemetry completeness | Decide which receiver-side hooks should be first-class versus intentionally PC-stats-only | Jitter buffer min delay is present, but receiver-local observability remains thinner than sender/PC parity | mostly `pkg/pc` + `internal/ffi` + `shim` | `pkg/pc/peerconnection.go`, `internal/ffi/peerconnection.go`, `shim/shim_rtp_receiver.cc` |
 
 ## Detailed Gap Notes
@@ -198,6 +200,58 @@ What "done" looks like:
 - thin-layer APIs fail only for real native limitations
 - tests cover at least one real negotiated multi-layer path end to end
 
+### 7. Capture-enabled shim packaging parity
+
+What we want:
+
+- shipped Linux shim artifacts that keep desktop/window capture support working
+- runtime diagnostics that make capture capability obvious before callers hit it
+
+Why it matters:
+
+- the thin capture APIs are already present
+- parity fails in practice if the published shim is built without the expected
+  capture stack
+- this is especially relevant for Linux X11/PipeWire desktop capture
+
+Current blockers:
+
+- parity depends on build/release packaging, not just Go API surface
+- capture runtime support is gated by the loaded shim and native build features
+
+What "done" looks like:
+
+- published Linux shim assets explicitly include the intended capture support
+- release validation proves capture capability in the supported environments
+- diagnostics/reporting clearly differentiate "API exists" from "runtime build
+  lacks capture support"
+
+### 8. Peer connection configuration parity
+
+What we want:
+
+- the constructor should accept as much of `webrtc.Configuration` as we can
+  represent faithfully
+- only real shim/native gaps should remain rejected
+
+Why it matters:
+
+- this is part of thin-layer trust: callers should not have to guess which
+  config fields are rejected for historical reasons versus native constraints
+
+Current blockers:
+
+- some fields remain intentionally narrower than browser/Pion behavior
+- policy serialization still lives in the Go/FFI bridge
+
+What "done" looks like:
+
+- every still-rejected configuration field is documented as either:
+  - not representable in the shim today
+  - intentionally unsupported
+  - newly supported end to end
+- constructor behavior matches native reality, not legacy wrapper policy
+
 ## Implementation Order
 
 ### Phase 1: Close the core telemetry loop
@@ -228,6 +282,12 @@ Why this first:
 1. Map exact simulcast/SVC support matrix
 2. Fix native/shim gaps needed for stable multilayer behavior
 3. Add end-to-end parity tests for negotiated multilayer send paths
+
+### Phase 5: Finish packaging and remaining thin-surface cleanup
+
+1. Capture-enabled Linux shim packaging/release validation
+2. Remaining `webrtc.Configuration` parity cleanup
+3. Receiver-side observability polish where still needed
 
 ## Test Matrix We Need
 
