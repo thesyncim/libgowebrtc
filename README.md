@@ -356,7 +356,7 @@ capture-backed track to Pion yourself. If you need exact stream-ID/msid
 semantics, use the lower-level `pkg/track` or `pkg/pc` constructors directly
 and set stream IDs there instead of relying on `pkg/media` helpers.
 
-### Browser Codec Presets
+### Explicit Codec Preferences
 
 ```go
 import (
@@ -366,12 +366,23 @@ import (
     "github.com/thesyncim/libgowebrtc/pkg/track"
 )
 
-// Chrome-shaped local encode preferences.
-preset := pioncodec.BrowserPreset(
-    pioncodec.BrowserChrome,
-    pioncodec.DirectionEncode,
-    pioncodec.PresetModeSupported,
-)
+codecSet := pioncodec.CodecSetFromParameters([]webrtc.RTPCodecParameters{
+    {
+        RTPCodecCapability: webrtc.RTPCodecCapability{
+            MimeType:  webrtc.MimeTypeVP8,
+            ClockRate: 90000,
+        },
+        PayloadType: 96,
+    },
+    {
+        RTPCodecCapability: webrtc.RTPCodecCapability{
+            MimeType:    webrtc.MimeTypeH264,
+            ClockRate:   90000,
+            SDPFmtpLine: "packetization-mode=1;profile-level-id=42e01f;level-asymmetry-allowed=1",
+        },
+        PayloadType: 120,
+    },
+})
 
 videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
     ID:               "video",
@@ -380,10 +391,10 @@ videoTrack, _ := track.NewVideoTrack(track.VideoTrackConfig{
     Bitrate:          2_000_000,
     FPS:              30,
     MTU:              1200,
-    CodecPreferences: preset.SupportedOnly().VideoCodecs(),
+    CodecPreferences: codecSet.SupportedOnly().VideoCodecs(),
 })
 
-// Apply the same supported subset to libgowebrtc's native PeerConnection wrapper.
+// Apply the same explicit preferences to libgowebrtc's native PeerConnection wrapper.
 pc, _ := pc.NewPeerConnection(pc.Configuration{
     BundlePolicy:       pc.BundlePolicyBalanced,
     RTCPMuxPolicy:      pc.RTCPMuxPolicyRequire,
@@ -392,18 +403,12 @@ pc, _ := pc.NewPeerConnection(pc.Configuration{
     ICEServers:         nil,
 })
 transceiver, _ := pc.AddTransceiver("video", &pc.TransceiverInit{Direction: pc.TransceiverDirectionSendOnly})
-_ = transceiver.SetCodecPreferences(preset.SupportedOnly().VideoCodecs())
+_ = transceiver.SetCodecPreferences(codecSet.SupportedOnly().VideoCodecs())
 
-// For direct Pion use, keep the full browser-shaped RTP codec list.
+// For direct Pion use, hand Pion the full RTP codec list you want negotiated.
 pionPC, _ := webrtc.NewPeerConnection(webrtc.Configuration{})
 recv, _ := pionPC.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
-_ = recv.SetCodecPreferences(
-    pioncodec.BrowserPreset(
-        pioncodec.BrowserChrome,
-        pioncodec.DirectionDecode,
-        pioncodec.PresetModeNegotiation,
-    ).VideoCodecs(),
-)
+_ = recv.SetCodecPreferences(codecSet.VideoCodecs())
 ```
 
 ### Migration Notes
@@ -425,11 +430,16 @@ _ = peerConnection.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.S
 _ = peerConnection.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
 
 // The advanced codec path is raw Pion RTP codec parameters everywhere.
-prefs := pioncodec.BrowserPreset(
-    pioncodec.BrowserChrome,
-    pioncodec.DirectionEncode,
-    pioncodec.PresetModeSupported,
-).SupportedOnly().VideoCodecs()
+codecSet := pioncodec.CodecSetFromParameters([]webrtc.RTPCodecParameters{
+    {
+        RTPCodecCapability: webrtc.RTPCodecCapability{
+            MimeType:  webrtc.MimeTypeVP8,
+            ClockRate: 90000,
+        },
+        PayloadType: 96,
+    },
+})
+prefs := codecSet.SupportedOnly().VideoCodecs()
 
 _ = transceiver.SetCodecPreferences(prefs)
 _ = sender.SetPreferredCodec(prefs[0])
