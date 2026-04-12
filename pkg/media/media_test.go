@@ -227,6 +227,55 @@ func TestGetUserMediaResolvesDevicesAndSettings(t *testing.T) {
 	}
 }
 
+func TestGetUserMediaPreservesEmptyDeviceLabels(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
+			return []ffi.DeviceInfo{
+				{DeviceID: "cam-1", Kind: ffi.DeviceKindVideoInput},
+				{DeviceID: "mic-1", Kind: ffi.DeviceKindAudioInput},
+			}, nil
+		},
+		newVideo: func(string, int, int, int) (videoCaptureHandle, error) { return stubVideoCapture{}, nil },
+		newAudio: func(string, int, int) (audioCaptureHandle, error) { return stubAudioCapture{}, nil },
+	})
+
+	stream, err := GetUserMedia(Constraints{
+		Video: &VideoConstraints{
+			Width:     ExactInt(640),
+			Height:    ExactInt(480),
+			FrameRate: ExactFloat(30),
+			DeviceID:  ExactString("cam-1"),
+			Codec:     codec.VP8,
+			Bitrate:   500_000,
+		},
+		Audio: &AudioConstraints{
+			SampleRate:   ExactInt(48_000),
+			ChannelCount: ExactInt(2),
+			DeviceID:     ExactString("mic-1"),
+			Bitrate:      64_000,
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetUserMedia() error = %v", err)
+	}
+
+	videoTracks := stream.GetVideoTracks()
+	audioTracks := stream.GetAudioTracks()
+	if len(videoTracks) != 1 {
+		t.Fatalf("GetVideoTracks() len = %d, want 1", len(videoTracks))
+	}
+	if len(audioTracks) != 1 {
+		t.Fatalf("GetAudioTracks() len = %d, want 1", len(audioTracks))
+	}
+	if got := videoTracks[0].Label(); got != "" {
+		t.Fatalf("video Label() = %q, want empty label", got)
+	}
+	if got := audioTracks[0].Label(); got != "" {
+		t.Fatalf("audio Label() = %q, want empty label", got)
+	}
+}
+
 func TestGetUserMediaRejectsMissingVideoBitrate(t *testing.T) {
 	installMediaFFIStubs(t, mediaFFIStubs{
 		loadLibrary: func() error { return nil },
