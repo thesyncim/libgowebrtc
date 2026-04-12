@@ -802,7 +802,17 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 		return ErrLibraryNotLoaded
 	}
 
-	params := shimVideoTrackSourcePushFrameParams{
+	params := newVideoTrackSourcePushFrameParams(source, yPlane, uPlane, vPlane, yStride, uStride, vStride, timestampUs)
+	result := shimVideoTrackSourcePushFrame(uintptr(unsafe.Pointer(params)))
+	runtime.KeepAlive(yPlane)
+	runtime.KeepAlive(uPlane)
+	runtime.KeepAlive(vPlane)
+	runtime.KeepAlive(params)
+	return ShimError(result)
+}
+
+func newVideoTrackSourcePushFrameParams(source uintptr, yPlane, uPlane, vPlane []byte, yStride, uStride, vStride int, timestampUs int64) *shimVideoTrackSourcePushFrameParams {
+	return &shimVideoTrackSourcePushFrameParams{
 		Source:      source,
 		YPlane:      ByteSlicePtr(yPlane),
 		UPlane:      ByteSlicePtr(uPlane),
@@ -812,12 +822,6 @@ func VideoTrackSourcePushFrame(source uintptr, yPlane, uPlane, vPlane []byte, yS
 		VStride:     int32(vStride),
 		TimestampUs: timestampUs,
 	}
-	result := shimVideoTrackSourcePushFrame(uintptr(unsafe.Pointer(&params)))
-	runtime.KeepAlive(yPlane)
-	runtime.KeepAlive(uPlane)
-	runtime.KeepAlive(vPlane)
-	runtime.KeepAlive(&params)
-	return ShimError(result)
 }
 
 // PeerConnectionAddVideoTrackFromSource adds a video track using a source.
@@ -875,14 +879,14 @@ func AudioTrackSourcePushFrame(source uintptr, samples []int16, numSamples int, 
 	}
 
 	params := newAudioTrackSourcePushFrameParams(source, samples, numSamples, timestampUs)
-	result := shimAudioTrackSourcePushFrame(uintptr(unsafe.Pointer(&params)))
+	result := shimAudioTrackSourcePushFrame(uintptr(unsafe.Pointer(params)))
 	runtime.KeepAlive(samples)
-	runtime.KeepAlive(&params)
+	runtime.KeepAlive(params)
 	return ShimError(result)
 }
 
-func newAudioTrackSourcePushFrameParams(source uintptr, samples []int16, numSamples int, timestampUs int64) shimAudioTrackSourcePushFrameParams {
-	return shimAudioTrackSourcePushFrameParams{
+func newAudioTrackSourcePushFrameParams(source uintptr, samples []int16, numSamples int, timestampUs int64) *shimAudioTrackSourcePushFrameParams {
+	return &shimAudioTrackSourcePushFrameParams{
 		Source:      source,
 		Samples:     Int16SlicePtr(samples),
 		NumSamples:  int32(numSamples),
