@@ -703,6 +703,7 @@ func (t *Track) WriteAudioFrame(f *frame.AudioFrame) error {
 	return ffi.AudioTrackSourcePushFrame(
 		t.sourceHandle,
 		samples,
+		f.NumSamples,
 		timestampUs,
 	)
 }

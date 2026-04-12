@@ -350,7 +350,7 @@ func BenchmarkFFIAudioPushFrame(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		ffi.AudioTrackSourcePushFrame(source, samples, int64(i)*10000)
+		ffi.AudioTrackSourcePushFrame(source, samples, 480, int64(i)*10000)
 	}
 }
 
