@@ -371,13 +371,7 @@ func TestPeerConnection_DataChannel_WithOptions(t *testing.T) {
 }
 
 func TestPeerConnection_Track_VideoTrackCreation(t *testing.T) {
-	testutil.SkipIfNoShim(t)
-
-	pc, err := NewPeerConnection(DefaultConfiguration())
-	if err != nil {
-		t.Fatalf("NewPeerConnection: %v", err)
-	}
-	defer pc.Close()
+	pc := &PeerConnection{}
 
 	track, err := pc.CreateVideoTrack("video-1", 640, 480)
 	if err != nil {
@@ -396,13 +390,7 @@ func TestPeerConnection_Track_VideoTrackCreation(t *testing.T) {
 }
 
 func TestPeerConnection_Track_AudioTrackCreation(t *testing.T) {
-	testutil.SkipIfNoShim(t)
-
-	pc, err := NewPeerConnection(DefaultConfiguration())
-	if err != nil {
-		t.Fatalf("NewPeerConnection: %v", err)
-	}
-	defer pc.Close()
+	pc := &PeerConnection{}
 
 	track, err := pc.CreateAudioTrack("audio-1")
 	if err != nil {
@@ -418,13 +406,7 @@ func TestPeerConnection_Track_AudioTrackCreation(t *testing.T) {
 }
 
 func TestPeerConnection_Track_InvalidDimensions(t *testing.T) {
-	testutil.SkipIfNoShim(t)
-
-	pc, err := NewPeerConnection(DefaultConfiguration())
-	if err != nil {
-		t.Fatalf("NewPeerConnection: %v", err)
-	}
-	defer pc.Close()
+	var pc PeerConnection
 
 	tests := []struct {
 		name   string
@@ -448,13 +430,7 @@ func TestPeerConnection_Track_InvalidDimensions(t *testing.T) {
 }
 
 func TestPeerConnection_Track_InvalidAudioParams(t *testing.T) {
-	testutil.SkipIfNoShim(t)
-
-	pc, err := NewPeerConnection(DefaultConfiguration())
-	if err != nil {
-		t.Fatalf("NewPeerConnection: %v", err)
-	}
-	defer pc.Close()
+	var pc PeerConnection
 
 	tests := []struct {
 		name       string
