@@ -163,22 +163,22 @@ func (l *ScenarioLab) runStep(ctx context.Context, step ScenarioStep) error {
 	var actionErr error
 	switch step.Action {
 	case ScenarioActionSetLayerActive:
-		if !l.session.policy.SupportsSimulcast && !l.session.policy.SupportsLayeredVP9 && !l.session.policy.SupportsLayeredAV1 {
-			l.session.recordSkip(fmt.Sprintf("layer activation scenarios are not guaranteed for validation profile %q", l.session.policy.Profile))
-			return nil
-		}
 		if step.Video == nil {
 			return errors.New("missing video publisher")
+		}
+		if !l.session.cfg.Assertions.LayerControl {
+			l.session.recordSkip("video layer activation is disabled by session config")
+			return nil
 		}
 		actionErr = step.Video.SetLayerActive(step.LayerIndex, step.Active)
 
 	case ScenarioActionSetLayerBitrate:
-		if !l.session.policy.SupportsSimulcast && !l.session.policy.SupportsLayeredVP9 && !l.session.policy.SupportsLayeredAV1 {
-			l.session.recordSkip(fmt.Sprintf("layer bitrate scenarios are not guaranteed for validation profile %q", l.session.policy.Profile))
-			return nil
-		}
 		if step.Video == nil {
 			return errors.New("missing video publisher")
+		}
+		if !l.session.cfg.Assertions.LayerControl {
+			l.session.recordSkip("video layer bitrate control is disabled by session config")
+			return nil
 		}
 		actionErr = step.Video.SetLayerBitrate(step.LayerIndex, step.Bitrate)
 
@@ -189,12 +189,12 @@ func (l *ScenarioLab) runStep(ctx context.Context, step ScenarioStep) error {
 		step.Video.RequestKeyFrame()
 
 	case ScenarioActionCodecRenegotiation, ScenarioActionICERestart, ScenarioActionTrackAdd, ScenarioActionTrackRemove, ScenarioActionExternal:
-		if step.Action == ScenarioActionCodecRenegotiation && !l.session.policy.SupportsCodecSwitchAssertions {
-			l.session.recordSkip(fmt.Sprintf("codec renegotiation assertions are not guaranteed for validation profile %q", l.session.policy.Profile))
-			return nil
-		}
 		if step.Callback == nil {
 			return errors.New("missing external callback")
+		}
+		if step.Action == ScenarioActionCodecRenegotiation && !l.session.cfg.Assertions.CodecSwitch {
+			l.session.recordSkip("codec switch assertions are disabled by session config")
+			return nil
 		}
 		actionErr = step.Callback(ctx, l.session)
 
@@ -258,7 +258,7 @@ func (l *ScenarioLab) awaitExpectation(ctx context.Context, expect ScenarioExpec
 		return nil
 	}
 
-	timeout := expect.timeout(l.session.cfg.SwitchRecoveryThreshold)
+	timeout := expect.timeout(l.session.cfg.RecoveryTimeout)
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -308,16 +308,16 @@ func (l *ScenarioLab) awaitExpectation(ctx context.Context, expect ScenarioExpec
 }
 
 func (l *ScenarioLab) normalizeExpectation(expect ScenarioExpectation) ScenarioExpectation {
-	if expect.CodecMime != "" && !l.session.policy.SupportsCodecSwitchAssertions {
-		l.session.recordSkip(fmt.Sprintf("codec switch assertions are not guaranteed for validation profile %q", l.session.policy.Profile))
+	if expect.CodecMime != "" && !l.session.cfg.Assertions.CodecSwitch {
+		l.session.recordSkip("codec switch assertions are disabled by session config")
 		expect.CodecMime = ""
 	}
-	if expect.VideoRID != "" && !l.session.policy.SupportsRID {
-		l.session.recordSkip(fmt.Sprintf("RID assertions are not guaranteed for validation profile %q", l.session.policy.Profile))
+	if expect.VideoRID != "" && !l.session.cfg.Assertions.RID {
+		l.session.recordSkip("RID assertions are disabled by session config")
 		expect.VideoRID = ""
 	}
-	if expect.HasVideoLayer && !l.session.policy.SupportsDependencyDescriptor {
-		l.session.recordSkip(fmt.Sprintf("dependency-descriptor layer assertions are not guaranteed for validation profile %q", l.session.policy.Profile))
+	if expect.HasVideoLayer && !l.session.cfg.Assertions.VideoLayer {
+		l.session.recordSkip("video layer assertions are disabled by session config")
 		expect.HasVideoLayer = false
 		expect.VideoLayer = pionrecv.VideoLayer{}
 	}

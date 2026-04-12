@@ -1402,6 +1402,7 @@ Cleaned up public API to hide C implementation details and provide more browser/
 ### Deferred Changes
 
 - Continue shrinking `pkg/media` away from browser-derived stream/track vocabulary and toward explicit capture/runtime helpers.
+- Keep `pkg/testkit/validate` on explicit session config and assertion policy only; do not reintroduce browser/profile naming there.
 
 ---
 

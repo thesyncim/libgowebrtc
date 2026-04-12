@@ -209,26 +209,37 @@ func (f *fakeMediaTrack) ReadyState() string            { return "live" }
 func (f *fakeMediaTrack) Stop()                         {}
 func (f *fakeMediaTrack) Clone() media.MediaStreamTrack { return &fakeMediaTrack{enabled: f.enabled} }
 
-func TestPolicyForProfile(t *testing.T) {
-	chrome := PolicyForProfile(ProfileChrome)
-	if !chrome.SupportsSimulcast || !chrome.SupportsDependencyDescriptor {
-		t.Fatalf("chrome policy = %+v, want simulcast and DD support", chrome)
+func TestDefaultSessionConfig(t *testing.T) {
+	cfg := DefaultSessionConfig()
+	if cfg.StatsPollInterval != 250*time.Millisecond {
+		t.Fatalf("StatsPollInterval = %v, want 250ms", cfg.StatsPollInterval)
 	}
-
-	safari := PolicyForProfile(ProfileSafari)
-	if safari.SupportsDependencyDescriptor || safari.SupportsLayeredVP9 {
-		t.Fatalf("safari policy = %+v, want conservative layered support flags disabled", safari)
+	if cfg.VideoFreezeThreshold != 450*time.Millisecond {
+		t.Fatalf("VideoFreezeThreshold = %v, want 450ms", cfg.VideoFreezeThreshold)
+	}
+	if cfg.PacketGapThreshold != 250*time.Millisecond {
+		t.Fatalf("PacketGapThreshold = %v, want 250ms", cfg.PacketGapThreshold)
+	}
+	if cfg.AudioFreezeThreshold != 150*time.Millisecond {
+		t.Fatalf("AudioFreezeThreshold = %v, want 150ms", cfg.AudioFreezeThreshold)
+	}
+	if cfg.RecoveryTimeout != 1500*time.Millisecond {
+		t.Fatalf("RecoveryTimeout = %v, want 1500ms", cfg.RecoveryTimeout)
+	}
+	if cfg.Assertions != (AssertionPolicy{}) {
+		t.Fatalf("Assertions = %+v, want zero-value explicit policy", cfg.Assertions)
 	}
 }
 
 func TestNewSessionsAndTrackWrappers(t *testing.T) {
 	pionPC := mustNewPionPeerConnection(t)
-	pionSession := NewPionSession(pionPC, SessionConfig{})
+	cfg := DefaultSessionConfig()
+	pionSession := NewPionSession(pionPC, cfg)
 	if pionSession == nil {
 		t.Fatal("NewPionSession() = nil")
 	}
-	if got := pionSession.Snapshot().Profile; got != ProfileChrome {
-		t.Fatalf("pionSession profile = %q, want chrome", got)
+	if got := pionSession.Snapshot().Config; got != cfg {
+		t.Fatalf("pionSession config = %+v, want %+v", got, cfg)
 	}
 
 	dc, err := pionPC.CreateDataChannel("control", nil)
@@ -358,7 +369,12 @@ func TestSessionWaitersAndCodecSwitch(t *testing.T) {
 		ice:       webrtc.ICEConnectionStateChecking,
 		signaling: webrtc.SignalingStateHaveLocalOffer,
 	}
-	session := newSession(peer, SessionConfig{StatsPollInterval: 10 * time.Millisecond})
+	session := newSession(peer, SessionConfig{
+		StatsPollInterval: 10 * time.Millisecond,
+		Assertions: AssertionPolicy{
+			CodecSwitch: true,
+		},
+	})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{
 		id:           "video-1",
@@ -415,9 +431,9 @@ func TestSessionWaitersAndCodecSwitch(t *testing.T) {
 
 func TestSessionObserveRemoteTracks(t *testing.T) {
 	session := newSession(nil, SessionConfig{
-		FreezeThreshold:   5 * time.Millisecond,
-		AudioGapThreshold: 5 * time.Millisecond,
-		EventHistory:      8,
+		VideoFreezeThreshold: 5 * time.Millisecond,
+		AudioFreezeThreshold: 5 * time.Millisecond,
+		EventHistory:         8,
 	})
 
 	video := newFakeRemoteVideoTrack("video-1", "stream-1", "h", codec.VP8, webrtc.RTPCodecParameters{
@@ -512,6 +528,9 @@ func TestSessionDataChannelHeartbeatsAndScenarioLab(t *testing.T) {
 		EnableDataChannelHeartbeats: true,
 		HeartbeatInterval:           10 * time.Millisecond,
 		HeartbeatTimeout:            50 * time.Millisecond,
+		Assertions: AssertionPolicy{
+			LayerControl: true,
+		},
 	})
 	dc := &fakeDataChannel{label: "control", id: 7, state: "connecting"}
 	session.observeDataChannel(dc)
@@ -1030,8 +1049,8 @@ func TestHasOpenDataChannel(t *testing.T) {
 	}
 }
 
-func TestSessionProfilePolicySkipsUnsupportedAssertions(t *testing.T) {
-	session := newSession(nil, SessionConfig{Profile: ProfileSafari})
+func TestSessionAssertionPolicySkipsDisabledAssertions(t *testing.T) {
+	session := newSession(nil, DefaultSessionConfig())
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{id: "video-1"}
 	session.mu.Unlock()
@@ -1056,7 +1075,12 @@ func TestSessionProfilePolicySkipsUnsupportedAssertions(t *testing.T) {
 }
 
 func TestSessionVideoSpecificWaiters(t *testing.T) {
-	session := newSession(nil, SessionConfig{})
+	session := newSession(nil, SessionConfig{
+		Assertions: AssertionPolicy{
+			RID:        true,
+			VideoLayer: true,
+		},
+	})
 	session.mu.Lock()
 	session.videoTracks["video-1"] = &videoTrackState{
 		id:              "video-1",
@@ -1086,7 +1110,7 @@ func TestSessionVideoSpecificWaiters(t *testing.T) {
 }
 
 func TestScenarioLabSkipsUnsupportedLayerScenarios(t *testing.T) {
-	session := newSession(nil, SessionConfig{Profile: ProfileSafari})
+	session := newSession(nil, DefaultSessionConfig())
 	lab := NewScenarioLab(session, LabConfig{})
 	video := &fakePublishedVideo{}
 
