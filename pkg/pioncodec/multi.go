@@ -77,7 +77,7 @@ func (e *MultiVideoEncoder) SetCodec(params webrtc.RTPCodecParameters) error {
 
 	params = normalizeCodecParameters(params)
 	for _, codec := range e.codecs {
-		if codecParametersMatch(codec, params) {
+		if CodecParametersMatch(codec, params) {
 			e.current = codec
 			return nil
 		}
@@ -173,7 +173,7 @@ func (e *MultiAudioEncoder) SetCodec(params webrtc.RTPCodecParameters) error {
 
 	params = normalizeCodecParameters(params)
 	for _, codec := range e.codecs {
-		if codecParametersMatch(codec, params) {
+		if CodecParametersMatch(codec, params) {
 			e.current = codec
 			return nil
 		}

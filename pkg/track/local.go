@@ -847,7 +847,7 @@ func (t *VideoTrack) createEncoder() (encoder.VideoEncoder, error) {
 
 func (t *VideoTrack) selectVideoCodec(offered []webrtc.RTPCodecParameters) (*webrtc.RTPCodecParameters, codec.Type, error) {
 	if len(t.config.CodecPreferences) > 0 {
-		selected, ok := pioncodec.Select(t.config.CodecPreferences, offered)
+		selected, ok := pioncodec.SelectCodec(t.config.CodecPreferences, offered)
 		if !ok {
 			return nil, 0, fmt.Errorf("no matching video codec preference")
 		}
@@ -1050,7 +1050,7 @@ func (t *AudioTrack) Bind(ctx webrtc.TrackLocalContext) (webrtc.RTPCodecParamete
 
 func (t *AudioTrack) selectAudioCodec(offered []webrtc.RTPCodecParameters) (*webrtc.RTPCodecParameters, error) {
 	if len(t.config.CodecPreferences) > 0 {
-		selected, ok := pioncodec.Select(t.config.CodecPreferences, offered)
+		selected, ok := pioncodec.SelectCodec(t.config.CodecPreferences, offered)
 		if !ok {
 			return nil, fmt.Errorf("no matching audio codec preference")
 		}
