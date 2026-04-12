@@ -523,13 +523,13 @@ func (h *subscriber) OnTrack(track receivedTrack) {
 }
 ```
 
-### Browser-Like Remote Tracks
+### Explicit Remote Tracks
 
-When you want a browser-shaped remote track surface, bind the backend track
-explicitly. The helper layer is still backend-neutral, but it no longer hides
-`OnTrack` behind a registry or synthetic event wrapper.
+When you want a remote track surface, bind the backend track explicitly. The
+helper layer stays backend-neutral, but it no longer hides `OnTrack` behind a
+registry or synthetic event wrapper.
 
-The browser-like layer is backend-neutral:
+The receive wrapper layer is backend-neutral:
 - `media.RemoteTrack`, `media.RemoteVideoTrack`, and `media.RemoteAudioTrack`
   work across Pion and native `pkg/pc`
 - `media.PionRemoteVideoTrack` / `media.PionRemoteAudioTrack` add decoded-track
@@ -597,8 +597,8 @@ peer.SetOnTrack(func(track *pc.Track, receiver *pc.RTPReceiver) {
 ```
 
 If you already manage the Pion receive pipeline yourself with
-`pionrecv.BindRemoteTrack(...)`, use `media.BindDecodedTrack(decoded)`
-to project that decoded track into the same browser-like remote-track model.
+`pionrecv.BindRemoteTrack(...)`, use `media.BindDecodedTrack(decoded)` to
+project that decoded track into the same explicit remote-track model.
 
 ### Low-Level Encoding (Allocation-Free)
 
