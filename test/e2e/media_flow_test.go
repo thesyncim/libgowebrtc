@@ -2,11 +2,13 @@ package e2e
 
 import (
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/thesyncim/libgowebrtc/internal/ffi"
 	"github.com/thesyncim/libgowebrtc/pkg/codec"
+	"github.com/thesyncim/libgowebrtc/pkg/frame"
 	"github.com/thesyncim/libgowebrtc/pkg/pc"
 )
 
@@ -498,32 +500,55 @@ func TestConcurrentFrameWrites(t *testing.T) {
 	track, _ := p.CreateVideoTrack("video-concurrent", 640, 480)
 	p.AddTrack(track, "stream-0")
 
-	// Write frames from multiple goroutines
+	// Generate frames concurrently, but keep the native track write path single-writer.
+	// The sender path is not a concurrency primitive; this still stresses concurrent
+	// producers without relying on unsupported parallel entry into libwebrtc.
 	const numGoroutines = 4
 	const framesPerGoroutine = 20
 
-	done := make(chan bool, numGoroutines)
+	frameCh := make(chan *frame.VideoFrame, numGoroutines)
 	errors := make(chan error, numGoroutines*framesPerGoroutine)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for f := range frameCh {
+			if err := track.WriteVideoFrame(f); err != nil {
+				errors <- err
+			}
+		}
+	}()
+
+	var producers sync.WaitGroup
+	producers.Add(numGoroutines)
 
 	for g := 0; g < numGoroutines; g++ {
 		go func(goroutineID int) {
+			defer producers.Done()
 			for i := 0; i < framesPerGoroutine; i++ {
-				frame := CreateTestFrame(640, 480, uint32(goroutineID*1000+i))
-				if err := track.WriteVideoFrame(frame); err != nil {
-					errors <- err
-				}
+				frameCh <- CreateTestFrame(640, 480, uint32(goroutineID*1000+i))
 			}
-			done <- true
 		}(g)
 	}
 
-	// Wait for all goroutines
-	for i := 0; i < numGoroutines; i++ {
-		select {
-		case <-done:
-		case <-time.After(shortConnectTimeout):
-			t.Fatal("Timeout waiting for goroutines")
-		}
+	// Wait for producers to finish generating frames, then let the writer drain them.
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		producers.Wait()
+		close(frameCh)
+	}()
+
+	select {
+	case <-doneCh:
+	case <-time.After(shortConnectTimeout):
+		t.Fatal("Timeout waiting for frame producers")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(shortConnectTimeout):
+		t.Fatal("Timeout waiting for frame writer")
 	}
 
 	close(errors)

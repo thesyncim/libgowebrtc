@@ -352,24 +352,19 @@ func deriveEncodingConfigs(cfg VideoPublishConfig) []encodingConfig {
 	if spatialLayers <= 0 {
 		return nil
 	}
+	if len(cfg.SVC.Layers) < spatialLayers {
+		return nil
+	}
 
-	weights := defaultLayerWeights(spatialLayers)
 	widths := make([]int, spatialLayers)
 	heights := make([]int, spatialLayers)
-	bitrates := make([]uint32, spatialLayers)
 	for i := 0; i < spatialLayers; i++ {
 		shift := spatialLayers - i - 1
 		widths[i] = evenDimension(maxInt(2, cfg.Width>>shift))
 		heights[i] = evenDimension(maxInt(2, cfg.Height>>shift))
-		bitrates[i] = weightedBitrate(cfg.Bitrate, weights[i], weights)
-	}
-	if len(cfg.SVC.Layers) > 0 {
-		for i := 0; i < spatialLayers && i < len(cfg.SVC.Layers); i++ {
-			layer := cfg.SVC.Layers[i]
-			widths[i] = clampPositive(layer.Width, widths[i])
-			heights[i] = clampPositive(layer.Height, heights[i])
-			bitrates[i] = clampPositiveUint32(layer.Bitrate, bitrates[i])
-		}
+		layer := cfg.SVC.Layers[i]
+		widths[i] = clampPositive(layer.Width, widths[i])
+		heights[i] = clampPositive(layer.Height, heights[i])
 	}
 
 	rids := defaultRIDs(spatialLayers)
@@ -380,21 +375,21 @@ func deriveEncodingConfigs(cfg VideoPublishConfig) []encodingConfig {
 
 	layers := make([]encodingConfig, 0, spatialLayers)
 	for i := 0; i < spatialLayers; i++ {
-		scale := float64(cfg.Width) / float64(widths[i])
-		active := true
-		if len(cfg.SVC.Layers) > 0 && i < len(cfg.SVC.Layers) {
-			active = cfg.SVC.Layers[i].Active
+		layer := cfg.SVC.Layers[i]
+		if layer.Bitrate == 0 {
+			return nil
 		}
+		scale := float64(cfg.Width) / float64(widths[i])
 		layers = append(layers, encodingConfig{
 			RID:     rids[i],
 			Width:   widths[i],
 			Height:  heights[i],
-			Bitrate: bitrates[i],
+			Bitrate: layer.Bitrate,
 			Scale:   scale,
 			SVC: &codec.SVCConfig{
 				Mode: temporalMode,
 			},
-			Active: active,
+			Active: layer.Active,
 		})
 	}
 	return layers
@@ -424,21 +419,6 @@ func closePublishedTracks(encodings []*encodingRuntime) error {
 	return firstErr
 }
 
-func defaultLayerWeights(count int) []int {
-	switch count {
-	case 2:
-		return []int{1, 2}
-	case 3:
-		return []int{1, 2, 4}
-	default:
-		out := make([]int, count)
-		for i := range out {
-			out[i] = 1
-		}
-		return out
-	}
-}
-
 func defaultRIDs(count int) []string {
 	switch count {
 	case 2:
@@ -448,17 +428,6 @@ func defaultRIDs(count int) []string {
 	default:
 		return []string{""}
 	}
-}
-
-func weightedBitrate(total uint32, weight int, weights []int) uint32 {
-	sum := 0
-	for _, w := range weights {
-		sum += w
-	}
-	if sum == 0 {
-		return total
-	}
-	return uint32((uint64(total) * uint64(weight)) / uint64(sum))
 }
 
 func clampPositive(v, fallback int) int {
