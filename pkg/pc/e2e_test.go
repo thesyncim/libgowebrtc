@@ -8,6 +8,7 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/thesyncim/libgowebrtc/internal/testutil"
+	"github.com/thesyncim/libgowebrtc/pkg/frame"
 )
 
 // End-to-end tests for PeerConnection that require the shim library.
@@ -689,6 +690,268 @@ func TestJitterBufferStatsViaGetStats(t *testing.T) {
 	t.Log("Jitter buffer stats retrieval via GetStats() succeeded")
 }
 
+func TestGetCongestionState(t *testing.T) {
+	cfg := DefaultConfiguration()
+	cfg.ICEServers = nil
+
+	senderPC, err := NewPeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("NewPeerConnection(sender): %v", err)
+	}
+	defer senderPC.Close()
+
+	receiverPC, err := NewPeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("NewPeerConnection(receiver): %v", err)
+	}
+	defer receiverPC.Close()
+
+	senderCandidates := make(chan *ICECandidate, 16)
+	receiverCandidates := make(chan *ICECandidate, 16)
+	receiverFrames := make(chan struct{}, 16)
+
+	senderPC.SetOnICECandidate(func(candidate *ICECandidate) {
+		select {
+		case senderCandidates <- candidate:
+		default:
+		}
+	})
+	receiverPC.SetOnICECandidate(func(candidate *ICECandidate) {
+		select {
+		case receiverCandidates <- candidate:
+		default:
+		}
+	})
+	receiverPC.SetOnTrack(func(track *Track, receiver *RTPReceiver, streamID string) {
+		if track.Kind() != "video" {
+			return
+		}
+		if err := track.SetOnVideoFrame(func(*frame.VideoFrame) {
+			select {
+			case receiverFrames <- struct{}{}:
+			default:
+			}
+		}); err != nil {
+			t.Errorf("SetOnVideoFrame() failed: %v", err)
+		}
+	})
+
+	videoTrack, err := senderPC.CreateVideoTrack("video-congestion", 96, 96)
+	if err != nil {
+		t.Fatalf("CreateVideoTrack: %v", err)
+	}
+	if _, err := senderPC.AddTrack(videoTrack, "stream-congestion"); err != nil {
+		t.Fatalf("AddTrack: %v", err)
+	}
+
+	offer, err := senderPC.CreateOffer(nil)
+	if err != nil {
+		t.Fatalf("CreateOffer: %v", err)
+	}
+	if err := senderPC.SetLocalDescription(offer); err != nil {
+		t.Fatalf("SetLocalDescription(offer): %v", err)
+	}
+	if err := receiverPC.SetRemoteDescription(offer); err != nil {
+		t.Fatalf("SetRemoteDescription(offer): %v", err)
+	}
+
+	answer, err := receiverPC.CreateAnswer(nil)
+	if err != nil {
+		t.Fatalf("CreateAnswer: %v", err)
+	}
+	if err := receiverPC.SetLocalDescription(answer); err != nil {
+		t.Fatalf("SetLocalDescription(answer): %v", err)
+	}
+	if err := senderPC.SetRemoteDescription(answer); err != nil {
+		t.Fatalf("SetRemoteDescription(answer): %v", err)
+	}
+
+	if !exchangeICEUntilConnected(t, senderPC, receiverPC, senderCandidates, receiverCandidates, 5*time.Second) {
+		t.Fatalf("sender did not reach connected state, got %s", senderPC.ConnectionState())
+	}
+	if receiverPC.ConnectionState() != PeerConnectionStateConnected {
+		t.Fatalf("receiver did not reach connected state, got %s", receiverPC.ConnectionState())
+	}
+
+	for i := 0; i < 5; i++ {
+		if err := videoTrack.WriteVideoFrame(makeTestVideoFrame(96, 96, uint32(i*3000))); err != nil {
+			t.Fatalf("WriteVideoFrame(%d): %v", i, err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	select {
+	case <-receiverFrames:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for a received video frame")
+	}
+
+	var senderState *CongestionState
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		senderState, err = senderPC.GetCongestionState()
+		if err != nil {
+			t.Fatalf("GetCongestionState(sender): %v", err)
+		}
+		if senderState.PacketsSent > 0 && senderState.BytesSent > 0 {
+			break
+		}
+	}
+	if senderState == nil {
+		t.Fatal("GetCongestionState(sender) returned nil")
+	}
+	if senderState.PacketsSent == 0 {
+		t.Fatalf("sender congestion state packetsSent = 0, want media to flow; state=%+v", *senderState)
+	}
+	if senderState.BytesSent == 0 {
+		t.Fatalf("sender congestion state bytesSent = 0, want media to flow; state=%+v", *senderState)
+	}
+	if senderState.QualityLimitationReason == "" {
+		t.Fatal("sender congestion state qualityLimitationReason is empty")
+	}
+
+	receiverState, err := receiverPC.GetCongestionState()
+	if err != nil {
+		t.Fatalf("GetCongestionState(receiver): %v", err)
+	}
+	if receiverState == nil {
+		t.Fatal("GetCongestionState(receiver) returned nil")
+	}
+	if receiverState.PacketsReceived == 0 {
+		t.Fatalf("receiver congestion state packetsReceived = 0, want inbound media; state=%+v", *receiverState)
+	}
+}
+
+func TestSetOnCongestionState(t *testing.T) {
+	cfg := DefaultConfiguration()
+	cfg.ICEServers = nil
+
+	senderPC, err := NewPeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("NewPeerConnection(sender): %v", err)
+	}
+	defer senderPC.Close()
+
+	receiverPC, err := NewPeerConnection(cfg)
+	if err != nil {
+		t.Fatalf("NewPeerConnection(receiver): %v", err)
+	}
+	defer receiverPC.Close()
+
+	senderCandidates := make(chan *ICECandidate, 16)
+	receiverCandidates := make(chan *ICECandidate, 16)
+	receiverFrames := make(chan struct{}, 16)
+	congestionUpdates := make(chan CongestionState, 16)
+
+	senderPC.SetOnICECandidate(func(candidate *ICECandidate) {
+		select {
+		case senderCandidates <- candidate:
+		default:
+		}
+	})
+	receiverPC.SetOnICECandidate(func(candidate *ICECandidate) {
+		select {
+		case receiverCandidates <- candidate:
+		default:
+		}
+	})
+	receiverPC.SetOnTrack(func(track *Track, receiver *RTPReceiver, streamID string) {
+		if track.Kind() != "video" {
+			return
+		}
+		if err := track.SetOnVideoFrame(func(*frame.VideoFrame) {
+			select {
+			case receiverFrames <- struct{}{}:
+			default:
+			}
+		}); err != nil {
+			t.Errorf("SetOnVideoFrame() failed: %v", err)
+		}
+	})
+	senderPC.SetOnCongestionState(func(state *CongestionState) {
+		if state == nil {
+			return
+		}
+		select {
+		case congestionUpdates <- *state:
+		default:
+		}
+	})
+
+	videoTrack, err := senderPC.CreateVideoTrack("video-congestion-callback", 96, 96)
+	if err != nil {
+		t.Fatalf("CreateVideoTrack: %v", err)
+	}
+	if _, err := senderPC.AddTrack(videoTrack, "stream-congestion-callback"); err != nil {
+		t.Fatalf("AddTrack: %v", err)
+	}
+
+	offer, err := senderPC.CreateOffer(nil)
+	if err != nil {
+		t.Fatalf("CreateOffer: %v", err)
+	}
+	if err := senderPC.SetLocalDescription(offer); err != nil {
+		t.Fatalf("SetLocalDescription(offer): %v", err)
+	}
+	if err := receiverPC.SetRemoteDescription(offer); err != nil {
+		t.Fatalf("SetRemoteDescription(offer): %v", err)
+	}
+
+	answer, err := receiverPC.CreateAnswer(nil)
+	if err != nil {
+		t.Fatalf("CreateAnswer: %v", err)
+	}
+	if err := receiverPC.SetLocalDescription(answer); err != nil {
+		t.Fatalf("SetLocalDescription(answer): %v", err)
+	}
+	if err := senderPC.SetRemoteDescription(answer); err != nil {
+		t.Fatalf("SetRemoteDescription(answer): %v", err)
+	}
+
+	if !exchangeICEUntilConnected(t, senderPC, receiverPC, senderCandidates, receiverCandidates, 5*time.Second) {
+		t.Fatalf("sender did not reach connected state, got %s", senderPC.ConnectionState())
+	}
+	if receiverPC.ConnectionState() != PeerConnectionStateConnected {
+		t.Fatalf("receiver did not reach connected state, got %s", receiverPC.ConnectionState())
+	}
+
+	for i := 0; i < 8; i++ {
+		if err := videoTrack.WriteVideoFrame(makeTestVideoFrame(96, 96, uint32(i*3000))); err != nil {
+			t.Fatalf("WriteVideoFrame(%d): %v", i, err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	select {
+	case <-receiverFrames:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for a received video frame")
+	}
+
+	var update CongestionState
+	var gotUpdate bool
+	deadline := time.After(3 * time.Second)
+	for !gotUpdate {
+		select {
+		case update = <-congestionUpdates:
+			if update.PacketsSent > 0 && update.BytesSent > 0 && update.QualityLimitationReason != "" {
+				gotUpdate = true
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for congestion callback with outbound media stats")
+		}
+	}
+
+	if update.PacketsSent == 0 {
+		t.Fatalf("callback packetsSent = 0, want outbound media flow; update=%+v", update)
+	}
+	if update.BytesSent == 0 {
+		t.Fatalf("callback bytesSent = 0, want outbound media flow; update=%+v", update)
+	}
+	if update.QualityLimitationReason == "" {
+		t.Fatalf("callback qualityLimitationReason is empty; update=%+v", update)
+	}
+}
+
 func TestJitterBufferOnNilReceiver(t *testing.T) {
 	// Test that methods fail gracefully on nil/invalid receiver
 	receiver := &RTPReceiver{}
@@ -699,4 +962,97 @@ func TestJitterBufferOnNilReceiver(t *testing.T) {
 	}
 
 	t.Log("Nil receiver error handling succeeded")
+}
+
+func TestAddICECandidateAcceptsEndOfCandidates(t *testing.T) {
+	offerer, err := NewPeerConnection(DefaultConfiguration())
+	if err != nil {
+		t.Fatalf("NewPeerConnection(offerer): %v", err)
+	}
+	defer offerer.Close()
+
+	answerer, err := NewPeerConnection(DefaultConfiguration())
+	if err != nil {
+		t.Fatalf("NewPeerConnection(answerer): %v", err)
+	}
+	defer answerer.Close()
+
+	offer, err := offerer.CreateOffer(nil)
+	if err != nil {
+		t.Fatalf("CreateOffer: %v", err)
+	}
+	if err := offerer.SetLocalDescription(offer); err != nil {
+		t.Fatalf("SetLocalDescription(offer): %v", err)
+	}
+	if err := answerer.SetRemoteDescription(offer); err != nil {
+		t.Fatalf("SetRemoteDescription(offer): %v", err)
+	}
+
+	if err := answerer.AddICECandidate(ICECandidate{}); err != nil {
+		t.Fatalf("AddICECandidate(end-of-candidates): %v", err)
+	}
+}
+
+func drainICECandidates(t *testing.T, dst *PeerConnection, src <-chan *ICECandidate) {
+	t.Helper()
+	for {
+		select {
+		case candidate := <-src:
+			if candidate == nil {
+				if err := dst.AddICECandidate(ICECandidate{}); err != nil {
+					t.Logf("AddICECandidate(end-of-candidates): %v", err)
+				}
+				continue
+			}
+			if err := dst.AddICECandidate(*candidate); err != nil {
+				t.Logf("AddICECandidate(%q): %v", candidate.Candidate, err)
+			}
+		default:
+			return
+		}
+	}
+}
+
+func waitForPeerConnectionState(t *testing.T, pc *PeerConnection, want PeerConnectionState, timeout time.Duration) bool {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if pc.ConnectionState() == want {
+			return true
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return false
+}
+
+func exchangeICEUntilConnected(t *testing.T, senderPC, receiverPC *PeerConnection, senderCandidates, receiverCandidates <-chan *ICECandidate, timeout time.Duration) bool {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		drainICECandidates(t, receiverPC, senderCandidates)
+		drainICECandidates(t, senderPC, receiverCandidates)
+		if senderPC.ConnectionState() == PeerConnectionStateConnected && receiverPC.ConnectionState() == PeerConnectionStateConnected {
+			return true
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	drainICECandidates(t, receiverPC, senderCandidates)
+	drainICECandidates(t, senderPC, receiverCandidates)
+	return senderPC.ConnectionState() == PeerConnectionStateConnected && receiverPC.ConnectionState() == PeerConnectionStateConnected
+}
+
+func makeTestVideoFrame(width, height int, pts uint32) *frame.VideoFrame {
+	f := frame.NewI420Frame(width, height)
+	f.PTS = pts
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			f.Data[0][y*width+x] = byte((x + y + int(pts/3000)) % 256)
+		}
+	}
+	for i := range f.Data[1] {
+		f.Data[1][i] = 128
+		f.Data[2][i] = 128
+	}
+	return f
 }

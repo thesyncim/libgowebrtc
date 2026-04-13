@@ -6,9 +6,11 @@ package pc
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 
@@ -41,7 +43,8 @@ var (
 
 // Constants
 const (
-	maxSDPSize = 64 * 1024 // 64KB should be sufficient for SDP
+	maxSDPSize                    = 64 * 1024 // 64KB should be sufficient for SDP
+	defaultCongestionPollInterval = 250 * time.Millisecond
 )
 
 type (
@@ -62,6 +65,23 @@ type (
 	RTPSendParameters     = webrtc.RTPSendParameters
 	RTPEncodingParameters = webrtc.RTPEncodingParameters
 )
+
+// CongestionState exposes the currently selected transport pair plus the sender
+// quality-limitation signal that libwebrtc reports through getStats().
+type CongestionState struct {
+	Timestamp                  webrtc.StatsTimestamp
+	SelectedCandidatePairID    string
+	AvailableOutgoingBitrate   float64
+	AvailableIncomingBitrate   float64
+	CurrentRoundTripTime       float64
+	TotalRoundTripTime         float64
+	BytesSent                  uint64
+	BytesReceived              uint64
+	PacketsSent                uint64
+	PacketsReceived            uint64
+	QualityLimitationReason    webrtc.QualityLimitationReason
+	QualityLimitationDurations map[string]float64
+}
 
 const (
 	SignalingStateStable             = webrtc.SignalingStateStable
@@ -759,6 +779,10 @@ type PeerConnection struct {
 	onTrack                    func(track *Track, receiver *RTPReceiver, streamID string)
 	onNegotiationNeeded        func()
 	onDataChannel              func(dc *DataChannel)
+	onCongestionState          func(state *CongestionState)
+
+	congestionPollStop chan struct{}
+	congestionPollDone chan struct{}
 
 	mu     sync.RWMutex
 	closed atomic.Bool
@@ -815,6 +839,25 @@ func (pc *PeerConnection) SetOnDataChannel(cb func(dc *DataChannel)) {
 	pc.callbackMu.Lock()
 	defer pc.callbackMu.Unlock()
 	pc.onDataChannel = cb
+}
+
+// SetOnCongestionState registers a callback fed by periodic live stats polling.
+// Pass nil to stop polling and clear the callback.
+func (pc *PeerConnection) SetOnCongestionState(cb func(state *CongestionState)) {
+	pc.callbackMu.Lock()
+	defer pc.callbackMu.Unlock()
+
+	pc.onCongestionState = cb
+	pc.stopCongestionPollerLocked()
+	if cb == nil || pc.closed.Load() {
+		return
+	}
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	pc.congestionPollStop = stop
+	pc.congestionPollDone = done
+	go pc.runCongestionPoller(stop, done)
 }
 
 // DataChannel represents a data channel.
@@ -1739,6 +1782,10 @@ func (pc *PeerConnection) Close() error {
 		return nil
 	}
 
+	pc.callbackMu.Lock()
+	pc.stopCongestionPollerLocked()
+	pc.callbackMu.Unlock()
+
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
@@ -1763,6 +1810,50 @@ func (pc *PeerConnection) Close() error {
 	pc.iceConnectionState.Store(ICEConnectionStateClosed)
 
 	return nil
+}
+
+func (pc *PeerConnection) stopCongestionPollerLocked() {
+	if pc.congestionPollStop != nil {
+		close(pc.congestionPollStop)
+		done := pc.congestionPollDone
+		pc.congestionPollStop = nil
+		pc.congestionPollDone = nil
+		pc.callbackMu.Unlock()
+		if done != nil {
+			<-done
+		}
+		pc.callbackMu.Lock()
+	}
+}
+
+func (pc *PeerConnection) runCongestionPoller(stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+
+	ticker := time.NewTicker(defaultCongestionPollInterval)
+	defer ticker.Stop()
+
+	var last *CongestionState
+	for {
+		state, err := pc.GetCongestionState()
+		if err == nil {
+			pc.callbackMu.RLock()
+			cb := pc.onCongestionState
+			pc.callbackMu.RUnlock()
+			if cb != nil && !congestionStatesEqual(last, state) {
+				stateCopy := cloneCongestionState(state)
+				cb(stateCopy)
+				last = stateCopy
+			}
+		} else if errors.Is(err, ErrPeerConnectionClosed) {
+			return
+		}
+
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // --- Track creation helpers ---
@@ -1850,4 +1941,140 @@ func (pc *PeerConnection) RestartICE() error {
 	}
 
 	return ffi.PeerConnectionRestartICE(pc.handle)
+}
+
+// GetCongestionState derives a transport-focused congestion snapshot from the
+// live libwebrtc stats report exposed via the shim.
+func (pc *PeerConnection) GetCongestionState() (*CongestionState, error) {
+	stats, err := pc.GetStats()
+	if err != nil {
+		return nil, err
+	}
+	return congestionStateFromStatsReport(stats), nil
+}
+
+func congestionStateFromStatsReport(report webrtc.StatsReport) *CongestionState {
+	if len(report) == 0 {
+		return &CongestionState{}
+	}
+
+	selectedCandidatePairID := ""
+	for _, stat := range report {
+		transport, ok := stat.(webrtc.TransportStats)
+		if !ok {
+			continue
+		}
+		if transport.SelectedCandidatePairID != "" {
+			selectedCandidatePairID = transport.SelectedCandidatePairID
+			break
+		}
+	}
+
+	state := &CongestionState{
+		SelectedCandidatePairID: selectedCandidatePairID,
+	}
+
+	var fallbackPair *webrtc.ICECandidatePairStats
+	for _, stat := range report {
+		pair, ok := stat.(webrtc.ICECandidatePairStats)
+		if !ok {
+			continue
+		}
+		if pair.ID == selectedCandidatePairID {
+			applyCandidatePairCongestionState(state, pair)
+			fallbackPair = nil
+			break
+		}
+		if fallbackPair == nil || pair.Nominated {
+			pairCopy := pair
+			fallbackPair = &pairCopy
+		}
+	}
+	if state.SelectedCandidatePairID == "" && fallbackPair != nil {
+		applyCandidatePairCongestionState(state, *fallbackPair)
+	}
+
+	for _, stat := range report {
+		outbound, ok := stat.(webrtc.OutboundRTPStreamStats)
+		if !ok {
+			continue
+		}
+
+		if outbound.Timestamp > state.Timestamp {
+			state.Timestamp = outbound.Timestamp
+		}
+		state.BytesSent += outbound.BytesSent
+		state.PacketsSent += uint64(outbound.PacketsSent)
+
+		if state.QualityLimitationReason == "" || outbound.Kind == "video" {
+			state.QualityLimitationReason = outbound.QualityLimitationReason
+			if len(outbound.QualityLimitationDurations) == 0 {
+				state.QualityLimitationDurations = nil
+			} else {
+				state.QualityLimitationDurations = make(map[string]float64, len(outbound.QualityLimitationDurations))
+				for reason, seconds := range outbound.QualityLimitationDurations {
+					state.QualityLimitationDurations[reason] = seconds
+				}
+			}
+			if outbound.Kind == "video" {
+				break
+			}
+		}
+	}
+
+	for _, stat := range report {
+		inbound, ok := stat.(webrtc.InboundRTPStreamStats)
+		if !ok {
+			continue
+		}
+		if inbound.Timestamp > state.Timestamp {
+			state.Timestamp = inbound.Timestamp
+		}
+		state.BytesReceived += inbound.BytesReceived
+		state.PacketsReceived += uint64(inbound.PacketsReceived)
+	}
+
+	return state
+}
+
+func applyCandidatePairCongestionState(state *CongestionState, pair webrtc.ICECandidatePairStats) {
+	state.SelectedCandidatePairID = pair.ID
+	if pair.Timestamp > state.Timestamp {
+		state.Timestamp = pair.Timestamp
+	}
+	state.AvailableOutgoingBitrate = pair.AvailableOutgoingBitrate
+	state.AvailableIncomingBitrate = pair.AvailableIncomingBitrate
+	state.CurrentRoundTripTime = pair.CurrentRoundTripTime
+	state.TotalRoundTripTime = pair.TotalRoundTripTime
+}
+
+func cloneCongestionState(state *CongestionState) *CongestionState {
+	if state == nil {
+		return nil
+	}
+	out := *state
+	if state.QualityLimitationDurations != nil {
+		out.QualityLimitationDurations = maps.Clone(state.QualityLimitationDurations)
+	}
+	return &out
+}
+
+func congestionStatesEqual(a, b *CongestionState) bool {
+	switch {
+	case a == nil || b == nil:
+		return a == b
+	default:
+		return a.Timestamp == b.Timestamp &&
+			a.SelectedCandidatePairID == b.SelectedCandidatePairID &&
+			a.AvailableOutgoingBitrate == b.AvailableOutgoingBitrate &&
+			a.AvailableIncomingBitrate == b.AvailableIncomingBitrate &&
+			a.CurrentRoundTripTime == b.CurrentRoundTripTime &&
+			a.TotalRoundTripTime == b.TotalRoundTripTime &&
+			a.BytesSent == b.BytesSent &&
+			a.BytesReceived == b.BytesReceived &&
+			a.PacketsSent == b.PacketsSent &&
+			a.PacketsReceived == b.PacketsReceived &&
+			a.QualityLimitationReason == b.QualityLimitationReason &&
+			maps.Equal(a.QualityLimitationDurations, b.QualityLimitationDurations)
+	}
 }

@@ -656,6 +656,12 @@ SHIM_EXPORT int shim_peer_connection_add_ice_candidate(ShimPeerConnectionAddICEC
         shim::SetErrorMessage(params->error_out, "invalid parameter", SHIM_ERROR_INVALID_PARAM);
         return SHIM_ERROR_INVALID_PARAM;
     }
+    if (params->candidate[0] == '\0') {
+        // Browsers surface end-of-candidates by forwarding an empty candidate
+        // entry. libwebrtc's native parser rejects that string, so accept it as
+        // a signaling no-op instead of failing the negotiation path.
+        return SHIM_OK;
+    }
 
     webrtc::SdpParseError parse_error;
     webrtc::IceCandidate* ice_candidate = webrtc::CreateIceCandidate(
