@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/ice/v4"
 	"github.com/pion/rtp"
 	pioncodecs "github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
@@ -16,17 +17,24 @@ import (
 	"github.com/thesyncim/libgowebrtc/pkg/pionrecv"
 )
 
-func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
-	sender, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+func newLoopbackPionPeerConnection(t testing.TB) *webrtc.PeerConnection {
+	t.Helper()
+
+	settingEngine := webrtc.SettingEngine{}
+	settingEngine.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
+
+	pc, err := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine)).NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
-		t.Fatalf("NewPeerConnection(sender): %v", err)
+		t.Fatalf("NewPeerConnection(): %v", err)
 	}
+	return pc
+}
+
+func TestRemoteStreamRegistryBindPionTrackIntegration(t *testing.T) {
+	sender := newLoopbackPionPeerConnection(t)
 	defer func() { _ = sender.Close() }()
 
-	receiver, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-	if err != nil {
-		t.Fatalf("NewPeerConnection(receiver): %v", err)
-	}
+	receiver := newLoopbackPionPeerConnection(t)
 	defer func() { _ = receiver.Close() }()
 
 	videoTrack, err := webrtc.NewTrackLocalStaticRTP(

@@ -257,6 +257,67 @@ func TestGetUserMediaMissingExactDeviceReturnsOverconstrained(t *testing.T) {
 	}
 }
 
+func TestGetUserMediaReturnsOverconstrainedWhenEnumerationIsEmptyAndExactDeviceRequested(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
+			return nil, nil
+		},
+	})
+
+	stream, err := GetUserMedia(Constraints{
+		Video: &VideoConstraints{
+			DeviceID: ExactString("cam-404"),
+		},
+	})
+	if stream != nil {
+		t.Fatal("GetUserMedia() stream = non-nil, want nil")
+	}
+
+	var overconstrained *OverconstrainedError
+	if !errors.As(err, &overconstrained) {
+		t.Fatalf("GetUserMedia() error = %v, want OverconstrainedError", err)
+	}
+	if overconstrained.Constraint != "deviceId" {
+		t.Fatalf("Constraint = %q, want %q", overconstrained.Constraint, "deviceId")
+	}
+}
+
+func TestGetUserMediaFallbackDoesNotReportRequestedFacingModeWhenEnumerationIsEmpty(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateDevice: func() ([]ffi.DeviceInfo, error) {
+			return nil, nil
+		},
+		newVideo: func(string, int, int, int) (videoCaptureHandle, error) { return stubVideoCapture{}, nil },
+	})
+
+	stream, err := GetUserMedia(Constraints{
+		Video: &VideoConstraints{
+			FacingMode: FacingModeEnvironment,
+			Width:      ExactInt(640),
+			Height:     ExactInt(480),
+			FrameRate:  ExactFloat(15),
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetUserMedia() error = %v", err)
+	}
+
+	videoTracks := stream.GetVideoTracks()
+	if len(videoTracks) != 1 {
+		t.Fatalf("GetVideoTracks() len = %d, want 1", len(videoTracks))
+	}
+
+	video := videoTracks[0]
+	if got := video.GetSettings().FacingMode; got != "" {
+		t.Fatalf("video FacingMode = %q, want empty when fallback device direction is unknown", got)
+	}
+	if got := video.GetCapabilities().FacingMode; len(got) != 0 {
+		t.Fatalf("video FacingMode capability = %v, want empty when fallback device direction is unknown", got)
+	}
+}
+
 func TestGetDisplayMediaResolvesRequestedWindowAndOptionalAudio(t *testing.T) {
 	installMediaFFIStubs(t, mediaFFIStubs{
 		loadLibrary: func() error { return nil },
@@ -337,6 +398,54 @@ func TestGetDisplayMediaRejectsConflictingTargets(t *testing.T) {
 	}
 	if stream != nil {
 		t.Fatal("GetDisplayMedia() stream = non-nil, want nil")
+	}
+}
+
+func TestGetDisplayMediaAllowsExplicitScreenIDWhenEnumerationOnlyReturnsWindows(t *testing.T) {
+	installMediaFFIStubs(t, mediaFFIStubs{
+		loadLibrary: func() error { return nil },
+		enumerateScreen: func() ([]ffi.ScreenInfo, error) {
+			return []ffi.ScreenInfo{
+				{ID: 7, Title: "Slides", IsWindow: true},
+			}, nil
+		},
+		newScreen: func(id int64, isWindow bool, fps int) (screenCaptureHandle, error) {
+			if isWindow {
+				t.Fatal("explicit screen fallback should not create a window capture")
+			}
+			if id != 1 {
+				t.Fatalf("newScreen id = %d, want 1", id)
+			}
+			return stubScreenCapture{}, nil
+		},
+	})
+
+	stream, err := GetDisplayMedia(DisplayConstraints{
+		Video: &DisplayVideoConstraints{
+			ScreenID:  1,
+			Width:     IdealInt(1920),
+			Height:    IdealInt(1080),
+			FrameRate: IdealFloat(30),
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetDisplayMedia() error = %v", err)
+	}
+	if stream == nil {
+		t.Fatal("GetDisplayMedia() stream = nil, want non-nil")
+	}
+
+	videoTracks := stream.GetVideoTracks()
+	if len(videoTracks) != 1 {
+		t.Fatalf("GetVideoTracks() len = %d, want 1", len(videoTracks))
+	}
+
+	video := videoTracks[0].(*videoStreamTrack)
+	if got := video.Label(); got != "screen-capture" {
+		t.Fatalf("video Label() = %q, want %q", got, "screen-capture")
+	}
+	if video.displayConstraints == nil || video.displayConstraints.ScreenID != 1 {
+		t.Fatalf("screen id = %+v, want 1", video.displayConstraints)
 	}
 }
 

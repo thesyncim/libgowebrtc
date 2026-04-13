@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -778,7 +779,7 @@ func resolveVideoCaptureRequest(request VideoConstraints, devices []MediaDeviceI
 	if err := validateVideoConstraints(request); err != nil {
 		return VideoTrackSettings{}, VideoConstraints{}, "", err
 	}
-	device, err := selectDevice(devices, MediaDeviceKindVideoInput, request.DeviceID)
+	device, actualFacingMode, err := selectVideoDevice(devices, request.DeviceID, request.FacingMode)
 	if err != nil {
 		return VideoTrackSettings{}, VideoConstraints{}, "", err
 	}
@@ -795,7 +796,7 @@ func resolveVideoCaptureRequest(request VideoConstraints, devices []MediaDeviceI
 		Height:     height,
 		FrameRate:  frameRate,
 		DeviceID:   device.DeviceID,
-		FacingMode: request.FacingMode,
+		FacingMode: actualFacingMode,
 	}
 
 	resolved := request
@@ -818,11 +819,82 @@ func resolveVideoCaptureRequest(request VideoConstraints, devices []MediaDeviceI
 	return settings, resolved, label, nil
 }
 
+func selectVideoDevice(devices []MediaDeviceInfo, requestedDeviceID StringConstraint, requestedFacingMode FacingMode) (MediaDeviceInfo, FacingMode, error) {
+	device, enumerated, err := selectDevice(devices, MediaDeviceKindVideoInput, requestedDeviceID)
+	if err != nil {
+		return MediaDeviceInfo{}, "", err
+	}
+
+	// deviceId constraints take precedence over facingMode preferences.
+	if requestedDeviceID.Exact != nil || requestedDeviceID.Ideal != nil {
+		return device, resolvedFacingModeForDevice(device, requestedFacingMode, enumerated), nil
+	}
+
+	if requestedFacingMode != "" {
+		for _, candidate := range filterDevicesByKind(devices, MediaDeviceKindVideoInput) {
+			if inferFacingMode(candidate) == requestedFacingMode {
+				return candidate, requestedFacingMode, nil
+			}
+		}
+	}
+
+	return device, resolvedFacingModeForDevice(device, requestedFacingMode, enumerated), nil
+}
+
+func filterDevicesByKind(devices []MediaDeviceInfo, kind MediaDeviceKind) []MediaDeviceInfo {
+	filtered := make([]MediaDeviceInfo, 0, len(devices))
+	for _, device := range devices {
+		if device.Kind == kind {
+			filtered = append(filtered, device)
+		}
+	}
+	return filtered
+}
+
+func resolvedFacingModeForDevice(device MediaDeviceInfo, fallback FacingMode, enumerated bool) FacingMode {
+	if inferred := inferFacingMode(device); inferred != "" {
+		return inferred
+	}
+	if !enumerated {
+		return ""
+	}
+	return fallback
+}
+
+func inferFacingMode(device MediaDeviceInfo) FacingMode {
+	normalized := normalizeCaptureDescriptor(device.Label + " " + device.DeviceID)
+
+	switch {
+	case strings.Contains(normalized, "front"),
+		strings.Contains(normalized, "facetime"),
+		strings.Contains(normalized, "selfie"),
+		strings.Contains(normalized, "user"):
+		return FacingModeUser
+	case strings.Contains(normalized, "rear"),
+		strings.Contains(normalized, "back"),
+		strings.Contains(normalized, "environment"),
+		strings.Contains(normalized, "world"):
+		return FacingModeEnvironment
+	case strings.Contains(normalized, "left"):
+		return FacingModeLeft
+	case strings.Contains(normalized, "right"):
+		return FacingModeRight
+	default:
+		return ""
+	}
+}
+
+func normalizeCaptureDescriptor(value string) string {
+	value = strings.ToLower(value)
+	replacer := strings.NewReplacer("-", " ", "_", " ", ".", " ", "/", " ", "\\", " ")
+	return replacer.Replace(value)
+}
+
 func resolveAudioCaptureRequest(request AudioConstraints, devices []MediaDeviceInfo) (AudioTrackSettings, AudioConstraints, string, error) {
 	if err := validateAudioConstraints(request); err != nil {
 		return AudioTrackSettings{}, AudioConstraints{}, "", err
 	}
-	device, err := selectDevice(devices, MediaDeviceKindAudioInput, request.DeviceID)
+	device, _, err := selectDevice(devices, MediaDeviceKindAudioInput, request.DeviceID)
 	if err != nil {
 		return AudioTrackSettings{}, AudioConstraints{}, "", err
 	}
@@ -1070,7 +1142,7 @@ func validateStringConstraintShape(c StringConstraint) error {
 	return nil
 }
 
-func selectDevice(devices []MediaDeviceInfo, kind MediaDeviceKind, requested StringConstraint) (MediaDeviceInfo, error) {
+func selectDevice(devices []MediaDeviceInfo, kind MediaDeviceKind, requested StringConstraint) (MediaDeviceInfo, bool, error) {
 	candidates := make([]MediaDeviceInfo, 0, len(devices))
 	for _, device := range devices {
 		if device.Kind == kind {
@@ -1078,15 +1150,24 @@ func selectDevice(devices []MediaDeviceInfo, kind MediaDeviceKind, requested Str
 		}
 	}
 	if len(candidates) == 0 {
-		return MediaDeviceInfo{}, ErrDeviceNotFound
+		if requested.Exact != nil {
+			return MediaDeviceInfo{}, false, &OverconstrainedError{
+				Constraint: "deviceId",
+				Message:    fmt.Sprintf("requires exact %q", *requested.Exact),
+			}
+		}
+		return MediaDeviceInfo{
+			Kind:  kind,
+			Label: defaultDeviceLabel(kind),
+		}, false, nil
 	}
 	if requested.Exact != nil {
 		for _, device := range candidates {
 			if device.DeviceID == *requested.Exact {
-				return device, nil
+				return device, true, nil
 			}
 		}
-		return MediaDeviceInfo{}, &OverconstrainedError{
+		return MediaDeviceInfo{}, true, &OverconstrainedError{
 			Constraint: "deviceId",
 			Message:    fmt.Sprintf("requires exact %q", *requested.Exact),
 		}
@@ -1094,11 +1175,24 @@ func selectDevice(devices []MediaDeviceInfo, kind MediaDeviceKind, requested Str
 	if requested.Ideal != nil {
 		for _, device := range candidates {
 			if device.DeviceID == *requested.Ideal {
-				return device, nil
+				return device, true, nil
 			}
 		}
 	}
-	return candidates[0], nil
+	return candidates[0], true, nil
+}
+
+func defaultDeviceLabel(kind MediaDeviceKind) string {
+	switch kind {
+	case MediaDeviceKindVideoInput:
+		return "camera"
+	case MediaDeviceKindAudioInput:
+		return "microphone"
+	case MediaDeviceKindAudioOutput:
+		return "speaker"
+	default:
+		return "device"
+	}
 }
 
 func selectDisplayTarget(screens []ScreenInfo, request DisplayVideoConstraints) (ScreenInfo, DisplaySurface, error) {
@@ -1427,12 +1521,6 @@ func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
 		return err
 	}
 
-	if merged.Bitrate > 0 && merged.Bitrate != t.constraints.Bitrate {
-		if err := t.track.SetBitrate(merged.Bitrate); err != nil {
-			return err
-		}
-	}
-
 	nextFrameRate, err := resolveVideoFrameRateConstraint(
 		merged.FrameRate,
 		t.settings.FrameRate,
@@ -1441,7 +1529,17 @@ func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
 	if err != nil {
 		return err
 	}
+
+	if merged.Bitrate > 0 && merged.Bitrate != t.constraints.Bitrate {
+		if err := t.track.SetBitrate(merged.Bitrate); err != nil {
+			return err
+		}
+	}
+
 	if nextFrameRate != t.settings.FrameRate {
+		if err := t.restartVideoCapture(nextFrameRate); err != nil {
+			return err
+		}
 		if err := t.track.SetFramerate(nextFrameRate); err != nil {
 			return err
 		}
@@ -1459,6 +1557,93 @@ func (t *videoStreamTrack) ApplyConstraints(vc VideoConstraints) error {
 var _ VideoStreamTrack = (*videoStreamTrack)(nil)
 
 func (t *videoStreamTrack) pionTrack() webrtc.TrackLocal { return t.track }
+
+func (t *videoStreamTrack) restartVideoCapture(frameRate float64) error {
+	if t.source != sourceDevice && t.source != sourceDisplay {
+		return nil
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.readyState.Load().(string) != "live" {
+		return nil
+	}
+
+	var (
+		nextCapture videoCaptureHandle
+		nextScreen  screenCaptureHandle
+		err         error
+	)
+
+	switch t.source {
+	case sourceDevice:
+		nextCapture, err = newVideoCapture(
+			t.settings.DeviceID,
+			t.settings.Width,
+			t.settings.Height,
+			int(frameRate),
+		)
+		if err != nil {
+			return err
+		}
+		err = nextCapture.Start(t.videoCaptureCallback())
+	case sourceDisplay:
+		if t.displayConstraints == nil {
+			return ErrInvalidConstraints
+		}
+		screenID := t.displayConstraints.ScreenID
+		isWindow := false
+		if t.displayConstraints.WindowID != 0 {
+			screenID = t.displayConstraints.WindowID
+			isWindow = true
+		}
+		nextScreen, err = newScreenCapture(screenID, isWindow, int(frameRate))
+		if err != nil {
+			return err
+		}
+		err = nextScreen.Start(t.videoCaptureCallback())
+	}
+	if err != nil {
+		if nextCapture != nil {
+			nextCapture.Close()
+		}
+		if nextScreen != nil {
+			nextScreen.Close()
+		}
+		return err
+	}
+
+	if t.videoCapture != nil {
+		t.videoCapture.Close()
+		t.videoCapture = nil
+	}
+	if t.screenCapture != nil {
+		t.screenCapture.Close()
+		t.screenCapture = nil
+	}
+
+	t.videoCapture = nextCapture
+	t.screenCapture = nextScreen
+	return nil
+}
+
+func (t *videoStreamTrack) videoCaptureCallback() ffi.VideoCaptureCallback {
+	return func(captured *ffi.CapturedVideoFrame) {
+		if !t.enabled.Load() || t.muted.Load() || t.readyState.Load().(string) != "live" {
+			return
+		}
+		videoFrame := &frame.VideoFrame{
+			Width:  int(captured.Width),
+			Height: int(captured.Height),
+			PTS:    ptsFromTimestampUs(captured.TimestampUs, 90000),
+			Format: frame.PixelFormatI420,
+			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
+			Stride: []int{int(captured.YStride), int(captured.UStride), int(captured.VStride)},
+		}
+		_ = t.track.WriteFrame(videoFrame, false)
+	}
+}
 
 func (t *videoStreamTrack) startVideoCapture() error {
 	t.mu.Lock()
@@ -1478,20 +1663,7 @@ func (t *videoStreamTrack) startVideoCapture() error {
 		return err
 	}
 
-	err = capture.Start(func(captured *ffi.CapturedVideoFrame) {
-		if !t.enabled.Load() || t.muted.Load() || t.readyState.Load().(string) != "live" {
-			return
-		}
-		videoFrame := &frame.VideoFrame{
-			Width:  int(captured.Width),
-			Height: int(captured.Height),
-			PTS:    ptsFromTimestampUs(captured.TimestampUs, 90000),
-			Format: frame.PixelFormatI420,
-			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
-			Stride: []int{int(captured.YStride), int(captured.UStride), int(captured.VStride)},
-		}
-		_ = t.track.WriteFrame(videoFrame, false)
-	})
+	err = capture.Start(t.videoCaptureCallback())
 	if err != nil {
 		capture.Close()
 		return err
@@ -1524,20 +1696,7 @@ func (t *videoStreamTrack) startScreenCapture() error {
 		return err
 	}
 
-	err = capture.Start(func(captured *ffi.CapturedVideoFrame) {
-		if !t.enabled.Load() || t.muted.Load() || t.readyState.Load().(string) != "live" {
-			return
-		}
-		videoFrame := &frame.VideoFrame{
-			Width:  int(captured.Width),
-			Height: int(captured.Height),
-			PTS:    ptsFromTimestampUs(captured.TimestampUs, 90000),
-			Format: frame.PixelFormatI420,
-			Data:   [][]byte{captured.YPlane, captured.UPlane, captured.VPlane},
-			Stride: []int{int(captured.YStride), int(captured.UStride), int(captured.VStride)},
-		}
-		_ = t.track.WriteFrame(videoFrame, false)
-	})
+	err = capture.Start(t.videoCaptureCallback())
 	if err != nil {
 		capture.Close()
 		return err
