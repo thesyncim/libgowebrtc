@@ -35,4 +35,4 @@ jobs:
 
       - name: Review dependency changes
         if: steps.dependency-graph.outputs.enabled == 'true'
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
