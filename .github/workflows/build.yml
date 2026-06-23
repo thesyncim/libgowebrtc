@@ -40,7 +40,7 @@ jobs:
             extension: dll
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
@@ -110,7 +110,7 @@ jobs:
     name: darwin_amd64 (Rosetta)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
@@ -188,7 +188,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
@@ -224,7 +224,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
@@ -263,7 +263,7 @@ jobs:
       matrix:
         platform: [darwin_arm64, darwin_amd64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
@@ -305,7 +305,7 @@ jobs:
       matrix:
         platform: [linux_amd64, linux_386]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
@@ -343,7 +343,7 @@ jobs:
     name: build windows_amd64
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
