@@ -6,7 +6,7 @@ require (
 	github.com/ebitengine/purego v0.10.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/pion/interceptor v0.1.44
-	github.com/pion/rtcp v1.2.16
+	github.com/pion/rtcp v1.2.17
 	github.com/pion/rtp v1.10.1
 	github.com/pion/webrtc/v4 v4.2.11
 )
