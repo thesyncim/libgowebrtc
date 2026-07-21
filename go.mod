@@ -5,9 +5,9 @@ go 1.25
 require (
 	github.com/ebitengine/purego v0.10.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/pion/interceptor v0.1.44
-	github.com/pion/rtcp v1.2.16
-	github.com/pion/rtp v1.10.1
+	github.com/pion/interceptor v0.1.46
+	github.com/pion/rtcp v1.2.17
+	github.com/pion/rtp v1.10.4
 	github.com/pion/webrtc/v4 v4.2.11
 )
 
@@ -29,5 +29,5 @@ require (
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/time v0.10.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
 )
